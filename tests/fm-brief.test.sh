@@ -119,6 +119,63 @@ test_no_mistakes_dod_wording() {
   pass "fm-brief.sh: no-mistakes DOD wording avoids the apostrophe regression"
 }
 
+# The scaffold owns the crew branch/PR-naming convention: branches are
+# sc-<story-id>-<slug> (ticket-mandated repos) or <type>/<slug> (ticketless,
+# including firstmate itself), never fm/<id>. fm/ stays reserved for the work
+# window. The PR title must carry the sc-<story-id>:/<type>: prefix so Shortcut
+# auto-links. This pins that output for every PR-producing mode.
+test_branch_and_pr_naming_convention() {
+  local home id brief
+  home="$TMP_ROOT/branch-convention-home"
+  write_registry "$home"
+
+  # Shared branch step: present in every ship mode, conditional on ticket mandate,
+  # and never fm/<id>.
+  for id_proj in "conv-nm:no-registry-proj" "conv-dp:direct-proj" "conv-lo:local-proj"; do
+    id=${id_proj%%:*}
+    proj=${id_proj##*:}
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "$proj" >/dev/null 2>&1
+    brief="$home/data/$id/brief.md"
+    assert_present "$brief" "$id: brief was not scaffolded"
+    assert_grep "sc-<story-id>-<short-slug>" "$brief" \
+      "$id: brief missing the ticket-mandated branch rule"
+    assert_grep "conventional-commit type" "$brief" \
+      "$id: brief missing the ticketless conventional-commit branch rule"
+    # shellcheck disable=SC2016  # literal backticks must render in the brief
+    assert_grep 'Never name the branch `fm/' "$brief" \
+      "$id: brief missing the fm/ branch prohibition"
+    # shellcheck disable=SC2016  # literal command text must render verbatim
+    assert_no_grep 'git checkout -b fm/' "$brief" \
+      "$id: brief still tells the crewmate to create an fm/ branch"
+    assert_no_grep "create your branch: " "$brief" \
+      "$id: brief kept the old single-line fm/<id> branch step"
+  done
+
+  # PR-producing modes carry the PR-title prefix contract.
+  for id in conv-nm conv-dp; do
+    brief="$home/data/$id/brief.md"
+    # shellcheck disable=SC2016  # literal backticks and prefix must render verbatim
+    assert_grep 'prefix the title `sc-<story-id>: `' "$brief" \
+      "$id: brief missing the ticketed PR-title prefix"
+    # shellcheck disable=SC2016  # literal backticks and prefix must render verbatim
+    assert_grep 'prefix the title `<type>: `' "$brief" \
+      "$id: brief missing the ticketless PR-title prefix"
+  done
+
+  # no-mistakes generates the title, so the crewmate must edit it after the PR opens.
+  brief="$home/data/conv-nm/brief.md"
+  # shellcheck disable=SC2016  # literal command text must render verbatim
+  assert_grep 'gh-axi pr edit <pr-number> --title' "$brief" \
+    "no-mistakes brief missing the edit-the-PR-title-after-open instruction"
+
+  # direct-PR opens the PR itself, so it sets the prefix at creation time.
+  brief="$home/data/conv-dp/brief.md"
+  assert_grep "Set that prefix in the title when you open the PR" "$brief" \
+    "direct-PR brief missing the set-prefix-at-open instruction"
+
+  pass "fm-brief.sh: branch and PR-title naming convention renders in every ship mode"
+}
+
 test_ship_project_memory_wording() {
   local home id brief
   home="$TMP_ROOT/project-memory-home"
@@ -385,6 +442,7 @@ test_scout_and_secondmate_scaffold() {
 test_script_parses
 test_help_includes_entire_header
 test_ship_modes_generate_clean_briefs
+test_branch_and_pr_naming_convention
 test_faster_paths_use_configured_authority_without_stacked_review
 test_no_mistakes_dod_wording
 test_ship_project_memory_wording

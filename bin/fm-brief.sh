@@ -281,28 +281,39 @@ read -r MODE _ <<EOF
 $("$FM_ROOT/bin/fm-project-mode.sh" "$REPO")
 EOF
 
+# Shared PR-title contract for the PR-producing modes (no-mistakes, direct-PR).
+# Quoted heredoc: backticks and braces stay literal in the generated brief.
+PR_TITLE_RULE=$(cat <<'EOF'
+The PR title must carry the ticket-or-type prefix so it is visible and Shortcut auto-links the story:
+- Ticket-mandated repo: prefix the title `sc-<story-id>: ` (the same story id as your `sc-<story-id>-<slug>` branch).
+- Ticketless work, including the firstmate repo: prefix the title `<type>: ` matching your branch type (`feat`, `fix`, `chore`, or `docs`).
+EOF
+)
+
 case "$MODE" in
   direct-PR)
     SETUP2=""
-    RULE1='1. Never push to the default branch (push only your `fm/'"$ID"'` branch). Never merge a PR.'
+    RULE1='1. Never push to the default branch (push only your own feature branch). Never merge a PR.'
     DOD=$(cat <<EOF
 # Definition of done
 This project ships **direct-PR**: you raise the PR yourself, without the no-mistakes pipeline.
 The task is complete only when committed on your branch.
 When it is implemented and committed, push your branch and open a PR with \`gh-axi\`, then append \`done: PR {url}\` to the status file and stop.
+$PR_TITLE_RULE
+Set that prefix in the title when you open the PR with \`gh-axi\`.
 Do NOT run /no-mistakes. The configured merge authority decides whether to merge the PR; firstmate relays the outcome.
 EOF
 )
     ;;
   local-only)
     SETUP2=""
-    RULE1="1. Never push to any remote and never open a PR. Work only on your \`fm/$ID\` branch; firstmate handles the merge into local \`main\`."
+    RULE1="1. Never push to any remote and never open a PR. Work only on your own feature branch; firstmate handles the merge into local \`main\`."
     DOD=$(cat <<EOF
 # Definition of done
 This project ships **local-only**: no remote, no PR, no pipeline.
-The task is complete only when committed on your branch \`fm/$ID\`. Do NOT push, do NOT open a PR, do NOT merge.
+The task is complete only when committed on your feature branch. Do NOT push, do NOT open a PR, do NOT merge.
 Keep your branch a clean fast-forward onto the current default branch - if \`main\` has advanced, rebase onto it so the eventual merge stays a fast-forward.
-When it is implemented and committed, append \`done: ready in branch fm/$ID\` to the status file and stop.
+When it is implemented and committed, append \`done: ready in branch <your-branch-name>\` to the status file and stop.
 The configured merge authority approves the ready branch, then firstmate merges it into local \`main\` through the guarded fast-forward path.
 EOF
 )
@@ -327,6 +338,8 @@ Two firstmate-specific rules layer on top of that guidance:
   When the decision comes back, feed it to the gate with \`no-mistakes axi respond\` and let the pipeline apply it - do not route the question to "the user" or implement the fix yourself.
 - Avoid \`--yes\`: it would silently bypass firstmate's authority check and any required captain escalation.
 
+$PR_TITLE_RULE
+no-mistakes generates the PR title, so right after it opens the PR, check the title and, if it lacks that prefix, edit it with \`gh-axi pr edit <pr-number> --title "<prefix><summary>"\` before you report done.
 After /no-mistakes reports CI green (the CI-ready return point - do not wait for it to keep monitoring in the background until merge), append \`done: PR {url} checks green\` and stop. You are finished.
 EOF
 )
@@ -348,7 +361,10 @@ You are in a disposable git worktree of $REPO, at a detached HEAD on a clean def
 The path check is authoritative: \`git rev-parse --git-dir\` and \`git rev-parse --git-common-dir\` can help inspect the repo, but they do not prove you are outside the primary checkout.
 If the top-level path is the primary checkout or not the worktree you were launched in, STOP - do not branch or commit here - append \`blocked: launched in primary checkout, not an isolated worktree\` to the status file and stop.
 
-1. First action: create your branch: \`git checkout -b fm/$ID\`$SETUP2
+1. First action - create your branch. The name depends on whether this repository mandates a Shortcut ticket (its \`AGENTS.md\` requires every change to carry a story, as apply_pass_backend and ai_backend do); this scaffold cannot detect that, so pick the matching rule:
+   - **Ticket-mandated repo:** create or link the Shortcut story FIRST, then branch \`sc-<story-id>-<short-slug>\` (e.g. \`git checkout -b sc-4821-fix-login-redirect\`).
+   - **Ticketless work, including the firstmate repo itself:** branch \`<type>/<short-slug>\` where \`<type>\` is a conventional-commit type - \`feat\`, \`fix\`, \`chore\`, or \`docs\` (e.g. \`git checkout -b feat/crew-branch-convention\`).
+   Never name the branch \`fm/...\`; that prefix is reserved for the work window, not the branch.$SETUP2
 
 # Rules
 $RULE1
