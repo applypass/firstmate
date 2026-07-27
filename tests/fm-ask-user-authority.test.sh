@@ -5,6 +5,9 @@
 # groups, and a later audit classified 14 of 32 rounds as over-engineered after
 # checkpoint-based gameplay verification expanded into continuous adversarial
 # 60 Hz browser proof.
+# The class-sweep rule has its own motivating evidence: one queue-refresh fix
+# cost the captain roughly nine separate ask-user decisions, each another caller
+# that ignored a swallowed failure, before the class was swept and decided once.
 # The tests below enforce the general contract boundary without naming that
 # project in the runtime policy.
 # shellcheck disable=SC2016
@@ -88,14 +91,18 @@ test_defect_class_is_swept_and_decided_once() {
     "class-sweep rule is missing from its owner"
   assert_grep 'Enumerate that whole class before deciding the instance in front of you' "$OWNER" \
     "class-sweep rule no longer enumerates the class up front"
-  assert_grep 'bring the captain one decision that covers the class' "$OWNER" \
-    "class-sweep rule lost the single batched captain decision"
-  assert_grep 'follow "Sweep the defect class, decide once" below instead of routing the next instance' "$OWNER" \
-    "same-theme step does not cross-reference the class-sweep rule"
+  assert_grep 'bring one decision that covers the class to whoever owns it under the numbered procedure above' "$OWNER" \
+    "class-sweep rule lost the single batched decision routed to its authority owner"
+  assert_grep 'sweep it with "Sweep the defect class, decide once" below rather than routing the next instance, without relaxing this step'"'"'s own escalation requirement' "$OWNER" \
+    "same-theme step cross-reference can be read as replacing its own escalation"
   assert_grep 'Enumerating the class is not contract expansion' "$OWNER" \
     "class-sweep rule no longer distinguishes enumeration from contract expansion"
-  assert_grep 'still follows the numbered procedure above' "$OWNER" \
-    "class-sweep rule stopped deferring authority to the numbered procedure"
+  assert_grep 'still follows the numbered procedure above, including its stronger destructive, irreversible, and security-sensitive captain boundaries' "$OWNER" \
+    "class-sweep rule stopped deferring authority to the numbered procedure and its stronger boundaries"
+  assert_grep "Step 7's questionable-abstraction escalation still fires when the class is swept" "$OWNER" \
+    "sweeping a class can skip the questionable-abstraction escalation"
+  assert_grep 'never authorizes batch-patching a class autonomously in place of that escalation' "$OWNER" \
+    "folding corrections into one round reads as autonomous batch-patching authority"
 
   brief_contract=$(awk '
     /^## 11\. Crewmate briefs$/ { found = 1; next }
@@ -106,8 +113,8 @@ test_defect_class_is_swept_and_decided_once() {
     "brief contract does not require systemic work to be swept in one set"
   assert_contains "$brief_contract" '`ask-user-authority` owns the matching one-batched-decision rule' \
     "brief contract does not point at the class-sweep owner"
-  sweep_owners=$(grep -Fc 'Sweep the defect class, decide once' "$AGENTS")
-  [ "$sweep_owners" -eq 0 ] || fail "AGENTS.md duplicated the class-sweep procedure instead of pointing at its owner"
+  sweep_owners=$(grep -Fc 'Enumerate that whole class before deciding the instance in front of you' "$AGENTS")
+  [ "$sweep_owners" -eq 0 ] || fail "AGENTS.md carries a second copy of the class-sweep procedure instead of pointing at its owner"
   pass "a defect class is enumerated up front and decided in one batched decision"
 }
 
