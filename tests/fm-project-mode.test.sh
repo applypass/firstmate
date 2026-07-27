@@ -1,0 +1,117 @@
+#!/usr/bin/env bash
+# Tests for bin/fm-project-mode.sh: the data/projects.md registry parser that
+# resolves a project's delivery mode, yolo flag, and ticket prefix.
+#
+# The bracket flags are additive and order-independent. The optional third
+# output word (the +ticket:<prefix> value) drives the crew branch and PR-title
+# convention in bin/fm-brief.sh, and it must stay optional so callers that read
+# only "<mode> <yolo>" keep working. An invalid prefix is dropped to ticketless
+# rather than scaffolding an unusable branch name.
+set -u
+
+# shellcheck source=tests/lib.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+
+PROJECT_MODE="$ROOT/bin/fm-project-mode.sh"
+TMP_ROOT=$(fm_test_tmproot fm-project-mode)
+
+# Build a home with the given registry lines and echo its path.
+make_home() {
+  local name=$1 home
+  shift
+  home="$TMP_ROOT/$name"
+  mkdir -p "$home/data"
+  printf '%s\n' "$@" > "$home/data/projects.md"
+  printf '%s\n' "$home"
+}
+
+resolve() {
+  local home=$1 project=$2
+  FM_HOME="$home" "$PROJECT_MODE" "$project" 2>/dev/null
+}
+
+expect_resolves() {
+  local home=$1 project=$2 want=$3 got
+  got=$(resolve "$home" "$project")
+  [ "$got" = "$want" ] || fail "$project: expected \"$want\", got \"$got\""
+}
+
+test_existing_flags_are_unchanged() {
+  local home
+  home=$(make_home existing \
+    '- plain - no bracket flags (added 2026-07-01)' \
+    '- moded [direct-PR] - mode only (added 2026-07-01)' \
+    '- yolo-only [local-only +yolo] - mode and yolo (added 2026-07-01)' \
+    '- bare-yolo [+yolo] - yolo without an explicit mode (added 2026-07-01)')
+
+  expect_resolves "$home" plain "no-mistakes off"
+  expect_resolves "$home" moded "direct-PR off"
+  expect_resolves "$home" yolo-only "local-only on"
+  expect_resolves "$home" bare-yolo "no-mistakes on"
+  expect_resolves "$home" absent "no-mistakes off"
+  pass "fm-project-mode.sh: mode and +yolo parsing is unchanged and emits two words"
+}
+
+test_ticket_prefix_is_an_optional_third_word() {
+  local home
+  home=$(make_home ticket \
+    '- ticketed [no-mistakes +ticket:sc] - ticket flag only (added 2026-07-01)' \
+    '- both [direct-PR +yolo +ticket:sc] - ticket and yolo (added 2026-07-01)' \
+    '- reordered [direct-PR +ticket:ENG +yolo] - order-independent flags (added 2026-07-01)' \
+    '- bare-ticket [+ticket:sc] - ticket without an explicit mode (added 2026-07-01)' \
+    '- ticketless [direct-PR +yolo] - no ticket flag (added 2026-07-01)')
+
+  expect_resolves "$home" ticketed "no-mistakes off sc"
+  expect_resolves "$home" both "direct-PR on sc"
+  expect_resolves "$home" reordered "direct-PR on ENG"
+  expect_resolves "$home" bare-ticket "no-mistakes off sc"
+  # Absent flag emits exactly two words, so an existing caller's exact-match
+  # comparison and `read -r MODE YOLO` both keep working.
+  expect_resolves "$home" ticketless "direct-PR on"
+  pass "fm-project-mode.sh: +ticket:<prefix> adds a third word only when present"
+}
+
+test_third_field_reads_empty_when_ticketless() {
+  local home mode yolo ticket
+  home=$(make_home read-shape '- ticketless [direct-PR] - no ticket flag (added 2026-07-01)')
+  read -r mode yolo ticket <<EOF
+$(resolve "$home" ticketless)
+EOF
+  [ "$mode" = "direct-PR" ] || fail "read-shape: mode field is $mode"
+  [ "$yolo" = "off" ] || fail "read-shape: yolo field is $yolo"
+  [ -z "$ticket" ] || fail "read-shape: ticket field should be empty, got \"$ticket\""
+  pass "fm-project-mode.sh: a ticketless project leaves a caller's third field empty"
+}
+
+test_invalid_ticket_prefix_falls_back_to_ticketless() {
+  local home out err
+  home=$(make_home invalid \
+    '- slashy [direct-PR +ticket:sc/x] - prefix with a path separator (added 2026-07-01)' \
+    '- spacey [direct-PR +ticket:] - empty prefix (added 2026-07-01)' \
+    '- numeric [direct-PR +ticket:42] - prefix that does not start with a letter (added 2026-07-01)')
+
+  for project in slashy numeric; do
+    err=$(FM_HOME="$home" "$PROJECT_MODE" "$project" 2>&1 >/dev/null)
+    out=$(resolve "$home" "$project")
+    [ "$out" = "direct-PR off" ] || fail "$project: an invalid prefix must fall back to ticketless, got \"$out\""
+    assert_contains "$err" "invalid +ticket prefix" "$project: an invalid prefix must warn to stderr"
+  done
+  expect_resolves "$home" spacey "direct-PR off"
+  pass "fm-project-mode.sh: an unusable ticket prefix warns and drops to ticketless"
+}
+
+test_unknown_mode_still_falls_back() {
+  local home out err
+  home=$(make_home unknown-mode '- bogus [sideways +ticket:sc] - unknown delivery mode (added 2026-07-01)')
+  err=$(FM_HOME="$home" "$PROJECT_MODE" bogus 2>&1 >/dev/null)
+  out=$(resolve "$home" bogus)
+  [ "$out" = "no-mistakes off" ] || fail "unknown mode must fall back to the safest gate, got \"$out\""
+  assert_contains "$err" "unknown mode" "unknown mode must warn to stderr"
+  pass "fm-project-mode.sh: an unknown mode still falls back to the safest gate"
+}
+
+test_existing_flags_are_unchanged
+test_ticket_prefix_is_an_optional_third_word
+test_third_field_reads_empty_when_ticketless
+test_invalid_ticket_prefix_falls_back_to_ticketless
+test_unknown_mode_still_falls_back

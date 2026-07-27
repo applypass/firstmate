@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# Resolve a project's delivery mode and yolo flag from the data/projects.md registry.
-# Prints two words to stdout: "<mode> <yolo>" where mode is one of
+# Resolve a project's delivery mode, yolo flag, and ticket prefix from the
+# data/projects.md registry.
+# Prints "<mode> <yolo>" to stdout, plus a third word "<ticket-prefix>" when the
+# project carries the +ticket:<prefix> flag. Mode is one of
 # no-mistakes|direct-PR|local-only and yolo is on|off.
 #
 # Registry line format (data/projects.md):
-#   - <name> - <desc> (added <date>)                  -> no-mistakes off  (legacy default)
-#   - <name> [<mode>] - <desc> (added <date>)          -> <mode> off
-#   - <name> [<mode> +yolo] - <desc> (added <date>)    -> <mode> on
+#   - <name> - <desc> (added <date>)                       -> no-mistakes off  (legacy default)
+#   - <name> [<mode>] - <desc> (added <date>)               -> <mode> off
+#   - <name> [<mode> +yolo] - <desc> (added <date>)         -> <mode> on
+#   - <name> [<mode> +ticket:sc] - <desc> (added <date>)    -> <mode> off sc
+# The bracket flags are additive and order-independent, so
+# "[direct-PR +yolo +ticket:sc]" sets both.
 #
 # mode = how a finished change reaches main:
 #   no-mistakes  full pipeline -> PR -> captain merge (default)
@@ -15,9 +20,21 @@
 # yolo (orthogonal) = when on, firstmate may make routine approval decisions itself.
 #   AGENTS.md section 7 is the single owner of authority exceptions, including
 #   ask-user contract expansion and stronger captain boundaries.
+# ticket (orthogonal) = the project mandates a tracker ticket per change, and
+#   <prefix> is the tracker's id prefix. It drives the crew branch and PR-title
+#   convention owned by bin/fm-brief.sh: branch <prefix>-<ticket-id>-<slug> and
+#   PR title prefix "<prefix>-<ticket-id>: ". Absent means ticketless work, which
+#   branches <type>/<slug> with a "<type>: " title prefix instead.
+#   A prefix must be a bare token ([A-Za-z][A-Za-z0-9_-]*) because it becomes part
+#   of a git branch name; anything else is warned about and dropped to ticketless.
+#
+# The third word is emitted only for a ticket-mandated project, so callers that
+# read only "<mode> <yolo>" are unaffected. A caller that wants the prefix reads a
+# third field, which stays empty for a ticketless project.
 #
 # An unknown/missing project or unknown mode falls back to "no-mistakes off" and warns
-# to stderr, so a typo never silently drops the gate.
+# to stderr, so a typo never silently drops the gate. An unknown mode discards the
+# whole bracket, ticket prefix included, because nothing in it can be trusted.
 # Usage: fm-project-mode.sh <project-name>
 set -eu
 
@@ -34,19 +51,23 @@ if [ ! -f "$REG" ]; then
   exit 0
 fi
 
-# awk emits "<mode> <yolo>" (one line) or nothing if the project is absent.
+# awk emits "<mode> <yolo> <ticket>" (one line, ticket empty when the flag is
+# absent) or nothing if the project is absent.
 parsed=$(awk -v n="$NAME" '
   $1=="-" && $2==n {
-    mode="no-mistakes"; yolo="off";
+    mode="no-mistakes"; yolo="off"; ticket="";
     if ($3 ~ /^\[/) {
       s="";
       for (i=3; i<=NF; i++) { s = s (s==""?"":" ") $i; if ($i ~ /\]$/) break }
       gsub(/^\[|\]$/, "", s);           # strip the surrounding brackets
       k = split(s, a, " ");
-      if (a[1] != "" && a[1] != "+yolo") mode = a[1];
-      for (j=1; j<=k; j++) if (a[j]=="+yolo") yolo="on";
+      if (a[1] != "" && a[1] !~ /^\+/) mode = a[1];
+      for (j=1; j<=k; j++) {
+        if (a[j]=="+yolo") yolo="on";
+        else if (a[j] ~ /^\+ticket:/) { ticket = a[j]; sub(/^\+ticket:/, "", ticket) }
+      }
     }
-    print mode, yolo; exit
+    print mode, yolo, ticket; exit
   }
 ' "$REG")
 
@@ -56,11 +77,25 @@ if [ -z "$parsed" ]; then
   exit 0
 fi
 
-mode=${parsed%% *}
-yolo=${parsed##* }
+read -r mode yolo ticket <<EOF
+$parsed
+EOF
 case "$mode" in
   no-mistakes|direct-PR|local-only) ;;
-  *) echo "warn: unknown mode \"$mode\" for $NAME; defaulting to no-mistakes off" >&2; mode=no-mistakes; yolo=off ;;
+  *) echo "warn: unknown mode \"$mode\" for $NAME; defaulting to no-mistakes off" >&2; mode=no-mistakes; yolo=off; ticket= ;;
 esac
 case "$yolo" in on|off) ;; *) yolo=off ;; esac
-echo "$mode $yolo"
+# The prefix becomes part of a branch name and a PR title, so reject anything
+# that is not a bare token rather than scaffolding an unusable branch rule.
+case "$ticket" in
+  "") ;;
+  *[!A-Za-z0-9_-]*|[!A-Za-z]*)
+    echo "warn: invalid +ticket prefix \"$ticket\" for $NAME; treating the project as ticketless" >&2
+    ticket=
+    ;;
+esac
+if [ -n "$ticket" ]; then
+  echo "$mode $yolo $ticket"
+else
+  echo "$mode $yolo"
+fi

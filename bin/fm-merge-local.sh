@@ -3,6 +3,13 @@
 # project's default branch to the crewmate's ready branch (discovered from the
 # task worktree's checked-out HEAD, so it works for any branch name).
 #
+# When the worktree cannot supply the branch - meta has no worktree=, the
+# worktree directory is gone (a pruned pool worktree), or its HEAD is detached
+# after a rebase - pass --branch <name> to name the ready branch directly. The
+# crewmate reports it as "done: ready in branch <name>" in the task's status log.
+# The override only replaces branch DISCOVERY: every merge guard below still
+# applies, so an unlanded or diverged branch is refused exactly as before.
+#
 # This is firstmate's merge gate-action (the captain's merge authority applied
 # locally instead of via a GitHub PR). It is the one sanctioned exception to hard
 # rule #1 "never run state-changing git in projects/", and it is narrow: it only
@@ -10,7 +17,7 @@
 # auto-approves), and only as a clean fast-forward - it refuses a diverged branch
 # and tells you to have the crewmate rebase. See AGENTS.md prime directives,
 # project management, and task lifecycle.
-# Usage: fm-merge-local.sh <task-id>
+# Usage: fm-merge-local.sh <task-id> [--branch <name>]
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -18,7 +25,27 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 "$FM_ROOT/bin/fm-guard.sh" || true
-ID=${1:?usage: fm-merge-local.sh <task-id>}
+ID=${1:?usage: fm-merge-local.sh <task-id> [--branch <name>]}
+shift
+BRANCH_OVERRIDE=
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --branch)
+      BRANCH_OVERRIDE=${2:?error: --branch needs a branch name}
+      shift 2
+      ;;
+    --branch=*)
+      BRANCH_OVERRIDE=${1#--branch=}
+      [ -n "$BRANCH_OVERRIDE" ] || { echo "error: --branch needs a branch name" >&2; exit 1; }
+      shift
+      ;;
+    *)
+      echo "error: unknown argument \"$1\"; usage: fm-merge-local.sh <task-id> [--branch <name>]" >&2
+      exit 1
+      ;;
+  esac
+done
+
 META="$STATE/$ID.meta"
 [ -f "$META" ] || { echo "error: no meta for task $ID at $META" >&2; exit 1; }
 
@@ -45,10 +72,25 @@ default_branch() {
 
 # The crewmate's ready branch is whatever the task worktree has checked out; the
 # branch name is no longer a fixed fm/<id> (see bin/fm-brief.sh branch convention).
-[ -n "$WT" ] || { echo "error: meta for task $ID is missing worktree=; cannot determine the ready branch" >&2; exit 1; }
-[ -d "$WT" ] || { echo "error: worktree for task $ID is missing: $WT" >&2; exit 1; }
-BRANCH=$(git -C "$WT" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
-[ -n "$BRANCH" ] || { echo "error: worktree $WT for task $ID is detached; no ready branch to merge" >&2; exit 1; }
+# An explicit --branch wins, and is also the recovery path when the worktree can
+# no longer answer the question - approved work must always be landable.
+BRANCH=$BRANCH_OVERRIDE
+if [ -z "$BRANCH" ]; then
+  why=
+  if [ -z "$WT" ]; then
+    why="meta for task $ID is missing worktree="
+  elif [ ! -d "$WT" ]; then
+    why="worktree for task $ID is missing: $WT"
+  else
+    BRANCH=$(git -C "$WT" symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+    [ -n "$BRANCH" ] || why="worktree $WT for task $ID is detached"
+  fi
+  [ -n "$BRANCH" ] || {
+    echo "error: $why; cannot determine the ready branch" >&2
+    echo "Pass the branch the crewmate reported ready: bin/fm-merge-local.sh $ID --branch <name>" >&2
+    exit 1
+  }
+fi
 git -C "$PROJ" rev-parse --verify --quiet "refs/heads/$BRANCH" >/dev/null || { echo "error: branch $BRANCH does not exist in $PROJ" >&2; exit 1; }
 
 DEFAULT=$(default_branch) || { echo "error: cannot determine default branch for $PROJ; expected origin/HEAD, main, or master" >&2; exit 1; }

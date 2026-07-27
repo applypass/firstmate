@@ -239,7 +239,7 @@ EOF
         [ .[] | {
           num:(.number|tostring),
           repo:$repo,
-          task:(.headRefName // "-"),
+          branch:(.headRefName // "-"),
           url:(.url // "-"),
           review:(.reviewDecision // "none"),
           mergeable:(.mergeable // "UNKNOWN"),

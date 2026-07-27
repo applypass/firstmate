@@ -34,6 +34,14 @@
 #   local-only   implement on branch, stop and report "ready in branch" (no push/PR);
 #                captain approves, firstmate merges to local main
 # Ship briefs begin with a worktree-isolation assertion before the branch step.
+# This scaffold owns the crew branch and PR-title convention, keyed off the
+# project's +ticket:<prefix> registry flag (bin/fm-project-mode.sh):
+#   ticket-mandated  branch <prefix>-<ticket-id>-<short-slug>, PR title prefix
+#                    "<prefix>-<ticket-id>: "; the crewmate creates or links the
+#                    ticket through the Shortcut MCP tools before branching
+#   ticketless       branch <type>/<short-slug> and PR title prefix "<type>: "
+#                    with a conventional-commit type (feat, fix, chore, docs)
+# A branch is never named fm/...; that prefix is reserved for the work window.
 # Scout tasks ignore mode - their deliverable is a report, not a merge.
 # Every scaffold's status protocol distinguishes the configured
 # declared-external-wait verb (FM_CLASSIFY_PAUSED_VERB, default "paused") from
@@ -277,18 +285,23 @@ fi
 # Ship task: shape Setup / Rule 1 / Definition of done by the project's delivery mode.
 # yolo does not affect the brief because the worker never owns approval decisions;
 # firstmate applies the authority contract in AGENTS.md section 7, so discard it.
-read -r MODE _ <<EOF
+read -r MODE _ TICKET <<EOF
 $("$FM_ROOT/bin/fm-project-mode.sh" "$REPO")
 EOF
 
-# Shared PR-title contract for the PR-producing modes (no-mistakes, direct-PR).
-# Quoted heredoc: backticks and braces stay literal in the generated brief.
-PR_TITLE_RULE=$(cat <<'EOF'
-The PR title must carry the ticket-or-type prefix so it is visible and Shortcut auto-links the story:
-- Ticket-mandated repo: prefix the title `sc-<story-id>: ` (the same story id as your `sc-<story-id>-<slug>` branch).
-- Ticketless work, including the firstmate repo: prefix the title `<type>: ` matching your branch type (`feat`, `fix`, `chore`, or `docs`).
-EOF
-)
+# The branch step and the PR-title contract are both keyed off the project's
+# +ticket:<prefix> flag, so the brief states exactly one rule instead of asking
+# the crewmate to guess which one applies.
+if [ -n "$TICKET" ]; then
+  BRANCH_RULE="1. First action - create your branch. This repository mandates a tracker ticket, so create or link the ticket FIRST with the Shortcut MCP tools, then branch \`$TICKET-<ticket-id>-<short-slug>\` (e.g. \`git checkout -b $TICKET-4821-fix-login-redirect\`)."
+  PR_TITLE_RULE="The PR title must be prefixed \`$TICKET-<ticket-id>: \` - the same ticket id as your \`$TICKET-<ticket-id>-<short-slug>\` branch - so the prefix is visible and the tracker auto-links the ticket."
+else
+  # Single-quoted: the backticks and <type> placeholders are literal brief text.
+  # shellcheck disable=SC2016
+  BRANCH_RULE='1. First action - create your branch `<type>/<short-slug>`, where `<type>` is a conventional-commit type - `feat`, `fix`, `chore`, or `docs` (e.g. `git checkout -b feat/crew-branch-convention`).'
+  # shellcheck disable=SC2016
+  PR_TITLE_RULE='The PR title must be prefixed `<type>: ` matching your branch type (`feat`, `fix`, `chore`, or `docs`), so the prefix is visible.'
+fi
 
 case "$MODE" in
   direct-PR)
@@ -298,9 +311,9 @@ case "$MODE" in
 # Definition of done
 This project ships **direct-PR**: you raise the PR yourself, without the no-mistakes pipeline.
 The task is complete only when committed on your branch.
-When it is implemented and committed, push your branch and open a PR with \`gh-axi\`, then append \`done: PR {url}\` to the status file and stop.
 $PR_TITLE_RULE
 Set that prefix in the title when you open the PR with \`gh-axi\`.
+When it is implemented and committed, push your branch and open a PR with \`gh-axi\`, then append \`done: PR {url}\` to the status file and stop.
 Do NOT run /no-mistakes. The configured merge authority decides whether to merge the PR; firstmate relays the outcome.
 EOF
 )
@@ -361,9 +374,7 @@ You are in a disposable git worktree of $REPO, at a detached HEAD on a clean def
 The path check is authoritative: \`git rev-parse --git-dir\` and \`git rev-parse --git-common-dir\` can help inspect the repo, but they do not prove you are outside the primary checkout.
 If the top-level path is the primary checkout or not the worktree you were launched in, STOP - do not branch or commit here - append \`blocked: launched in primary checkout, not an isolated worktree\` to the status file and stop.
 
-1. First action - create your branch. The name depends on whether this repository mandates a Shortcut ticket (its \`AGENTS.md\` requires every change to carry a story, as apply_pass_backend and ai_backend do); this scaffold cannot detect that, so pick the matching rule:
-   - **Ticket-mandated repo:** create or link the Shortcut story FIRST, then branch \`sc-<story-id>-<short-slug>\` (e.g. \`git checkout -b sc-4821-fix-login-redirect\`).
-   - **Ticketless work, including the firstmate repo itself:** branch \`<type>/<short-slug>\` where \`<type>\` is a conventional-commit type - \`feat\`, \`fix\`, \`chore\`, or \`docs\` (e.g. \`git checkout -b feat/crew-branch-convention\`).
+$BRANCH_RULE
    Never name the branch \`fm/...\`; that prefix is reserved for the work window, not the branch.$SETUP2
 
 # Rules

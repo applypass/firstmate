@@ -954,8 +954,11 @@ test_include_prs_is_the_only_fetch_path() {
     .prs | startswith("checked")
   ' >/dev/null || fail "--include-prs must report checked PR state"
   printf '%s' "$json" | jq -e '
-    .candidate_prs | any(.[]; .num == "9" and .task == "feat/ship-task" and .checks == "passing" and .review == "APPROVED")
+    .candidate_prs | any(.[]; .num == "9" and .branch == "feat/ship-task" and .checks == "passing" and .review == "APPROVED")
   ' >/dev/null || fail "candidate_prs must carry the fetched PR labeled by its head branch: $json"
+  printf '%s' "$json" | jq -e '
+    .candidate_prs | all(.[]; has("branch") and (has("task") | not))
+  ' >/dev/null || fail "candidate_prs must name the head-branch column 'branch', never the mislabeled 'task': $json"
   pass "--include-prs is the only path that fetches, and it enriches correctly"
 }
 

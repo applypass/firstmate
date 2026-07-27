@@ -27,4 +27,4 @@ mv "$TMP" "$META"
 
 HOME_Q=$(printf '%q' "$FM_HOME")
 echo "promoted $ID to ship (teardown protection restored)"
-echo "next: FM_HOME=$HOME_Q bin/fm-send.sh fm-$ID '<ship instructions: review scratch state with git status and git log; reset to a clean default-branch base; carry over only intended fix changes; create the ship branch using the repo branch convention (sc-<story-id>-<slug> for a ticket-mandated repo, otherwise <type>/<slug>, never fm/...); implement; report done>'"
+echo "next: FM_HOME=$HOME_Q bin/fm-send.sh fm-$ID '<ship instructions: review scratch state with git status and git log; reset to a clean default-branch base; carry over only intended fix changes; create the ship branch named per the branch convention owned by bin/fm-brief.sh; implement; report done>'"
