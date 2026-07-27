@@ -120,6 +120,12 @@ init_changed_fixture_repo() {
   : >"$repo/tests/fm-backend-herdr-eventwait.test.py"
   : >"$repo/bin/fm-supervisor-target-lib.sh"
   : >"$repo/bin/unmapped-source.sh"
+  # A script whose output another family asserts must reach that family through
+  # reference discovery, not an explicit arm that can fall behind.
+  : >"$repo/bin/fm-brief.sh"
+  printf '# bin/fm-brief.sh\n' >>"$repo/tests/fm-brief.test.sh"
+  printf '# bin/fm-brief.sh\n' >>"$repo/tests/fm-session-start.test.sh"
+  printf '# .agents/skills/example/SKILL.md\n' >>"$repo/tests/fm-captain-translation-contract.test.sh"
   printf '# .claude/settings.json\n# .pi/extensions/fm-primary-turnend-guard.ts\n' \
     >>"$repo/tests/fm-cd-pretool-check.test.sh"
   printf '# .pi/extensions/fm-primary-pi-watch.ts\n' >>"$repo/tests/fm-pi-watch-extension.test.sh"
@@ -161,6 +167,14 @@ test_changed_dependency_selection_and_unmapped_failure() {
   assert_contains "$listed" "tests/fm-afk-return.test.sh" "supervisor target selects afk coverage"
   git -C "$repo" add bin/fm-supervisor-target-lib.sh
   git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm supervisor-change
+
+  printf '\n' >>"$repo/bin/fm-brief.sh"
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
+  assert_contains "$listed" "tests/fm-brief.test.sh" "brief source selects its own coverage"
+  assert_contains "$listed" "tests/fm-session-start.test.sh" \
+    "brief source selects the other family that asserts its generated output"
+  git -C "$repo" add bin/fm-brief.sh
+  git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm brief-change
 
   printf '\n' >>"$repo/.agents/skills/example/SKILL.md"
   printf '\n' >>"$repo/.claude/settings.json"

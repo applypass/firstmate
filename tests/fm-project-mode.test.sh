@@ -125,8 +125,32 @@ test_unknown_mode_still_falls_back() {
   pass "fm-project-mode.sh: an unknown mode still falls back to the safest gate"
 }
 
+# A mode written after the bracket flags used to be discarded in silence, which
+# resolved a captain-declared local-only project to the remote-pushing default.
+# It must still be honored, and it must say so.
+test_misordered_mode_is_honored_and_warns() {
+  local home out err
+  home=$(make_home misordered \
+    '- late-mode [+ticket:sc local-only] - mode written after the flags (added 2026-07-01)' \
+    '- junk [direct-PR +yolo sideways] - a token that is neither mode nor flag (added 2026-07-01)')
+
+  err=$(FM_HOME="$home" "$PROJECT_MODE" late-mode 2>&1 >/dev/null)
+  out=$(resolve "$home" late-mode)
+  [ "$out" = "local-only off sc" ] \
+    || fail "late-mode: a misordered mode must not be downgraded, got \"$out\""
+  assert_contains "$err" "follows the bracket flags" "late-mode: a misordered mode must warn to stderr"
+
+  err=$(FM_HOME="$home" "$PROJECT_MODE" junk 2>&1 >/dev/null)
+  out=$(resolve "$home" junk)
+  [ "$out" = "direct-PR on" ] || fail "junk: an unrecognized token must not change the mode, got \"$out\""
+  assert_contains "$err" "unrecognized bracket token" "junk: an unrecognized bracket token must warn to stderr"
+
+  pass "fm-project-mode.sh: a misordered mode is honored with a warning, junk tokens warn"
+}
+
 test_existing_flags_are_unchanged
 test_ticket_prefix_is_an_optional_third_word
+test_misordered_mode_is_honored_and_warns
 test_third_field_reads_empty_when_ticketless
 test_invalid_ticket_prefix_falls_back_to_ticketless
 test_prefixless_ticket_flag_warns

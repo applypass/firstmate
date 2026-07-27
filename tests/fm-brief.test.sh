@@ -167,17 +167,17 @@ test_ticketless_branch_and_pr_naming_convention() {
       "$id: brief missing the ticketless PR-title prefix"
   done
 
-  # no-mistakes generates the title, so the crewmate must edit it at the post-PR
-  # return point - a single timing, before CI-green monitoring, so a title edit
-  # never re-triggers a required check after the run has reported green.
+  # no-mistakes generates the title from the committed work and never returns
+  # between opening the PR and CI green, so the prefix rides in the commit
+  # subject; a post-hoc title edit would restart the required check.
   brief="$home/data/conv-nm/brief.md"
-  # shellcheck disable=SC2016  # literal command text must render verbatim
-  assert_grep 'gh-axi pr edit <pr-number> --title' "$brief" \
-    "no-mistakes brief missing the edit-the-PR-title-after-open instruction"
-  assert_grep 'before it monitors for CI green' "$brief" \
-    "no-mistakes brief missing the single post-PR PR-title timing"
-  assert_no_grep 'before you report done' "$brief" \
-    "no-mistakes brief still offers a second, later PR-title timing"
+  # shellcheck disable=SC2016  # literal backticks and prefix must render verbatim
+  assert_grep 'commit with a conventional-commit subject prefixed `<type>: `' "$brief" \
+    "no-mistakes brief missing the commit-subject PR-title prefix instruction"
+  assert_no_grep 'gh-axi pr edit' "$brief" \
+    "no-mistakes brief still tells the crewmate to edit the PR title after the fact"
+  assert_no_grep 'before it monitors for CI green' "$brief" \
+    "no-mistakes brief still names a post-PR return point the pipeline never reaches"
 
   # direct-PR opens the PR itself, so it sets the prefix at creation time, and the
   # title rule must precede the open-the-PR-and-stop sentence a crewmate reads first.
@@ -233,6 +233,20 @@ EOF
       "$id: ticketed brief must not also emit the ticketless PR-title prefix"
   done
 
+  # The no-mistakes path cannot set the title, so the ticket prefix must reach it
+  # through the commit subject rather than a post-hoc edit.
+  brief="$home/data/tkt-nm/brief.md"
+  # shellcheck disable=SC2016  # literal backticks and prefix must render verbatim
+  assert_grep 'commit with the subject prefixed `sc-<ticket-id>: `' "$brief" \
+    "tkt-nm: ticketed no-mistakes brief missing the commit-subject prefix instruction"
+  assert_no_grep 'gh-axi pr edit' "$brief" \
+    "tkt-nm: ticketed no-mistakes brief still tells the crewmate to edit the PR title"
+
+  # direct-PR opens the PR itself, so it still sets the prefixed title at creation.
+  brief="$home/data/tkt-dp/brief.md"
+  assert_grep "Set that prefix in the title when you open the PR" "$brief" \
+    "tkt-dp: ticketed direct-PR brief missing the set-prefix-at-open instruction"
+
   # The private fleet's own repo names must never leak into this shared template.
   assert_no_grep "apply_pass_backend" "$ROOT/bin/fm-brief.sh" \
     "fm-brief.sh hardcodes a captain-private project name"
@@ -278,6 +292,8 @@ test_help_states_branch_convention() {
   assert_contains "$help" "<prefix>-<ticket-id>-<short-slug>" "fm-brief.sh --help omitted the ticketed branch shape"
   assert_contains "$help" "<type>/<short-slug>" "fm-brief.sh --help omitted the ticketless branch shape"
   assert_contains "$help" "never named fm/" "fm-brief.sh --help omitted the fm/ branch prohibition"
+  assert_contains "$help" "prefix in the commit subject" \
+    "fm-brief.sh --help omitted how the no-mistakes path carries the title prefix"
   pass "fm-brief.sh: --help owns the branch and PR-title convention it is cited for"
 }
 

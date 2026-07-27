@@ -46,6 +46,10 @@
 # Branch names are crewmate-chosen and share one namespace across concurrent
 # tasks, so the brief also tells the crewmate to disambiguate a name collision
 # instead of stalling on it.
+# How the title prefix gets there depends on who opens the PR: a direct-PR
+# crewmate sets it at creation time, while no-mistakes generates the title from
+# the committed work with no return point in between, so that path carries the
+# prefix in the commit subject rather than editing the title afterwards.
 # Scout tasks ignore mode - their deliverable is a report, not a merge.
 # Every scaffold's status protocol distinguishes the configured
 # declared-external-wait verb (FM_CLASSIFY_PAUSED_VERB, default "paused") from
@@ -299,12 +303,15 @@ EOF
 if [ -n "$TICKET" ]; then
   BRANCH_RULE="1. First action - create your branch. This repository mandates a tracker ticket, so create or link the ticket FIRST in the project's own ticket tracker - for a Shortcut project, the Shortcut MCP tools - then branch \`$TICKET-<ticket-id>-<short-slug>\` (e.g. \`git checkout -b $TICKET-4821-fix-login-redirect\`)."
   PR_TITLE_RULE="The PR title must be prefixed \`$TICKET-<ticket-id>: \` - the same ticket id as your \`$TICKET-<ticket-id>-<short-slug>\` branch - so the prefix is visible and the tracker auto-links the ticket."
+  COMMIT_SUBJECT_RULE="commit with the subject prefixed \`$TICKET-<ticket-id>: \`, carrying the same ticket id as your branch."
 else
   # Single-quoted: the backticks and <type> placeholders are literal brief text.
   # shellcheck disable=SC2016
   BRANCH_RULE='1. First action - create your branch `<type>/<short-slug>`, where `<type>` is a conventional-commit type - `feat`, `fix`, `chore`, or `docs` (e.g. `git checkout -b feat/crew-branch-convention`).'
   # shellcheck disable=SC2016
   PR_TITLE_RULE='The PR title must be prefixed `<type>: ` matching your branch type (`feat`, `fix`, `chore`, or `docs`), so the prefix is visible.'
+  # shellcheck disable=SC2016
+  COMMIT_SUBJECT_RULE='commit with a conventional-commit subject prefixed `<type>: `, matching your branch type.'
 fi
 
 case "$MODE" in
@@ -356,7 +363,8 @@ Two firstmate-specific rules layer on top of that guidance:
 - Avoid \`--yes\`: it would silently bypass firstmate's authority check and any required captain escalation.
 
 $PR_TITLE_RULE
-no-mistakes generates the PR title, so at the pipeline's post-PR return point - right after it opens the PR and before it monitors for CI green - check the title and, if it lacks that prefix, edit it with \`gh-axi pr edit <pr-number> --title "<prefix><summary>"\`.
+no-mistakes generates that title from your committed work and never returns between opening the PR and CI green, so there is no point at which you can set it - carry the prefix in your commit subject instead: $COMMIT_SUBJECT_RULE
+Do not edit the title afterwards; that restarts the PR's required check after it has already gone green.
 After /no-mistakes reports CI green (the CI-ready return point - do not wait for it to keep monitoring in the background until merge), append \`done: PR {url} checks green\` and stop. You are finished.
 EOF
 )

@@ -12,6 +12,9 @@
 #   - <name> [<mode> +ticket:sc] - <desc> (added <date>)    -> <mode> off sc
 # The bracket flags are additive and order-independent, so
 # "[direct-PR +yolo +ticket:sc]" sets both.
+# The mode belongs first. A mode written after the flags is still honored, but it
+# warns, because silently dropping it would resolve a local-only project to the
+# remote-pushing default. Any other unrecognized bracket token warns too.
 #
 # mode = how a finished change reaches main:
 #   no-mistakes  full pipeline -> PR -> captain merge (default)
@@ -53,25 +56,35 @@ if [ ! -f "$REG" ]; then
   exit 0
 fi
 
-# awk emits "<mode> <yolo> <ticket-flag>" (one line, the flag token verbatim and
-# empty when no +ticket flag is present) or nothing if the project is absent.
+# awk emits "<mode> <yolo> <ticket-flag> <modeset> <unknown>" (one line, the flag
+# token verbatim and empty when no +ticket flag is present) or nothing if the
+# project is absent. The fields are joined with a unit separator rather than a
+# tab because `read` collapses runs of IFS whitespace, which would shift an empty
+# field's successors into it.
 # The flag is matched without its colon so a malformed one still reaches the
 # shell's validation instead of being dropped as if it were never written.
+# Every bracket token that is neither the position-1 mode nor a recognized flag
+# is collected into <unknown> so the shell can rescue a misordered mode from it
+# and warn about whatever is left. <modeset> is non-empty when the mode came from
+# position 1, which is the only position that may name an unrecognized mode.
 parsed=$(awk -v n="$NAME" '
+  BEGIN { OFS="\037" }
   $1=="-" && $2==n {
-    mode="no-mistakes"; yolo="off"; ticket="";
+    mode="no-mistakes"; yolo="off"; ticket=""; modeset=""; unknown="";
     if ($3 ~ /^\[/) {
       s="";
       for (i=3; i<=NF; i++) { s = s (s==""?"":" ") $i; if ($i ~ /\]$/) break }
       gsub(/^\[|\]$/, "", s);           # strip the surrounding brackets
       k = split(s, a, " ");
-      if (a[1] != "" && a[1] !~ /^\+/) mode = a[1];
+      if (a[1] != "" && a[1] !~ /^\+/) { mode = a[1]; modeset = "1" }
       for (j=1; j<=k; j++) {
+        if (j==1 && modeset != "") continue;
         if (a[j]=="+yolo") yolo="on";
         else if (a[j] ~ /^\+ticket/) ticket = a[j];
+        else unknown = unknown (unknown==""?"":" ") a[j];
       }
     }
-    print mode, yolo, ticket; exit
+    print mode, yolo, ticket, modeset, unknown; exit
   }
 ' "$REG")
 
@@ -81,9 +94,31 @@ if [ -z "$parsed" ]; then
   exit 0
 fi
 
-read -r mode yolo ticket <<EOF
+IFS=$'\037' read -r mode yolo ticket modeset unknown <<EOF
 $parsed
 EOF
+# A mode written after the flags would otherwise be discarded in silence, and
+# the discard resolves to the remote-pushing default - so rescue it and warn.
+# Whatever is left is an operator typo and warns the way an unknown mode does.
+rest=
+set -f                                  # a stray token must never glob the cwd
+for token in $unknown; do
+  if [ -z "$modeset" ]; then
+    case "$token" in
+      no-mistakes|direct-PR|local-only)
+        echo "warn: mode \"$token\" for $NAME follows the bracket flags; write it first as [$token ...]" >&2
+        mode=$token
+        modeset=1
+        continue
+        ;;
+    esac
+  fi
+  rest="${rest:+$rest }$token"
+done
+set +f
+if [ -n "$rest" ]; then
+  echo "warn: unrecognized bracket token(s) \"$rest\" for $NAME; expected the mode first, then +yolo or +ticket:<prefix>" >&2
+fi
 case "$mode" in
   no-mistakes|direct-PR|local-only) ;;
   *) echo "warn: unknown mode \"$mode\" for $NAME; defaulting to no-mistakes off" >&2; mode=no-mistakes; yolo=off; ticket= ;;
