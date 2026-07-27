@@ -154,6 +154,9 @@ test_ticketless_branch_and_pr_naming_convention() {
       "$id: brief still tells the crewmate to create an fm/ branch"
     assert_no_grep "create your branch: " "$brief" \
       "$id: brief kept the old single-line fm/<id> branch step"
+    # Crewmate-chosen names share one namespace, so a collision must not stall the task.
+    assert_grep "if \`git checkout -b\` fails because the name already exists" "$brief" \
+      "$id: brief missing the branch-name collision guidance"
   done
 
   # PR-producing modes carry the ticketless PR-title prefix, and only that one.
@@ -202,8 +205,12 @@ EOF
     # shellcheck disable=SC2016  # literal backticks must render in the brief
     assert_grep 'branch `sc-<ticket-id>-<short-slug>`' "$brief" \
       "$id: brief missing the ticket-mandated branch rule"
-    assert_grep "Shortcut MCP tools" "$brief" \
-      "$id: ticketed brief must name the sanctioned tool for creating or linking the ticket"
+    assert_grep "in the project's own ticket tracker" "$brief" \
+      "$id: ticketed brief must name where the crewmate creates or links the ticket"
+    assert_grep "for a Shortcut project, the Shortcut MCP tools" "$brief" \
+      "$id: ticketed brief must keep Shortcut as the worked example, not the only tracker"
+    assert_grep "if \`git checkout -b\` fails because the name already exists" "$brief" \
+      "$id: brief missing the branch-name collision guidance"
     # shellcheck disable=SC2016  # literal backticks must render in the brief
     assert_no_grep 'create your branch `<type>/<short-slug>`' "$brief" \
       "$id: ticketed brief must not also emit the ticketless branch rule"
@@ -227,6 +234,33 @@ EOF
     "fm-brief.sh hardcodes a captain-private project name"
 
   pass "fm-brief.sh: a +ticket project gets only the ticketed branch and title rule"
+}
+
+# The +ticket:<prefix> flag accepts any bare token, so the brief must not claim
+# one specific tracker owns a prefix it knows nothing about.
+test_non_shortcut_ticket_prefix_keeps_tracker_generic() {
+  local home brief
+  home="$TMP_ROOT/eng-ticket-home"
+  mkdir -p "$home/data"
+  cat > "$home/data/projects.md" <<'EOF'
+- eng-proj [direct-PR +ticket:ENG] - fixture for a non-Shortcut ticket-mandated repo (added 2026-07-01)
+EOF
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" tkt-eng eng-proj >/dev/null 2>&1
+  brief="$home/data/tkt-eng/brief.md"
+  assert_present "$brief" "tkt-eng: brief was not scaffolded"
+  # shellcheck disable=SC2016  # literal backticks must render in the brief
+  assert_grep 'branch `ENG-<ticket-id>-<short-slug>`' "$brief" \
+    "tkt-eng: brief missing the derived ENG branch rule"
+  # shellcheck disable=SC2016  # literal backticks and prefix must render verbatim
+  assert_grep 'The PR title must be prefixed `ENG-<ticket-id>: `' "$brief" \
+    "tkt-eng: brief missing the derived ENG PR-title prefix"
+  assert_grep "in the project's own ticket tracker" "$brief" \
+    "tkt-eng: brief must point at the project's own tracker"
+  assert_no_grep "create or link the ticket FIRST with the Shortcut" "$brief" \
+    "tkt-eng: brief names Shortcut as the tracker for a non-Shortcut prefix"
+
+  pass "fm-brief.sh: a non-Shortcut ticket prefix does not claim Shortcut as its tracker"
 }
 
 # fm-merge-local.sh and fm-review-diff.sh both point readers at this script's
@@ -509,6 +543,7 @@ test_help_includes_entire_header
 test_ship_modes_generate_clean_briefs
 test_ticketless_branch_and_pr_naming_convention
 test_ticketed_branch_and_pr_naming_convention
+test_non_shortcut_ticket_prefix_keeps_tracker_generic
 test_help_states_branch_convention
 test_faster_paths_use_configured_authority_without_stacked_review
 test_no_mistakes_dod_wording

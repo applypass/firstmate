@@ -12,8 +12,11 @@
 #   (c) worktree directory pruned                    -> refuse, name --branch
 #   (d) detached worktree HEAD                       -> refuse, name --branch
 #   (e) diverged branch                              -> fast-forward-only refusal
-#   (f) --branch override                            -> merges without consulting HEAD
+#   (f) --branch override                            -> lands when HEAD is unreadable
 #   (g) --branch recovers each unavailable-worktree case, keeping every guard
+#   (h) readable HEAD                                -> outranks an agreeing --branch
+#   (i) --branch disagreeing with a readable HEAD    -> refused, main untouched
+#   (j) empty or absent project=                     -> refuse before any git -C runs
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -215,9 +218,11 @@ test_branch_override_recovers_every_unavailable_worktree() {
 
 test_branch_override_keeps_every_merge_guard() {
   local case_dir err rc before
-  # An unknown branch name must be rejected, not merged blindly.
+  # An unknown branch name must be rejected, not merged blindly. Detach first so
+  # the override is actually consulted rather than refused as a HEAD mismatch.
   case_dir=$(make_case override-unknown-branch)
   write_attached_meta "$case_dir"
+  git -C "$case_dir/wt" checkout -q --detach
   before=$(main_head "$case_dir")
   set +e
   run_merge_local "$case_dir" task-m1 --branch feat/never-created > /dev/null 2> "$case_dir/stderr"; rc=$?
@@ -259,6 +264,81 @@ test_branch_override_keeps_every_merge_guard() {
   [ "$(main_head "$case_dir")" = "$before" ] || fail "override-dirty: main must be untouched"
 
   pass "fm-merge-local --branch keeps the existence, fast-forward, and clean-tree guards"
+}
+
+test_worktree_head_outranks_branch_override() {
+  local case_dir out rc
+  case_dir=$(make_case head-wins)
+  write_attached_meta "$case_dir"
+  # A second landable branch the override could have named. The worktree HEAD is
+  # readable, so discovery must win and this branch must stay unmerged.
+  git -C "$case_dir/project" branch feat/other-task main
+
+  set +e
+  out=$(run_merge_local "$case_dir" task-m1 --branch feat/ready-work 2> "$case_dir/stderr"); rc=$?
+  set -e
+  expect_code 0 "$rc" "head-wins: an agreeing --branch must still merge (stderr: $(cat "$case_dir/stderr"))"
+  assert_contains "$out" "merged feat/ready-work into local main" \
+    "head-wins: must merge the branch the worktree has checked out"
+  [ "$(main_head "$case_dir")" = "$(branch_head "$case_dir" feat/ready-work)" ] \
+    || fail "head-wins: main was not fast-forwarded to the discovered branch"
+  pass "fm-merge-local uses the worktree HEAD when it is readable"
+}
+
+test_branch_override_disagreeing_with_head_refuses() {
+  local case_dir err rc before
+  case_dir=$(make_case override-mismatch)
+  write_attached_meta "$case_dir"
+  # Another task's branch, ahead of main and a perfectly valid fast-forward, so
+  # only the identity check can stop it landing.
+  git -C "$case_dir/project" worktree add -q -b feat/other-task "$case_dir/other-wt" main
+  printf 'other work\n' > "$case_dir/other-wt/other.txt"
+  git -C "$case_dir/other-wt" add other.txt
+  git -C "$case_dir/other-wt" commit -qm "feat: other task work"
+  before=$(main_head "$case_dir")
+
+  set +e
+  run_merge_local "$case_dir" task-m1 --branch feat/other-task > /dev/null 2> "$case_dir/stderr"; rc=$?
+  set -e
+  err=$(cat "$case_dir/stderr")
+
+  [ "$rc" -ne 0 ] || fail "override-mismatch: must refuse a --branch that is not the task's checked-out work"
+  assert_contains "$err" "REFUSED: --branch feat/other-task disagrees with the branch task task-m1 has checked out (feat/ready-work)" \
+    "override-mismatch: must name both branches in the refusal"
+  [ "$(main_head "$case_dir")" = "$before" ] || fail "override-mismatch: main must be untouched"
+  pass "fm-merge-local refuses a --branch that disagrees with a readable worktree HEAD"
+}
+
+test_missing_project_refuses() {
+  local case_dir err rc
+  # An empty project= would make every git -C "$PROJ" run in the current
+  # directory - firstmate's own checkout - instead of the project.
+  case_dir=$(make_case no-project)
+  fm_write_meta "$case_dir/state/task-m1.meta" \
+    "window=fm-task-m1" \
+    "project=" \
+    "worktree=$case_dir/wt" \
+    "mode=local-only"
+  set +e
+  run_merge_local "$case_dir" task-m1 --branch feat/ready-work > /dev/null 2> "$case_dir/stderr"; rc=$?
+  set -e
+  err=$(cat "$case_dir/stderr")
+  [ "$rc" -ne 0 ] || fail "no-project: must refuse an empty project="
+  assert_contains "$err" "missing project=" "no-project: must name the missing project key"
+
+  case_dir=$(make_case gone-project)
+  fm_write_meta "$case_dir/state/task-m1.meta" \
+    "window=fm-task-m1" \
+    "project=$case_dir/not-a-project" \
+    "worktree=$case_dir/wt" \
+    "mode=local-only"
+  set +e
+  run_merge_local "$case_dir" task-m1 > /dev/null 2> "$case_dir/stderr"; rc=$?
+  set -e
+  err=$(cat "$case_dir/stderr")
+  [ "$rc" -ne 0 ] || fail "gone-project: must refuse a project directory that does not exist"
+  assert_contains "$err" "project for task task-m1 is missing" "gone-project: must name the absent project"
+  pass "fm-merge-local refuses an empty or absent project= instead of running git in the cwd"
 }
 
 test_non_local_only_mode_refuses() {
@@ -308,5 +388,8 @@ test_diverged_branch_refuses_fast_forward
 test_branch_override_merges_without_worktree_head
 test_branch_override_recovers_every_unavailable_worktree
 test_branch_override_keeps_every_merge_guard
+test_worktree_head_outranks_branch_override
+test_branch_override_disagreeing_with_head_refuses
+test_missing_project_refuses
 test_non_local_only_mode_refuses
 test_unknown_argument_refuses

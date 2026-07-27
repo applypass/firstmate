@@ -38,10 +38,14 @@
 # project's +ticket:<prefix> registry flag (bin/fm-project-mode.sh):
 #   ticket-mandated  branch <prefix>-<ticket-id>-<short-slug>, PR title prefix
 #                    "<prefix>-<ticket-id>: "; the crewmate creates or links the
-#                    ticket through the Shortcut MCP tools before branching
+#                    ticket in the project's own tracker before branching (for a
+#                    Shortcut project, the Shortcut MCP tools)
 #   ticketless       branch <type>/<short-slug> and PR title prefix "<type>: "
 #                    with a conventional-commit type (feat, fix, chore, docs)
 # A branch is never named fm/...; that prefix is reserved for the work window.
+# Branch names are crewmate-chosen and share one namespace across concurrent
+# tasks, so the brief also tells the crewmate to disambiguate a name collision
+# instead of stalling on it.
 # Scout tasks ignore mode - their deliverable is a report, not a merge.
 # Every scaffold's status protocol distinguishes the configured
 # declared-external-wait verb (FM_CLASSIFY_PAUSED_VERB, default "paused") from
@@ -293,7 +297,7 @@ EOF
 # +ticket:<prefix> flag, so the brief states exactly one rule instead of asking
 # the crewmate to guess which one applies.
 if [ -n "$TICKET" ]; then
-  BRANCH_RULE="1. First action - create your branch. This repository mandates a tracker ticket, so create or link the ticket FIRST with the Shortcut MCP tools, then branch \`$TICKET-<ticket-id>-<short-slug>\` (e.g. \`git checkout -b $TICKET-4821-fix-login-redirect\`)."
+  BRANCH_RULE="1. First action - create your branch. This repository mandates a tracker ticket, so create or link the ticket FIRST in the project's own ticket tracker - for a Shortcut project, the Shortcut MCP tools - then branch \`$TICKET-<ticket-id>-<short-slug>\` (e.g. \`git checkout -b $TICKET-4821-fix-login-redirect\`)."
   PR_TITLE_RULE="The PR title must be prefixed \`$TICKET-<ticket-id>: \` - the same ticket id as your \`$TICKET-<ticket-id>-<short-slug>\` branch - so the prefix is visible and the tracker auto-links the ticket."
 else
   # Single-quoted: the backticks and <type> placeholders are literal brief text.
@@ -375,7 +379,8 @@ The path check is authoritative: \`git rev-parse --git-dir\` and \`git rev-parse
 If the top-level path is the primary checkout or not the worktree you were launched in, STOP - do not branch or commit here - append \`blocked: launched in primary checkout, not an isolated worktree\` to the status file and stop.
 
 $BRANCH_RULE
-   Never name the branch \`fm/...\`; that prefix is reserved for the work window, not the branch.$SETUP2
+   Never name the branch \`fm/...\`; that prefix is reserved for the work window, not the branch.
+   Concurrent tasks share one branch namespace, so if \`git checkout -b\` fails because the name already exists, pick a distinct slug or append a short unique suffix and continue - do not stop for this.$SETUP2
 
 # Rules
 $RULE1
