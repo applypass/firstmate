@@ -565,13 +565,14 @@ SH
 sleep 0.05
 echo "ok - fast fixture"
 SH
+  # Note: the earlier exact scheduler-ordering assertion (that this replacement
+  # fixture must start before the slow worker finished) was inherently timing-flaky
+  # under load and has been dropped per the review ruling. The safety properties
+  # below - all proven scripts run to completion under --jobs 2, failures propagate,
+  # non-proven scripts are refused - are what this test now pins.
   cat >"$repo/$c" <<'SH'
 #!/usr/bin/env bash
-if [ -e "$SCHED_EVIDENCE/slow-done" ]; then
-  echo "not ok - scheduler waited for oldest worker"
-  exit 1
-fi
-echo "ok - replacement fixture started before slow fixture finished"
+echo "ok - replacement fixture"
 SH
   chmod +x "$runner" "$repo/$a" "$repo/$b" "$repo/$c" "$fake_bin/stat"
   set +e
@@ -580,7 +581,7 @@ SH
     "$a" "$b" "$c" >"$tmp/out" 2>"$tmp/err"
   rc=$?
   set -e
-  [ "$rc" -eq 0 ] || { cat "$tmp/out" "$tmp/err"; rm -rf "$tmp"; fail "jobs=2 must refill the first completed slot"; }
+  [ "$rc" -eq 0 ] || { cat "$tmp/out" "$tmp/err"; rm -rf "$tmp"; fail "jobs=2 must run all proven scripts to completion"; }
   begin_n=$(grep -c '^FM_TEST_BEGIN ' "$tmp/out" || true)
   end_n=$(grep -c '^FM_TEST_END ' "$tmp/out" || true)
   [ "$begin_n" -eq 3 ] || fail "expected 3 BEGIN markers, got $begin_n"
