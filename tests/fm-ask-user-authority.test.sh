@@ -82,6 +82,35 @@ test_repeated_same_theme_escalates_before_another_round() {
   pass "repeated abstraction-preserving findings escalate before another fix round"
 }
 
+test_defect_class_is_swept_and_decided_once() {
+  local brief_contract sweep_owners
+  assert_grep 'Sweep the defect class, decide once' "$OWNER" \
+    "class-sweep rule is missing from its owner"
+  assert_grep 'Enumerate that whole class before deciding the instance in front of you' "$OWNER" \
+    "class-sweep rule no longer enumerates the class up front"
+  assert_grep 'bring the captain one decision that covers the class' "$OWNER" \
+    "class-sweep rule lost the single batched captain decision"
+  assert_grep 'follow "Sweep the defect class, decide once" below instead of routing the next instance' "$OWNER" \
+    "same-theme step does not cross-reference the class-sweep rule"
+  assert_grep 'Enumerating the class is not contract expansion' "$OWNER" \
+    "class-sweep rule no longer distinguishes enumeration from contract expansion"
+  assert_grep 'still follows the numbered procedure above' "$OWNER" \
+    "class-sweep rule stopped deferring authority to the numbered procedure"
+
+  brief_contract=$(awk '
+    /^## 11\. Crewmate briefs$/ { found = 1; next }
+    found && /^## 12\./ { exit }
+    found { print }
+  ' "$AGENTS")
+  assert_contains "$brief_contract" 'enumerate every occurrence of that class and report them as one set' \
+    "brief contract does not require systemic work to be swept in one set"
+  assert_contains "$brief_contract" '`ask-user-authority` owns the matching one-batched-decision rule' \
+    "brief contract does not point at the class-sweep owner"
+  sweep_owners=$(grep -Fc 'Sweep the defect class, decide once' "$AGENTS")
+  [ "$sweep_owners" -eq 0 ] || fail "AGENTS.md duplicated the class-sweep procedure instead of pointing at its owner"
+  pass "a defect class is enumerated up front and decided in one batched decision"
+}
+
 test_stronger_security_boundary_survives() {
   assert_grep 'genuinely security-sensitive choices always escalate' "$OWNER" \
     "security-sensitive choices no longer use the stronger captain boundary"
@@ -154,6 +183,7 @@ test_owner_and_always_loaded_boundary
 test_concrete_required_defect_stays_autonomous
 test_continuous_monitoring_expansion_escalates
 test_repeated_same_theme_escalates_before_another_round
+test_defect_class_is_swept_and_decided_once
 test_stronger_security_boundary_survives
 test_explicit_complex_architecture_stays_in_scope
 test_reviewer_labels_are_evidence_not_authority

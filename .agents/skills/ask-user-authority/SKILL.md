@@ -25,11 +25,21 @@ The concise standing authority boundary remains always loaded in `AGENTS.md` sec
 6. Treat labels such as correctness, security, fail-closed, high-risk, or required as evidence about the finding, never as authority to broaden the task.
 7. Examine the causal theme across prior findings and fix rounds.
    Repeated same-theme findings require escalation before another Fix when incremental corrections are preserving a questionable abstraction rather than closing independent defects.
+   Treat the repeat as a signal that the root is a shared abstraction, and follow "Sweep the defect class, decide once" below instead of routing the next instance.
 8. Apply the existing stronger captain boundaries first.
    Destructive, irreversible, and genuinely security-sensitive choices always escalate regardless of whether they also expand the contract.
 
 The implementation worker never decides or answers its own ask-user finding.
 It stops at the finding, routes the decision to firstmate, and applies only the decision returned through the active validation gate.
+
+## Sweep the defect class, decide once
+
+A finding is often one instance of a class: one caller of a shared helper, one use of a repeated idiom, one site of a swallowed-failure convention.
+Enumerate that whole class before deciding the instance in front of you.
+Direct the worker to find every occurrence, fold the corrections into one round, and bring the captain one decision that covers the class.
+One queue-refresh fix cost the captain roughly nine separate ask-user decisions, each another caller that ignored a swallowed failure, before the class was swept and decided once.
+Enumerating the class is not contract expansion, because it only establishes the real size of the defect the accepted contract already requires fixing.
+Whether the batched correction stays within `yolo` authority or belongs to the captain still follows the numbered procedure above, and one batched escalation still carries all five elements below.
 
 ## Captain-facing escalation
 
