@@ -39,7 +39,8 @@ Enumerate that whole class before deciding the instance in front of you.
 Direct the worker to find every occurrence, fold the corrections into one round, and bring one decision that covers the class to whoever owns it under the numbered procedure above.
 Enumerating the class is not contract expansion, because it only establishes the real size of the defect the accepted contract already requires fixing.
 Whether the batched correction stays within `yolo` authority or belongs to the captain still follows the numbered procedure above, including its stronger destructive, irreversible, and security-sensitive captain boundaries, and one batched escalation still carries all five elements below.
-Step 7's questionable-abstraction escalation still fires when the class is swept, so folding the corrections into one round never authorizes batch-patching a class autonomously in place of that escalation.
+Step 7's questionable-abstraction escalation is not suspended by the sweep, so folding the corrections into one round never authorizes batch-patching a class autonomously in place of that escalation.
+The sweep alone does not trigger that escalation either, because step 7 fires only on its own condition.
 
 ## Captain-facing escalation
 

@@ -99,10 +99,12 @@ test_defect_class_is_swept_and_decided_once() {
     "class-sweep rule no longer distinguishes enumeration from contract expansion"
   assert_grep 'still follows the numbered procedure above, including its stronger destructive, irreversible, and security-sensitive captain boundaries' "$OWNER" \
     "class-sweep rule stopped deferring authority to the numbered procedure and its stronger boundaries"
-  assert_grep "Step 7's questionable-abstraction escalation still fires when the class is swept" "$OWNER" \
+  assert_grep "Step 7's questionable-abstraction escalation is not suspended by the sweep" "$OWNER" \
     "sweeping a class can skip the questionable-abstraction escalation"
   assert_grep 'never authorizes batch-patching a class autonomously in place of that escalation' "$OWNER" \
     "folding corrections into one round reads as autonomous batch-patching authority"
+  assert_grep 'The sweep alone does not trigger that escalation either, because step 7 fires only on its own condition' "$OWNER" \
+    "sweeping a class reads as unconditionally triggering the questionable-abstraction escalation"
 
   brief_contract=$(awk '
     /^## 11\. Crewmate briefs$/ { found = 1; next }
