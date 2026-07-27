@@ -21,11 +21,17 @@ mkdir -p "$BRIEF_HOME/data"
 # The script itself must always parse. This is the direct regression test for
 # issue #166: a stray apostrophe in any of the three DOD heredoc bodies
 # (no-mistakes/direct-PR/local-only) breaks `bash -n` on the whole file.
+# The bug only reproduces on Bash 3.2, which the PATH bash usually is not, so
+# /bin/bash is checked too - that gives a macOS developer the same signal the
+# stock-Bash CI lane provides instead of a green local run.
 test_script_parses() {
-  local out rc
-  out=$(bash -n "$ROOT/bin/fm-brief.sh" 2>&1); rc=$?
-  expect_code 0 "$rc" "bash -n bin/fm-brief.sh must parse cleanly (got: $out)"
-  [ -z "$out" ] || fail "bash -n bin/fm-brief.sh emitted unexpected output: $out"
+  local interp out rc
+  for interp in "$(command -v bash)" /bin/bash; do
+    [ -x "$interp" ] || continue
+    out=$("$interp" -n "$ROOT/bin/fm-brief.sh" 2>&1); rc=$?
+    expect_code 0 "$rc" "$interp -n bin/fm-brief.sh must parse cleanly (got: $out)"
+    [ -z "$out" ] || fail "$interp -n bin/fm-brief.sh emitted unexpected output: $out"
+  done
   pass "fm-brief.sh: bash -n succeeds"
 }
 
@@ -117,6 +123,152 @@ test_no_mistakes_dod_wording() {
   assert_no_grep "no-mistakes' own guidance" "$brief" \
     "no-mistakes DOD regressed to the apostrophe form that breaks bash -n"
   pass "fm-brief.sh: no-mistakes DOD wording avoids the apostrophe regression"
+}
+
+# The scaffold owns the crew branch-naming convention, keyed off the project's
+# +ticket:<prefix> registry flag (bin/fm-project-mode.sh). A ticketless project
+# branches <type>/<slug>; a ticket-mandated one branches <prefix>-<ticket-id>-<slug>
+# and the tracker auto-links from the branch name, so NO PR-title prefix machinery
+# is emitted. The brief states exactly ONE rule so the crewmate never has to guess,
+# and never fm/<id> - that prefix stays reserved for the work window.
+test_ticketless_branch_naming_convention() {
+  local home id brief
+  home="$TMP_ROOT/branch-convention-home"
+  write_registry "$home"
+
+  # Shared branch step: present in every ship mode, and never fm/<id>.
+  for id_proj in "conv-nm:no-registry-proj" "conv-dp:direct-proj" "conv-lo:local-proj"; do
+    id=${id_proj%%:*}
+    proj=${id_proj##*:}
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "$proj" >/dev/null 2>&1
+    brief="$home/data/$id/brief.md"
+    assert_present "$brief" "$id: brief was not scaffolded"
+    # shellcheck disable=SC2016  # literal backticks must render in the brief
+    assert_grep 'create your branch `<type>/<short-slug>`' "$brief" \
+      "$id: brief missing the ticketless conventional-commit branch rule"
+    assert_grep "conventional-commit type" "$brief" \
+      "$id: brief missing the conventional-commit type list"
+    assert_no_grep "<ticket-id>" "$brief" \
+      "$id: ticketless brief must not emit the ticket-mandated rule"
+    assert_no_grep "Shortcut MCP" "$brief" \
+      "$id: ticketless brief must not tell the crewmate to create a ticket"
+    # shellcheck disable=SC2016  # literal backticks must render in the brief
+    assert_grep 'prefix names the work window' "$brief" \
+      "$id: brief lost the fm/-is-the-window note"
+    # shellcheck disable=SC2016  # literal command text must render verbatim
+    assert_no_grep 'git checkout -b fm/' "$brief" \
+      "$id: brief still tells the crewmate to create an fm/ branch"
+    assert_no_grep "create your branch: " "$brief" \
+      "$id: brief kept the old single-line fm/<id> branch step"
+    # Crewmate-chosen names share one namespace, so a collision must not stall the task.
+    assert_grep "if \`git checkout -b\` reports the name already exists" "$brief" \
+      "$id: brief missing the branch-name collision guidance"
+    # Shortcut auto-links from the branch name, so no PR-title-prefix machinery.
+    assert_no_grep "The PR title must be prefixed" "$brief" \
+      "$id: brief still emits a PR-title-prefix rule (branch-name linking makes it unneeded)"
+    assert_no_grep "commit with a conventional-commit subject prefixed" "$brief" \
+      "$id: brief still carries the commit-subject title-prefix trick"
+    assert_no_grep 'gh-axi pr edit' "$brief" \
+      "$id: brief still tells the crewmate to edit the PR title"
+    assert_no_grep "Set that prefix in the title" "$brief" \
+      "$id: brief still tells the crewmate to set a PR-title prefix"
+  done
+
+  pass "fm-brief.sh: a ticketless project gets only the <type>/<slug> branch rule, no PR-title machinery"
+}
+
+# A project registered with +ticket:<prefix> gets the ticketed branch rule only,
+# and the brief names the concrete mechanism for obtaining the ticket id. The
+# branch name itself carries the ticket id (that is what the tracker auto-links),
+# so no PR-title-prefix machinery is emitted.
+test_ticketed_branch_naming_convention() {
+  local home id brief
+  home="$TMP_ROOT/ticket-convention-home"
+  mkdir -p "$home/data"
+  cat > "$home/data/projects.md" <<'EOF'
+- ticket-nm-proj [no-mistakes +ticket:sc] - fixture for a ticket-mandated no-mistakes repo (added 2026-07-01)
+- ticket-dp-proj [direct-PR +yolo +ticket:sc] - fixture for a ticket-mandated direct-PR repo (added 2026-07-01)
+EOF
+
+  for id_proj in "tkt-nm:ticket-nm-proj" "tkt-dp:ticket-dp-proj"; do
+    id=${id_proj%%:*}
+    proj=${id_proj##*:}
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" "$proj" >/dev/null 2>&1
+    brief="$home/data/$id/brief.md"
+    assert_present "$brief" "$id: brief was not scaffolded"
+    # shellcheck disable=SC2016  # literal backticks must render in the brief
+    assert_grep 'branch `sc-<ticket-id>-<short-slug>`' "$brief" \
+      "$id: brief missing the ticket-mandated branch rule"
+    assert_grep "in the project's own ticket tracker" "$brief" \
+      "$id: ticketed brief must name where the crewmate creates or links the ticket"
+    assert_grep "for a Shortcut project, the Shortcut MCP tools" "$brief" \
+      "$id: ticketed brief must keep Shortcut as the worked example, not the only tracker"
+    assert_grep "auto-links the ticket from this branch name" "$brief" \
+      "$id: ticketed brief must state the tracker links from the branch name"
+    assert_grep "if \`git checkout -b\` reports the name already exists" "$brief" \
+      "$id: brief missing the branch-name collision guidance"
+    # shellcheck disable=SC2016  # literal backticks must render in the brief
+    assert_no_grep 'create your branch `<type>/<short-slug>`' "$brief" \
+      "$id: ticketed brief must not also emit the ticketless branch rule"
+    assert_no_grep "conventional-commit type" "$brief" \
+      "$id: ticketed brief must not offer the conventional-commit alternative"
+    # shellcheck disable=SC2016  # literal backticks must render in the brief
+    assert_grep 'prefix names the work window' "$brief" \
+      "$id: brief lost the fm/-is-the-window note"
+    # Branch-name linking makes any PR-title-prefix machinery unnecessary.
+    assert_no_grep "The PR title must be prefixed" "$brief" \
+      "$id: ticketed brief still emits a PR-title-prefix rule"
+    assert_no_grep "commit with the subject prefixed" "$brief" \
+      "$id: ticketed brief still carries the commit-subject title-prefix trick"
+    assert_no_grep 'gh-axi pr edit' "$brief" \
+      "$id: ticketed brief still tells the crewmate to edit the PR title"
+    assert_no_grep "Set that prefix in the title" "$brief" \
+      "$id: ticketed brief still tells the crewmate to set a PR-title prefix"
+  done
+
+  # The private fleet's own repo names must never leak into this shared template.
+  assert_no_grep "apply_pass_backend" "$ROOT/bin/fm-brief.sh" \
+    "fm-brief.sh hardcodes a captain-private project name"
+  assert_no_grep "ai_backend" "$ROOT/bin/fm-brief.sh" \
+    "fm-brief.sh hardcodes a captain-private project name"
+
+  pass "fm-brief.sh: a +ticket project gets only the ticketed branch rule, no PR-title machinery"
+}
+
+# The +ticket:<prefix> flag accepts any bare token, so the brief must not claim
+# one specific tracker owns a prefix it knows nothing about.
+test_non_shortcut_ticket_prefix_keeps_tracker_generic() {
+  local home brief
+  home="$TMP_ROOT/eng-ticket-home"
+  mkdir -p "$home/data"
+  cat > "$home/data/projects.md" <<'EOF'
+- eng-proj [direct-PR +ticket:ENG] - fixture for a non-Shortcut ticket-mandated repo (added 2026-07-01)
+EOF
+
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" tkt-eng eng-proj >/dev/null 2>&1
+  brief="$home/data/tkt-eng/brief.md"
+  assert_present "$brief" "tkt-eng: brief was not scaffolded"
+  # shellcheck disable=SC2016  # literal backticks must render in the brief
+  assert_grep 'branch `ENG-<ticket-id>-<short-slug>`' "$brief" \
+    "tkt-eng: brief missing the derived ENG branch rule"
+  assert_grep "in the project's own ticket tracker" "$brief" \
+    "tkt-eng: brief must point at the project's own tracker"
+  assert_no_grep "create or link the ticket FIRST with the Shortcut" "$brief" \
+    "tkt-eng: brief names Shortcut as the tracker for a non-Shortcut prefix"
+
+  pass "fm-brief.sh: a non-Shortcut ticket prefix does not claim Shortcut as its tracker"
+}
+
+# fm-merge-local.sh and fm-review-diff.sh both point readers at this script's
+# --help as the owner of the branch convention, so --help must state it.
+test_help_states_branch_convention() {
+  local help
+  help=$("$ROOT/bin/fm-brief.sh" --help)
+  assert_contains "$help" "+ticket:<prefix>" "fm-brief.sh --help omitted the ticket flag that keys the convention"
+  assert_contains "$help" "<prefix>-<ticket-id>-<short-slug>" "fm-brief.sh --help omitted the ticketed branch shape"
+  assert_contains "$help" "<type>/<short-slug>" "fm-brief.sh --help omitted the ticketless branch shape"
+  assert_contains "$help" "names the work window" "fm-brief.sh --help omitted the fm/-window note"
+  pass "fm-brief.sh: --help owns the branch convention it is cited for"
 }
 
 test_ship_project_memory_wording() {
@@ -385,6 +537,10 @@ test_scout_and_secondmate_scaffold() {
 test_script_parses
 test_help_includes_entire_header
 test_ship_modes_generate_clean_briefs
+test_ticketless_branch_naming_convention
+test_ticketed_branch_naming_convention
+test_non_shortcut_ticket_prefix_keeps_tracker_generic
+test_help_states_branch_convention
 test_faster_paths_use_configured_authority_without_stacked_review
 test_no_mistakes_dod_wording
 test_ship_project_memory_wording

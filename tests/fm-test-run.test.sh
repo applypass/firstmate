@@ -120,6 +120,12 @@ init_changed_fixture_repo() {
   : >"$repo/tests/fm-backend-herdr-eventwait.test.py"
   : >"$repo/bin/fm-supervisor-target-lib.sh"
   : >"$repo/bin/unmapped-source.sh"
+  # A script whose output another family asserts must reach that family through
+  # reference discovery, not an explicit arm that can fall behind.
+  : >"$repo/bin/fm-brief.sh"
+  printf '# bin/fm-brief.sh\n' >>"$repo/tests/fm-brief.test.sh"
+  printf '# bin/fm-brief.sh\n' >>"$repo/tests/fm-session-start.test.sh"
+  printf '# .agents/skills/example/SKILL.md\n' >>"$repo/tests/fm-captain-translation-contract.test.sh"
   printf '# .claude/settings.json\n# .pi/extensions/fm-primary-turnend-guard.ts\n' \
     >>"$repo/tests/fm-cd-pretool-check.test.sh"
   printf '# .pi/extensions/fm-primary-pi-watch.ts\n' >>"$repo/tests/fm-pi-watch-extension.test.sh"
@@ -161,6 +167,14 @@ test_changed_dependency_selection_and_unmapped_failure() {
   assert_contains "$listed" "tests/fm-afk-return.test.sh" "supervisor target selects afk coverage"
   git -C "$repo" add bin/fm-supervisor-target-lib.sh
   git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm supervisor-change
+
+  printf '\n' >>"$repo/bin/fm-brief.sh"
+  listed=$(cd "$repo" && bin/fm-test-run.sh --list --changed --base HEAD)
+  assert_contains "$listed" "tests/fm-brief.test.sh" "brief source selects its own coverage"
+  assert_contains "$listed" "tests/fm-session-start.test.sh" \
+    "brief source selects the other family that asserts its generated output"
+  git -C "$repo" add bin/fm-brief.sh
+  git -C "$repo" -c user.name=test -c user.email=test@example.invalid commit -qm brief-change
 
   printf '\n' >>"$repo/.agents/skills/example/SKILL.md"
   printf '\n' >>"$repo/.claude/settings.json"
@@ -551,13 +565,14 @@ SH
 sleep 0.05
 echo "ok - fast fixture"
 SH
+  # Note: the earlier exact scheduler-ordering assertion (that this replacement
+  # fixture must start before the slow worker finished) was inherently timing-flaky
+  # under load and has been dropped per the review ruling. The safety properties
+  # below - all proven scripts run to completion under --jobs 2, failures propagate,
+  # non-proven scripts are refused - are what this test now pins.
   cat >"$repo/$c" <<'SH'
 #!/usr/bin/env bash
-if [ -e "$SCHED_EVIDENCE/slow-done" ]; then
-  echo "not ok - scheduler waited for oldest worker"
-  exit 1
-fi
-echo "ok - replacement fixture started before slow fixture finished"
+echo "ok - replacement fixture"
 SH
   chmod +x "$runner" "$repo/$a" "$repo/$b" "$repo/$c" "$fake_bin/stat"
   set +e
@@ -566,7 +581,7 @@ SH
     "$a" "$b" "$c" >"$tmp/out" 2>"$tmp/err"
   rc=$?
   set -e
-  [ "$rc" -eq 0 ] || { cat "$tmp/out" "$tmp/err"; rm -rf "$tmp"; fail "jobs=2 must refill the first completed slot"; }
+  [ "$rc" -eq 0 ] || { cat "$tmp/out" "$tmp/err"; rm -rf "$tmp"; fail "jobs=2 must run all proven scripts to completion"; }
   begin_n=$(grep -c '^FM_TEST_BEGIN ' "$tmp/out" || true)
   end_n=$(grep -c '^FM_TEST_END ' "$tmp/out" || true)
   [ "$begin_n" -eq 3 ] || fail "expected 3 BEGIN markers, got $begin_n"

@@ -34,6 +34,12 @@
 #   local-only   implement on branch, stop and report "ready in branch" (no push/PR);
 #                captain approves, firstmate merges to local main
 # Ship briefs begin with a worktree-isolation assertion before the branch step.
+# This scaffold owns the crew branch convention, keyed off the project's
+# +ticket:<prefix> registry flag (bin/fm-project-mode.sh): a ticket-mandated
+# project branches <prefix>-<ticket-id>-<short-slug> (the crewmate links the
+# ticket first, and the tracker auto-links from that branch name); a ticketless
+# project branches <type>/<short-slug> with a conventional-commit type. The fm/
+# prefix names the work window, not a branch.
 # Scout tasks ignore mode - their deliverable is a report, not a merge.
 # Every scaffold's status protocol distinguishes the configured
 # declared-external-wait verb (FM_CLASSIFY_PAUSED_VERB, default "paused") from
@@ -277,14 +283,32 @@ fi
 # Ship task: shape Setup / Rule 1 / Definition of done by the project's delivery mode.
 # yolo does not affect the brief because the worker never owns approval decisions;
 # firstmate applies the authority contract in AGENTS.md section 7, so discard it.
-read -r MODE _ <<EOF
-$("$FM_ROOT/bin/fm-project-mode.sh" "$REPO")
+# Fail closed on an unresolvable mode (e.g. a typo'd mode in the registry) rather
+# than scaffolding a brief against an empty, silently-defaulted mode.
+if ! MODE_LINE=$("$FM_ROOT/bin/fm-project-mode.sh" "$REPO"); then
+  echo "error: cannot resolve delivery mode for $REPO; fix the registry bracket" >&2
+  exit 1
+fi
+read -r MODE _ TICKET <<EOF
+$MODE_LINE
 EOF
+
+# The branch step is keyed off the project's +ticket:<prefix> flag, so the brief
+# states exactly one rule instead of asking the crewmate to guess which applies.
+# A ticket-mandated branch carries the ticket id in its NAME, which is what the
+# tracker's GitHub integration auto-links against - no PR-title prefix is needed.
+if [ -n "$TICKET" ]; then
+  BRANCH_RULE="1. First action - create your branch. This repository mandates a tracker ticket, so create or link the ticket FIRST in the project's own ticket tracker - for a Shortcut project, the Shortcut MCP tools - then branch \`$TICKET-<ticket-id>-<short-slug>\` (e.g. \`git checkout -b $TICKET-4821-fix-login-redirect\`). The tracker auto-links the ticket from this branch name."
+else
+  # Single-quoted: the backticks and <type> placeholders are literal brief text.
+  # shellcheck disable=SC2016
+  BRANCH_RULE='1. First action - create your branch `<type>/<short-slug>`, where `<type>` is a conventional-commit type - `feat`, `fix`, `chore`, or `docs` (e.g. `git checkout -b feat/crew-branch-convention`).'
+fi
 
 case "$MODE" in
   direct-PR)
     SETUP2=""
-    RULE1='1. Never push to the default branch (push only your `fm/'"$ID"'` branch). Never merge a PR.'
+    RULE1='1. Never push to the default branch (push only your own feature branch). Never merge a PR.'
     DOD=$(cat <<EOF
 # Definition of done
 This project ships **direct-PR**: you raise the PR yourself, without the no-mistakes pipeline.
@@ -296,13 +320,13 @@ EOF
     ;;
   local-only)
     SETUP2=""
-    RULE1="1. Never push to any remote and never open a PR. Work only on your \`fm/$ID\` branch; firstmate handles the merge into local \`main\`."
+    RULE1="1. Never push to any remote and never open a PR. Work only on your own feature branch; firstmate handles the merge into local \`main\`."
     DOD=$(cat <<EOF
 # Definition of done
 This project ships **local-only**: no remote, no PR, no pipeline.
-The task is complete only when committed on your branch \`fm/$ID\`. Do NOT push, do NOT open a PR, do NOT merge.
+The task is complete only when committed on your feature branch. Do NOT push, do NOT open a PR, do NOT merge.
 Keep your branch a clean fast-forward onto the current default branch - if \`main\` has advanced, rebase onto it so the eventual merge stays a fast-forward.
-When it is implemented and committed, append \`done: ready in branch fm/$ID\` to the status file and stop.
+When it is implemented and committed, append \`done: ready in branch <your-branch-name>\` to the status file and stop.
 The configured merge authority approves the ready branch, then firstmate merges it into local \`main\` through the guarded fast-forward path.
 EOF
 )
@@ -325,7 +349,7 @@ Two firstmate-specific rules layer on top of that guidance:
 - ask-user findings are never yours to answer: escalate to firstmate (rule 6) and stop.
   Firstmate applies the authority contract in its \`AGENTS.md\` and obtains any required captain decision.
   When the decision comes back, feed it to the gate with \`no-mistakes axi respond\` and let the pipeline apply it - do not route the question to "the user" or implement the fix yourself.
-- Avoid \`--yes\`: it would silently bypass firstmate's authority check and any required captain escalation.
+- Avoid \`--yes\`: it would silently bypass the authority check firstmate applies and any required captain escalation.
 
 After /no-mistakes reports CI green (the CI-ready return point - do not wait for it to keep monitoring in the background until merge), append \`done: PR {url} checks green\` and stop. You are finished.
 EOF
@@ -348,7 +372,9 @@ You are in a disposable git worktree of $REPO, at a detached HEAD on a clean def
 The path check is authoritative: \`git rev-parse --git-dir\` and \`git rev-parse --git-common-dir\` can help inspect the repo, but they do not prove you are outside the primary checkout.
 If the top-level path is the primary checkout or not the worktree you were launched in, STOP - do not branch or commit here - append \`blocked: launched in primary checkout, not an isolated worktree\` to the status file and stop.
 
-1. First action: create your branch: \`git checkout -b fm/$ID\`$SETUP2
+$BRANCH_RULE
+   (The \`fm/\` prefix names the work window; branch names use the rule above.)
+   Concurrent tasks share one branch namespace, so if \`git checkout -b\` reports the name already exists, pick a distinct slug or append a short unique suffix and continue.$SETUP2
 
 # Rules
 $RULE1

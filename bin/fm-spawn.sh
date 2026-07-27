@@ -926,6 +926,18 @@ herdr_projection_existing_meta_allows_flat() {  # <meta>
   esac
 }
 
+# Resolve the per-project delivery mode BEFORE creating any window or leasing a
+# worktree. Failing closed here (e.g. on a typo'd registry bracket) then aborts
+# before any resource is acquired, so a refusal never strands a live window or a
+# leased worktree with no meta file (which recovery could not see).
+if [ "$KIND" != secondmate ]; then
+  PROJ_NAME=$(basename "$PROJ_ABS")
+  if ! MODE_LINE=$("$FM_ROOT/bin/fm-project-mode.sh" "$PROJ_NAME"); then
+    echo "error: cannot resolve delivery mode for $PROJ_NAME; fix the registry bracket before spawning" >&2
+    exit 1
+  fi
+fi
+
 W="fm-$ID"
 case "$BACKEND" in
   tmux)
@@ -1412,9 +1424,9 @@ if [ "$KIND" = secondmate ]; then
   YOLO=off
   SECONDMATE_PROJECTS=$(secondmate_registry_value "$ID" projects || true)
 else
-  PROJ_NAME=$(basename "$PROJ_ABS")
-  read -r MODE YOLO <<EOF
-$("$FM_ROOT/bin/fm-project-mode.sh" "$PROJ_NAME")
+  # MODE_LINE was already resolved (and fail-closed) before window creation above.
+  read -r MODE YOLO _ <<EOF
+$MODE_LINE
 EOF
 fi
 
@@ -1458,7 +1470,13 @@ META_WINDOW=$T
     echo "home=$PROJ_ABS"
     echo "projects=$SECONDMATE_PROJECTS"
   fi
-} > "$STATE/$ID.meta"
+} > "$STATE/$ID.meta" || {
+  # Stock bash does not trip errexit on a compound command's redirection error,
+  # so an unwritable metadata path must be caught explicitly. Aborting here keeps
+  # the backend's abort cleanup armed instead of leaving an unrecorded endpoint.
+  echo "error: could not publish task metadata to $STATE/$ID.meta" >&2
+  exit 1
+}
 [ "$BACKEND" = orca ] && ORCA_ABORT_CLEANUP=0
 
 sq_brief=$(shell_quote "$BRIEF")
