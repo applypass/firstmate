@@ -1,19 +1,10 @@
 #!/usr/bin/env bash
 # Perform the approved local merge for a local-only ship task: fast-forward the
-# project's default branch to the crewmate's ready branch (discovered from the
-# task worktree's checked-out HEAD, so it works for any branch name).
-#
-# When the worktree cannot supply the branch - meta has no worktree=, the
-# worktree directory is gone (a pruned pool worktree), or its HEAD is detached
-# after a rebase - pass --branch <name> to name the ready branch directly. The
-# crewmate reports it as "done: ready in branch <name>" in the task's status log.
-# The worktree HEAD stays authoritative whenever it is readable: --branch is a
-# recovery fallback only, and a --branch that disagrees with a readable HEAD is
-# refused rather than merged. So whenever the worktree HEAD can answer, this path
-# never lands another task's branch; in the fallback (no readable HEAD) the
-# operator-supplied --branch is trusted, still gated by every merge check below.
-# The override only replaces branch DISCOVERY: every merge guard below still
-# applies, so an unlanded or diverged branch is refused exactly as before.
+# project's default branch to the crewmate's ready branch, discovered from the
+# task worktree's checked-out HEAD (any branch name). --branch <name> recovers the
+# case where the worktree cannot report its branch (missing worktree=, pruned, or
+# detached HEAD); a readable HEAD stays authoritative and a disagreeing --branch is
+# refused, so only the task's own work lands. Every merge guard below still applies.
 #
 # This is firstmate's merge gate-action (the captain's merge authority applied
 # locally instead of via a GitHub PR). It is the one sanctioned exception to hard
@@ -80,11 +71,8 @@ default_branch() {
   return 1
 }
 
-# The crewmate's ready branch is whatever the task worktree has checked out; the
-# branch name is no longer a fixed fm/<id> (see bin/fm-brief.sh branch convention).
-# The worktree HEAD is the source of truth because it is the only thing that ties
-# a branch back to THIS task; --branch is purely a recovery fallback for when the
-# worktree cannot answer, so approved work always stays landable.
+# The worktree HEAD is the source of truth (it ties the branch to THIS task);
+# --branch is only a fallback for when the worktree cannot answer.
 DISCOVERED=
 why=
 if [ -z "$WT" ]; then
@@ -118,10 +106,8 @@ git -C "$PROJ" rev-parse --verify --quiet "refs/heads/$BRANCH" >/dev/null || { e
 
 DEFAULT=$(default_branch) || { echo "error: cannot determine default branch for $PROJ; expected origin/HEAD, main, or master" >&2; exit 1; }
 
-# The ready branch must be a real task branch, never the default itself: merging
-# the default into the default is a no-op that would otherwise report success and
-# be read as "the approved work landed" when nothing did. This matters most in the
-# --branch recovery path, where the name is operator-supplied and unbound to the task.
+# Merging the default into itself is a no-op that would report success as if work
+# landed; require a real task branch (matters most on the operator-supplied --branch).
 [ "$BRANCH" != "$DEFAULT" ] || { echo "error: ready branch is the default branch '$DEFAULT'; there is nothing to merge" >&2; exit 1; }
 
 # The project's main checkout must be on its default branch and clean, so the

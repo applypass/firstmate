@@ -23,15 +23,11 @@
 # yolo (orthogonal) = when on, firstmate may make routine approval decisions itself.
 #   AGENTS.md section 7 is the single owner of authority exceptions, including
 #   ask-user contract expansion and stronger captain boundaries.
-# ticket (orthogonal) = the project mandates a tracker ticket per change, and
-#   <prefix> is the tracker's id prefix. It drives the crew branch convention
-#   owned by bin/fm-brief.sh: branch <prefix>-<ticket-id>-<slug>, which the
-#   tracker's GitHub integration auto-links off. Absent means ticketless work,
-#   which branches <type>/<slug> instead. No PR-title prefix is involved.
-#   A prefix must be a bare token ([A-Za-z][A-Za-z0-9_-]*) because it becomes part
-#   of a git branch name; anything else is warned about and dropped to ticketless.
-#   A malformed flag that carries no prefix at all ("+ticket" or "+ticket:") warns
-#   the same way, so an operator typo never silently reads as a ticketless project.
+# ticket (orthogonal) = the project mandates a tracker ticket per change; <prefix>
+#   is the tracker's id prefix, which bin/fm-brief.sh puts in the crew branch name
+#   (<prefix>-<ticket-id>-<slug>) for the tracker to auto-link. The prefix must be a
+#   bare token ([A-Za-z][A-Za-z0-9_-]*) since it becomes part of a branch name; an
+#   invalid or prefixless flag warns and drops the project to ticketless.
 #
 # The third word is emitted only for a ticket-mandated project, so callers that
 # read only "<mode> <yolo>" are unaffected. A caller that wants the prefix reads a
@@ -59,17 +55,11 @@ if [ ! -f "$REG" ]; then
   exit 0
 fi
 
-# awk emits "<mode> <yolo> <ticket-flag> <modeset> <unknown>" (one line, the flag
-# token verbatim and empty when no +ticket flag is present) or nothing if the
-# project is absent. The fields are joined with a unit separator rather than a
-# tab because `read` collapses runs of IFS whitespace, which would shift an empty
-# field's successors into it.
-# The flag is matched without its colon so a malformed one still reaches the
-# shell's validation instead of being dropped as if it were never written.
-# Every bracket token that is neither the position-1 mode nor a recognized flag
-# is collected into <unknown> so the shell can rescue a misordered mode from it
-# and warn about whatever is left. <modeset> is non-empty when the mode came from
-# position 1, which is the only position that may name an unrecognized mode.
+# awk emits "<mode> <yolo> <ticket-flag> <modeset> <unknown>" on one line (empty
+# fields kept), joined with a unit separator so `read` does not fold an empty field
+# into its successor. <unknown> collects any bracket token that is neither the
+# position-1 mode nor a recognized flag, so the shell can rescue a misordered mode
+# and warn about the rest; <modeset> is set when the mode came from position 1.
 parsed=$(awk -v n="$NAME" '
   BEGIN { OFS="\037" }
   $1=="-" && $2==n {

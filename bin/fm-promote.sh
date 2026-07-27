@@ -20,13 +20,12 @@ META="$STATE/$ID.meta"
 [ -f "$META" ] || { echo "error: no meta for task $ID at $META" >&2; exit 1; }
 grep -qx 'kind=scout' "$META" || { echo "error: task $ID is not a scout task (kind=scout not in meta)" >&2; exit 1; }
 
-# Resolve the concrete branch rule from the project's ticket flag BEFORE flipping
-# state, so an unresolvable mode aborts cleanly without half-promoting. The scout
-# brief carried no branch or ticket rule, so the ship instruction must spell it
-# out - a ticket-mandated project needs its tracker ticket created first, else the
-# branch loses the auto-link the whole convention produces.
+# Resolve the concrete branch rule from the project's ticket flag before flipping
+# state, so an unresolvable mode aborts cleanly. The scout brief carried no branch
+# rule, so the ship instruction spells it out (a ticket-mandated project links its
+# tracker ticket first, which gives the branch name its auto-link).
 PROJ=$(grep '^project=' "$META" | cut -d= -f2- || true)
-BRANCH_HINT="create the ship branch per the branch convention owned by bin/fm-brief.sh, never fm/..."
+BRANCH_HINT="create the ship branch per the branch convention owned by bin/fm-brief.sh"
 if [ -n "$PROJ" ]; then
   PROJ_NAME=$(basename "$PROJ")
   if ! MODE_LINE=$("$FM_ROOT/bin/fm-project-mode.sh" "$PROJ_NAME"); then
@@ -35,9 +34,9 @@ if [ -n "$PROJ" ]; then
   fi
   TICKET=$(printf '%s\n' "$MODE_LINE" | awk '{print $3}')
   if [ -n "$TICKET" ]; then
-    BRANCH_HINT="create or link the tracker ticket FIRST (for a Shortcut project, the Shortcut MCP tools), then create the ship branch ${TICKET}-<ticket-id>-<slug>, never fm/..."
+    BRANCH_HINT="create or link the tracker ticket FIRST (for a Shortcut project, the Shortcut MCP tools), then create the ship branch ${TICKET}-<ticket-id>-<slug>"
   else
-    BRANCH_HINT="create the ship branch <type>/<slug> with a conventional-commit type (feat/fix/chore/docs), never fm/..."
+    BRANCH_HINT="create the ship branch <type>/<slug> with a conventional-commit type (feat/fix/chore/docs)"
   fi
 fi
 

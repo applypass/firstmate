@@ -153,15 +153,15 @@ test_ticketless_branch_naming_convention() {
     assert_no_grep "Shortcut MCP" "$brief" \
       "$id: ticketless brief must not tell the crewmate to create a ticket"
     # shellcheck disable=SC2016  # literal backticks must render in the brief
-    assert_grep 'Never name the branch `fm/' "$brief" \
-      "$id: brief missing the fm/ branch prohibition"
+    assert_grep 'prefix names the work window' "$brief" \
+      "$id: brief lost the fm/-is-the-window note"
     # shellcheck disable=SC2016  # literal command text must render verbatim
     assert_no_grep 'git checkout -b fm/' "$brief" \
       "$id: brief still tells the crewmate to create an fm/ branch"
     assert_no_grep "create your branch: " "$brief" \
       "$id: brief kept the old single-line fm/<id> branch step"
     # Crewmate-chosen names share one namespace, so a collision must not stall the task.
-    assert_grep "if \`git checkout -b\` fails because the name already exists" "$brief" \
+    assert_grep "if \`git checkout -b\` reports the name already exists" "$brief" \
       "$id: brief missing the branch-name collision guidance"
     # Shortcut auto-links from the branch name, so no PR-title-prefix machinery.
     assert_no_grep "The PR title must be prefixed" "$brief" \
@@ -205,7 +205,7 @@ EOF
       "$id: ticketed brief must keep Shortcut as the worked example, not the only tracker"
     assert_grep "auto-links the ticket from this branch name" "$brief" \
       "$id: ticketed brief must state the tracker links from the branch name"
-    assert_grep "if \`git checkout -b\` fails because the name already exists" "$brief" \
+    assert_grep "if \`git checkout -b\` reports the name already exists" "$brief" \
       "$id: brief missing the branch-name collision guidance"
     # shellcheck disable=SC2016  # literal backticks must render in the brief
     assert_no_grep 'create your branch `<type>/<short-slug>`' "$brief" \
@@ -213,8 +213,8 @@ EOF
     assert_no_grep "conventional-commit type" "$brief" \
       "$id: ticketed brief must not offer the conventional-commit alternative"
     # shellcheck disable=SC2016  # literal backticks must render in the brief
-    assert_grep 'Never name the branch `fm/' "$brief" \
-      "$id: brief missing the fm/ branch prohibition"
+    assert_grep 'prefix names the work window' "$brief" \
+      "$id: brief lost the fm/-is-the-window note"
     # Branch-name linking makes any PR-title-prefix machinery unnecessary.
     assert_no_grep "The PR title must be prefixed" "$brief" \
       "$id: ticketed brief still emits a PR-title-prefix rule"
@@ -267,7 +267,7 @@ test_help_states_branch_convention() {
   assert_contains "$help" "+ticket:<prefix>" "fm-brief.sh --help omitted the ticket flag that keys the convention"
   assert_contains "$help" "<prefix>-<ticket-id>-<short-slug>" "fm-brief.sh --help omitted the ticketed branch shape"
   assert_contains "$help" "<type>/<short-slug>" "fm-brief.sh --help omitted the ticketless branch shape"
-  assert_contains "$help" "never named fm/" "fm-brief.sh --help omitted the fm/ branch prohibition"
+  assert_contains "$help" "names the work window" "fm-brief.sh --help omitted the fm/-window note"
   pass "fm-brief.sh: --help owns the branch convention it is cited for"
 }
 

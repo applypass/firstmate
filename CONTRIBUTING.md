@@ -45,7 +45,7 @@ See the [no-mistakes quick start](https://kunchenguid.github.io/no-mistakes/star
 - Crew branch names follow the convention owned by `bin/fm-brief.sh` (see its `--help`), keyed off the per-project `+ticket:<prefix>` flag in the `data/projects.md` registry (`bin/fm-project-mode.sh`).
   A ticket-mandated project branches `<prefix>-<ticket-id>-<short-slug>`; the tracker's GitHub integration auto-links the ticket from that branch name, so no PR-title prefix is required.
   A ticketless project, including this repo itself, branches `<type>/<short-slug>`, where `<type>` is a conventional-commit type (`feat`, `fix`, `chore`, `docs`).
-  A branch is never named `fm/...`; that prefix is reserved for a crewmate's work window, not its branch.
+  The `fm/` prefix names a crewmate's work window, not its branch.
 - Helper scripts in `bin/` are plain bash.
   Each starts with a usage header comment; keep it accurate when you change behavior.
   Test scripts and helpers in `tests/` are plain bash too.

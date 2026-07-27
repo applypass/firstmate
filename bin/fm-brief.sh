@@ -35,18 +35,11 @@
 #                captain approves, firstmate merges to local main
 # Ship briefs begin with a worktree-isolation assertion before the branch step.
 # This scaffold owns the crew branch convention, keyed off the project's
-# +ticket:<prefix> registry flag (bin/fm-project-mode.sh):
-#   ticket-mandated  branch <prefix>-<ticket-id>-<short-slug>; the crewmate
-#                    creates or links the ticket in the project's own tracker
-#                    before branching (for a Shortcut project, the Shortcut MCP
-#                    tools). The tracker's GitHub integration auto-links the
-#                    ticket from this branch name, so no PR-title prefix is needed.
-#   ticketless       branch <type>/<short-slug> with a conventional-commit type
-#                    (feat, fix, chore, docs)
-# A branch is never named fm/...; that prefix is reserved for the work window.
-# Branch names are crewmate-chosen and share one namespace across concurrent
-# tasks, so the brief also tells the crewmate to disambiguate a name collision
-# instead of stalling on it.
+# +ticket:<prefix> registry flag (bin/fm-project-mode.sh): a ticket-mandated
+# project branches <prefix>-<ticket-id>-<short-slug> (the crewmate links the
+# ticket first, and the tracker auto-links from that branch name); a ticketless
+# project branches <type>/<short-slug> with a conventional-commit type. The fm/
+# prefix names the work window, not a branch.
 # Scout tasks ignore mode - their deliverable is a report, not a merge.
 # Every scaffold's status protocol distinguishes the configured
 # declared-external-wait verb (FM_CLASSIFY_PAUSED_VERB, default "paused") from
@@ -380,8 +373,8 @@ The path check is authoritative: \`git rev-parse --git-dir\` and \`git rev-parse
 If the top-level path is the primary checkout or not the worktree you were launched in, STOP - do not branch or commit here - append \`blocked: launched in primary checkout, not an isolated worktree\` to the status file and stop.
 
 $BRANCH_RULE
-   Never name the branch \`fm/...\`; that prefix is reserved for the work window, not the branch.
-   Concurrent tasks share one branch namespace, so if \`git checkout -b\` fails because the name already exists, pick a distinct slug or append a short unique suffix and continue - do not stop for this.$SETUP2
+   (The \`fm/\` prefix names the work window; branch names use the rule above.)
+   Concurrent tasks share one branch namespace, so if \`git checkout -b\` reports the name already exists, pick a distinct slug or append a short unique suffix and continue.$SETUP2
 
 # Rules
 $RULE1
