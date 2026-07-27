@@ -1470,7 +1470,13 @@ META_WINDOW=$T
     echo "home=$PROJ_ABS"
     echo "projects=$SECONDMATE_PROJECTS"
   fi
-} > "$STATE/$ID.meta"
+} > "$STATE/$ID.meta" || {
+  # Stock bash does not trip errexit on a compound command's redirection error,
+  # so an unwritable metadata path must be caught explicitly. Aborting here keeps
+  # the backend's abort cleanup armed instead of leaving an unrecorded endpoint.
+  echo "error: could not publish task metadata to $STATE/$ID.meta" >&2
+  exit 1
+}
 [ "$BACKEND" = orca ] && ORCA_ABORT_CLEANUP=0
 
 sq_brief=$(shell_quote "$BRIEF")

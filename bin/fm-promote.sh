@@ -29,7 +29,7 @@ PROJ=$(grep '^project=' "$META" | cut -d= -f2- || true)
 BRANCH_HINT="create the ship branch per the branch convention owned by bin/fm-brief.sh, never fm/..."
 if [ -n "$PROJ" ]; then
   PROJ_NAME=$(basename "$PROJ")
-  if ! MODE_LINE=$("$FM_ROOT/bin/fm-project-mode.sh" "$PROJ_NAME" 2>/dev/null); then
+  if ! MODE_LINE=$("$FM_ROOT/bin/fm-project-mode.sh" "$PROJ_NAME"); then
     echo "error: cannot resolve delivery mode for $PROJ_NAME; fix the registry bracket before promoting" >&2
     exit 1
   fi

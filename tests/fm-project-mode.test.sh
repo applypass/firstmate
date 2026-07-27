@@ -3,9 +3,9 @@
 # resolves a project's delivery mode, yolo flag, and ticket prefix.
 #
 # The bracket flags are additive and order-independent. The optional third
-# output word (the +ticket:<prefix> value) drives the crew branch and PR-title
-# convention in bin/fm-brief.sh, and it must stay optional so callers that read
-# only "<mode> <yolo>" keep working. An invalid or prefixless flag warns and is
+# output word (the +ticket:<prefix> value) drives the crew branch convention in
+# bin/fm-brief.sh, and it must stay optional so callers that read only
+# "<mode> <yolo>" keep working. An invalid or prefixless flag warns and is
 # dropped to ticketless rather than scaffolding an unusable branch name.
 set -u
 

@@ -21,11 +21,17 @@ mkdir -p "$BRIEF_HOME/data"
 # The script itself must always parse. This is the direct regression test for
 # issue #166: a stray apostrophe in any of the three DOD heredoc bodies
 # (no-mistakes/direct-PR/local-only) breaks `bash -n` on the whole file.
+# The bug only reproduces on Bash 3.2, which the PATH bash usually is not, so
+# /bin/bash is checked too - that gives a macOS developer the same signal the
+# stock-Bash CI lane provides instead of a green local run.
 test_script_parses() {
-  local out rc
-  out=$(bash -n "$ROOT/bin/fm-brief.sh" 2>&1); rc=$?
-  expect_code 0 "$rc" "bash -n bin/fm-brief.sh must parse cleanly (got: $out)"
-  [ -z "$out" ] || fail "bash -n bin/fm-brief.sh emitted unexpected output: $out"
+  local interp out rc
+  for interp in "$(command -v bash)" /bin/bash; do
+    [ -x "$interp" ] || continue
+    out=$("$interp" -n "$ROOT/bin/fm-brief.sh" 2>&1); rc=$?
+    expect_code 0 "$rc" "$interp -n bin/fm-brief.sh must parse cleanly (got: $out)"
+    [ -z "$out" ] || fail "$interp -n bin/fm-brief.sh emitted unexpected output: $out"
+  done
   pass "fm-brief.sh: bash -n succeeds"
 }
 
