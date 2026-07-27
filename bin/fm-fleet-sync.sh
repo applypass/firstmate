@@ -301,7 +301,14 @@ sync_project() {
     echo "$label: skipped: not a git repo"
     return 0
   fi
-  mode_line=$("$FM_ROOT/bin/fm-project-mode.sh" "$label" 2>/dev/null || echo "no-mistakes off")
+  # Fail closed: if the mode cannot be resolved (e.g. a typo'd mode in the
+  # registry), skip rather than default to the remote-pushing "no-mistakes" - a
+  # mistyped local-only project must never be pushed. The warning is no longer
+  # discarded, so the operator sees why the project was skipped.
+  if ! mode_line=$("$FM_ROOT/bin/fm-project-mode.sh" "$label"); then
+    echo "$label: skipped: cannot resolve delivery mode (fix the registry bracket)"
+    return 0
+  fi
   mode=${mode_line%% *}
   if [ "$mode" = "local-only" ]; then
     echo "$label: skipped: local-only project"

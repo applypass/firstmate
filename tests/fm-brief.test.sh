@@ -119,13 +119,13 @@ test_no_mistakes_dod_wording() {
   pass "fm-brief.sh: no-mistakes DOD wording avoids the apostrophe regression"
 }
 
-# The scaffold owns the crew branch/PR-naming convention, keyed off the project's
+# The scaffold owns the crew branch-naming convention, keyed off the project's
 # +ticket:<prefix> registry flag (bin/fm-project-mode.sh). A ticketless project
-# branches <type>/<slug> with a "<type>: " PR-title prefix; a ticket-mandated one
-# branches <prefix>-<ticket-id>-<slug> with a "<prefix>-<ticket-id>: " prefix. The
-# brief states exactly ONE rule so the crewmate never has to guess, and never
-# fm/<id> - that prefix stays reserved for the work window.
-test_ticketless_branch_and_pr_naming_convention() {
+# branches <type>/<slug>; a ticket-mandated one branches <prefix>-<ticket-id>-<slug>
+# and the tracker auto-links from the branch name, so NO PR-title prefix machinery
+# is emitted. The brief states exactly ONE rule so the crewmate never has to guess,
+# and never fm/<id> - that prefix stays reserved for the work window.
+test_ticketless_branch_naming_convention() {
   local home id brief
   home="$TMP_ROOT/branch-convention-home"
   write_registry "$home"
@@ -157,43 +157,25 @@ test_ticketless_branch_and_pr_naming_convention() {
     # Crewmate-chosen names share one namespace, so a collision must not stall the task.
     assert_grep "if \`git checkout -b\` fails because the name already exists" "$brief" \
       "$id: brief missing the branch-name collision guidance"
+    # Shortcut auto-links from the branch name, so no PR-title-prefix machinery.
+    assert_no_grep "The PR title must be prefixed" "$brief" \
+      "$id: brief still emits a PR-title-prefix rule (branch-name linking makes it unneeded)"
+    assert_no_grep "commit with a conventional-commit subject prefixed" "$brief" \
+      "$id: brief still carries the commit-subject title-prefix trick"
+    assert_no_grep 'gh-axi pr edit' "$brief" \
+      "$id: brief still tells the crewmate to edit the PR title"
+    assert_no_grep "Set that prefix in the title" "$brief" \
+      "$id: brief still tells the crewmate to set a PR-title prefix"
   done
 
-  # PR-producing modes carry the ticketless PR-title prefix, and only that one.
-  for id in conv-nm conv-dp; do
-    brief="$home/data/$id/brief.md"
-    # shellcheck disable=SC2016  # literal backticks and prefix must render verbatim
-    assert_grep 'The PR title must be prefixed `<type>: `' "$brief" \
-      "$id: brief missing the ticketless PR-title prefix"
-  done
-
-  # no-mistakes generates the title from the committed work and never returns
-  # between opening the PR and CI green, so the prefix rides in the commit
-  # subject; a post-hoc title edit would restart the required check.
-  brief="$home/data/conv-nm/brief.md"
-  # shellcheck disable=SC2016  # literal backticks and prefix must render verbatim
-  assert_grep 'commit with a conventional-commit subject prefixed `<type>: `' "$brief" \
-    "no-mistakes brief missing the commit-subject PR-title prefix instruction"
-  assert_no_grep 'gh-axi pr edit' "$brief" \
-    "no-mistakes brief still tells the crewmate to edit the PR title after the fact"
-  assert_no_grep 'before it monitors for CI green' "$brief" \
-    "no-mistakes brief still names a post-PR return point the pipeline never reaches"
-
-  # direct-PR opens the PR itself, so it sets the prefix at creation time, and the
-  # title rule must precede the open-the-PR-and-stop sentence a crewmate reads first.
-  brief="$home/data/conv-dp/brief.md"
-  assert_grep "Set that prefix in the title when you open the PR" "$brief" \
-    "direct-PR brief missing the set-prefix-at-open instruction"
-  awk '/^Set that prefix in the title when you open the PR/ { seen = 1 }
-       /^When it is implemented and committed, push your branch/ { exit seen ? 0 : 1 }' "$brief" \
-    || fail "direct-PR brief states the PR-title rule after the open-the-PR-and-stop sentence"
-
-  pass "fm-brief.sh: a ticketless project gets only the <type>/<slug> branch and <type>: title rule"
+  pass "fm-brief.sh: a ticketless project gets only the <type>/<slug> branch rule, no PR-title machinery"
 }
 
-# A project registered with +ticket:<prefix> gets the ticketed rule only, and the
-# brief names the concrete mechanism for obtaining the ticket id.
-test_ticketed_branch_and_pr_naming_convention() {
+# A project registered with +ticket:<prefix> gets the ticketed branch rule only,
+# and the brief names the concrete mechanism for obtaining the ticket id. The
+# branch name itself carries the ticket id (that is what the tracker auto-links),
+# so no PR-title-prefix machinery is emitted.
+test_ticketed_branch_naming_convention() {
   local home id brief
   home="$TMP_ROOT/ticket-convention-home"
   mkdir -p "$home/data"
@@ -215,6 +197,8 @@ EOF
       "$id: ticketed brief must name where the crewmate creates or links the ticket"
     assert_grep "for a Shortcut project, the Shortcut MCP tools" "$brief" \
       "$id: ticketed brief must keep Shortcut as the worked example, not the only tracker"
+    assert_grep "auto-links the ticket from this branch name" "$brief" \
+      "$id: ticketed brief must state the tracker links from the branch name"
     assert_grep "if \`git checkout -b\` fails because the name already exists" "$brief" \
       "$id: brief missing the branch-name collision guidance"
     # shellcheck disable=SC2016  # literal backticks must render in the brief
@@ -225,27 +209,16 @@ EOF
     # shellcheck disable=SC2016  # literal backticks must render in the brief
     assert_grep 'Never name the branch `fm/' "$brief" \
       "$id: brief missing the fm/ branch prohibition"
-    # shellcheck disable=SC2016  # literal backticks and prefix must render verbatim
-    assert_grep 'The PR title must be prefixed `sc-<ticket-id>: `' "$brief" \
-      "$id: brief missing the ticketed PR-title prefix"
-    # shellcheck disable=SC2016  # literal backticks and prefix must render verbatim
-    assert_no_grep 'The PR title must be prefixed `<type>: `' "$brief" \
-      "$id: ticketed brief must not also emit the ticketless PR-title prefix"
+    # Branch-name linking makes any PR-title-prefix machinery unnecessary.
+    assert_no_grep "The PR title must be prefixed" "$brief" \
+      "$id: ticketed brief still emits a PR-title-prefix rule"
+    assert_no_grep "commit with the subject prefixed" "$brief" \
+      "$id: ticketed brief still carries the commit-subject title-prefix trick"
+    assert_no_grep 'gh-axi pr edit' "$brief" \
+      "$id: ticketed brief still tells the crewmate to edit the PR title"
+    assert_no_grep "Set that prefix in the title" "$brief" \
+      "$id: ticketed brief still tells the crewmate to set a PR-title prefix"
   done
-
-  # The no-mistakes path cannot set the title, so the ticket prefix must reach it
-  # through the commit subject rather than a post-hoc edit.
-  brief="$home/data/tkt-nm/brief.md"
-  # shellcheck disable=SC2016  # literal backticks and prefix must render verbatim
-  assert_grep 'commit with the subject prefixed `sc-<ticket-id>: `' "$brief" \
-    "tkt-nm: ticketed no-mistakes brief missing the commit-subject prefix instruction"
-  assert_no_grep 'gh-axi pr edit' "$brief" \
-    "tkt-nm: ticketed no-mistakes brief still tells the crewmate to edit the PR title"
-
-  # direct-PR opens the PR itself, so it still sets the prefixed title at creation.
-  brief="$home/data/tkt-dp/brief.md"
-  assert_grep "Set that prefix in the title when you open the PR" "$brief" \
-    "tkt-dp: ticketed direct-PR brief missing the set-prefix-at-open instruction"
 
   # The private fleet's own repo names must never leak into this shared template.
   assert_no_grep "apply_pass_backend" "$ROOT/bin/fm-brief.sh" \
@@ -253,7 +226,7 @@ EOF
   assert_no_grep "ai_backend" "$ROOT/bin/fm-brief.sh" \
     "fm-brief.sh hardcodes a captain-private project name"
 
-  pass "fm-brief.sh: a +ticket project gets only the ticketed branch and title rule"
+  pass "fm-brief.sh: a +ticket project gets only the ticketed branch rule, no PR-title machinery"
 }
 
 # The +ticket:<prefix> flag accepts any bare token, so the brief must not claim
@@ -272,9 +245,6 @@ EOF
   # shellcheck disable=SC2016  # literal backticks must render in the brief
   assert_grep 'branch `ENG-<ticket-id>-<short-slug>`' "$brief" \
     "tkt-eng: brief missing the derived ENG branch rule"
-  # shellcheck disable=SC2016  # literal backticks and prefix must render verbatim
-  assert_grep 'The PR title must be prefixed `ENG-<ticket-id>: `' "$brief" \
-    "tkt-eng: brief missing the derived ENG PR-title prefix"
   assert_grep "in the project's own ticket tracker" "$brief" \
     "tkt-eng: brief must point at the project's own tracker"
   assert_no_grep "create or link the ticket FIRST with the Shortcut" "$brief" \
@@ -292,9 +262,7 @@ test_help_states_branch_convention() {
   assert_contains "$help" "<prefix>-<ticket-id>-<short-slug>" "fm-brief.sh --help omitted the ticketed branch shape"
   assert_contains "$help" "<type>/<short-slug>" "fm-brief.sh --help omitted the ticketless branch shape"
   assert_contains "$help" "never named fm/" "fm-brief.sh --help omitted the fm/ branch prohibition"
-  assert_contains "$help" "prefix in the commit subject" \
-    "fm-brief.sh --help omitted how the no-mistakes path carries the title prefix"
-  pass "fm-brief.sh: --help owns the branch and PR-title convention it is cited for"
+  pass "fm-brief.sh: --help owns the branch convention it is cited for"
 }
 
 test_ship_project_memory_wording() {
@@ -563,8 +531,8 @@ test_scout_and_secondmate_scaffold() {
 test_script_parses
 test_help_includes_entire_header
 test_ship_modes_generate_clean_briefs
-test_ticketless_branch_and_pr_naming_convention
-test_ticketed_branch_and_pr_naming_convention
+test_ticketless_branch_naming_convention
+test_ticketed_branch_naming_convention
 test_non_shortcut_ticket_prefix_keeps_tracker_generic
 test_help_states_branch_convention
 test_faster_paths_use_configured_authority_without_stacked_review

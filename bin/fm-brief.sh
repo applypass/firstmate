@@ -34,22 +34,19 @@
 #   local-only   implement on branch, stop and report "ready in branch" (no push/PR);
 #                captain approves, firstmate merges to local main
 # Ship briefs begin with a worktree-isolation assertion before the branch step.
-# This scaffold owns the crew branch and PR-title convention, keyed off the
-# project's +ticket:<prefix> registry flag (bin/fm-project-mode.sh):
-#   ticket-mandated  branch <prefix>-<ticket-id>-<short-slug>, PR title prefix
-#                    "<prefix>-<ticket-id>: "; the crewmate creates or links the
-#                    ticket in the project's own tracker before branching (for a
-#                    Shortcut project, the Shortcut MCP tools)
-#   ticketless       branch <type>/<short-slug> and PR title prefix "<type>: "
-#                    with a conventional-commit type (feat, fix, chore, docs)
+# This scaffold owns the crew branch convention, keyed off the project's
+# +ticket:<prefix> registry flag (bin/fm-project-mode.sh):
+#   ticket-mandated  branch <prefix>-<ticket-id>-<short-slug>; the crewmate
+#                    creates or links the ticket in the project's own tracker
+#                    before branching (for a Shortcut project, the Shortcut MCP
+#                    tools). The tracker's GitHub integration auto-links the
+#                    ticket from this branch name, so no PR-title prefix is needed.
+#   ticketless       branch <type>/<short-slug> with a conventional-commit type
+#                    (feat, fix, chore, docs)
 # A branch is never named fm/...; that prefix is reserved for the work window.
 # Branch names are crewmate-chosen and share one namespace across concurrent
 # tasks, so the brief also tells the crewmate to disambiguate a name collision
 # instead of stalling on it.
-# How the title prefix gets there depends on who opens the PR: a direct-PR
-# crewmate sets it at creation time, while no-mistakes generates the title from
-# the committed work with no return point in between, so that path carries the
-# prefix in the commit subject rather than editing the title afterwards.
 # Scout tasks ignore mode - their deliverable is a report, not a merge.
 # Every scaffold's status protocol distinguishes the configured
 # declared-external-wait verb (FM_CLASSIFY_PAUSED_VERB, default "paused") from
@@ -293,25 +290,26 @@ fi
 # Ship task: shape Setup / Rule 1 / Definition of done by the project's delivery mode.
 # yolo does not affect the brief because the worker never owns approval decisions;
 # firstmate applies the authority contract in AGENTS.md section 7, so discard it.
+# Fail closed on an unresolvable mode (e.g. a typo'd mode in the registry) rather
+# than scaffolding a brief against an empty, silently-defaulted mode.
+if ! MODE_LINE=$("$FM_ROOT/bin/fm-project-mode.sh" "$REPO"); then
+  echo "error: cannot resolve delivery mode for $REPO; fix the registry bracket" >&2
+  exit 1
+fi
 read -r MODE _ TICKET <<EOF
-$("$FM_ROOT/bin/fm-project-mode.sh" "$REPO")
+$MODE_LINE
 EOF
 
-# The branch step and the PR-title contract are both keyed off the project's
-# +ticket:<prefix> flag, so the brief states exactly one rule instead of asking
-# the crewmate to guess which one applies.
+# The branch step is keyed off the project's +ticket:<prefix> flag, so the brief
+# states exactly one rule instead of asking the crewmate to guess which applies.
+# A ticket-mandated branch carries the ticket id in its NAME, which is what the
+# tracker's GitHub integration auto-links against - no PR-title prefix is needed.
 if [ -n "$TICKET" ]; then
-  BRANCH_RULE="1. First action - create your branch. This repository mandates a tracker ticket, so create or link the ticket FIRST in the project's own ticket tracker - for a Shortcut project, the Shortcut MCP tools - then branch \`$TICKET-<ticket-id>-<short-slug>\` (e.g. \`git checkout -b $TICKET-4821-fix-login-redirect\`)."
-  PR_TITLE_RULE="The PR title must be prefixed \`$TICKET-<ticket-id>: \` - the same ticket id as your \`$TICKET-<ticket-id>-<short-slug>\` branch - so the prefix is visible and the tracker auto-links the ticket."
-  COMMIT_SUBJECT_RULE="commit with the subject prefixed \`$TICKET-<ticket-id>: \`, carrying the same ticket id as your branch."
+  BRANCH_RULE="1. First action - create your branch. This repository mandates a tracker ticket, so create or link the ticket FIRST in the project's own ticket tracker - for a Shortcut project, the Shortcut MCP tools - then branch \`$TICKET-<ticket-id>-<short-slug>\` (e.g. \`git checkout -b $TICKET-4821-fix-login-redirect\`). The tracker auto-links the ticket from this branch name."
 else
   # Single-quoted: the backticks and <type> placeholders are literal brief text.
   # shellcheck disable=SC2016
   BRANCH_RULE='1. First action - create your branch `<type>/<short-slug>`, where `<type>` is a conventional-commit type - `feat`, `fix`, `chore`, or `docs` (e.g. `git checkout -b feat/crew-branch-convention`).'
-  # shellcheck disable=SC2016
-  PR_TITLE_RULE='The PR title must be prefixed `<type>: ` matching your branch type (`feat`, `fix`, `chore`, or `docs`), so the prefix is visible.'
-  # shellcheck disable=SC2016
-  COMMIT_SUBJECT_RULE='commit with a conventional-commit subject prefixed `<type>: `, matching your branch type.'
 fi
 
 case "$MODE" in
@@ -322,8 +320,6 @@ case "$MODE" in
 # Definition of done
 This project ships **direct-PR**: you raise the PR yourself, without the no-mistakes pipeline.
 The task is complete only when committed on your branch.
-$PR_TITLE_RULE
-Set that prefix in the title when you open the PR with \`gh-axi\`.
 When it is implemented and committed, push your branch and open a PR with \`gh-axi\`, then append \`done: PR {url}\` to the status file and stop.
 Do NOT run /no-mistakes. The configured merge authority decides whether to merge the PR; firstmate relays the outcome.
 EOF
@@ -362,9 +358,6 @@ Two firstmate-specific rules layer on top of that guidance:
   When the decision comes back, feed it to the gate with \`no-mistakes axi respond\` and let the pipeline apply it - do not route the question to "the user" or implement the fix yourself.
 - Avoid \`--yes\`: it would silently bypass firstmate's authority check and any required captain escalation.
 
-$PR_TITLE_RULE
-no-mistakes generates that title from your committed work and never returns between opening the PR and CI green, so there is no point at which you can set it - carry the prefix in your commit subject instead: $COMMIT_SUBJECT_RULE
-Do not edit the title afterwards; that restarts the PR's required check after it has already gone green.
 After /no-mistakes reports CI green (the CI-ready return point - do not wait for it to keep monitoring in the background until merge), append \`done: PR {url} checks green\` and stop. You are finished.
 EOF
 )

@@ -115,14 +115,19 @@ test_prefixless_ticket_flag_warns() {
   pass "fm-project-mode.sh: a +ticket flag with no prefix warns and drops to ticketless"
 }
 
-test_unknown_mode_still_falls_back() {
-  local home out err
+# An unrecognized mode NAME in a registered bracket must REFUSE, not default to
+# the remote-pushing "no-mistakes": a typo of a local-only project must never
+# silently become a push-and-PR project. It exits non-zero with no stdout.
+test_unknown_mode_refuses() {
+  local home out err rc
   home=$(make_home unknown-mode '- bogus [sideways +ticket:sc] - unknown delivery mode (added 2026-07-01)')
-  err=$(FM_HOME="$home" "$PROJECT_MODE" bogus 2>&1 >/dev/null)
-  out=$(resolve "$home" bogus)
-  [ "$out" = "no-mistakes off" ] || fail "unknown mode must fall back to the safest gate, got \"$out\""
-  assert_contains "$err" "unknown mode" "unknown mode must warn to stderr"
-  pass "fm-project-mode.sh: an unknown mode still falls back to the safest gate"
+  out=$(FM_HOME="$home" "$PROJECT_MODE" bogus 2>/dev/null); rc=$?
+  [ "$rc" -ne 0 ] || fail "unknown mode must refuse with a non-zero exit, got rc=$rc"
+  [ -z "$out" ] || fail "unknown mode must emit no mode on stdout, got \"$out\""
+  err=$(FM_HOME="$home" "$PROJECT_MODE" bogus 2>&1 >/dev/null || true)
+  assert_contains "$err" "unknown mode" "unknown mode must explain the refusal on stderr"
+  assert_contains "$err" "refusing" "unknown mode must state that it refuses"
+  pass "fm-project-mode.sh: an unrecognized mode name refuses instead of defaulting to no-mistakes"
 }
 
 # A mode written after the bracket flags used to be discarded in silence, which
@@ -154,4 +159,4 @@ test_misordered_mode_is_honored_and_warns
 test_third_field_reads_empty_when_ticketless
 test_invalid_ticket_prefix_falls_back_to_ticketless
 test_prefixless_ticket_flag_warns
-test_unknown_mode_still_falls_back
+test_unknown_mode_refuses

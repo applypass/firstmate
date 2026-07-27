@@ -1413,8 +1413,14 @@ if [ "$KIND" = secondmate ]; then
   SECONDMATE_PROJECTS=$(secondmate_registry_value "$ID" projects || true)
 else
   PROJ_NAME=$(basename "$PROJ_ABS")
+  # Fail closed on an unresolvable mode (e.g. a typo'd mode in the registry)
+  # rather than spawning against an empty, silently-defaulted mode.
+  if ! MODE_LINE=$("$FM_ROOT/bin/fm-project-mode.sh" "$PROJ_NAME"); then
+    echo "error: cannot resolve delivery mode for $PROJ_NAME; fix the registry bracket before spawning" >&2
+    exit 1
+  fi
   read -r MODE YOLO _ <<EOF
-$("$FM_ROOT/bin/fm-project-mode.sh" "$PROJ_NAME")
+$MODE_LINE
 EOF
 fi
 

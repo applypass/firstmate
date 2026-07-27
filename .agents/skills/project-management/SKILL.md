@@ -39,7 +39,7 @@ Default it off, and enable it only on the captain's explicit instruction.
 `AGENTS.md` section 7 owns the complete authority boundary and exceptions when it is on.
 
 The optional `+ticket:<prefix>` flag records that the project mandates a tracker ticket per change, and is likewise orthogonal to the delivery mode.
-Set it only when the captain confirms the mandate and names the tracker's id prefix; `bin/fm-brief.sh` owns what it does to the crew branch and PR title.
+Set it only when the captain confirms the mandate and names the tracker's id prefix; `bin/fm-brief.sh` owns what it does to the crew branch name.
 
 ## Add or clone an existing project
 

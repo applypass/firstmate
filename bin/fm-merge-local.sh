@@ -9,7 +9,9 @@
 # crewmate reports it as "done: ready in branch <name>" in the task's status log.
 # The worktree HEAD stays authoritative whenever it is readable: --branch is a
 # recovery fallback only, and a --branch that disagrees with a readable HEAD is
-# refused rather than merged, so this path can never land another task's branch.
+# refused rather than merged. So whenever the worktree HEAD can answer, this path
+# never lands another task's branch; in the fallback (no readable HEAD) the
+# operator-supplied --branch is trusted, still gated by every merge check below.
 # The override only replaces branch DISCOVERY: every merge guard below still
 # applies, so an unlanded or diverged branch is refused exactly as before.
 #

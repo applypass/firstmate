@@ -37,9 +37,12 @@
 # read only "<mode> <yolo>" are unaffected. A caller that wants the prefix reads a
 # third field, which stays empty for a ticketless project.
 #
-# An unknown/missing project or unknown mode falls back to "no-mistakes off" and warns
-# to stderr, so a typo never silently drops the gate. An unknown mode discards the
-# whole bracket, ticket prefix included, because nothing in it can be trusted.
+# An unknown or missing project falls back to "no-mistakes off" and warns to
+# stderr. An unrecognized mode NAME in a registered bracket instead REFUSES: it
+# prints an error and exits non-zero (3) with no stdout, because defaulting a
+# typo to the remote-pushing "no-mistakes" could push a project the captain meant
+# to keep local. Callers must fail closed on that non-zero exit rather than treat
+# an empty result as the default mode.
 # Usage: fm-project-mode.sh <project-name>
 set -eu
 
@@ -121,7 +124,7 @@ if [ -n "$rest" ]; then
 fi
 case "$mode" in
   no-mistakes|direct-PR|local-only) ;;
-  *) echo "warn: unknown mode \"$mode\" for $NAME; defaulting to no-mistakes off" >&2; mode=no-mistakes; yolo=off; ticket= ;;
+  *) echo "error: unknown mode \"$mode\" for $NAME; refusing to resolve a delivery mode - fix the bracket in the registry. A typo must not silently become the remote-pushing default and push a project meant to stay local." >&2; exit 3 ;;
 esac
 case "$yolo" in on|off) ;; *) yolo=off ;; esac
 # The prefix becomes part of a branch name and a PR title, so reject anything
