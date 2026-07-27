@@ -5,8 +5,8 @@
 # The bracket flags are additive and order-independent. The optional third
 # output word (the +ticket:<prefix> value) drives the crew branch and PR-title
 # convention in bin/fm-brief.sh, and it must stay optional so callers that read
-# only "<mode> <yolo>" keep working. An invalid prefix is dropped to ticketless
-# rather than scaffolding an unusable branch name.
+# only "<mode> <yolo>" keep working. An invalid or prefixless flag warns and is
+# dropped to ticketless rather than scaffolding an unusable branch name.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -87,7 +87,6 @@ test_invalid_ticket_prefix_falls_back_to_ticketless() {
   local home out err
   home=$(make_home invalid \
     '- slashy [direct-PR +ticket:sc/x] - prefix with a path separator (added 2026-07-01)' \
-    '- spacey [direct-PR +ticket:] - empty prefix (added 2026-07-01)' \
     '- numeric [direct-PR +ticket:42] - prefix that does not start with a letter (added 2026-07-01)')
 
   for project in slashy numeric; do
@@ -96,8 +95,24 @@ test_invalid_ticket_prefix_falls_back_to_ticketless() {
     [ "$out" = "direct-PR off" ] || fail "$project: an invalid prefix must fall back to ticketless, got \"$out\""
     assert_contains "$err" "invalid +ticket prefix" "$project: an invalid prefix must warn to stderr"
   done
-  expect_resolves "$home" spacey "direct-PR off"
   pass "fm-project-mode.sh: an unusable ticket prefix warns and drops to ticketless"
+}
+
+# A flag that carries no prefix at all is the operator typo the flag exists to
+# catch, so it must warn rather than read as a deliberately ticketless project.
+test_prefixless_ticket_flag_warns() {
+  local home out err
+  home=$(make_home prefixless \
+    '- spacey [direct-PR +ticket:] - colon with an empty prefix (added 2026-07-01)' \
+    '- colonless [direct-PR +ticket] - flag with no colon at all (added 2026-07-01)')
+
+  for project in spacey colonless; do
+    err=$(FM_HOME="$home" "$PROJECT_MODE" "$project" 2>&1 >/dev/null)
+    out=$(resolve "$home" "$project")
+    [ "$out" = "direct-PR off" ] || fail "$project: a prefixless flag must fall back to ticketless, got \"$out\""
+    assert_contains "$err" "malformed +ticket flag" "$project: a prefixless +ticket flag must warn to stderr"
+  done
+  pass "fm-project-mode.sh: a +ticket flag with no prefix warns and drops to ticketless"
 }
 
 test_unknown_mode_still_falls_back() {
@@ -114,4 +129,5 @@ test_existing_flags_are_unchanged
 test_ticket_prefix_is_an_optional_third_word
 test_third_field_reads_empty_when_ticketless
 test_invalid_ticket_prefix_falls_back_to_ticketless
+test_prefixless_ticket_flag_warns
 test_unknown_mode_still_falls_back

@@ -27,6 +27,8 @@
 #   branches <type>/<slug> with a "<type>: " title prefix instead.
 #   A prefix must be a bare token ([A-Za-z][A-Za-z0-9_-]*) because it becomes part
 #   of a git branch name; anything else is warned about and dropped to ticketless.
+#   A malformed flag that carries no prefix at all ("+ticket" or "+ticket:") warns
+#   the same way, so an operator typo never silently reads as a ticketless project.
 #
 # The third word is emitted only for a ticket-mandated project, so callers that
 # read only "<mode> <yolo>" are unaffected. A caller that wants the prefix reads a
@@ -51,8 +53,10 @@ if [ ! -f "$REG" ]; then
   exit 0
 fi
 
-# awk emits "<mode> <yolo> <ticket>" (one line, ticket empty when the flag is
-# absent) or nothing if the project is absent.
+# awk emits "<mode> <yolo> <ticket-flag>" (one line, the flag token verbatim and
+# empty when no +ticket flag is present) or nothing if the project is absent.
+# The flag is matched without its colon so a malformed one still reaches the
+# shell's validation instead of being dropped as if it were never written.
 parsed=$(awk -v n="$NAME" '
   $1=="-" && $2==n {
     mode="no-mistakes"; yolo="off"; ticket="";
@@ -64,7 +68,7 @@ parsed=$(awk -v n="$NAME" '
       if (a[1] != "" && a[1] !~ /^\+/) mode = a[1];
       for (j=1; j<=k; j++) {
         if (a[j]=="+yolo") yolo="on";
-        else if (a[j] ~ /^\+ticket:/) { ticket = a[j]; sub(/^\+ticket:/, "", ticket) }
+        else if (a[j] ~ /^\+ticket/) ticket = a[j];
       }
     }
     print mode, yolo, ticket; exit
@@ -87,10 +91,21 @@ esac
 case "$yolo" in on|off) ;; *) yolo=off ;; esac
 # The prefix becomes part of a branch name and a PR title, so reject anything
 # that is not a bare token rather than scaffolding an unusable branch rule.
+# A flag that carries no prefix at all is the same operator typo, so it warns too
+# instead of reading as a deliberately ticketless project.
 case "$ticket" in
   "") ;;
-  *[!A-Za-z0-9_-]*|[!A-Za-z]*)
-    echo "warn: invalid +ticket prefix \"$ticket\" for $NAME; treating the project as ticketless" >&2
+  +ticket:?*)
+    ticket=${ticket#+ticket:}
+    case "$ticket" in
+      *[!A-Za-z0-9_-]*|[!A-Za-z]*)
+        echo "warn: invalid +ticket prefix \"$ticket\" for $NAME; treating the project as ticketless" >&2
+        ticket=
+        ;;
+    esac
+    ;;
+  *)
+    echo "warn: malformed +ticket flag \"$ticket\" for $NAME; expected +ticket:<prefix>, treating the project as ticketless" >&2
     ticket=
     ;;
 esac

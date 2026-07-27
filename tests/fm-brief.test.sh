@@ -167,11 +167,17 @@ test_ticketless_branch_and_pr_naming_convention() {
       "$id: brief missing the ticketless PR-title prefix"
   done
 
-  # no-mistakes generates the title, so the crewmate must edit it after the PR opens.
+  # no-mistakes generates the title, so the crewmate must edit it at the post-PR
+  # return point - a single timing, before CI-green monitoring, so a title edit
+  # never re-triggers a required check after the run has reported green.
   brief="$home/data/conv-nm/brief.md"
   # shellcheck disable=SC2016  # literal command text must render verbatim
   assert_grep 'gh-axi pr edit <pr-number> --title' "$brief" \
     "no-mistakes brief missing the edit-the-PR-title-after-open instruction"
+  assert_grep 'before it monitors for CI green' "$brief" \
+    "no-mistakes brief missing the single post-PR PR-title timing"
+  assert_no_grep 'before you report done' "$brief" \
+    "no-mistakes brief still offers a second, later PR-title timing"
 
   # direct-PR opens the PR itself, so it sets the prefix at creation time, and the
   # title rule must precede the open-the-PR-and-stop sentence a crewmate reads first.

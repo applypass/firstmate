@@ -356,7 +356,7 @@ Two firstmate-specific rules layer on top of that guidance:
 - Avoid \`--yes\`: it would silently bypass firstmate's authority check and any required captain escalation.
 
 $PR_TITLE_RULE
-no-mistakes generates the PR title, so right after it opens the PR, check the title and, if it lacks that prefix, edit it with \`gh-axi pr edit <pr-number> --title "<prefix><summary>"\` before you report done.
+no-mistakes generates the PR title, so at the pipeline's post-PR return point - right after it opens the PR and before it monitors for CI green - check the title and, if it lacks that prefix, edit it with \`gh-axi pr edit <pr-number> --title "<prefix><summary>"\`.
 After /no-mistakes reports CI green (the CI-ready return point - do not wait for it to keep monitoring in the background until merge), append \`done: PR {url} checks green\` and stop. You are finished.
 EOF
 )
