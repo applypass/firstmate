@@ -20,6 +20,27 @@ META="$STATE/$ID.meta"
 [ -f "$META" ] || { echo "error: no meta for task $ID at $META" >&2; exit 1; }
 grep -qx 'kind=scout' "$META" || { echo "error: task $ID is not a scout task (kind=scout not in meta)" >&2; exit 1; }
 
+# Resolve the concrete branch rule from the project's ticket flag BEFORE flipping
+# state, so an unresolvable mode aborts cleanly without half-promoting. The scout
+# brief carried no branch or ticket rule, so the ship instruction must spell it
+# out - a ticket-mandated project needs its tracker ticket created first, else the
+# branch loses the auto-link the whole convention produces.
+PROJ=$(grep '^project=' "$META" | cut -d= -f2- || true)
+BRANCH_HINT="create the ship branch per the branch convention owned by bin/fm-brief.sh, never fm/..."
+if [ -n "$PROJ" ]; then
+  PROJ_NAME=$(basename "$PROJ")
+  if ! MODE_LINE=$("$FM_ROOT/bin/fm-project-mode.sh" "$PROJ_NAME" 2>/dev/null); then
+    echo "error: cannot resolve delivery mode for $PROJ_NAME; fix the registry bracket before promoting" >&2
+    exit 1
+  fi
+  TICKET=$(printf '%s\n' "$MODE_LINE" | awk '{print $3}')
+  if [ -n "$TICKET" ]; then
+    BRANCH_HINT="create or link the tracker ticket FIRST (for a Shortcut project, the Shortcut MCP tools), then create the ship branch ${TICKET}-<ticket-id>-<slug>, never fm/..."
+  else
+    BRANCH_HINT="create the ship branch <type>/<slug> with a conventional-commit type (feat/fix/chore/docs), never fm/..."
+  fi
+fi
+
 TMP="$META.tmp"
 grep -v '^kind=' "$META" > "$TMP"
 echo "kind=ship" >> "$TMP"
@@ -27,4 +48,4 @@ mv "$TMP" "$META"
 
 HOME_Q=$(printf '%q' "$FM_HOME")
 echo "promoted $ID to ship (teardown protection restored)"
-echo "next: FM_HOME=$HOME_Q bin/fm-send.sh fm-$ID '<ship instructions: review scratch state with git status and git log; reset to a clean default-branch base; carry over only intended fix changes; create the ship branch named per the branch convention owned by bin/fm-brief.sh; implement; report done>'"
+echo "next: FM_HOME=$HOME_Q bin/fm-send.sh fm-$ID '<ship instructions: review scratch state with git status and git log; reset to a clean default-branch base; carry over only intended fix changes; $BRANCH_HINT; implement; report done>'"

@@ -380,6 +380,27 @@ test_unknown_argument_refuses() {
   pass "fm-merge-local refuses an unrecognized argument instead of ignoring it"
 }
 
+# A --branch that names the default branch would fast-forward main onto main - a
+# no-op that must not be reported as a successful land of approved work.
+test_branch_equal_default_refuses() {
+  local case_dir err rc before
+  case_dir=$(make_case branch-equals-default)
+  write_attached_meta "$case_dir"
+  # Detach the worktree HEAD so the operator-supplied --branch is consulted.
+  git -C "$case_dir/wt" checkout -q --detach
+  before=$(main_head "$case_dir")
+
+  set +e
+  run_merge_local "$case_dir" task-m1 --branch main > /dev/null 2> "$case_dir/stderr"; rc=$?
+  set -e
+  err=$(cat "$case_dir/stderr")
+
+  [ "$rc" -ne 0 ] || fail "branch-equals-default: --branch main must be refused, not reported as a merge"
+  assert_contains "$err" "default branch" "branch-equals-default: must say the ready branch is the default"
+  [ "$(main_head "$case_dir")" = "$before" ] || fail "branch-equals-default: main must be untouched"
+  pass "fm-merge-local refuses a ready branch equal to the default (no-op passed off as success)"
+}
+
 test_attached_worktree_branch_fast_forwards
 test_missing_worktree_key_refuses
 test_absent_worktree_dir_refuses
@@ -393,3 +414,4 @@ test_branch_override_disagreeing_with_head_refuses
 test_missing_project_refuses
 test_non_local_only_mode_refuses
 test_unknown_argument_refuses
+test_branch_equal_default_refuses

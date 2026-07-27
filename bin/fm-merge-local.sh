@@ -118,6 +118,12 @@ git -C "$PROJ" rev-parse --verify --quiet "refs/heads/$BRANCH" >/dev/null || { e
 
 DEFAULT=$(default_branch) || { echo "error: cannot determine default branch for $PROJ; expected origin/HEAD, main, or master" >&2; exit 1; }
 
+# The ready branch must be a real task branch, never the default itself: merging
+# the default into the default is a no-op that would otherwise report success and
+# be read as "the approved work landed" when nothing did. This matters most in the
+# --branch recovery path, where the name is operator-supplied and unbound to the task.
+[ "$BRANCH" != "$DEFAULT" ] || { echo "error: ready branch is the default branch '$DEFAULT'; there is nothing to merge" >&2; exit 1; }
+
 # The project's main checkout must be on its default branch and clean, so the
 # fast-forward lands predictably (firstmate never writes here otherwise).
 cur=$(git -C "$PROJ" symbolic-ref --short HEAD 2>/dev/null || echo "")
@@ -137,4 +143,7 @@ fi
 before=$(git -C "$PROJ" rev-parse --short "$DEFAULT")
 git -C "$PROJ" merge --ff-only "$BRANCH" >/dev/null
 after=$(git -C "$PROJ" rev-parse --short "$DEFAULT")
+# A no-op fast-forward (default already contained the branch) landed nothing;
+# report it as a failure rather than a successful merge.
+[ "$before" != "$after" ] || { echo "error: no-op merge of $BRANCH into $DEFAULT ($before unchanged); nothing landed" >&2; exit 1; }
 echo "merged $BRANCH into local $DEFAULT ($before -> $after) in $PROJ"

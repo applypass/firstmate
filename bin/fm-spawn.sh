@@ -926,6 +926,18 @@ herdr_projection_existing_meta_allows_flat() {  # <meta>
   esac
 }
 
+# Resolve the per-project delivery mode BEFORE creating any window or leasing a
+# worktree. Failing closed here (e.g. on a typo'd registry bracket) then aborts
+# before any resource is acquired, so a refusal never strands a live window or a
+# leased worktree with no meta file (which recovery could not see).
+if [ "$KIND" != secondmate ]; then
+  PROJ_NAME=$(basename "$PROJ_ABS")
+  if ! MODE_LINE=$("$FM_ROOT/bin/fm-project-mode.sh" "$PROJ_NAME"); then
+    echo "error: cannot resolve delivery mode for $PROJ_NAME; fix the registry bracket before spawning" >&2
+    exit 1
+  fi
+fi
+
 W="fm-$ID"
 case "$BACKEND" in
   tmux)
@@ -1412,13 +1424,7 @@ if [ "$KIND" = secondmate ]; then
   YOLO=off
   SECONDMATE_PROJECTS=$(secondmate_registry_value "$ID" projects || true)
 else
-  PROJ_NAME=$(basename "$PROJ_ABS")
-  # Fail closed on an unresolvable mode (e.g. a typo'd mode in the registry)
-  # rather than spawning against an empty, silently-defaulted mode.
-  if ! MODE_LINE=$("$FM_ROOT/bin/fm-project-mode.sh" "$PROJ_NAME"); then
-    echo "error: cannot resolve delivery mode for $PROJ_NAME; fix the registry bracket before spawning" >&2
-    exit 1
-  fi
+  # MODE_LINE was already resolved (and fail-closed) before window creation above.
   read -r MODE YOLO _ <<EOF
 $MODE_LINE
 EOF

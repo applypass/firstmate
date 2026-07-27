@@ -127,6 +127,16 @@ test_unknown_mode_refuses() {
   err=$(FM_HOME="$home" "$PROJECT_MODE" bogus 2>&1 >/dev/null || true)
   assert_contains "$err" "unknown mode" "unknown mode must explain the refusal on stderr"
   assert_contains "$err" "refusing" "unknown mode must state that it refuses"
+
+  # A typo'd mode written AFTER a flag lands in the leftover-token path, not the
+  # position-1 mode check, so it must refuse there too rather than warn-and-default
+  # to the remote-pushing no-mistakes (a mistyped local-only must never push).
+  home=$(make_home flag-first-typo '- appA [+yolo locl-only] - typo mode after a flag (added 2026-07-01)')
+  out=$(FM_HOME="$home" "$PROJECT_MODE" appA 2>/dev/null); rc=$?
+  [ "$rc" -ne 0 ] || fail "a typo'd mode after a flag must refuse, got rc=$rc"
+  [ -z "$out" ] || fail "a typo'd mode after a flag must emit no mode, got \"$out\""
+  err=$(FM_HOME="$home" "$PROJECT_MODE" appA 2>&1 >/dev/null || true)
+  assert_contains "$err" "refusing" "a typo'd mode after a flag must state that it refuses"
   pass "fm-project-mode.sh: an unrecognized mode name refuses instead of defaulting to no-mistakes"
 }
 

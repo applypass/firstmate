@@ -24,10 +24,10 @@
 #   AGENTS.md section 7 is the single owner of authority exceptions, including
 #   ask-user contract expansion and stronger captain boundaries.
 # ticket (orthogonal) = the project mandates a tracker ticket per change, and
-#   <prefix> is the tracker's id prefix. It drives the crew branch and PR-title
-#   convention owned by bin/fm-brief.sh: branch <prefix>-<ticket-id>-<slug> and
-#   PR title prefix "<prefix>-<ticket-id>: ". Absent means ticketless work, which
-#   branches <type>/<slug> with a "<type>: " title prefix instead.
+#   <prefix> is the tracker's id prefix. It drives the crew branch convention
+#   owned by bin/fm-brief.sh: branch <prefix>-<ticket-id>-<slug>, which the
+#   tracker's GitHub integration auto-links off. Absent means ticketless work,
+#   which branches <type>/<slug> instead. No PR-title prefix is involved.
 #   A prefix must be a bare token ([A-Za-z][A-Za-z0-9_-]*) because it becomes part
 #   of a git branch name; anything else is warned about and dropped to ticketless.
 #   A malformed flag that carries no prefix at all ("+ticket" or "+ticket:") warns
@@ -120,6 +120,10 @@ for token in $unknown; do
 done
 set +f
 if [ -n "$rest" ]; then
+  if [ -z "$modeset" ]; then
+    echo "error: unrecognized bracket token(s) \"$rest\" for $NAME with no valid mode in position 1; refusing rather than defaulting to the remote-pushing no-mistakes - a mistyped mode written after the flags must not silently push a project meant to stay local. Write the mode first as [<mode> ...]." >&2
+    exit 3
+  fi
   echo "warn: unrecognized bracket token(s) \"$rest\" for $NAME; expected the mode first, then +yolo or +ticket:<prefix>" >&2
 fi
 case "$mode" in
@@ -127,8 +131,8 @@ case "$mode" in
   *) echo "error: unknown mode \"$mode\" for $NAME; refusing to resolve a delivery mode - fix the bracket in the registry. A typo must not silently become the remote-pushing default and push a project meant to stay local." >&2; exit 3 ;;
 esac
 case "$yolo" in on|off) ;; *) yolo=off ;; esac
-# The prefix becomes part of a branch name and a PR title, so reject anything
-# that is not a bare token rather than scaffolding an unusable branch rule.
+# The prefix becomes part of a branch name, so reject anything that is not a bare
+# token rather than scaffolding an unusable branch rule.
 # A flag that carries no prefix at all is the same operator typo, so it warns too
 # instead of reading as a deliberately ticketless project.
 case "$ticket" in
