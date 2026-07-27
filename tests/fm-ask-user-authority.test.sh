@@ -91,20 +91,20 @@ test_defect_class_is_swept_and_decided_once() {
     "class-sweep rule is missing from its owner"
   assert_grep 'Enumerate that whole class before deciding the instance in front of you' "$OWNER" \
     "class-sweep rule no longer enumerates the class up front"
-  assert_grep 'bring one decision that covers the class to whoever owns it under the numbered procedure above' "$OWNER" \
-    "class-sweep rule lost the single batched decision routed to its authority owner"
-  assert_grep 'sweep it with "Sweep the defect class, decide once" below rather than routing the next instance, without relaxing this step'"'"'s own escalation requirement' "$OWNER" \
+  assert_grep 'find every occurrence of that class and report them as one set, which is evidence-gathering and never a license to correct them' "$OWNER" \
+    "class-sweep enumeration is no longer marked report-only"
+  assert_grep 'bring one decision that covers the whole class, and let only that decision, returned through the active validation gate, authorize folding the corrections into one round' "$OWNER" \
+    "class-sweep rule lost the single batched decision that alone authorizes the corrections"
+  assert_grep 'sweep the class with "Sweep the defect class, decide once" below rather than routing the next instance, without relaxing this step'"'"'s own escalation requirement' "$OWNER" \
     "same-theme step cross-reference can be read as replacing its own escalation"
+  assert_grep 'signal to check whether the root is a shared abstraction' "$OWNER" \
+    "same-theme step pre-decides that the repeat has a shared-abstraction root"
   assert_grep 'Enumerating the class is not contract expansion' "$OWNER" \
     "class-sweep rule no longer distinguishes enumeration from contract expansion"
-  assert_grep 'still follows the numbered procedure above, including its stronger destructive, irreversible, and security-sensitive captain boundaries' "$OWNER" \
-    "class-sweep rule stopped deferring authority to the numbered procedure and its stronger boundaries"
-  assert_grep "Step 7's questionable-abstraction escalation is not suspended by the sweep" "$OWNER" \
-    "sweeping a class can skip the questionable-abstraction escalation"
-  assert_grep 'never authorizes batch-patching a class autonomously in place of that escalation' "$OWNER" \
-    "folding corrections into one round reads as autonomous batch-patching authority"
-  assert_grep 'The sweep alone does not trigger that escalation either, because step 7 fires only on its own condition' "$OWNER" \
-    "sweeping a class reads as unconditionally triggering the questionable-abstraction escalation"
+  assert_grep 'The sweep changes only the size of the evidence, never the authority' "$OWNER" \
+    "class-sweep rule stopped deferring authority to the numbered procedure"
+  assert_grep "still decides who answers the batched correction, still applies its stronger destructive, irreversible, and security-sensitive captain boundaries, and still fires step 7 on step 7's own condition alone" "$OWNER" \
+    "consolidated authority pointer lost the unchanged owner, the stronger boundaries, or step 7's own condition"
 
   brief_contract=$(awk '
     /^## 11\. Crewmate briefs$/ { found = 1; next }
