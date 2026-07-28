@@ -5,12 +5,18 @@
 # live session's context from the transcript the payload points at and blocks
 # the turn end once the measurement crosses the absolute ceiling.
 #
-# Four layers:
-#   MEASUREMENT  - the two correctness rules (last-not-max-not-sum, sidechain
-#                  exclusion) and the multi-block property that subsumes dedupe.
+# Five layers:
+#   MEASUREMENT  - the three correctness rules (last-not-max-not-sum, sidechain
+#                  exclusion, zero-usage synthetic entries ignored) and the
+#                  multi-block property that subsumes dedupe.
 #   STAGES       - the derived advisory notice, the warning-only shipped default
 #                  at the ceiling, and the opt-in enforcing ceiling.
-#   DEGRADATION  - every measurement failure is a silent exit 0.
+#   CHANNELS     - which stream each notice lands on. Asserted SEPARATELY, never
+#                  merged: Claude Code discards a successful Stop hook's stderr,
+#                  so a merged capture cannot tell a visible notice from an
+#                  invisible one.
+#   DEGRADATION  - every measurement failure is a silent exit 0, and every record
+#                  failure degrades toward not blocking.
 #   SCOPE        - inert in a crewmate worktree, active in a secondmate home.
 # All hermetic over temp dirs; no real agent session is invoked.
 set -u
@@ -83,19 +89,57 @@ write_transcript() {
   done
 }
 
+# A trailing synthetic entry, the shape Claude Code writes when a turn ends
+# abnormally: assistant, main chain, model "<synthetic>", all four usage fields 0.
+synthetic_zero_line() {
+  printf '{"type":"assistant","isSidechain":false,"message":{"model":"<synthetic>","usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0}}}\n'
+}
+
 stop_payload() {
   printf '{"session_id":"%s","stop_hook_active":false,"transcript_path":"%s"}' "${2:-sess-1}" "$1"
 }
 
-# Run the hook as the registered Claude Stop hook, with stdout and stderr merged
-# so a test can assert on either channel.
-run_budget() {
+# Run the hook as the registered Claude Stop hook, capturing the two channels
+# SEPARATELY into BUDGET_STDOUT and BUDGET_STDERR and returning the hook's exit
+# status. Channel identity is load-bearing here, so it must never be lost to a
+# 2>&1 merge: an exit-0 notice written to stderr is discarded by Claude Code and
+# is therefore invisible, which a merged capture cannot detect.
+# Call this DIRECTLY, never inside a command substitution, or the two globals are
+# set in a subshell and lost.
+BUDGET_STDOUT=''
+BUDGET_STDERR=''
+run_budget_channels() {
   local dir=$1 payload=$2
   shift 2
-  local home
+  local home errfile status
   home=$(cd "$dir" && pwd)
-  printf '%s' "$payload" | env "$@" CLAUDECODE=1 FM_HOME="$home" \
-    bash "$dir/bin/fm-context-budget.sh" --claude 2>&1
+  errfile=$(mktemp "$TMP_ROOT/stderr.XXXXXX")
+  BUDGET_STDOUT=$(printf '%s' "$payload" | env "$@" CLAUDECODE=1 FM_HOME="$home" \
+    bash "$dir/bin/fm-context-budget.sh" --claude 2>"$errfile")
+  status=$?
+  BUDGET_STDERR=$(cat "$errfile")
+  rm -f "$errfile"
+  return "$status"
+}
+
+# The merged view, for the tests whose subject is behavior rather than channel.
+run_budget() {
+  local status
+  run_budget_channels "$@"
+  status=$?
+  [ -z "$BUDGET_STDOUT" ] || printf '%s\n' "$BUDGET_STDOUT"
+  [ -z "$BUDGET_STDERR" ] || printf '%s\n' "$BUDGET_STDERR"
+  return "$status"
+}
+
+# The visible non-blocking channel is a systemMessage JSON object on stdout, so
+# assert the shape too: a bare banner on stdout would render as nothing.
+assert_system_message_contains() {  # <stdout> <needle> <label>
+  local msg
+  msg=$(printf '%s' "$1" | jq -r '.systemMessage' 2>/dev/null) \
+    || fail "$3: stdout is not a JSON hook response: $1"
+  [ -n "$msg" ] && [ "$msg" != null ] || fail "$3: stdout carried no systemMessage: $1"
+  assert_contains "$msg" "$2" "$3"
 }
 
 # Same, with enforcement switched on. The shipped default only warns, so every
@@ -104,6 +148,12 @@ run_budget_enforcing() {
   local dir=$1 payload=$2
   shift 2
   run_budget "$dir" "$payload" FM_CONTEXT_BUDGET_ENFORCE=1 "$@"
+}
+
+run_budget_channels_enforcing() {
+  local dir=$1 payload=$2
+  shift 2
+  run_budget_channels "$dir" "$payload" FM_CONTEXT_BUDGET_ENFORCE=1 "$@"
 }
 
 # --- MEASUREMENT: the ceiling blocks and names the valve ---------------------
@@ -448,6 +498,265 @@ test_stand_down_rearms_below_the_advisory() {
   pass "fm-context-budget: only a measurement below the advisory re-arms the stand-down"
 }
 
+# --- CHANNELS: every notice on a stream the runtime actually renders ----------
+# Claude Code discards a successful Stop hook's stderr: the hook_success
+# attachment renders as null and only the SessionStart-family events feed hook
+# output into model context. A notice printed to stderr with exit 0 is therefore
+# invisible to both the captain and the session, so each non-blocking stage must
+# land on stdout as a systemMessage object, and only the blocking path - which
+# exits 2, the one status that does deliver stderr - may use stderr.
+
+test_advisory_notice_is_a_system_message_on_stdout() {
+  local dir transcript status
+  dir=$(make_primary_dir "$TMP_ROOT/chan-advisory")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 160000
+  run_budget_channels "$dir" "$(stop_payload "$transcript")" \
+    FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_HEADROOM=30000
+  status=$?
+  expect_code 0 "$status" "the advisory must allow the turn end"
+  assert_system_message_contains "$BUDGET_STDOUT" "CONTEXT BUDGET ADVISORY" \
+    "the advisory must be a systemMessage on stdout"
+  assert_system_message_contains "$BUDGET_STDOUT" "20000 tokens of headroom" \
+    "the advisory systemMessage must report remaining headroom"
+  [ -z "$BUDGET_STDERR" ] \
+    || fail "the advisory wrote to stderr, which an exit-0 Stop hook discards: $BUDGET_STDERR"
+  pass "fm-context-budget channels: the advisory notice is a systemMessage on stdout, never stderr"
+}
+
+test_warning_only_ceiling_notice_is_a_system_message_on_stdout() {
+  local dir transcript status
+  dir=$(make_primary_dir "$TMP_ROOT/chan-warn")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  run_budget_channels "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000
+  status=$?
+  expect_code 0 "$status" "the shipped default must allow the turn end"
+  assert_system_message_contains "$BUDGET_STDOUT" "CONTEXT BUDGET CEILING REACHED" \
+    "the warning-only ceiling notice must be a systemMessage on stdout"
+  assert_system_message_contains "$BUDGET_STDOUT" "/stow" \
+    "the warning-only systemMessage must still name the valve"
+  [ -z "$BUDGET_STDERR" ] \
+    || fail "the shipped default wrote its only notice to a discarded channel: $BUDGET_STDERR"
+  pass "fm-context-budget channels: the shipped default's ceiling notice is a systemMessage on stdout"
+}
+
+test_stand_down_notice_is_a_system_message_on_stdout() {
+  local dir transcript payload status
+  dir=$(make_primary_dir "$TMP_ROOT/chan-standdown")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  payload=$(stop_payload "$transcript" sess-chan-sd)
+  run_budget_channels_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1 >/dev/null
+  run_budget_channels_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1
+  status=$?
+  expect_code 0 "$status" "the spent budget must allow the turn end"
+  assert_system_message_contains "$BUDGET_STDOUT" "block budget is exhausted" \
+    "the stand-down must be a systemMessage on stdout"
+  [ -z "$BUDGET_STDERR" ] || fail "the stand-down wrote to a discarded channel: $BUDGET_STDERR"
+  pass "fm-context-budget channels: the sticky stand-down announces itself on stdout"
+}
+
+# The one path that legitimately uses stderr: exit 2 IS delivered to the model.
+test_block_banner_is_on_stderr_with_clean_stdout() {
+  local dir transcript status
+  dir=$(make_primary_dir "$TMP_ROOT/chan-block")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  run_budget_channels_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000
+  status=$?
+  expect_code 2 "$status" "enforcement must block above the ceiling"
+  assert_contains "$BUDGET_STDERR" "CONTEXT BUDGET CEILING REACHED" \
+    "the blocking banner must go to stderr, which exit 2 delivers"
+  assert_contains "$BUDGET_STDERR" "/stow" "the blocking banner must name the valve"
+  [ -z "$BUDGET_STDOUT" ] \
+    || fail "a blocking turn must not also emit a hook response on stdout: $BUDGET_STDOUT"
+  pass "fm-context-budget channels: the blocking banner stays on stderr with exit 2"
+}
+
+# --- MEASUREMENT: zero-usage synthetic entries -------------------------------
+# Claude Code writes one of these whenever a turn ends abnormally - a login or
+# API error, an interrupt - which is exactly when this hook fires. It is the LAST
+# assistant entry at that moment, so counting it would read a long session as
+# empty. A real 81 MB session transcript carries 32 of them.
+
+test_trailing_synthetic_zero_entry_does_not_hide_the_measurement() {
+  local dir transcript out status
+  dir=$(make_primary_dir "$TMP_ROOT/synthetic-measure")
+  transcript="$dir/transcript.jsonl"
+  {
+    assistant_line 210000 req-real
+    synthetic_zero_line
+  } > "$transcript"
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000)
+  status=$?
+  expect_code 2 "$status" "a trailing zero-usage synthetic entry must not read as an empty session"
+  assert_contains "$out" "210000" "the last POSITIVE assistant total must be the measurement"
+  pass "fm-context-budget: a trailing zero-usage synthetic entry is ignored, not measured as a reset"
+}
+
+test_trailing_synthetic_zero_entry_cannot_rearm_a_spent_stand_down() {
+  local dir transcript payload out status i
+  dir=$(make_primary_dir "$TMP_ROOT/synthetic-standdown")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  payload=$(stop_payload "$transcript" sess-synth)
+  run_budget_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1 >/dev/null
+  out=$(run_budget_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+  expect_code 0 "$status" "the budget must be spent by now"
+  assert_contains "$out" "stands down" "the stand-down must announce itself once"
+  # The abnormal turn end lands: a zero-usage synthetic entry becomes the last
+  # assistant entry. It must not read as a drop below the advisory, because that
+  # would delete the stand-down record and re-arm blocking.
+  synthetic_zero_line >> "$transcript"
+  out=$(run_budget_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+  expect_code 0 "$status" "the turn that ended abnormally must not block"
+  [ -z "$out" ] || fail "a synthetic zero-usage entry produced a notice: $out"
+  # The session carries on and the next real turn is logged. Still over the
+  # ceiling, still the same session: the stand-down must have survived.
+  assistant_line 210000 req-after >> "$transcript"
+  for i in 1 2 3; do
+    out=$(run_budget_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+    expect_code 0 "$status" "turn $i after the synthetic entry must not block again"
+    [ -z "$out" ] || fail "a synthetic zero-usage entry re-armed the stand-down on turn $i: $out"
+  done
+  pass "fm-context-budget: a zero-usage entry is never treated as proof the context reset"
+}
+
+# --- Record durability: identity, isolation, and write failure ----------------
+
+test_records_are_named_per_session() {
+  local dir transcript
+  dir=$(make_primary_dir "$TMP_ROOT/record-naming")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-named)" \
+    FM_CONTEXT_BUDGET_BLOCK_BUDGET=2 >/dev/null
+  assert_present "$dir/state/.context-budget-blocks-sess-named" \
+    "the block record must be keyed to the session id, not the home"
+  assert_absent "$dir/state/.context-budget-blocks" \
+    "a home-scoped record would alias two sessions onto one count"
+  pass "fm-context-budget: the durable records are named per session id"
+}
+
+# Two primary sessions in one home is the case the home session lock reports
+# rather than prevents. With one shared record each turn end of one session reset
+# the other's count, so neither ever reached its budget and both blocked without
+# bound. Interleaving them here pins that they no longer interact.
+test_two_sessions_in_one_home_keep_separate_budgets() {
+  local dir transcript out status
+  dir=$(make_primary_dir "$TMP_ROOT/two-sessions")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-one)" \
+    FM_CONTEXT_BUDGET_BLOCK_BUDGET=1 >/dev/null; status=$?
+  expect_code 2 "$status" "session one must spend its single block"
+  run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-two)" \
+    FM_CONTEXT_BUDGET_BLOCK_BUDGET=1 >/dev/null; status=$?
+  expect_code 2 "$status" "session two must have its own single block"
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-one)" \
+    FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+  expect_code 0 "$status" "session one's count must have survived session two's turn end"
+  assert_contains "$out" "stands down" "session one must reach its own stand-down"
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-two)" \
+    FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+  expect_code 0 "$status" "session two must reach its own stand-down too"
+  pass "fm-context-budget: two sessions in one home cannot wipe each other's stand-down"
+}
+
+test_missing_session_id_is_inert() {
+  local dir transcript out status
+  dir=$(make_primary_dir "$TMP_ROOT/no-session-id")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  out=$(run_budget_enforcing "$dir" \
+    "$(printf '{"stop_hook_active":false,"transcript_path":"%s"}' "$transcript")" \
+    FM_CONTEXT_BUDGET_CEILING=180000); status=$?
+  expect_silent_exit_zero "a payload with no session_id" "$out" "$status"
+  pass "fm-context-budget: a payload with no session_id is inert, never a shared record"
+}
+
+test_unsafe_session_id_is_inert() {
+  local dir transcript out status value
+  dir=$(make_primary_dir "$TMP_ROOT/unsafe-session-id")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  for value in '../escape' 'a/b' 'has space' 'tab	sep'; do
+    out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript" "$value")" \
+      FM_CONTEXT_BUDGET_CEILING=180000); status=$?
+    expect_silent_exit_zero "session_id '$value'" "$out" "$status"
+  done
+  # No record anywhere under the home, so no unsafe id reached a path at all.
+  [ -z "$(find "$dir" -name '.context-budget-*' -print -quit)" ] \
+    || fail "an unsafe session id reached the filesystem as a record path"
+  pass "fm-context-budget: a session id that is not a plain filename token is inert"
+}
+
+# A record that cannot be persisted cannot bound anything, so blocking on it
+# would repeat every turn end forever. The degrade is toward warning, never
+# toward blocking, and it stays visible.
+test_unwritable_record_degrades_to_a_visible_warning() {
+  local dir transcript status
+  dir=$(make_primary_dir "$TMP_ROOT/record-unwritable")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  chmod 500 "$dir/state"
+  if touch "$dir/state/.writable-probe" 2>/dev/null; then
+    rm -f "$dir/state/.writable-probe"
+    chmod 755 "$dir/state"
+    pass "fm-context-budget: skipped unwritable-record row (test host ignores mode 500)"
+    return 0
+  fi
+  run_budget_channels_enforcing "$dir" "$(stop_payload "$transcript" sess-ro)" \
+    FM_CONTEXT_BUDGET_CEILING=180000
+  status=$?
+  chmod 755 "$dir/state"
+  expect_code 0 "$status" "an unrecordable block count must never block the turn end"
+  assert_system_message_contains "$BUDGET_STDOUT" "could not be recorded" \
+    "the degrade must say why it allowed the turn end"
+  assert_system_message_contains "$BUDGET_STDOUT" "/stow" "the degrade must still name the valve"
+  pass "fm-context-budget: a record it cannot write degrades to a visible warning, never a block"
+}
+
+# Raising the budget mid-session must not resurrect a stand-down that was already
+# spent, which a clamped count alone could not prevent.
+test_raising_the_block_budget_cannot_rearm_a_spent_stand_down() {
+  local dir transcript payload out status
+  dir=$(make_primary_dir "$TMP_ROOT/budget-raise")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  payload=$(stop_payload "$transcript" sess-raise)
+  run_budget_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1 >/dev/null
+  out=$(run_budget_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+  expect_code 0 "$status" "the single block must be spent"
+  assert_contains "$out" "stands down" "the stand-down must be recorded"
+  out=$(run_budget_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_BLOCK_BUDGET=9); status=$?
+  expect_code 0 "$status" "a raised budget must not re-arm a spent stand-down"
+  [ -z "$out" ] || fail "a raised budget reopened a spent stand-down: $out"
+  pass "fm-context-budget: raising the block budget mid-session cannot re-arm a spent stand-down"
+}
+
+test_long_dead_records_are_pruned_and_recent_ones_kept() {
+  local dir transcript
+  dir=$(make_primary_dir "$TMP_ROOT/record-prune")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  printf 'count=1\nstanddown=1\nsession=sess-ancient\n' \
+    > "$dir/state/.context-budget-blocks-sess-ancient"
+  printf 'count=1\nstanddown=1\nsession=sess-recent\n' \
+    > "$dir/state/.context-budget-blocks-sess-recent"
+  touch -t 202001010000 "$dir/state/.context-budget-blocks-sess-ancient"
+  run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-live)" \
+    FM_CONTEXT_BUDGET_BLOCK_BUDGET=2 >/dev/null
+  assert_absent "$dir/state/.context-budget-blocks-sess-ancient" \
+    "a record too old for any live session must be pruned"
+  assert_present "$dir/state/.context-budget-blocks-sess-recent" \
+    "a recent record may still belong to a live session and must be kept"
+  assert_present "$dir/state/.context-budget-blocks-sess-live" \
+    "this session's own record must survive its own prune"
+  pass "fm-context-budget: per-session records prune only when too old to belong to a live session"
+}
+
 # --- DEGRADATION: the eight rows, every one a silent exit 0 ------------------
 
 expect_silent_exit_zero() {
@@ -778,6 +1087,19 @@ test_block_budget_stands_down_visibly
 test_stand_down_is_sticky_for_the_rest_of_the_session
 test_block_budget_is_per_session
 test_stand_down_rearms_below_the_advisory
+test_advisory_notice_is_a_system_message_on_stdout
+test_warning_only_ceiling_notice_is_a_system_message_on_stdout
+test_stand_down_notice_is_a_system_message_on_stdout
+test_block_banner_is_on_stderr_with_clean_stdout
+test_trailing_synthetic_zero_entry_does_not_hide_the_measurement
+test_trailing_synthetic_zero_entry_cannot_rearm_a_spent_stand_down
+test_records_are_named_per_session
+test_two_sessions_in_one_home_keep_separate_budgets
+test_missing_session_id_is_inert
+test_unsafe_session_id_is_inert
+test_unwritable_record_degrades_to_a_visible_warning
+test_raising_the_block_budget_cannot_rearm_a_spent_stand_down
+test_long_dead_records_are_pruned_and_recent_ones_kept
 test_degrades_on_empty_stdin
 test_degrades_on_malformed_stdin
 test_degrades_without_transcript_path

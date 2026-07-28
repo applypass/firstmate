@@ -18,7 +18,7 @@
 # reproduces Claude Code's own accounting exactly; docs/verification/context-
 # budget.md records the cross-validation.
 #
-# Two correctness rules the measurement must keep:
+# Three correctness rules the measurement must keep:
 #   1. Take LAST, never max and never a sum. Compaction RESETS the running total,
 #      so a max implementation would latch the pre-compaction peak and disable
 #      the guard forever after the first compaction, and a sum would report a
@@ -28,9 +28,16 @@
 #      total and no requestId grouping is needed.
 #   2. Exclude sidechains. isSidechain==true marks subagent turns, which must
 #      never inflate the primary's measurement.
+#   3. Ignore zero-total entries. Claude Code writes SYNTHETIC assistant entries
+#      - type=="assistant", isSidechain false, model "<synthetic>", all four
+#      usage fields 0 - whenever a turn ends abnormally, such as a login or API
+#      error or an interrupt, which is exactly when this hook fires. Counting one
+#      would read a long session as empty, and that false zero would then look
+#      like proof the context had reset.
 # The measurement is ONE streaming jq pass that filters and projects as it reads,
-# so a multi-hundred-megabyte transcript costs constant memory on a hook that
-# runs at every single turn end.
+# so its MEMORY is constant in the transcript's size. Its TIME is still linear -
+# roughly 0.7 s per 80 MB on the measured host - and that cost is paid at every
+# single turn end, including far below the advisory.
 #
 # TWO STAGES, ONE POLICY NUMBER: the ceiling is the only policy number. The
 # advisory notice is DERIVED as ceiling - headroom, so there is never a second
@@ -41,6 +48,24 @@
 # FM_CONTEXT_BUDGET_ENFORCE=1, because a first release must observe the real
 # frequency of ceiling crossings before it is allowed to interrupt anyone.
 #
+# TWO OUTPUT CHANNELS, CHOSEN BY EXIT STATUS: Claude Code DISCARDS a successful
+# Stop hook's stderr - the hook_success attachment renders as null and only the
+# SessionStart-family events feed hook output into model context - so every
+# non-blocking notice here goes out as a {"systemMessage":...} object on STDOUT,
+# the documented channel the runtime actually renders. Only the blocking path,
+# which exits 2, uses stderr, because that path IS delivered to the model.
+# docs/verification/context-budget.md records both readings.
+#
+# RECORD IDENTITY IS THE SESSION: both records are named per session_id, which is
+# the identity of the context accumulation itself (the transcript file is
+# literally <session_id>.jsonl). Two primary sessions in one home therefore
+# cannot alias onto one record and wipe each other's stand-down. A missing or
+# unsafe session_id makes the turn inert rather than merging distinct sessions
+# under one shared identity, and the records are cleared only by a POSITIVE
+# measurement back below the advisory - never by a zero, absent, or unreadable
+# number, because losing a stand-down costs repeated forced handoffs while
+# keeping a stale one costs at most one missed warning.
+#
 # THE ONE VALVE: write a handoff and clear. This guard instructs and never types
 # into a pane: it never injects /compact, /clear, or any other command, and it
 # never spawns a replacement agent. docs/context-budget.md records the away-mode
@@ -48,7 +73,9 @@
 #
 # NEVER WEDGE A SESSION: every measurement failure - absent jq, missing or
 # unreadable transcript_path, missing or corrupt transcript, no assistant usage,
-# empty or malformed stdin - is a silent exit 0. When enforcement is on, blocking
+# a zero measurement, no usable session_id, empty or malformed stdin - is a silent
+# exit 0, and a block count that cannot be written degrades to the visible
+# warning rather than to an unbounded block. When enforcement is on, blocking
 # is bounded by FM_CONTEXT_BUDGET_BLOCK_BUDGET and then STANDS DOWN STICKILY for
 # the rest of the session, re-arming only once the measurement drops back below
 # the advisory. That is deliberately unlike bin/fm-turnend-guard.sh, which resets
@@ -111,13 +138,6 @@ fi
 # shellcheck source=bin/fm-primary-scope-lib.sh
 . "$SCRIPT_DIR/fm-primary-scope-lib.sh"
 
-# The consecutive-block record doubles as the STICKY stand-down record: once the
-# count passes the budget it stays past it, and only a measurement back below the
-# advisory removes the file.
-BUDGET_FILE="$STATE/.context-budget-blocks"
-# Which visible notice stage this session has already been shown, so neither the
-# advisory nor the warning-only ceiling notice repeats inside one episode.
-NOTICE_FILE="$STATE/.context-budget-notice"
 RULE='━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'
 
 # Read the whole turn-end hook payload once; never block on unreadable or absent
@@ -132,6 +152,12 @@ PAYLOAD=$(cat 2>/dev/null || true)
 # crewmate turn end - down to a couple of git calls with no jq spawn at all.
 fm_primary_scope_matches "$FM_ROOT" "$STATE" || exit 0
 
+# Pin the record location for the rest of this run. Canonicalizing once means a
+# symlinked or relative state path cannot resolve to two different record
+# locations across a session's invocations and split one session's records in
+# two, which would silently re-arm a spent stand-down.
+STATE=$(cd "$STATE" 2>/dev/null && pwd -P) || exit 0
+
 # jq is the repo's established JSON dependency (bin/fm-turnend-guard.sh:95 uses
 # the same "missing jq -> silent no-op" degrade). Without it we cannot read the
 # payload or the transcript at all, so we must never block.
@@ -145,14 +171,18 @@ TRANSCRIPT=$(printf '%s' "$PAYLOAD" | jq -r '.transcript_path // empty' 2>/dev/n
 # --- the measurement ---------------------------------------------------------
 # ONE streaming pass: jq -R reads a line at a time, drops it unless it parses to
 # a JSON OBJECT that is a countable assistant entry, and emits just that entry's
-# total. Nothing is slurped, so cost is constant in the transcript's size rather
-# than proportional to it - this runs at every turn end, including the common
+# total. Nothing is slurped, so MEMORY is constant in the transcript's size; the
+# time is still linear, and it is paid at every turn end including the common
 # case far below the advisory.
 #   fromjson? drops malformed or truncated lines instead of aborting, so a
 #   partially written transcript degrades to "measure what parsed".
 #   select(type == "object") drops a line that parses to a valid JSON SCALAR,
 #   which would otherwise make the .isSidechain lookup a hard jq error and abort
 #   the whole measurement.
+#   select(. > 0) drops a synthetic zero-usage entry (rule 3 in the header): a
+#   real long session never measures 0, so a 0 here is a missing measurement
+#   masquerading as a reset, and taking the last POSITIVE total instead reports
+#   the session's real size.
 # sed takes the last emitted total, which is the LAST rule; the trailing sed is
 # already a dependency of this script, so the pass adds no new tool.
 measure_context() {
@@ -168,6 +198,7 @@ measure_context() {
     | .message.usage
     | usage_total
     | floor
+    | select(. > 0)
   ' "$TRANSCRIPT" 2>/dev/null | sed -n '$p'
 }
 
@@ -175,47 +206,111 @@ TOTAL=$(measure_context) || exit 0
 case "$TOTAL" in
   ''|*[!0-9]*) exit 0 ;;
 esac
+# A non-positive measurement is not evidence of anything: it means nothing
+# countable was found, not that the context is empty. Stay completely inert on it
+# rather than warning on a false number or treating it as proof of a drop.
+[ "$TOTAL" -gt 0 ] || exit 0
 
-SESSION_ID=$(printf '%s' "$PAYLOAD" | jq -r '.session_id // "unknown"' 2>/dev/null || printf 'unknown')
+# --- record identity ---------------------------------------------------------
+# session_id is the identity of the context accumulation, so it names the
+# records. A missing, empty, or unsafe id makes this turn inert: acting on a
+# placeholder would merge two distinct sessions into one shared record, and an
+# id that is not a plain filename token has no business in a path.
+SESSION_ID=$(printf '%s' "$PAYLOAD" | jq -r '.session_id // empty' 2>/dev/null) || exit 0
+case "$SESSION_ID" in
+  ''|*[!A-Za-z0-9._-]*) exit 0 ;;
+esac
+[ "${#SESSION_ID}" -le 128 ] || exit 0
+
+# The consecutive-block record doubles as the STICKY stand-down record: once the
+# recorded standdown flag is set it stays set, and only a positive measurement
+# back below the advisory removes the file.
+BUDGET_FILE="$STATE/.context-budget-blocks-$SESSION_ID"
+# Which visible notice stage this session has already been shown, so neither the
+# advisory nor the warning-only ceiling notice repeats inside one episode.
+NOTICE_FILE="$STATE/.context-budget-notice-$SESSION_ID"
+
+# One session's records belong to that session and nothing else clears them, so
+# prune only records old enough that no live session could own them. The sticky
+# path refreshes its own record on every stood-down turn end, so pruning can
+# never take a stand-down away from a session that is still running.
+prune_dead_records() {
+  find "$STATE" -maxdepth 1 -type f -name '.context-budget-*' -mtime +30 \
+    -delete >/dev/null 2>&1 || true
+}
 
 # True when this session has already been shown the named notice stage.
 notice_seen() {  # <stage>
-  local seen_session seen_stage
-  seen_session=$(sed -n '1s/^session=//p' "$NOTICE_FILE" 2>/dev/null || true)
-  seen_stage=$(sed -n '2s/^stage=//p' "$NOTICE_FILE" 2>/dev/null || true)
-  [ "$seen_session" = "$SESSION_ID" ] && [ "$seen_stage" = "$1" ]
+  [ "$(sed -n '1s/^stage=//p' "$NOTICE_FILE" 2>/dev/null || true)" = "$1" ]
 }
 
+# A notice that cannot be recorded may repeat on a later turn end. That is the
+# deliberate degrade: a repeated visible warning is harmless, while suppressing
+# it would lose the only observable behavior the shipped default has.
 notice_record() {  # <stage>
-  printf 'session=%s\nstage=%s\n' "$SESSION_ID" "$1" > "$NOTICE_FILE" 2>/dev/null || true
+  [ -e "$NOTICE_FILE" ] || prune_dead_records
+  printf 'stage=%s\nsession=%s\n' "$1" "$SESSION_ID" > "$NOTICE_FILE" 2>/dev/null || true
 }
 
-budget_count() {
-  local old_session old_count
-  old_session=$(sed -n '1s/^session=//p' "$BUDGET_FILE" 2>/dev/null || true)
-  old_count=$(sed -n '2s/^count=//p' "$BUDGET_FILE" 2>/dev/null || true)
-  case "$old_count" in
-    ''|*[!0-9]*) old_count=0 ;;
+BUDGET_COUNT=0
+BUDGET_STOOD_DOWN=0
+# An unparseable count in an existing record is read as a spent stand-down, not
+# as a fresh budget: re-arming on a record we cannot read is exactly the loss
+# this record exists to prevent.
+budget_read() {
+  local raw_count raw_standdown
+  [ -e "$BUDGET_FILE" ] || return 0
+  raw_count=$(sed -n '1s/^count=//p' "$BUDGET_FILE" 2>/dev/null || true)
+  raw_standdown=$(sed -n '2s/^standdown=//p' "$BUDGET_FILE" 2>/dev/null || true)
+  case "$raw_count" in
+    ''|*[!0-9]*) BUDGET_STOOD_DOWN=1; return 0 ;;
   esac
-  [ "$old_session" = "$SESSION_ID" ] || old_count=0
-  printf '%s' "$old_count"
+  BUDGET_COUNT=$raw_count
+  [ "$raw_standdown" = 1 ] && BUDGET_STOOD_DOWN=1
+  return 0
 }
 
-budget_record() {  # <count>
-  printf 'session=%s\ncount=%s\n' "$SESSION_ID" "$1" > "$BUDGET_FILE" 2>/dev/null || true
+# Returns non-zero when the record could not be persisted. The caller must then
+# degrade toward NOT blocking: an unpersisted count cannot bound anything, so
+# blocking on it would repeat every turn end with no bound at all.
+budget_record() {  # <count> <standdown 0|1>
+  [ -e "$BUDGET_FILE" ] || prune_dead_records
+  printf 'count=%s\nstanddown=%s\nsession=%s\n' "$1" "$2" "$SESSION_ID" > "$BUDGET_FILE" 2>/dev/null
 }
 
-valve_lines() {
-  printf '●  Take the valve now, before any other work:\n'
-  printf '●    1. Run /stow to write durable knowledge, decisions, and unfinished work to disk.\n'
-  printf '●    2. Write a handoff note naming what you were doing and the exact next step.\n'
-  printf '●    3. Clear the context and resume from the stowed record.\n'
+# A systemMessage object on stdout: the one channel a successful Stop hook has.
+# jq builds it, compact and on one line, so a multi-line message is escaped
+# correctly rather than by hand.
+system_message() {  # <text>
+  jq -n -c --arg msg "$1" '{systemMessage: $msg}'
+}
+
+valve_text() {
+  printf 'Take the valve now, before any other work:\n'
+  printf '  1. Run /stow to write durable knowledge, decisions, and unfinished work to disk.\n'
+  printf '  2. Write a handoff note naming what you were doing and the exact next step.\n'
+  printf '  3. Clear the context and resume from the stowed record.\n'
+}
+
+ceiling_text() {  # <closing line>
+  printf 'CONTEXT BUDGET CEILING REACHED - HAND OFF AND CLEAR\n'
+  printf 'This session measures %s tokens, over the %s ceiling.\n' "$TOTAL" "$CEILING"
+  valve_text
+  printf '%s\n' "$1"
+  printf 'This is a cost and reasoning-quality policy, not an overflow warning.\n'
+}
+
+# One visible non-blocking notice per stage per episode, on stdout.
+notice_once() {  # <stage> <text>
+  notice_seen "$1" && return 0
+  notice_record "$1"
+  system_message "$2"
 }
 
 # --- below the advisory: silent, and re-arm the whole episode -----------------
-# This is the ONLY place the sticky stand-down is cleared, so a session that has
-# already spent its block budget is never blocked again until it genuinely drops
-# back under the advisory.
+# This is the ONLY place the sticky stand-down is cleared, and only a POSITIVE
+# measurement reaches here, so a session that has already spent its block budget
+# is never blocked again until it genuinely drops back under the advisory.
 if [ "$TOTAL" -lt "$ADVISORY" ]; then
   rm -f "$BUDGET_FILE" "$NOTICE_FILE" 2>/dev/null || true
   exit 0
@@ -223,61 +318,58 @@ fi
 
 # --- between advisory and ceiling: one non-blocking notice per episode ---------
 if [ "$TOTAL" -lt "$CEILING" ]; then
-  notice_seen advisory && exit 0
-  notice_record advisory
-  {
-    printf '●%s\n' "$RULE"
-    printf '●  CONTEXT BUDGET ADVISORY - %s tokens, ceiling %s\n' "$TOTAL" "$CEILING"
-    printf '●  About %s tokens of headroom left before the ceiling.\n' "$((CEILING - TOTAL))"
-    printf '●  Prefer cheap actions now and avoid large reads.\n'
-    printf '●  Run /stow, write a handoff note, and clear before the ceiling is reached.\n'
-    printf '●%s\n' "$RULE"
-  } >&2
+  notice_once advisory "$(
+    printf 'CONTEXT BUDGET ADVISORY - %s tokens, ceiling %s\n' "$TOTAL" "$CEILING"
+    printf 'About %s tokens of headroom left before the ceiling.\n' "$((CEILING - TOTAL))"
+    printf 'Prefer cheap actions now and avoid large reads.\n'
+    printf 'Run /stow, write a handoff note, and clear before the ceiling is reached.\n'
+  )"
   exit 0
 fi
 
 # --- at or above the ceiling, shipped default: warn once, never block ---------
 if [ "$ENFORCE" -ne 1 ]; then
-  notice_seen ceiling && exit 0
-  notice_record ceiling
-  {
-    printf '●%s\n' "$RULE"
-    printf '●  CONTEXT BUDGET CEILING REACHED - HAND OFF AND CLEAR\n'
-    printf '●  This session measures %s tokens, over the %s ceiling.\n' "$TOTAL" "$CEILING"
-    valve_lines
-    printf '●  This is a warning: the ceiling does not block by default.\n'
-    printf '●  This is a cost and reasoning-quality policy, not an overflow warning.\n'
-    printf '●%s\n' "$RULE"
-  } >&2
+  notice_once ceiling "$(ceiling_text 'This is a warning: the ceiling does not block by default.')"
   exit 0
 fi
 
 # --- at or above the ceiling with enforcement on: block, bounded, then stand
 # --- down stickily ------------------------------------------------------------
-COUNT=$(($(budget_count) + 1))
+budget_read
 
-if [ "$COUNT" -gt "$BLOCK_BUDGET" ]; then
-  # Never wedge, and never nag: the ceiling cannot clear without the captain, so
-  # once the budget is spent this guard stands down for the rest of the session
-  # rather than oscillating between blocking and allowing. Clamp the recorded
-  # count so the stand-down is a stable state, and say so exactly once.
-  already_stood_down=0
-  [ "$COUNT" -gt $((BLOCK_BUDGET + 1)) ] && already_stood_down=1
-  budget_record $((BLOCK_BUDGET + 1))
-  if [ "$already_stood_down" -eq 0 ]; then
-    printf '{"systemMessage":"firstmate context budget: this session measures %s tokens, over the %s ceiling, and the block budget is exhausted so this guard now stands down for the rest of the session. Run /stow, write a handoff note, and clear before continuing."}\n' \
-      "$TOTAL" "$CEILING"
-  fi
+if [ "$BUDGET_STOOD_DOWN" -eq 1 ]; then
+  # Sticky and silent. The ceiling cannot clear without the captain, so once the
+  # budget is spent this guard is out of the way for the rest of the session
+  # rather than oscillating between blocking and allowing. Refreshing the record
+  # keeps a long-running session's stand-down out of reach of the prune.
+  touch "$BUDGET_FILE" 2>/dev/null || true
   exit 0
 fi
-budget_record "$COUNT"
+
+COUNT=$((BUDGET_COUNT + 1))
+
+if [ "$COUNT" -gt "$BLOCK_BUDGET" ]; then
+  # Enter the stand-down as a recorded FLAG rather than a clamped count, so
+  # raising FM_CONTEXT_BUDGET_BLOCK_BUDGET mid-session cannot re-arm a budget
+  # that was already spent. Say so exactly once, visibly.
+  budget_record "$COUNT" 1
+  system_message "$(printf 'firstmate context budget: this session measures %s tokens, over the %s ceiling, and the block budget is exhausted so this guard now stands down for the rest of the session. Run /stow, write a handoff note, and clear before continuing.' \
+    "$TOTAL" "$CEILING")"
+  exit 0
+fi
+
+if ! budget_record "$COUNT" 0; then
+  # The count could not be persisted, so blocking could not be bounded by it.
+  # Degrade to the visible warning instead of blocking on a count that does not
+  # survive the turn.
+  notice_once ceiling "$(ceiling_text 'This turn is allowed rather than blocked because the block count could not be recorded.')"
+  exit 0
+fi
 
 {
   printf '●%s\n' "$RULE"
-  printf '●  CONTEXT BUDGET CEILING REACHED - HAND OFF AND CLEAR\n'
-  printf '●  This session measures %s tokens, over the %s ceiling.\n' "$TOTAL" "$CEILING"
-  valve_lines
-  printf '●  This is a cost and reasoning-quality policy, not an overflow warning.\n'
+  ceiling_text 'Blocking is bounded, then this guard stands down for the session.' \
+    | sed 's/^/●  /'
   printf '●%s\n' "$RULE"
 } >&2
 exit 2

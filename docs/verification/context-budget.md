@@ -78,6 +78,58 @@ This confirms both halves of the enforcement guarantee: the ceiling blocks a rea
 The stand-down that follows a spent budget is now sticky, so a fourth and later invocation over the ceiling stays allowed and silent.
 That behavior postdates this run and is covered by fixtures in `tests/fm-context-budget.test.sh` rather than by a live capture.
 
+## An exit-0 Stop hook's stderr is discarded
+
+The earlier block proof above exercised only the enforcement exit-2 path.
+Under the shipped warning-only default the guard never exits 2 at all, so the feature's entire observable behavior had never been proven visible.
+It was not: both non-blocking notices were written to stderr, where nothing renders them.
+
+Headless `claude -p` cannot decide this, because it emits no `Stop` hook response event to distinguish the two streams.
+The repeatable method is interactive:
+
+1. In a throwaway git-initialised project, register two `Stop` hooks. One prints a marker to stderr and exits 0; the other prints `{"systemMessage":"<marker>"}` to stdout and exits 0.
+2. Have both hooks append to their own log file, so hook execution is confirmed independently of what the UI shows.
+3. Drive a real Claude TUI under tmux, let one turn end, then capture the pane.
+
+Observed: the stdout `systemMessage` rendered in the pane as a visible `Stop ... says:` system line, while the stderr marker appeared zero times, with both log files proving both hooks had run.
+
+Corroborating reading of the bundled JavaScript in the installed 2.1.220 executable, re-run for this record:
+
+```sh
+strings -a "$(command -v claude)" | grep -o 'case"hook_success".\{0,220\}'
+```
+
+Two expressions decide it:
+
+```js
+case"hook_success":{return null}
+case"hook_success":if(e.hookEvent!=="SessionStart"&&e.hookEvent!=="UserPromptSubmit"&&e.hookEvent!=="UserPromptExpansion")return[];
+```
+
+The first is the UI renderer for a successful hook's output; the second is the model-context mapper, which passes hook output through only for those three events.
+A `Stop` hook that exits 0 is neither rendered nor fed to the model.
+`systemMessage` is the documented channel that is: the same binary's hook-response schema describes it as a "Warning message shown to the user".
+
+`bin/fm-context-budget.sh` therefore emits the advisory notice, the warning-only ceiling notice, and the sticky stand-down as `systemMessage` objects on stdout, and keeps stderr for the blocking path only.
+`tests/fm-context-budget.test.sh` captures the two streams separately for exactly this reason; the earlier suite merged them with `2>&1` and so could not have caught an invisible notice.
+
+## Zero-usage synthetic entries are real
+
+A real 81 MB session transcript on this host carries 32 assistant entries whose four usage fields are all `0`:
+
+```sh
+jq -c 'select(type=="object")
+  | select(.type=="assistant" and (.message.usage|type)=="object")
+  | {m: .message.model, t: ((.message.usage.input_tokens//0)+(.message.usage.cache_creation_input_tokens//0)+(.message.usage.cache_read_input_tokens//0)+(.message.usage.output_tokens//0))}' <transcript>
+```
+
+Every one of them reports `{"m":"<synthetic>","t":0}` on the main chain.
+Claude Code writes them when a turn ends abnormally, such as a login or API error or an interrupt, which is precisely when a `Stop` hook fires, so one is the last assistant entry exactly when the guard measures.
+
+Counted, it would read a long session as `0` tokens.
+That false zero then looks like proof of a reset: it takes the below-advisory branch, which is the one place the sticky stand-down is cleared.
+The reader now takes the last *positive* total, and a non-positive measurement leaves the turn inert instead of clearing anything.
+
 ## The consecutive-block override cap
 
 `docs/context-budget.md` previously repeated Claude Code's 8-consecutive-block override as bare fact.
@@ -102,7 +154,8 @@ Three facts follow, and they are what the guard's own bound is set against:
 - A cap of `0` or less disables the override entirely.
 
 Because the counter is shared, per-hook block budgets do not compose: several independently-budgeted blockers firing out of phase can keep consecutive stops blocked past the cap even though no single hook exceeds its own budget.
-`bin/fm-context-budget.sh` answers that by standing down stickily once its budget is spent, which removes it from the shared count for the rest of the session.
+`bin/fm-context-budget.sh` answers that by standing down stickily once its budget is spent, which removes it from the shared count for the rest of that session.
+The stand-down record is keyed to `session_id` and is only ever cleared by a positive measurement below the advisory, so a second session in the same home, an unreadable record, a raised block budget, or a zero measurement cannot put this guard back into that shared count.
 
 ## The session cannot clear itself
 
@@ -202,7 +255,12 @@ Both readers over the same 81 MB transcript, same host:
 | one streaming pass | `444729` | 0.64 s | 5.9 MB |
 
 The measured number is identical.
-The streaming pass filters and projects per line and keeps only the last emitted total, so memory is constant in transcript size rather than proportional to it.
+The streaming pass filters and projects per line and keeps only the last emitted total, so MEMORY is constant in transcript size rather than proportional to it.
+
+Time is not constant, and the table above says so: 0.64 s for the reader alone at 81 MB, and a separately measured 0.41 s over a 65 MB synthetic transcript.
+The shipped hook end to end over that same 81 MB transcript, in a primary-shaped scratch home, measured 0.67 s and 0.72 s across two runs and returned `444729`, the same total as the table.
+The cost is linear in transcript size, roughly 0.7 s per 80 MB on this host, and it is paid at every primary turn end including far below the advisory.
+That tradeoff is accepted at these magnitudes; only the claim needed narrowing from "constant cost" to "constant memory".
 
 ## Native knobs remain unusable
 

@@ -44,20 +44,23 @@ A non-default Claude config directory puts the transcript somewhere `$HOME` cann
 The context total is the sum of `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`, and `output_tokens` on the last non-sidechain `type=="assistant"` entry.
 That formula reproduces Claude Code's own accounting exactly rather than approximating it.
 
-Two correctness rules the measurement implements:
+Three correctness rules the measurement implements:
 
 - **Last, never max and never a sum.** Compaction resets the running total. A `max` implementation would latch the pre-compaction peak and disable the guard permanently after the first compaction, and a sum would report a multiple of the real total and fire the guard far too early.
 - **Exclude sidechains.** `isSidechain == true` marks subagent turns, which must never inflate the primary's measurement.
+- **Ignore zero-total entries.** Claude Code writes synthetic assistant entries - main chain, `model` of `<synthetic>`, all four usage fields `0` - whenever a turn ends abnormally, which is exactly when this hook fires. One is the last assistant entry at that moment, so counting it would read a long session as empty and that false zero would then look like proof the context had reset. The reader takes the last *positive* total instead.
 
 Taking the last entry also handles a multi-block assistant turn, with no separate dedupe step.
 Every JSONL line of one such turn carries that turn's own cumulative usage rather than a slice of it, so the last line already is the turn's total.
 There is deliberately no `requestId` grouping in the reader: an earlier draft had one, and it was provably equivalent to taking the last entry.
 
 The whole measurement is one streaming pass that filters and projects as it reads and keeps only the last matching total.
-Nothing is slurped into memory, so a multi-hundred-megabyte transcript costs the same as a small one on a hook that runs at every turn end.
+Nothing is slurped into memory, so its **memory** is constant in transcript size rather than proportional to it.
+Its **time** is still linear, roughly 0.7 s per 80 MB of transcript on the measured host, and that cost is paid at every primary turn end including far below the advisory.
 
 Malformed transcript lines are dropped rather than aborting the pass, so a half-written final line degrades to the last line that parsed.
 A line that parses to a valid JSON scalar rather than an object is dropped by the same rule, so it cannot turn the sidechain lookup into an error that would abort the whole measurement.
+A measurement that comes back absent, non-numeric, or zero leaves the turn completely inert: it is a missing number, not evidence about the session's size.
 
 ## Thresholds
 
@@ -78,6 +81,42 @@ A non-numeric or zero value falls back to the default rather than disabling the 
 
 Each notice prints once per episode and re-arms once the measurement drops back below the advisory point, the same shape `bin/fm-guard.sh` uses.
 The advisory notice and the warning-only ceiling notice are separate stages, so crossing from one into the other still produces exactly one new notice.
+
+## Where the notices appear
+
+Claude Code discards a successful `Stop` hook's stderr.
+The hook's output is recorded as a `hook_success` attachment whose renderer returns nothing, and hook output reaches model context only for the `SessionStart` family of events; [`verification/context-budget.md`](verification/context-budget.md) records both readings and the interactive capture that confirms them.
+
+So the channel is chosen by what the guard is doing, not by convenience:
+
+| Path | Exit | Channel |
+| --- | --- | --- |
+| Advisory notice | 0 | `{"systemMessage": ...}` on stdout |
+| Warning-only ceiling notice | 0 | `{"systemMessage": ...}` on stdout |
+| Sticky stand-down notice | 0 | `{"systemMessage": ...}` on stdout |
+| Blocking ceiling banner | 2 | stderr, which exit 2 delivers to the model |
+
+Under the shipped warning-only default every visible thing this guard does is a `systemMessage`, so that channel is the whole observable behavior of the feature rather than a detail.
+`tests/fm-context-budget.test.sh` asserts the two streams separately and never merges them, because a merged capture cannot tell a rendered notice from a discarded one.
+
+## Durable records
+
+Two records live under `state/`, both named per session: `.context-budget-blocks-<session_id>` and `.context-budget-notice-<session_id>`.
+
+`session_id` is the identity of the context accumulation itself, since the transcript file is literally `<session_id>.jsonl`, so a record keyed to it disappears exactly when the context genuinely resets.
+Naming the files per session also means two primary sessions in one home - the case the home session lock reports rather than prevents - cannot alias onto one record and wipe each other's stand-down.
+A payload with a missing, empty, or non-filename-token `session_id` makes the turn inert rather than merging distinct sessions under a placeholder identity.
+
+Every rule about these records biases toward keeping them.
+Losing a stand-down means repeated forced handoffs that grow the context this guard exists to cap; keeping a stale one costs at most one missed warning in one session.
+Concretely:
+
+- Only a positive measurement below the advisory point clears them. An absent, non-numeric, or zero measurement never does.
+- An existing block record whose count cannot be parsed is read as a spent stand-down, not as a fresh budget.
+- The stand-down is recorded as a flag rather than a clamped count, so raising `FM_CONTEXT_BUDGET_BLOCK_BUDGET` mid-session cannot re-arm a budget that was already spent.
+- The state directory is canonicalized once per run, so a symlinked or relative path cannot split one session's records across two locations.
+- A block count that cannot be written is not swallowed. Blocking on a count that does not survive the turn could not be bounded, so that turn degrades to the visible warning instead.
+- Records are pruned only when older than 30 days, and a stood-down session refreshes its own record on every turn end, so pruning can never reach a session that is still running.
 
 ## The valve
 
@@ -121,14 +160,14 @@ It is not authorized, not verified, and nothing should be built toward it.
 
 ## Never wedge a session
 
-Every measurement failure is a silent exit 0: absent `jq`, missing or unreadable `transcript_path`, a missing, empty, unreadable, or corrupt transcript, a transcript with no assistant usage, and empty or malformed stdin.
+Every measurement failure is a silent exit 0: absent `jq`, missing or unreadable `transcript_path`, a missing, empty, unreadable, or corrupt transcript, a transcript with no assistant usage, a measurement that comes back zero, a payload with no usable `session_id`, and empty or malformed stdin.
 A bare or unsupported-harness invocation is also inert rather than a blocking usage error.
 
 Under the shipped default the guard never blocks at all, so the ceiling can never contribute to a wedged session.
 
 With enforcement on, blocking is bounded and the stand-down is sticky.
 After `FM_CONTEXT_BUDGET_BLOCK_BUDGET` consecutive blocks in one session the guard allows the turn end with a visible `systemMessage` that still names the valve, then stays stood down for the rest of that session and says nothing further.
-Only a measurement back below the advisory point re-arms it, mirroring how the notices re-arm.
+Only a positive measurement back below the advisory point re-arms it, mirroring how the notices re-arm.
 
 That is deliberately different from the turn-end supervision guard in [`turnend-guard.md`](turnend-guard.md), which resets its block budget on every allow.
 The asymmetry is the point.
@@ -184,5 +223,5 @@ Firstmate measures and enforces this itself.
 
 ## Regression coverage
 
-`tests/fm-context-budget.test.sh` covers the two measurement correctness rules and the multi-block property that subsumes dedupe, the derived advisory and its per-episode dedup and re-arm, the absolute 180,000 default, the warning-only shipped default and the explicit enforcement switch, the sticky stand-down and its advisory-level re-arm, the full degradation matrix including a valid-JSON scalar line, main and secondmate primary scope, crewmate and secondmate-child worktree exclusion, the bounded block budget and its per-session keying, claude-only mode gating, the tracked `Stop` registration, and the one-owner and no-injection boundaries.
+`tests/fm-context-budget.test.sh` covers the three measurement correctness rules and the multi-block property that subsumes dedupe, the derived advisory and its per-episode dedup and re-arm, the absolute 180,000 default, the warning-only shipped default and the explicit enforcement switch, the channel each notice lands on with stdout and stderr captured separately, the sticky stand-down and its advisory-level re-arm, record durability against a trailing zero-usage synthetic entry, two sessions in one home, a missing or unsafe `session_id`, an unwritable record, a raised mid-session block budget and long-dead record pruning, the full degradation matrix including a valid-JSON scalar line, main and secondmate primary scope, crewmate and secondmate-child worktree exclusion, the bounded block budget and its per-session keying, claude-only mode gating, the tracked `Stop` registration, and the one-owner and no-injection boundaries.
 [`verification/context-budget.md`](verification/context-budget.md) records the live measurements, the end-to-end block proof, and the secondmate and subagent characterization.
