@@ -380,6 +380,13 @@ The record is advisory and durable records win every disagreement with it; never
 When a fresh session cannot take the helm, relay what holds it and the clearing command it printed, and never clear the helm from a session the captain has not agreed to give up.
 A session that does not hold the helm may read a waiting handover but never prepares or consumes one: consuming it there leaves the session that does take the helm told nothing is waiting.
 
+### Context ceiling
+
+An advisory at 150,000 tokens and a ceiling notice at 180,000 report that this session is spending more and reasoning worse than a fresh one would.
+Both fire before the 250,000 threshold above, and under the shipped default neither blocks: report it, keep working, and tell the captain at the next natural reply.
+Above 250,000 every threshold applies at once, and the handover mechanism above owns the valve in every case - hand over rather than running a second valve beside it.
+`docs/context-budget.md` owns the measurement, the opt-in enforcement switch, and the per-harness support.
+
 ### Away-mode stub
 
 Invoke the `/afk` skill when the captain says `/afk`, says they are going afk, `state/.afk` exists, an incoming message starts with `FM_INJECT_MARK`, or any `state/.subsuper-*` marker is involved.
