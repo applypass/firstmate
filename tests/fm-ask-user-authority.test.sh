@@ -87,7 +87,10 @@ test_repeated_same_theme_escalates_before_another_round() {
 
 test_defect_class_is_swept_and_decided_once() {
   local brief_contract
-  assert_grep 'Sweep the defect class, decide once' "$OWNER" \
+  # Anchored on the heading itself: step 7 cross-references the section by title,
+  # so an unanchored match would be satisfied by that pointer alone and a renamed
+  # heading would leave the pointer dangling.
+  assert_grep '## Sweep the defect class, decide once' "$OWNER" \
     "class-sweep rule is missing from its owner"
   assert_grep 'When the finding is one instance of such a class, enumerate that whole class before deciding the instance in front of you' "$OWNER" \
     "class-sweep rule fires unconditionally or no longer enumerates the class up front"

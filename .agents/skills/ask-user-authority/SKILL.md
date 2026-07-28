@@ -3,6 +3,7 @@ name: ask-user-authority
 description: >-
   Agent-only decision procedure for ask-user findings.
   Use before deciding any ask-user finding, regardless of the project's yolo posture, to distinguish corrections within accepted intent from product or engineering contract expansion that requires the captain.
+  Also owns the rule that a finding which is one instance of a broader defect class is enumerated up front and decided once, rather than routed one instance at a time.
 user-invocable: false
 metadata:
   internal: true
