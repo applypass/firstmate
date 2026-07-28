@@ -5,6 +5,9 @@
 # groups, and a later audit classified 14 of 32 rounds as over-engineered after
 # checkpoint-based gameplay verification expanded into continuous adversarial
 # 60 Hz browser proof.
+# The class-sweep rule has its own motivating evidence: one queue-refresh fix
+# cost the captain roughly nine separate ask-user decisions, each another caller
+# that ignored a swallowed failure, before the class was swept and decided once.
 # The tests below enforce the general contract boundary without naming that
 # project in the runtime policy.
 # shellcheck disable=SC2016
@@ -82,6 +85,46 @@ test_repeated_same_theme_escalates_before_another_round() {
   pass "repeated abstraction-preserving findings escalate before another fix round"
 }
 
+test_defect_class_is_swept_and_decided_once() {
+  local brief_contract
+  # Anchored on the heading itself: step 7 cross-references the section by title,
+  # so an unanchored match would be satisfied by that pointer alone and a renamed
+  # heading would leave the pointer dangling.
+  assert_grep '## Sweep the defect class, decide once' "$OWNER" \
+    "class-sweep rule is missing from its owner"
+  assert_grep 'When the finding is one instance of such a class, enumerate that whole class before deciding the instance in front of you' "$OWNER" \
+    "class-sweep rule fires unconditionally or no longer enumerates the class up front"
+  assert_grep 'find every occurrence of that class and report them as one set, which is evidence-gathering and never a license to correct them' "$OWNER" \
+    "class-sweep enumeration is no longer marked report-only"
+  assert_grep 'it must say the decision stays open, and the worker appends no resolved event until the batched decision returns through the gate' "$OWNER" \
+    "an enumeration steer can silently close a parked captain decision"
+  assert_grep 'bring one decision that covers the whole class, and let only that decision, returned through the active validation gate, authorize folding the corrections into one round' "$OWNER" \
+    "class-sweep rule lost the single batched decision that alone authorizes the corrections"
+  assert_grep 'sweep the class with "Sweep the defect class, decide once" below rather than routing the next instance, without relaxing this step'"'"'s own escalation requirement' "$OWNER" \
+    "same-theme step cross-reference can be read as replacing its own escalation"
+  assert_grep 'signal to check whether the root is a shared abstraction' "$OWNER" \
+    "same-theme step pre-decides that the repeat has a shared-abstraction root"
+  assert_grep 'Enumerating the class is not contract expansion' "$OWNER" \
+    "class-sweep rule no longer distinguishes enumeration from contract expansion"
+  assert_grep 'The sweep changes only the size of the evidence, never the authority' "$OWNER" \
+    "class-sweep rule stopped deferring authority to the numbered procedure"
+  assert_grep "still decides who answers the batched correction, still applies its stronger destructive, irreversible, and security-sensitive captain boundaries, and still fires step 7 on step 7's own condition alone" "$OWNER" \
+    "consolidated authority pointer lost the unchanged owner, the stronger boundaries, or step 7's own condition"
+
+  brief_contract=$(awk '
+    /^## 11\. Crewmate briefs$/ { found = 1; next }
+    found && /^## 12\./ { exit }
+    found { print }
+  ' "$AGENTS")
+  assert_contains "$brief_contract" 'enumerate every occurrence of that class and report them as one set' \
+    "brief contract does not require systemic work to be swept in one set"
+  assert_contains "$brief_contract" '`ask-user-authority` owns the matching one-batched-decision rule' \
+    "brief contract does not point at the class-sweep owner"
+  assert_no_grep 'enumerate that whole class before deciding the instance in front of you' "$AGENTS" \
+    "AGENTS.md carries a second copy of the class-sweep procedure instead of pointing at its owner"
+  pass "a defect class is enumerated up front and decided in one batched decision"
+}
+
 test_stronger_security_boundary_survives() {
   assert_grep 'genuinely security-sensitive choices always escalate' "$OWNER" \
     "security-sensitive choices no longer use the stronger captain boundary"
@@ -154,6 +197,7 @@ test_owner_and_always_loaded_boundary
 test_concrete_required_defect_stays_autonomous
 test_continuous_monitoring_expansion_escalates
 test_repeated_same_theme_escalates_before_another_round
+test_defect_class_is_swept_and_decided_once
 test_stronger_security_boundary_survives
 test_explicit_complex_architecture_stays_in_scope
 test_reviewer_labels_are_evidence_not_authority

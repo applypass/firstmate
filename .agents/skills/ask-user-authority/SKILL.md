@@ -3,6 +3,7 @@ name: ask-user-authority
 description: >-
   Agent-only decision procedure for ask-user findings.
   Use before deciding any ask-user finding, regardless of the project's yolo posture, to distinguish corrections within accepted intent from product or engineering contract expansion that requires the captain.
+  Also owns the rule that a finding which is one instance of a broader defect class is enumerated up front and decided once, rather than routed one instance at a time.
 user-invocable: false
 metadata:
   internal: true
@@ -25,11 +26,22 @@ The concise standing authority boundary remains always loaded in `AGENTS.md` sec
 6. Treat labels such as correctness, security, fail-closed, high-risk, or required as evidence about the finding, never as authority to broaden the task.
 7. Examine the causal theme across prior findings and fix rounds.
    Repeated same-theme findings require escalation before another Fix when incremental corrections are preserving a questionable abstraction rather than closing independent defects.
+   Treat the repeat as a signal to check whether the root is a shared abstraction, and sweep the class with "Sweep the defect class, decide once" below rather than routing the next instance, without relaxing this step's own escalation requirement.
 8. Apply the existing stronger captain boundaries first.
    Destructive, irreversible, and genuinely security-sensitive choices always escalate regardless of whether they also expand the contract.
 
 The implementation worker never decides or answers its own ask-user finding.
 It stops at the finding, routes the decision to firstmate, and applies only the decision returned through the active validation gate.
+
+## Sweep the defect class, decide once
+
+A finding is often one instance of a class: one caller of a shared helper, one use of a repeated idiom, one site of a swallowed-failure convention.
+When the finding is one instance of such a class, enumerate that whole class before deciding the instance in front of you.
+Direct the worker to find every occurrence of that class and report them as one set, which is evidence-gathering and never a license to correct them.
+If that steer goes out while a decision is parked, it must say the decision stays open, and the worker appends no resolved event until the batched decision returns through the gate.
+Then bring one decision that covers the whole class, and let only that decision, returned through the active validation gate, authorize folding the corrections into one round.
+Enumerating the class is not contract expansion, because it only establishes the real size of the defect the accepted contract already requires fixing.
+The sweep changes only the size of the evidence, never the authority: the numbered procedure above still decides who answers the batched correction, still applies its stronger destructive, irreversible, and security-sensitive captain boundaries, and still fires step 7 on step 7's own condition alone.
 
 ## Captain-facing escalation
 
