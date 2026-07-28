@@ -89,10 +89,12 @@ test_defect_class_is_swept_and_decided_once() {
   local brief_contract sweep_owners
   assert_grep 'Sweep the defect class, decide once' "$OWNER" \
     "class-sweep rule is missing from its owner"
-  assert_grep 'Enumerate that whole class before deciding the instance in front of you' "$OWNER" \
-    "class-sweep rule no longer enumerates the class up front"
+  assert_grep 'When the finding is one instance of such a class, enumerate that whole class before deciding the instance in front of you' "$OWNER" \
+    "class-sweep rule fires unconditionally or no longer enumerates the class up front"
   assert_grep 'find every occurrence of that class and report them as one set, which is evidence-gathering and never a license to correct them' "$OWNER" \
     "class-sweep enumeration is no longer marked report-only"
+  assert_grep 'it must say the decision stays open, and the worker appends no resolved event until the batched decision returns through the gate' "$OWNER" \
+    "an enumeration steer can silently close a parked captain decision"
   assert_grep 'bring one decision that covers the whole class, and let only that decision, returned through the active validation gate, authorize folding the corrections into one round' "$OWNER" \
     "class-sweep rule lost the single batched decision that alone authorizes the corrections"
   assert_grep 'sweep the class with "Sweep the defect class, decide once" below rather than routing the next instance, without relaxing this step'"'"'s own escalation requirement' "$OWNER" \
@@ -115,7 +117,7 @@ test_defect_class_is_swept_and_decided_once() {
     "brief contract does not require systemic work to be swept in one set"
   assert_contains "$brief_contract" '`ask-user-authority` owns the matching one-batched-decision rule' \
     "brief contract does not point at the class-sweep owner"
-  sweep_owners=$(grep -Fc 'Enumerate that whole class before deciding the instance in front of you' "$AGENTS")
+  sweep_owners=$(grep -Fc 'enumerate that whole class before deciding the instance in front of you' "$AGENTS")
   [ "$sweep_owners" -eq 0 ] || fail "AGENTS.md carries a second copy of the class-sweep procedure instead of pointing at its owner"
   pass "a defect class is enumerated up front and decided in one batched decision"
 }

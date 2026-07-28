@@ -35,8 +35,9 @@ It stops at the finding, routes the decision to firstmate, and applies only the 
 ## Sweep the defect class, decide once
 
 A finding is often one instance of a class: one caller of a shared helper, one use of a repeated idiom, one site of a swallowed-failure convention.
-Enumerate that whole class before deciding the instance in front of you.
+When the finding is one instance of such a class, enumerate that whole class before deciding the instance in front of you.
 Direct the worker to find every occurrence of that class and report them as one set, which is evidence-gathering and never a license to correct them.
+If that steer goes out while a decision is parked, it must say the decision stays open, and the worker appends no resolved event until the batched decision returns through the gate.
 Then bring one decision that covers the whole class, and let only that decision, returned through the active validation gate, authorize folding the corrections into one round.
 Enumerating the class is not contract expansion, because it only establishes the real size of the defect the accepted contract already requires fixing.
 The sweep changes only the size of the evidence, never the authority: the numbered procedure above still decides who answers the batched correction, still applies its stronger destructive, irreversible, and security-sensitive captain boundaries, and still fires step 7 on step 7's own condition alone.
