@@ -6,7 +6,9 @@ This record supports the current context-ceiling guarantees in [`../context-budg
 Operator behavior and active limits remain in that guide.
 Task-specific chronology and delivery transcripts remain in private reports or PR evidence.
 
-All runs below used Claude Code 2.1.220 on 2026-07-28, in a throwaway git-initialised project under the task scratchpad, never in a firstmate checkout.
+All runs below used Claude Code 2.1.220 on 2026-07-28.
+Every live session run happened in a throwaway git-initialised project under the task scratchpad, never in a firstmate checkout.
+The reader measurements and the block-cap reading are read-only observations over an installed harness and existing transcripts, and mutate nothing.
 
 ## Payload carries no token data
 
@@ -42,7 +44,13 @@ FM_CONTEXT_BUDGET_CEILING=900000 bash bin/fm-context-budget.sh --claude < last-s
 Result: exit 0, silent.
 Independently summing the last non-sidechain assistant entry's four usage fields over the same transcript returned `30454`, the same number the guard computed.
 
-## End-to-end block proof
+## End-to-end block proof, with enforcement driven on
+
+This run exercised the ENFORCEMENT path, which is off in the shipped default.
+It proves the enforcement path works end to end in a real session; it is not a demonstration of default behavior, and the default never reaches a blocking exit status at all.
+
+The run predates the warning-only default: at the time the guard blocked unconditionally at the ceiling, which is exactly the behavior `FM_CONTEXT_BUDGET_ENFORCE=1` now selects.
+Reproducing it today needs that variable added to the invocation below.
 
 The guard was registered as a real `Stop` hook in the scratch project's `.claude/settings.json`, then driven with the ceiling set below the session's own baseline:
 
@@ -65,7 +73,36 @@ The two blocking invocations emitted:
 
 The third invocation allowed the turn end once the block budget was spent.
 The `claude` process exited 0.
-This confirms both halves of the guarantee: the ceiling blocks a real session and names the valve, and bounded blocking releases the session rather than wedging it.
+This confirms both halves of the enforcement guarantee: the ceiling blocks a real session and names the valve, and bounded blocking releases the session rather than wedging it.
+
+The stand-down that follows a spent budget is now sticky, so a fourth and later invocation over the ceiling stays allowed and silent.
+That behavior postdates this run and is covered by fixtures in `tests/fm-context-budget.test.sh` rather than by a live capture.
+
+## The consecutive-block override cap
+
+`docs/context-budget.md` previously repeated Claude Code's 8-consecutive-block override as bare fact.
+It was unverified folklore at the time.
+It is now substantiated by reading the bundled JavaScript out of the installed 2.1.220 executable:
+
+```sh
+strings -a "$(command -v claude)" | grep -o '.\{280\}CLAUDE_CODE_STOP_HOOK_BLOCK_CAP.\{280\}'
+```
+
+The relevant expression:
+
+```js
+let Kt = Rue(process.env.CLAUDE_CODE_STOP_HOOK_BLOCK_CAP, 8);
+if (Kt > 0 && _o > Kt) return ... `A hook blocked the turn from ending ${_o} consecutive times - overriding and ending turn.`
+```
+
+Three facts follow, and they are what the guard's own bound is set against:
+
+- The cap defaults to 8 and is adjustable through `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`. The same binary's user-facing text confirms it: "For Stop/SubagentStop hooks, check `stop_hook_active` in the input and return success while it's true. Set `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` to raise this limit."
+- The counter it is compared against is incremented once per stop where *any* hook blocked, guarded by `blockingErrors.length > 0`. It is therefore session-wide and shared across every registered `Stop` hook, not per hook.
+- A cap of `0` or less disables the override entirely.
+
+Because the counter is shared, per-hook block budgets do not compose: several independently-budgeted blockers firing out of phase can keep consecutive stops blocked past the cap even though no single hook exceeds its own budget.
+`bin/fm-context-budget.sh` answers that by standing down stickily once its budget is spent, which removes it from the shared count for the rest of the session.
 
 ## The session cannot clear itself
 
@@ -75,7 +112,7 @@ In the blocked run above the session answered the instruction with:
 
 Clearing is a local user action with no tool surface.
 Steps 1 and 2 of the valve are autonomous; step 3 requires the captain.
-[`../context-budget.md`](../context-budget.md) records the resulting away-mode limitation.
+[`../context-budget.md`](../context-budget.md) records the resulting away-mode consequence.
 
 That same run also reported `/stow` missing, because the bare scratch project carried no skills directory.
 `/stow` is tracked at `.agents/skills/stow/` with `user-invocable: true`, and `.claude/skills` symlinks to it, so it resolves in every real firstmate home and secondmate home.
@@ -137,7 +174,35 @@ This partially corrects the feasibility scout, which expected subagent turns to 
 Summing every assistant usage object in the subagent run's parent transcript returned `99407` against a correct measurement of `33217`.
 That is the concrete cost of a naive implementation that adds turns instead of taking the last one.
 
-The requestId dedupe, the last-not-max compaction reset, and sidechain exclusion are each covered by a fixture in `tests/fm-context-budget.test.sh`.
+The last-not-max compaction reset and sidechain exclusion are each covered by a fixture in `tests/fm-context-budget.test.sh`, as is the multi-block turn.
+
+The reader has no `requestId` grouping, and deliberately so.
+An earlier draft carried one, of the form `(.[-1].requestId) as $rid | [ .[] | select($rid == null or .requestId == $rid) ][-1]`.
+That expression is provably equal to `.[-1]`: the last element of an array is a member of every subsequence that contains it, so filtering and then taking the last element returns that same element whether the variable was null or matched.
+It was removed as dead code.
+
+A real 81 MB session transcript confirms the field could not have carried that mechanism anyway.
+Of its 14,691 assistant entries with a usage object, 14,669 have no `requestId` key at all and 22 do, and the 22 are the API-error entries.
+Grouping by that field would have grouped essentially the whole transcript under `null`.
+
+Multi-block dedupe is instead a property of taking the last entry, because each JSONL line of a multi-block turn carries that turn's own cumulative usage rather than a slice of it.
+The same transcript shows the property directly: its longest run of consecutive assistant entries reporting one identical total is 13 lines at `159799`.
+Summing a run like that would report thirteen times the real number; taking the last reports it exactly.
+
+## One streaming measurement pass
+
+The reader was originally two `jq` processes with the second slurping every parsed line into one array before filtering.
+That cost landed on every single turn end, including the common case far below the advisory.
+
+Both readers over the same 81 MB transcript, same host:
+
+| Reader | Result | Wall | Max RSS |
+| --- | --- | --- | --- |
+| two passes, slurped | `444729` | 2.77 s | 299 MB |
+| one streaming pass | `444729` | 0.64 s | 5.9 MB |
+
+The measured number is identical.
+The streaming pass filters and projects per line and keeps only the last emitted total, so memory is constant in transcript size rather than proportional to it.
 
 ## Native knobs remain unusable
 

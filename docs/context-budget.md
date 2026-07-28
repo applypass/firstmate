@@ -11,7 +11,7 @@ Do not infer one guard's thresholds, loop safety, or degradation behavior from t
 ## What this is for
 
 Firstmate sessions run toward roughly 800,000 tokens before Claude's own auto-compaction fires.
-This guard fires far earlier, at an absolute 180,000 tokens, so the balloon never forms.
+This guard fires far earlier, at an absolute 180,000 tokens, and asks for a handoff so the balloon never forms.
 
 That makes it a deliberate cost and reasoning-quality policy, not overflow prevention.
 Nothing crashes at 180,000 tokens on a 1M-context session.
@@ -25,7 +25,14 @@ The window is not inferable from the transcript: a 1M session records `message.m
 At every primary turn end, the guard measures the live session's context.
 Below the advisory point it is completely silent.
 Between the advisory point and the ceiling it prints one non-blocking notice per episode.
-At or above the ceiling it blocks the turn end and requires the handoff-and-clear valve, bounded so a session can always end.
+At or above the ceiling it prints one visible ceiling notice per episode naming the handoff-and-clear valve, and by default allows the turn end.
+
+**The shipped default warns and does not block.**
+Enforcement is fully implemented and switched on with `FM_CONTEXT_BUDGET_ENFORCE=1`; with enforcement off, nothing in this guard can ever return a blocking exit status.
+
+That default is deliberate, and is not an unfinished enforcement path.
+A 180,000 ceiling on a million-token session will trip repeatedly in a normal working day, and every trip costs a handoff.
+The real frequency of those crossings has to be observed before the mechanism is allowed to interrupt anyone, so the first release stays out of the way and only reports.
 
 ## Measurement
 
@@ -37,30 +44,40 @@ A non-default Claude config directory puts the transcript somewhere `$HOME` cann
 The context total is the sum of `input_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`, and `output_tokens` on the last non-sidechain `type=="assistant"` entry.
 That formula reproduces Claude Code's own accounting exactly rather than approximating it.
 
-Three correctness rules the measurement keeps:
+Two correctness rules the measurement implements:
 
-- **Dedupe by `requestId`.** A multi-block assistant turn writes several JSONL lines for one turn. Summing them would report a multiple of the real total and fire the guard far too early.
-- **Last, never max.** Compaction resets the running total. A `max` implementation would latch the pre-compaction peak and disable the guard permanently after the first compaction.
+- **Last, never max and never a sum.** Compaction resets the running total. A `max` implementation would latch the pre-compaction peak and disable the guard permanently after the first compaction, and a sum would report a multiple of the real total and fire the guard far too early.
 - **Exclude sidechains.** `isSidechain == true` marks subagent turns, which must never inflate the primary's measurement.
 
+Taking the last entry also handles a multi-block assistant turn, with no separate dedupe step.
+Every JSONL line of one such turn carries that turn's own cumulative usage rather than a slice of it, so the last line already is the turn's total.
+There is deliberately no `requestId` grouping in the reader: an earlier draft had one, and it was provably equivalent to taking the last entry.
+
+The whole measurement is one streaming pass that filters and projects as it reads and keeps only the last matching total.
+Nothing is slurped into memory, so a multi-hundred-megabyte transcript costs the same as a small one on a hook that runs at every turn end.
+
 Malformed transcript lines are dropped rather than aborting the pass, so a half-written final line degrades to the last line that parsed.
+A line that parses to a valid JSON scalar rather than an object is dropped by the same rule, so it cannot turn the sidechain lookup into an error that would abort the whole measurement.
 
 ## Thresholds
 
-The ceiling is the enforce point and the only policy number.
+The ceiling is the policy point and the only policy number, whether or not enforcement is switched on.
 The advisory point is derived as `ceiling - headroom`, so there is never a second threshold to keep in sync.
 
 | Stage | Default | Behavior |
 | --- | --- | --- |
 | Advisory | 150,000 (`ceiling - headroom`) | One visible non-blocking notice per episode. Prefer cheap actions, avoid large reads. |
-| Ceiling | 180,000 | Block the turn end and require the valve. |
+| Ceiling, enforcement off (default) | 180,000 | One visible notice per episode naming the valve. The turn end is allowed. |
+| Ceiling, enforcement on | 180,000 | Block the turn end and require the valve, bounded, then stand down for the session. |
 
+`FM_CONTEXT_BUDGET_ENFORCE=1` switches enforcement on; any other value, including unset, leaves the shipped warning-only default in place so a typo cannot start blocking sessions.
 `FM_CONTEXT_BUDGET_CEILING` overrides the ceiling and defaults to 180000.
 `FM_CONTEXT_BUDGET_HEADROOM` overrides the headroom and defaults to 30000, about two worst-case turns on top of the valve's own cost.
-`FM_CONTEXT_BUDGET_BLOCK_BUDGET` overrides the consecutive-block bound and defaults to 3, safely below Claude Code's own 8-consecutive-block override.
+`FM_CONTEXT_BUDGET_BLOCK_BUDGET` overrides the consecutive-block bound and defaults to 3, well below Claude Code's own consecutive-block override cap recorded in [`verification/context-budget.md`](verification/context-budget.md).
 A non-numeric or zero value falls back to the default rather than disabling the guard.
 
-The advisory banner prints once per episode and re-arms once the measurement drops back below the advisory point, the same shape `bin/fm-guard.sh` uses.
+Each notice prints once per episode and re-arms once the measurement drops back below the advisory point, the same shape `bin/fm-guard.sh` uses.
+The advisory notice and the warning-only ceiling notice are separate stages, so crossing from one into the other still produces exactly one new notice.
 
 ## The valve
 
@@ -78,27 +95,48 @@ The guard instructs and nothing more.
 It never types into a pane, never injects `/compact`, `/clear`, or any other command, and never spawns a replacement agent.
 Compacting in place and spawning a fresh agent are not offered as alternatives; there is one deterministic valve.
 
-## Known limitation: the session cannot clear itself
+## The session cannot clear itself
 
 Steps 1 and 2 are fully autonomous.
 Step 3 is not: clearing the context is a local user action with no tool surface, so the session can prepare the handoff but cannot complete the reset itself.
 A live session confirmed this directly, replying "I can't clear my own context; that's yours to do" ([`verification/context-budget.md`](verification/context-budget.md)).
 
-With the captain present this closes normally: the block surfaces the instruction, the session stows and writes the note, and the captain clears.
+With the captain present this closes normally: the notice surfaces the instruction, the session stows and writes the note, and the captain clears.
 
-While away mode is active there is no captain to clear, so the valve cannot close.
-The guard still blocks, still gets the durable knowledge written to disk by steps 1 and 2, and then degrades to a visible allow once the block budget is spent.
-The session continues over the ceiling until the captain returns.
-This is a real gap, and it is preferred over the alternative: injecting keystrokes into a live session was ruled out deliberately, and a guard that wedges an unattended session would be worse than one that warns and lets it run.
+## Away mode: advisory only, by decision
+
+While away mode is active there is no captain at the keyboard, so step 3 of the valve cannot run.
+This is accepted, deliberate behavior rather than an open defect.
+
+Nothing in firstmate may type a command into a live session, so there is no mechanism that could close the valve unattended, and none is being built.
+Under the shipped warning-only default the guard reports the crossing and the session keeps running.
+With enforcement switched on it blocks up to `FM_CONTEXT_BUDGET_BLOCK_BUDGET` times, which gets steps 1 and 2 written to disk, and then stands down for the rest of that session.
+
+The cost is plain and worth stating: the guardrail is effectively inert while away, which is exactly when sessions run longest unattended and when a ballooning context is most expensive.
+That is preferred to the alternatives.
+Injecting keystrokes into a live session was ruled out deliberately, and a guard that nagged an unattended session every turn would grow the very context it exists to cap while doing nothing useful.
+
+Ending and restarting the session with the handoff as its opening context is recorded here as an unverified lead only.
+It is not authorized, not verified, and nothing should be built toward it.
 
 ## Never wedge a session
 
 Every measurement failure is a silent exit 0: absent `jq`, missing or unreadable `transcript_path`, a missing, empty, unreadable, or corrupt transcript, a transcript with no assistant usage, and empty or malformed stdin.
 A bare or unsupported-harness invocation is also inert rather than a blocking usage error.
 
-Blocking is bounded.
-After `FM_CONTEXT_BUDGET_BLOCK_BUDGET` consecutive blocks in one session the guard allows the turn end with a visible `systemMessage` that still names the valve.
-Any allow resets the budget, so a later balloon in the same session gets the full budget again.
+Under the shipped default the guard never blocks at all, so the ceiling can never contribute to a wedged session.
+
+With enforcement on, blocking is bounded and the stand-down is sticky.
+After `FM_CONTEXT_BUDGET_BLOCK_BUDGET` consecutive blocks in one session the guard allows the turn end with a visible `systemMessage` that still names the valve, then stays stood down for the rest of that session and says nothing further.
+Only a measurement back below the advisory point re-arms it, mirroring how the notices re-arm.
+
+That is deliberately different from the turn-end supervision guard in [`turnend-guard.md`](turnend-guard.md), which resets its block budget on every allow.
+The asymmetry is the point.
+A blind turn end is a repairable condition and a forced continuation is itself the repair prompt, so blocking again on a later turn is useful pressure.
+The context ceiling cannot clear without a captain keystroke, so a guard that reset its budget would oscillate between blocking and allowing forever, and each forced continuation would re-run the handoff and add tokens to the context it exists to cap.
+Standing down is the correct end state here; it is not the correct end state there.
+
+The sticky stand-down also keeps this guard out of the harness's consecutive-block accounting for the rest of the session, so stacking it alongside the other `Stop` hooks cannot drive the union of blockers into the harness's own override.
 
 ## Scope
 
@@ -133,6 +171,10 @@ Each remaining harness needs the harness installed and its own probe, and lands 
 Claude registers three `Stop` hooks in `.claude/settings.json`, all anchored through `CLAUDE_PROJECT_DIR`: `bin/fm-turnend-guard.sh --claude`, `bin/fm-context-budget.sh --claude`, then `bin/fm-claude-stop-autoarm.sh`.
 Stacking a third `Stop` hook is the established pattern, not a new mechanism.
 
+The harness's consecutive-block override counts a stop where *any* hook blocked, so it is shared across all registered hooks rather than per hook.
+[`verification/context-budget.md`](verification/context-budget.md) records the decompiled cap, its default, and the environment variable that raises it; do not restate the number from memory.
+This guard's sticky stand-down keeps it from contributing to that shared count for the rest of a session once its own budget is spent.
+
 The guard is deliberately not folded into `bin/fm-turnend-guard.sh`, which owns exactly one predicate, and it deliberately does not use `PreToolUse`, which would run many times per turn for no extra safety and cannot act at a safe boundary.
 
 Neither native knob can do this job.
@@ -142,5 +184,5 @@ Firstmate measures and enforces this itself.
 
 ## Regression coverage
 
-`tests/fm-context-budget.test.sh` covers the three measurement correctness rules, the derived advisory and its per-episode dedup and re-arm, the absolute 180,000 default, the full degradation matrix, main and secondmate primary scope, crewmate and secondmate-child worktree exclusion, the bounded block budget and its per-session keying and reset, claude-only mode gating, the tracked `Stop` registration, and the one-owner and no-injection boundaries.
+`tests/fm-context-budget.test.sh` covers the two measurement correctness rules and the multi-block property that subsumes dedupe, the derived advisory and its per-episode dedup and re-arm, the absolute 180,000 default, the warning-only shipped default and the explicit enforcement switch, the sticky stand-down and its advisory-level re-arm, the full degradation matrix including a valid-JSON scalar line, main and secondmate primary scope, crewmate and secondmate-child worktree exclusion, the bounded block budget and its per-session keying, claude-only mode gating, the tracked `Stop` registration, and the one-owner and no-injection boundaries.
 [`verification/context-budget.md`](verification/context-budget.md) records the live measurements, the end-to-end block proof, and the secondmate and subagent characterization.

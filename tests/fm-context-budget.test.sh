@@ -6,9 +6,10 @@
 # the turn end once the measurement crosses the absolute ceiling.
 #
 # Four layers:
-#   MEASUREMENT  - the three correctness rules: requestId dedupe, last-not-max,
-#                  sidechain exclusion.
-#   STAGES       - the derived advisory notice and the enforcing ceiling.
+#   MEASUREMENT  - the two correctness rules (last-not-max-not-sum, sidechain
+#                  exclusion) and the multi-block property that subsumes dedupe.
+#   STAGES       - the derived advisory notice, the warning-only shipped default
+#                  at the ceiling, and the opt-in enforcing ceiling.
 #   DEGRADATION  - every measurement failure is a silent exit 0.
 #   SCOPE        - inert in a crewmate worktree, active in a secondmate home.
 # All hermetic over temp dirs; no real agent session is invoked.
@@ -97,6 +98,14 @@ run_budget() {
     bash "$dir/bin/fm-context-budget.sh" --claude 2>&1
 }
 
+# Same, with enforcement switched on. The shipped default only warns, so every
+# assertion about a BLOCKED turn end has to opt in explicitly.
+run_budget_enforcing() {
+  local dir=$1 payload=$2
+  shift 2
+  run_budget "$dir" "$payload" FM_CONTEXT_BUDGET_ENFORCE=1 "$@"
+}
+
 # --- MEASUREMENT: the ceiling blocks and names the valve ---------------------
 
 test_blocks_over_ceiling_and_names_the_valve() {
@@ -104,64 +113,118 @@ test_blocks_over_ceiling_and_names_the_valve() {
   dir=$(make_primary_dir "$TMP_ROOT/over-ceiling")
   transcript="$dir/transcript.jsonl"
   write_transcript "$transcript" 210000
-  out=$(run_budget "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
-  expect_code 2 "$status" "hook must block the turn end above the ceiling"
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
+  expect_code 2 "$status" "with enforcement on the hook must block the turn end above the ceiling"
   assert_contains "$out" "CONTEXT BUDGET CEILING" "block banner must read as a ceiling alarm"
   assert_contains "$out" "210000" "block banner must report the measured total"
   assert_contains "$out" "180000" "block banner must report the ceiling it enforced"
   assert_contains "$out" "/stow" "the valve must name /stow"
   assert_contains "$out" "handoff note" "the valve must require a handoff note"
   assert_contains "$out" "Clear the context" "the valve must require clearing the session"
-  pass "fm-context-budget: blocks above the ceiling and names the handoff-and-clear valve"
+  pass "fm-context-budget: blocks above the ceiling under enforcement and names the handoff-and-clear valve"
+}
+
+# The shipped default is deliberately warning-only: the ceiling has to be
+# observed in real working days before it is allowed to interrupt anyone.
+test_shipped_default_warns_and_never_blocks() {
+  local dir transcript out status
+  dir=$(make_primary_dir "$TMP_ROOT/warn-only")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  out=$(run_budget "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
+  expect_code 0 "$status" "the shipped default must allow the turn end over the ceiling"
+  assert_contains "$out" "CONTEXT BUDGET CEILING" "the default must still surface the crossing visibly"
+  assert_contains "$out" "210000" "the default notice must report the measured total"
+  assert_contains "$out" "/stow" "the default notice must still name the valve"
+  assert_contains "$out" "does not block by default" "the default notice must say it is not blocking"
+  pass "fm-context-budget: the shipped default warns at the ceiling and never blocks"
+}
+
+test_enforcement_requires_an_exact_opt_in() {
+  local dir transcript status value
+  dir=$(make_primary_dir "$TMP_ROOT/enforce-optin")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  # Anything other than an exact 1 must leave the warning-only default alone, so
+  # a typo can never start blocking sessions.
+  for value in 0 '' true yes on 2 '1 '; do
+    run_budget "$dir" "$(stop_payload "$transcript" "sess-$value")" \
+      FM_CONTEXT_BUDGET_CEILING=180000 "FM_CONTEXT_BUDGET_ENFORCE=$value" >/dev/null
+    status=$?
+    expect_code 0 "$status" "FM_CONTEXT_BUDGET_ENFORCE='$value' must not switch enforcement on"
+  done
+  run_budget "$dir" "$(stop_payload "$transcript" sess-exact)" \
+    FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_ENFORCE=1 >/dev/null
+  status=$?
+  expect_code 2 "$status" "an exact FM_CONTEXT_BUDGET_ENFORCE=1 must switch enforcement on"
+  pass "fm-context-budget: only an exact FM_CONTEXT_BUDGET_ENFORCE=1 switches enforcement on"
 }
 
 test_default_ceiling_is_180000() {
   local dir transcript out status
   dir=$(make_primary_dir "$TMP_ROOT/default-ceiling")
   transcript="$dir/transcript.jsonl"
-  # One token under the shipped default must not block; one over must.
+  # One token under the shipped default ceiling must stay silent; one over must
+  # reach it. Enforcement is on so the boundary reads as 0 against 2.
   write_transcript "$transcript" 179999
-  out=$(run_budget "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_HEADROOM=0); status=$?
-  expect_code 0 "$status" "179,999 tokens must not block under the shipped default ceiling"
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_HEADROOM=0); status=$?
+  expect_code 0 "$status" "179,999 tokens must not reach the shipped default ceiling"
   write_transcript "$transcript" 180000
-  out=$(run_budget "$dir" "$(stop_payload "$transcript" sess-2)" FM_CONTEXT_BUDGET_HEADROOM=0); status=$?
-  expect_code 2 "$status" "180,000 tokens must block under the shipped default ceiling"
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-2)" FM_CONTEXT_BUDGET_HEADROOM=0); status=$?
+  expect_code 2 "$status" "180,000 tokens must reach the shipped default ceiling"
   assert_contains "$out" "180000" "the shipped default ceiling must be 180000"
   pass "fm-context-budget: the shipped default ceiling is an absolute 180,000 tokens"
 }
 
-# Correctness rule 1. A multi-block assistant turn writes several JSONL lines
-# sharing one requestId and one usage object. Summing them would report 3x the
-# real total and fire the guard far too early.
-test_dedupes_multi_block_turn_by_request_id() {
+# A multi-block assistant turn writes several JSONL lines, each carrying that
+# turn's own CUMULATIVE usage rather than a slice of it. Taking the last entry
+# therefore measures the turn exactly, with no dedupe step: summing the blocks
+# would report a multiple, and taking the first would report a stale prefix.
+# Both wrong answers are pinned here, so the test cannot pass vacuously.
+test_multi_block_turn_measures_the_last_block_not_the_sum() {
   local dir transcript out status
-  dir=$(make_primary_dir "$TMP_ROOT/dedupe")
+  dir=$(make_primary_dir "$TMP_ROOT/multi-block")
   transcript="$dir/transcript.jsonl"
+  # Realistic shape first: three identical blocks of one 100,000-token turn.
+  # 100,000 is under the ceiling; a 300,000 sum would be far over it.
   {
     assistant_line 100000 req-multi
     assistant_line 100000 req-multi
     assistant_line 100000 req-multi
   } > "$transcript"
-  out=$(run_budget "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_HEADROOM=0); status=$?
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" \
+    FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_HEADROOM=0); status=$?
   expect_code 0 "$status" "three blocks of one 100,000-token turn must measure 100,000, not 300,000"
-  [ -z "$out" ] || fail "hook produced output for a turn below the ceiling: $out"
-  pass "fm-context-budget: dedupes a multi-block turn by requestId instead of summing its blocks"
+  [ -z "$out" ] || fail "hook summed the blocks of one turn: $out"
+  # Now pin take-LAST specifically: a growing turn whose final block is the only
+  # one over the ceiling. Taking the first block would measure 100,000 and stay
+  # silent; summing would report 320,000; only take-last reports 120,000.
+  {
+    assistant_line 100000 req-grow
+    assistant_line 100000 req-grow
+    assistant_line 120000 req-grow
+  } > "$transcript"
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-grow)" \
+    FM_CONTEXT_BUDGET_CEILING=110000 FM_CONTEXT_BUDGET_HEADROOM=0); status=$?
+  expect_code 2 "$status" "the final block of a multi-block turn must be the measured total"
+  assert_contains "$out" "120000 tokens" "the measurement must be the last block, not the first or the sum"
+  pass "fm-context-budget: a multi-block turn measures its last block, never the sum or the first"
 }
 
-# Correctness rule 2. Compaction RESETS the running total. A max implementation
+# Correctness rule: compaction RESETS the running total. A max implementation
 # would latch the pre-compaction peak and suppress the guard forever after.
 test_takes_last_never_max_across_compaction() {
   local dir transcript out status
   dir=$(make_primary_dir "$TMP_ROOT/last-not-max")
   transcript="$dir/transcript.jsonl"
   write_transcript "$transcript" 240000 30000
-  out=$(run_budget "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_HEADROOM=0); status=$?
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_HEADROOM=0); status=$?
   expect_code 0 "$status" "a post-compaction 30,000 must be measured, not the stale 240,000 peak"
   [ -z "$out" ] || fail "hook fired on a stale pre-compaction peak: $out"
   pass "fm-context-budget: takes the last total, never the max, so compaction cannot disable the guard"
 }
 
-# Correctness rule 3. isSidechain==true marks subagent turns. A single inflated
+# Correctness rule: isSidechain==true marks subagent turns. A single inflated
 # sidechain entry must never drag the primary over the ceiling.
 test_excludes_sidechain_entries() {
   local dir transcript out status
@@ -170,7 +233,7 @@ test_excludes_sidechain_entries() {
   : > "$transcript"
   assistant_line 20000 req-main >> "$transcript"
   assistant_line 999999 req-sub true >> "$transcript"
-  out=$(run_budget "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_HEADROOM=0); status=$?
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_HEADROOM=0); status=$?
   expect_code 0 "$status" "a 999,999-token sidechain entry must not count toward the primary total"
   [ -z "$out" ] || fail "hook counted a sidechain entry: $out"
   pass "fm-context-budget: excludes isSidechain entries so subagent turns never inflate the primary"
@@ -183,7 +246,7 @@ test_measures_only_assistant_entries() {
   : > "$transcript"
   assistant_line 210000 req-a >> "$transcript"
   printf '{"type":"user","message":{"role":"user","content":"hi"}}\n' >> "$transcript"
-  out=$(run_budget "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
   expect_code 2 "$status" "a trailing user entry must not hide the last assistant measurement"
   assert_contains "$out" "210000" "the last assistant usage must still be measured"
   pass "fm-context-budget: measures the last assistant usage past trailing non-assistant entries"
@@ -195,7 +258,7 @@ test_sums_all_four_usage_fields() {
   transcript="$dir/transcript.jsonl"
   printf '{"type":"assistant","requestId":"req-1","message":{"usage":{"input_tokens":1000,"cache_creation_input_tokens":2000,"cache_read_input_tokens":4000,"output_tokens":8000}}}\n' \
     > "$transcript"
-  out=$(run_budget "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=15000 FM_CONTEXT_BUDGET_HEADROOM=0); status=$?
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=15000 FM_CONTEXT_BUDGET_HEADROOM=0); status=$?
   expect_code 2 "$status" "1000+2000+4000+8000 must measure 15000 and reach a 15000 ceiling"
   assert_contains "$out" "15000 tokens" "all four usage fields must be summed"
   pass "fm-context-budget: sums input, cache creation, cache read, and output tokens"
@@ -280,24 +343,70 @@ test_silent_well_below_advisory() {
   pass "fm-context-budget: completely silent for a session well below the advisory"
 }
 
-# --- Block-budget safety: bounded blocking can never wedge a session ---------
+test_ceiling_notice_prints_once_per_episode() {
+  local dir transcript first second status
+  dir=$(make_primary_dir "$TMP_ROOT/ceiling-dedup")
+  transcript="$dir/transcript.jsonl"
+  # Cross the advisory first, so the advisory notice is already spent. Crossing
+  # into the ceiling is a DIFFERENT stage and must still produce one notice.
+  write_transcript "$transcript" 160000
+  first=$(run_budget "$dir" "$(stop_payload "$transcript" sess-cn)" FM_CONTEXT_BUDGET_CEILING=180000)
+  assert_contains "$first" "CONTEXT BUDGET ADVISORY" "the advisory stage must warn first"
+  write_transcript "$transcript" 210000
+  first=$(run_budget "$dir" "$(stop_payload "$transcript" sess-cn)" FM_CONTEXT_BUDGET_CEILING=180000)
+  assert_contains "$first" "CONTEXT BUDGET CEILING" "crossing into the ceiling stage must warn again"
+  second=$(run_budget "$dir" "$(stop_payload "$transcript" sess-cn)" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
+  expect_code 0 "$status" "a repeat ceiling turn must still exit 0 under the shipped default"
+  [ -z "$second" ] || fail "ceiling notice repeated inside one episode: $second"
+  pass "fm-context-budget: the warning-only ceiling notice is its own stage and prints once per episode"
+}
 
-test_block_budget_degrades_to_visible_warning() {
+# --- Block-budget safety: bounded blocking, then a STICKY stand-down ---------
+
+test_block_budget_stands_down_visibly() {
   local dir transcript payload out status i
   dir=$(make_primary_dir "$TMP_ROOT/block-budget")
   transcript="$dir/transcript.jsonl"
   write_transcript "$transcript" 210000
   payload=$(stop_payload "$transcript" sess-budget)
   for i in 1 2; do
-    out=$(run_budget "$dir" "$payload" FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=2); status=$?
+    out=$(run_budget_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=2); status=$?
     expect_code 2 "$status" "block $i must still block within the budget"
   done
-  out=$(run_budget "$dir" "$payload" FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=2); status=$?
+  out=$(run_budget_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=2); status=$?
   expect_code 0 "$status" "past the block budget the turn end must be allowed, never wedged"
-  assert_contains "$out" "systemMessage" "the degraded allow must stay visible to the session"
-  assert_contains "$out" "block budget is exhausted" "the degraded allow must say why it stopped blocking"
-  assert_contains "$out" "/stow" "the degraded allow must still name the valve"
-  pass "fm-context-budget: bounded blocking degrades to a visible warning instead of wedging"
+  assert_contains "$out" "systemMessage" "the stand-down must stay visible to the session"
+  assert_contains "$out" "block budget is exhausted" "the stand-down must say why it stopped blocking"
+  assert_contains "$out" "stands down" "the stand-down must say it is standing down for the session"
+  assert_contains "$out" "/stow" "the stand-down must still name the valve"
+  pass "fm-context-budget: bounded blocking stands down visibly instead of wedging"
+}
+
+# The core loop-safety property. The ceiling cannot clear without the captain, so
+# a guard that reset its budget on the degraded allow would oscillate
+# block-block-allow forever, and each forced continuation would re-run the
+# handoff and grow the very context the guard exists to cap. Away mode is the
+# unbounded case, because nobody is there to clear.
+test_stand_down_is_sticky_for_the_rest_of_the_session() {
+  local dir transcript payload out status i
+  dir=$(make_primary_dir "$TMP_ROOT/sticky-standdown")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  payload=$(stop_payload "$transcript" sess-sticky)
+  for i in 1 2; do
+    run_budget_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=2 >/dev/null
+  done
+  out=$(run_budget_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=2); status=$?
+  expect_code 0 "$status" "the budget must be spent by now"
+  assert_contains "$out" "systemMessage" "the stand-down must announce itself once"
+  # Ten more turns, still far over the ceiling: never another block, and never
+  # another word.
+  for i in $(seq 1 10); do
+    out=$(run_budget_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=2); status=$?
+    expect_code 0 "$status" "turn $i after the stand-down must not block again"
+    [ -z "$out" ] || fail "the stand-down repeated itself on turn $i: $out"
+  done
+  pass "fm-context-budget: the stand-down is sticky and silent, never oscillating back into blocking"
 }
 
 test_block_budget_is_per_session() {
@@ -305,29 +414,38 @@ test_block_budget_is_per_session() {
   dir=$(make_primary_dir "$TMP_ROOT/block-budget-session")
   transcript="$dir/transcript.jsonl"
   write_transcript "$transcript" 210000
-  run_budget "$dir" "$(stop_payload "$transcript" sess-a)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1 >/dev/null
-  out=$(run_budget "$dir" "$(stop_payload "$transcript" sess-a)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+  run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-a)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1 >/dev/null
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-a)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
   expect_code 0 "$status" "the same session must exhaust its budget"
-  out=$(run_budget "$dir" "$(stop_payload "$transcript" sess-b)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-b)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
   expect_code 2 "$status" "a different session must start with a fresh block budget"
   pass "fm-context-budget: the block budget is keyed to the session, not the home"
 }
 
-test_block_budget_resets_after_the_valve() {
+# The stand-down re-arms on exactly one condition: the measurement drops back
+# below the advisory, which is the same condition that re-arms the notices.
+test_stand_down_rearms_below_the_advisory() {
   local dir transcript out status
   dir=$(make_primary_dir "$TMP_ROOT/block-reset")
   transcript="$dir/transcript.jsonl"
   write_transcript "$transcript" 210000
-  run_budget "$dir" "$(stop_payload "$transcript" sess-r)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=2 >/dev/null
+  run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-r)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1 >/dev/null
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-r)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+  expect_code 0 "$status" "the budget is spent, so this turn stands down"
+  # Still over the ceiling but back under the advisory does NOT re-arm: only
+  # dropping below the advisory does.
+  write_transcript "$transcript" 160000
+  run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-r)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1 >/dev/null
+  write_transcript "$transcript" 210000
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-r)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+  expect_code 0 "$status" "a dip into the advisory band must not re-arm the stand-down"
   # The session takes the valve: the measurement drops back to baseline.
   write_transcript "$transcript" 30000
-  run_budget "$dir" "$(stop_payload "$transcript" sess-r)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=2 >/dev/null
-  # A later balloon in the same session must get the full budget again.
+  run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-r)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1 >/dev/null
   write_transcript "$transcript" 210000
-  run_budget "$dir" "$(stop_payload "$transcript" sess-r)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=2 >/dev/null
-  out=$(run_budget "$dir" "$(stop_payload "$transcript" sess-r)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=2); status=$?
-  expect_code 2 "$status" "an allow must reset the consecutive-block budget"
-  pass "fm-context-budget: any allow resets the consecutive-block budget"
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-r)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+  expect_code 2 "$status" "dropping below the advisory must re-arm the block budget"
+  pass "fm-context-budget: only a measurement below the advisory re-arms the stand-down"
 }
 
 # --- DEGRADATION: the eight rows, every one a silent exit 0 ------------------
@@ -434,6 +552,29 @@ test_degrades_without_jq() {
   pass "fm-context-budget degradation: a host without jq is a silent exit 0"
 }
 
+# A line that is SYNTACTICALLY valid JSON but not an object is the corruption the
+# corrupt-transcript row cannot reach: it parses fine, so it survives into the
+# filter, where a lookup like .isSidechain on a string is a hard jq error. Left
+# unguarded that error aborts the whole measurement and the guard silently
+# measures nothing at all.
+test_valid_json_scalar_line_does_not_abort_the_measurement() {
+  local dir transcript out status
+  dir=$(make_primary_dir "$TMP_ROOT/deg-scalar")
+  transcript="$dir/transcript.jsonl"
+  {
+    assistant_line 210000 req-a
+    printf '"a bare string line"\n'
+    printf '42\n'
+    printf 'null\n'
+    printf 'true\n'
+    printf '["an","array"]\n'
+  } > "$transcript"
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
+  expect_code 2 "$status" "a valid-JSON non-object line must not abort the measurement"
+  assert_contains "$out" "210000" "the assistant entry must still be measured past a scalar line"
+  pass "fm-context-budget: a valid-JSON non-object line is dropped, not an abort"
+}
+
 # A truncated final line is the realistic corruption: the transcript is written
 # as the session runs. The measurement must fall back to the last line that
 # parsed rather than aborting or reporting a wrong number.
@@ -443,7 +584,7 @@ test_truncated_last_line_measures_last_valid_entry() {
   transcript="$dir/transcript.jsonl"
   assistant_line 210000 req-good > "$transcript"
   printf '{"type":"assistant","requestId":"req-half","message":{"usa' >> "$transcript"
-  out=$(run_budget "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
   expect_code 2 "$status" "a half-written final line must not hide the last complete measurement"
   assert_contains "$out" "210000" "the last parseable assistant entry must be measured"
   pass "fm-context-budget: a truncated final line falls back to the last entry that parsed"
@@ -456,7 +597,7 @@ test_active_in_main_primary() {
   dir=$(make_primary_dir "$TMP_ROOT/scope-primary")
   transcript="$dir/transcript.jsonl"
   write_transcript "$transcript" 210000
-  out=$(run_budget "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
   expect_code 2 "$status" "the main primary home must be guarded"
   pass "fm-context-budget scope: active in the main primary home"
 }
@@ -466,7 +607,7 @@ test_active_in_secondmate_home() {
   dir=$(make_secondmate_dir "$TMP_ROOT/scope-secondmate")
   transcript="$dir/transcript.jsonl"
   write_transcript "$transcript" 210000
-  out=$(run_budget "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
   expect_code 2 "$status" "a secondmate runs its own primary session and must be guarded"
   assert_contains "$out" "CONTEXT BUDGET CEILING" "the secondmate block must carry the same banner"
   pass "fm-context-budget scope: active in a marked secondmate home"
@@ -483,7 +624,7 @@ test_active_in_treehouse_leased_secondmate_home() {
   printf 'sm-linked-1\n' > "$dir/.fm-secondmate-home"
   transcript="$dir/transcript.jsonl"
   write_transcript "$transcript" 210000
-  out=$(run_budget "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
   expect_code 2 "$status" "a treehouse-leased secondmate home is a linked worktree but still a primary"
   pass "fm-context-budget scope: active in a treehouse-leased secondmate home"
 }
@@ -494,7 +635,7 @@ test_inert_in_crewmate_worktree() {
   dir=$(make_crewmate_worktree_dir "$base" "$TMP_ROOT/scope-crew")
   transcript="$dir/transcript.jsonl"
   write_transcript "$transcript" 999999
-  out=$(run_budget "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
   expect_silent_exit_zero "a crewmate task worktree" "$out" "$status"
   pass "fm-context-budget scope: inert in a linked crewmate worktree, whatever its context size"
 }
@@ -509,7 +650,7 @@ test_inert_in_secondmate_child_worktree() {
   install_budget_scripts "$dir"
   transcript="$dir/transcript.jsonl"
   write_transcript "$transcript" 999999
-  out=$(run_budget "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
   expect_silent_exit_zero "a secondmate's own child task worktree" "$out" "$status"
   pass "fm-context-budget scope: inert in a secondmate's own child task worktree"
 }
@@ -524,7 +665,7 @@ test_inert_without_state_dir() {
   install_budget_scripts "$dir"
   transcript="$dir/transcript.jsonl"
   write_transcript "$transcript" 210000
-  out=$(run_budget "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
+  out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
   expect_silent_exit_zero "a checkout with no state directory" "$out" "$status"
   pass "fm-context-budget scope: inert without an effective state directory"
 }
@@ -566,11 +707,12 @@ test_requires_claude_mode_and_stays_inert_otherwise() {
   dir=$(make_primary_dir "$TMP_ROOT/mode")
   transcript="$dir/transcript.jsonl"
   write_transcript "$transcript" 210000
-  out=$(printf '%s' "$(stop_payload "$transcript")" | FM_HOME="$dir" \
+  # Enforcement is on throughout: mode gating must win over it, not the reverse.
+  out=$(printf '%s' "$(stop_payload "$transcript")" | FM_CONTEXT_BUDGET_ENFORCE=1 FM_HOME="$dir" \
     bash "$dir/bin/fm-context-budget.sh" 2>&1); status=$?
   expect_code 0 "$status" "a bare invocation must never block; only claude is wired in this slice"
   assert_contains "$out" "usage:" "a bare invocation must say which mode it needs"
-  out=$(printf '%s' "$(stop_payload "$transcript")" | FM_HOME="$dir" \
+  out=$(printf '%s' "$(stop_payload "$transcript")" | FM_CONTEXT_BUDGET_ENFORCE=1 FM_HOME="$dir" \
     bash "$dir/bin/fm-context-budget.sh" --codex 2>&1); status=$?
   expect_code 0 "$status" "an unsupported harness mode must be inert, never a blocking usage error"
   pass "fm-context-budget: claude is the only wired mode, and every other invocation is inert"
@@ -584,6 +726,22 @@ test_help_prints_the_header_only() {
   assert_not_contains "$out" "set -u" "--help must stop at the header and never leak script body"
   assert_not_contains "$out" "SCRIPT_DIR=" "--help must not leak implementation lines"
   pass "fm-context-budget: --help prints the header contract and no script body"
+}
+
+# A wall-clock bound over a fixture small enough to build in a test cannot
+# distinguish a streaming reader from a slurping one; the difference only shows
+# on a transcript far larger than any hermetic fixture. The structural assertion
+# is the real regression guard, and the timing bound is a smoke check on top.
+test_measurement_never_slurps_the_transcript() {
+  local script="$ROOT/bin/fm-context-budget.sh" passes
+  assert_no_grep 'jq -s' "$script" \
+    "the reader must stream the transcript, never slurp it into one array"
+  assert_no_grep 'jq --slurp' "$script" \
+    "the reader must stream the transcript, never slurp it into one array"
+  passes=$(grep -c '^[^#]*jq -R' "$script" || true)
+  [ "$passes" -eq 1 ] \
+    || fail "the transcript must be parsed by exactly one pass, not $passes"
+  pass "fm-context-budget: the measurement is one streaming pass at constant memory"
 }
 
 test_hook_runs_fast() {
@@ -602,8 +760,10 @@ test_hook_runs_fast() {
 }
 
 test_blocks_over_ceiling_and_names_the_valve
+test_shipped_default_warns_and_never_blocks
+test_enforcement_requires_an_exact_opt_in
 test_default_ceiling_is_180000
-test_dedupes_multi_block_turn_by_request_id
+test_multi_block_turn_measures_the_last_block_not_the_sum
 test_takes_last_never_max_across_compaction
 test_excludes_sidechain_entries
 test_measures_only_assistant_entries
@@ -613,9 +773,11 @@ test_advisory_is_derived_from_ceiling_minus_headroom
 test_advisory_prints_once_per_episode
 test_advisory_rearms_after_dropping_below
 test_silent_well_below_advisory
-test_block_budget_degrades_to_visible_warning
+test_ceiling_notice_prints_once_per_episode
+test_block_budget_stands_down_visibly
+test_stand_down_is_sticky_for_the_rest_of_the_session
 test_block_budget_is_per_session
-test_block_budget_resets_after_the_valve
+test_stand_down_rearms_below_the_advisory
 test_degrades_on_empty_stdin
 test_degrades_on_malformed_stdin
 test_degrades_without_transcript_path
@@ -625,6 +787,7 @@ test_degrades_on_transcript_without_assistant_usage
 test_degrades_on_corrupt_transcript
 test_degrades_on_empty_transcript
 test_degrades_without_jq
+test_valid_json_scalar_line_does_not_abort_the_measurement
 test_truncated_last_line_measures_last_valid_entry
 test_active_in_main_primary
 test_active_in_secondmate_home
@@ -637,4 +800,5 @@ test_hook_does_not_fold_into_the_turnend_guard
 test_hook_never_injects_a_command
 test_requires_claude_mode_and_stays_inert_otherwise
 test_help_prints_the_header_only
+test_measurement_never_slurps_the_transcript
 test_hook_runs_fast
