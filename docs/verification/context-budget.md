@@ -113,6 +113,44 @@ A `Stop` hook that exits 0 is neither rendered nor fed to the model.
 `bin/fm-context-budget.sh` therefore emits the advisory notice, the warning-only ceiling notice, and the sticky stand-down as `systemMessage` objects on stdout, and keeps stderr for the blocking path only.
 `tests/fm-context-budget.test.sh` captures the two streams separately for exactly this reason; the earlier suite merged them with `2>&1` and so could not have caught an invisible notice.
 
+## The default notice is captain-facing, and may not render at all
+
+Two separate limits, established after the channel move.
+
+**It is not delivered to the model.** The hook-response schema quoted above describes `systemMessage` as a "Warning message shown to the user", and the model-context mapper passes hook output only for the `SessionStart` family.
+Probed directly: a session was asked in the turn after a `systemMessage` had visibly rendered whether it had received it, and answered `DID_NOT_SEE_IT`.
+The blocking exit-2 path is separately proven to reach the model by the block proof above, where the session read the banner and answered its instruction.
+So under the shipped warning-only default nothing instructs the session, and the automatic handoff needs `FM_CONTEXT_BUDGET_ENFORCE=1`.
+
+**It may not render either.** A bounded one-axis experiment ran eight trials in a project where `Stop` hooks are known to fire, with hook execution confirmed from the transcript on every trial.
+
+| Axis | Values tried | Result |
+| --- | --- | --- |
+| A: emitting `Stop` hook count | 1, 2, 3 (three is firstmate's real primary) | identical |
+| B: message body | single-line, multi-line | identical |
+
+Across the eight trials: 30 confirmed emissions and zero renders, captured after turn 1 and again after a completed second turn.
+All three candidate causes are ruled out, and the premise that two emitting hooks are somehow special is false.
+
+**Unproven, and deliberately not explained away:** why the same single-line exit-0 `systemMessage` rendered twice in that same project earlier could not be established.
+The honest statement of the shipped default's behavior is therefore that the notice may not appear at all, and that the file-based trip record is the channel the feature relies on.
+
+## The trip record
+
+`state/.context-budget-trips` exists because of the section above: how often the ceiling is crossed is the question the warning-only first release is meant to answer, and a display behavior this repo does not control cannot be the answer's source.
+
+Its four constraints are structural rather than measured, and each has a fixture in `tests/fm-context-budget.test.sh`:
+
+| Constraint | How it is pinned |
+| --- | --- |
+| Write-only, never read for a decision | One identical scripted session replayed three ways - record kept, deleted before every turn end, corrupted with NUL bytes before every turn end - comparing every exit status and both streams. All three are byte-identical, and the replay reaches both the blocking path and the stand-down. |
+| Bounded | A 4,000-line, 444 KB fixture is trimmed on the next turn end to under the 128 KiB cap and at most the most recent 500 entries, keeping the newest and dropping the oldest. |
+| Records each firing, with size | Asserted on the exact line shape, including stage, measured total, ceiling, advisory, enforcement state, and session. |
+| Silent below the advisory | No file is created at all for an ordinary session. |
+
+**Unproven:** the retention and garbage-collection question raised by the attachment-durability work is not answered here.
+How long a harness keeps a `hook_success` attachment, and whether anything reclaims it, was not established, and nothing in this guard depends on it.
+
 ## Zero-usage synthetic entries are real
 
 A real 81 MB session transcript on this host carries 32 assistant entries whose four usage fields are all `0`:
@@ -127,8 +165,41 @@ Every one of them reports `{"m":"<synthetic>","t":0}` on the main chain.
 Claude Code writes them when a turn ends abnormally, such as a login or API error or an interrupt, which is precisely when a `Stop` hook fires, so one is the last assistant entry exactly when the guard measures.
 
 Counted, it would read a long session as `0` tokens.
-That false zero then looks like proof of a reset: it takes the below-advisory branch, which is the one place the sticky stand-down is cleared.
+That false zero then looks like proof of a reset: it takes the below-advisory branch, which is one of the two places the sticky stand-down is cleared.
 The reader now takes the last *positive* total, and a non-positive measurement leaves the turn inert instead of clearing anything.
+
+## Compaction boundaries are the other proof of a reset
+
+A compaction does not change `session_id`, and the transcript file is named after the session, so a session-keyed record survives one.
+The drop-below-advisory rule usually covers that, but not when the post-compaction total is still above the advisory: the record would then stay stood down for the rest of a session that had genuinely reset.
+
+The marker is already in the transcript the reader walks:
+
+```json
+{"type":"system","subtype":"compact_boundary","compactMetadata":{"preTokens":318961,"postTokens":18947}}
+```
+
+Those `preTokens` and `postTokens` are real observed values across one boundary.
+The reader counts boundaries in the same streaming pass as the token measurement, so proving a reset costs no second read, and each record stores the count it was written with.
+A record is cleared only when the current count is strictly greater, so a boundary already accounted for cannot clear it twice, and a record whose own count is missing or unreadable is kept - the same retention bias as everywhere else in the file.
+
+## A per-line jq error does not abort the streaming pass
+
+The streaming reader carries `select(type == "object")`, and the earlier records here and in the operator guide justified it as preventing a hard `jq` error from aborting the whole measurement.
+That justification was wrong for the streaming reader and has been corrected.
+
+With `jq -R` every line is a separate input, so an error on one input is reported to stderr and jq continues with the next input:
+
+```sh
+printf '"a bare string"\n{"type":"assistant","isSidechain":false,"message":{"usage":{"input_tokens":100,"output_tokens":5}}}\n' \
+  | jq -R -r '(fromjson? // empty) | select(.type == "assistant") | .message.usage | (.input_tokens // 0) + (.output_tokens // 0)'
+```
+
+On jq 1.7.1-apple that prints the error for line 1 and then `105` for line 2.
+The abort risk was real only in the original slurped `jq -s` reader, where the whole transcript is one input and one error kills everything; that reader was replaced by the streaming pass recorded below.
+
+The clause is kept, because skipping a non-object line deliberately is better than skipping it by way of a suppressed error, but it is no longer described as abort protection.
+The colocated test was rewritten with it: it now pins the observable contract - non-object lines before and after the entry that must be measured, the later entry still measured, the earlier one not latched, and no diagnostic on the hook's own stderr - and says in its own comment that it cannot distinguish the clause's presence from its absence, because nothing observable does.
 
 ## The consecutive-block override cap
 
@@ -155,7 +226,7 @@ Three facts follow, and they are what the guard's own bound is set against:
 
 Because the counter is shared, per-hook block budgets do not compose: several independently-budgeted blockers firing out of phase can keep consecutive stops blocked past the cap even though no single hook exceeds its own budget.
 `bin/fm-context-budget.sh` answers that by standing down stickily once its budget is spent, which removes it from the shared count for the rest of that session.
-The stand-down record is keyed to `session_id` and is only ever cleared by a positive measurement below the advisory, so a second session in the same home, an unreadable record, a raised block budget, or a zero measurement cannot put this guard back into that shared count.
+The stand-down record is keyed to `session_id` and is only ever cleared by evidence of a genuine reset - a positive measurement below the advisory, or a compaction boundary newer than the one the record was written with - so a second session in the same home, an unreadable record, a raised block budget, or a zero measurement cannot put this guard back into that shared count.
 
 ## The session cannot clear itself
 
@@ -261,6 +332,22 @@ Time is not constant, and the table above says so: 0.64 s for the reader alone a
 The shipped hook end to end over that same 81 MB transcript, in a primary-shaped scratch home, measured 0.67 s and 0.72 s across two runs and returned `444729`, the same total as the table.
 The cost is linear in transcript size, roughly 0.7 s per 80 MB on this host, and it is paid at every primary turn end including far below the advisory.
 That tradeoff is accepted at these magnitudes; only the claim needed narrowing from "constant cost" to "constant memory".
+
+## Which regression rows could show a failing-before state
+
+Not every row in `tests/fm-context-budget.test.sh` can demonstrate one, and claiming otherwise would overstate the coverage.
+Stated per change:
+
+| Change | Failing-before state |
+| --- | --- |
+| Compaction boundary re-arms a spent stand-down | Yes. Against the previous script the row reports `expected exit 2, got 0`. |
+| The trip record captures each stage firing | Yes. Against the previous script the record does not exist. |
+| The trip record stays bounded | Yes. Against the previous script the 444 KB fixture is still 444 KB afterwards. |
+| The enforce opt-in row's `'1 '` value | Yes, but only against a mutated subject. Both the old and new rows pass against the shipped script. Loosening the enforce check to accept a trailing space makes the new row fail with `expected exit 0, got 2` while the old row still passes, which is the concrete demonstration that the old row was inert. |
+| Only a *new* boundary re-arms | No. The mechanism it bounds did not exist before, so it cannot fail against the previous script. It guards over-clearing in the new code. |
+| The trip record writes nothing below the advisory | No, for the same reason: there was no writer to be over-eager. |
+| The trip record cannot influence a decision | No. It pins a constraint on new code rather than repairing old behavior. |
+| Non-object transcript lines are skipped | No, and deliberately so. The reader is unchanged; the correction was to a wrong rationale and a vacuous assertion, and nothing observable distinguishes the clause's presence from its absence. |
 
 ## Native knobs remain unusable
 

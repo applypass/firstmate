@@ -95,6 +95,12 @@ synthetic_zero_line() {
   printf '{"type":"assistant","isSidechain":false,"message":{"model":"<synthetic>","usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0}}}\n'
 }
 
+# The marker Claude Code writes across a compaction. Real observed values.
+compact_boundary_line() {
+  printf '{"type":"system","subtype":"compact_boundary","compactMetadata":{"preTokens":%s,"postTokens":%s}}\n' \
+    "${1:-318961}" "${2:-18947}"
+}
+
 stop_payload() {
   printf '{"session_id":"%s","stop_hook_active":false,"transcript_path":"%s"}' "${2:-sess-1}" "$1"
 }
@@ -191,14 +197,21 @@ test_shipped_default_warns_and_never_blocks() {
 }
 
 test_enforcement_requires_an_exact_opt_in() {
-  local dir transcript status value
+  local dir transcript status value i
   dir=$(make_primary_dir "$TMP_ROOT/enforce-optin")
   transcript="$dir/transcript.jsonl"
   write_transcript "$transcript" 210000
   # Anything other than an exact 1 must leave the warning-only default alone, so
   # a typo can never start blocking sessions.
+  # The session id is indexed rather than derived from the value under test: a
+  # value like '1 ' would otherwise produce an unsafe session id, and the hook
+  # would exit on identity validation long before it ever consulted ENFORCE, so
+  # the row would keep passing even if the enforce check were loosened to strip
+  # whitespace - exactly the typo class this row exists to pin.
+  i=0
   for value in 0 '' true yes on 2 '1 '; do
-    run_budget "$dir" "$(stop_payload "$transcript" "sess-$value")" \
+    i=$((i + 1))
+    run_budget "$dir" "$(stop_payload "$transcript" "sess-optin-$i")" \
       FM_CONTEXT_BUDGET_CEILING=180000 "FM_CONTEXT_BUDGET_ENFORCE=$value" >/dev/null
     status=$?
     expect_code 0 "$status" "FM_CONTEXT_BUDGET_ENFORCE='$value' must not switch enforcement on"
@@ -757,6 +770,168 @@ test_long_dead_records_are_pruned_and_recent_ones_kept() {
   pass "fm-context-budget: per-session records prune only when too old to belong to a live session"
 }
 
+# --- Compaction is the other proof of a genuine reset -------------------------
+# A compaction does NOT change session_id, so a session-keyed stand-down survives
+# it. When the post-compaction total is still above the advisory the drop-below
+# rule never fires either, and the guard would stay stood down for the rest of a
+# session that had genuinely reset. The boundary marker closes that.
+
+test_a_new_compaction_boundary_rearms_a_spent_stand_down() {
+  local dir transcript payload out status
+  dir=$(make_primary_dir "$TMP_ROOT/compact-rearm")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 400000
+  payload=$(stop_payload "$transcript" sess-compact)
+  run_budget_enforcing "$dir" "$payload" \
+    FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=1 >/dev/null; status=$?
+  expect_code 2 "$status" "the single block must be spent first"
+  out=$(run_budget_enforcing "$dir" "$payload" \
+    FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+  expect_code 0 "$status" "the stand-down must be recorded"
+  assert_contains "$out" "stands down" "the stand-down must announce itself once"
+  # The session compacts. The post-compaction total is far smaller but still over
+  # the ceiling, so nothing else in this guard could tell a real reset happened.
+  {
+    compact_boundary_line 400000 210000
+    assistant_line 210000 req-post
+  } >> "$transcript"
+  out=$(run_budget_enforcing "$dir" "$payload" \
+    FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+  expect_code 2 "$status" "a new compaction boundary must re-arm the spent stand-down"
+  assert_contains "$out" "210000" "the post-compaction total must be the measurement"
+  pass "fm-context-budget: a new compaction boundary re-arms a session-keyed stand-down"
+}
+
+# The boundary re-arms ONCE. A boundary already accounted for in the record must
+# not clear it again on every later turn end, or the stand-down would never stick
+# for the rest of a compacted session.
+test_an_already_recorded_compaction_boundary_does_not_rearm_again() {
+  local dir transcript payload out status i
+  dir=$(make_primary_dir "$TMP_ROOT/compact-once")
+  transcript="$dir/transcript.jsonl"
+  {
+    compact_boundary_line 400000 210000
+    assistant_line 210000 req-post
+  } > "$transcript"
+  payload=$(stop_payload "$transcript" sess-compact-once)
+  run_budget_enforcing "$dir" "$payload" \
+    FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=1 >/dev/null; status=$?
+  expect_code 2 "$status" "the first turn over the ceiling must block"
+  out=$(run_budget_enforcing "$dir" "$payload" \
+    FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+  expect_code 0 "$status" "the budget must be spent"
+  assert_contains "$out" "stands down" "the stand-down must be recorded"
+  for i in 1 2 3; do
+    out=$(run_budget_enforcing "$dir" "$payload" \
+      FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+    expect_code 0 "$status" "turn $i must not block on a boundary already accounted for"
+    [ -z "$out" ] || fail "an old compaction boundary re-armed the stand-down on turn $i: $out"
+  done
+  pass "fm-context-budget: only a NEW compaction boundary re-arms, never one already recorded"
+}
+
+# --- The trip record: write-only observation ----------------------------------
+# The shipped default's only rendered output is a systemMessage, and rendering is
+# not something this repo controls: a controlled experiment confirmed 30
+# emissions with zero renders. Counting how often the ceiling is actually crossed
+# therefore cannot depend on the notice, so every stage firing is also appended to
+# a durable file. That file is write-only by contract.
+
+test_trip_record_captures_each_stage_firing() {
+  local dir transcript trips
+  dir=$(make_primary_dir "$TMP_ROOT/trip-record")
+  transcript="$dir/transcript.jsonl"
+  trips="$dir/state/.context-budget-trips"
+  write_transcript "$transcript" 160000
+  run_budget "$dir" "$(stop_payload "$transcript" sess-trip)" \
+    FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_HEADROOM=30000 >/dev/null
+  write_transcript "$transcript" 210000
+  run_budget "$dir" "$(stop_payload "$transcript" sess-trip)" \
+    FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_HEADROOM=30000 >/dev/null
+  assert_present "$trips" "a stage firing must leave a durable trip line"
+  assert_grep 'stage=advisory total=160000 ceiling=180000 advisory=150000' "$trips" \
+    "the advisory trip must record how big the session was and against which thresholds"
+  assert_grep 'stage=ceiling total=210000' "$trips" \
+    "the ceiling trip must record the crossing too"
+  assert_grep 'session=sess-trip' "$trips" "a trip must name the session that made it"
+  assert_grep 'enforce=0' "$trips" "a trip must record whether enforcement was on"
+  pass "fm-context-budget: every stage firing appends a durable trip line"
+}
+
+test_trip_record_is_not_written_below_the_advisory() {
+  local dir transcript
+  dir=$(make_primary_dir "$TMP_ROOT/trip-quiet")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 31710
+  run_budget "$dir" "$(stop_payload "$transcript" sess-quiet)" >/dev/null
+  assert_absent "$dir/state/.context-budget-trips" \
+    "an ordinary session below the advisory must leave no trip at all"
+  pass "fm-context-budget: a session below the advisory records no trip"
+}
+
+test_trip_record_stays_bounded() {
+  local dir transcript trips i bytes lines
+  dir=$(make_primary_dir "$TMP_ROOT/trip-bounded")
+  transcript="$dir/transcript.jsonl"
+  trips="$dir/state/.context-budget-trips"
+  write_transcript "$transcript" 210000
+  : > "$trips"
+  for i in $(seq 1 4000); do
+    printf '2026-01-01T00:00:00Z stage=ceiling total=210000 ceiling=180000 advisory=150000 enforce=0 session=sess-old-%04d\n' "$i" >> "$trips"
+  done
+  bytes=$(wc -c < "$trips" | tr -d ' ')
+  [ "$bytes" -gt 131072 ] || fail "fixture must exceed the byte cap to exercise the trim, got $bytes"
+  run_budget "$dir" "$(stop_payload "$transcript" sess-bound)" \
+    FM_CONTEXT_BUDGET_CEILING=180000 >/dev/null
+  bytes=$(wc -c < "$trips" | tr -d ' ')
+  lines=$(wc -l < "$trips" | tr -d ' ')
+  [ "$bytes" -le 131072 ] || fail "the trip record grew past its byte cap: $bytes"
+  [ "$lines" -le 501 ] || fail "the trip record kept more than the most recent entries: $lines"
+  assert_grep 'session=sess-bound' "$trips" "the newest trip must survive the trim"
+  assert_no_grep 'session=sess-old-0001' "$trips" "the oldest trips must be the ones dropped"
+  assert_grep 'session=sess-old-4000' "$trips" "the most recent old trips must be kept"
+  pass "fm-context-budget: the trip record is bounded and keeps the most recent entries"
+}
+
+# The property that keeps the trip record outside the record loss-path class: it
+# is never read back to decide anything, so losing or corrupting it cannot change
+# a single decision. Replay one identical scripted session three ways and compare.
+trip_influence_replay() {  # <dir> <mode: keep|delete|corrupt>
+  local dir=$1 mode=$2 transcript payload trips step status
+  transcript="$dir/transcript.jsonl"
+  trips="$dir/state/.context-budget-trips"
+  payload=$(stop_payload "$transcript" sess-influence)
+  write_transcript "$transcript" 160000
+  for step in advisory advisory-repeat block-1 block-2 standdown quiet-1 quiet-2; do
+    case "$mode" in
+      delete) rm -f "$trips" ;;
+      corrupt) printf '\0\0not a trip line at all\0\0' > "$trips" ;;
+    esac
+    case "$step" in
+      block-1) write_transcript "$transcript" 210000 ;;
+    esac
+    run_budget_channels_enforcing "$dir" "$payload" \
+      FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_HEADROOM=30000 \
+      FM_CONTEXT_BUDGET_BLOCK_BUDGET=2
+    status=$?
+    printf '%s exit=%s out=%s err=%s\n' "$step" "$status" "$BUDGET_STDOUT" "$BUDGET_STDERR"
+  done
+}
+
+test_trip_record_never_influences_a_decision() {
+  local keep deleted corrupted
+  keep=$(trip_influence_replay "$(make_primary_dir "$TMP_ROOT/trip-influence-keep")" keep)
+  deleted=$(trip_influence_replay "$(make_primary_dir "$TMP_ROOT/trip-influence-del")" delete)
+  corrupted=$(trip_influence_replay "$(make_primary_dir "$TMP_ROOT/trip-influence-bad")" corrupt)
+  [ "$keep" = "$deleted" ] \
+    || fail "deleting the trip record changed behavior:\n--- kept ---\n$keep\n--- deleted ---\n$deleted"
+  [ "$keep" = "$corrupted" ] \
+    || fail "corrupting the trip record changed behavior:\n--- kept ---\n$keep\n--- corrupted ---\n$corrupted"
+  assert_contains "$keep" "exit=2" "the replay must actually reach the blocking path"
+  assert_contains "$keep" "stands down" "the replay must actually reach the stand-down"
+  pass "fm-context-budget: the trip record is write-only and can never change a decision"
+}
+
 # --- DEGRADATION: the eight rows, every one a silent exit 0 ------------------
 
 expect_silent_exit_zero() {
@@ -863,25 +1038,45 @@ test_degrades_without_jq() {
 
 # A line that is SYNTACTICALLY valid JSON but not an object is the corruption the
 # corrupt-transcript row cannot reach: it parses fine, so it survives into the
-# filter, where a lookup like .isSidechain on a string is a hard jq error. Left
-# unguarded that error aborts the whole measurement and the guard silently
-# measures nothing at all.
-test_valid_json_scalar_line_does_not_abort_the_measurement() {
+# filter, where a lookup like .isSidechain on a string would be a jq error.
+#
+# What this row can and cannot pin, stated plainly. With jq -R every line is its
+# own input, so such an error is reported for that line and the next line still
+# runs; it does NOT abort the pass, and deleting select(type == "object") from the
+# reader would not change any assertion below. What is pinned is the observable
+# contract: non-object lines are skipped wherever they sit, a later assistant
+# entry is still measured, and the reader leaks no diagnostic onto the hook's own
+# stderr - the channel the blocking path owns.
+test_valid_json_non_object_lines_are_skipped() {
   local dir transcript out status
   dir=$(make_primary_dir "$TMP_ROOT/deg-scalar")
   transcript="$dir/transcript.jsonl"
+  # Non-object lines both before and after the entry that must be measured, so a
+  # reader that stopped at the first one would report the wrong number.
   {
-    assistant_line 210000 req-a
+    assistant_line 100000 req-early
     printf '"a bare string line"\n'
     printf '42\n'
     printf 'null\n'
     printf 'true\n'
     printf '["an","array"]\n'
+    assistant_line 210000 req-late
+    printf '"trailing bare string"\n'
   } > "$transcript"
   out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript")" FM_CONTEXT_BUDGET_CEILING=180000); status=$?
-  expect_code 2 "$status" "a valid-JSON non-object line must not abort the measurement"
-  assert_contains "$out" "210000" "the assistant entry must still be measured past a scalar line"
-  pass "fm-context-budget: a valid-JSON non-object line is dropped, not an abort"
+  expect_code 2 "$status" "a valid-JSON non-object line must not hide the measurement"
+  assert_contains "$out" "210000" "the last assistant entry past the non-object lines must be measured"
+  assert_not_contains "$out" "100000" "a non-object line must not freeze the measurement at an earlier entry"
+  # Same transcript under the shipped default, where the hook's stderr must be
+  # empty: a jq diagnostic escaping onto it would be indistinguishable from the
+  # blocking banner's channel.
+  run_budget_channels "$dir" "$(stop_payload "$transcript" sess-scalar-chan)" \
+    FM_CONTEXT_BUDGET_CEILING=180000
+  status=$?
+  expect_code 0 "$status" "the shipped default must allow this turn end"
+  [ -z "$BUDGET_STDERR" ] \
+    || fail "the reader leaked a diagnostic onto the hook's stderr: $BUDGET_STDERR"
+  pass "fm-context-budget: valid-JSON non-object lines are skipped without disturbing the measurement"
 }
 
 # A truncated final line is the realistic corruption: the transcript is written
@@ -1100,6 +1295,12 @@ test_unsafe_session_id_is_inert
 test_unwritable_record_degrades_to_a_visible_warning
 test_raising_the_block_budget_cannot_rearm_a_spent_stand_down
 test_long_dead_records_are_pruned_and_recent_ones_kept
+test_a_new_compaction_boundary_rearms_a_spent_stand_down
+test_an_already_recorded_compaction_boundary_does_not_rearm_again
+test_trip_record_captures_each_stage_firing
+test_trip_record_is_not_written_below_the_advisory
+test_trip_record_stays_bounded
+test_trip_record_never_influences_a_decision
 test_degrades_on_empty_stdin
 test_degrades_on_malformed_stdin
 test_degrades_without_transcript_path
@@ -1109,7 +1310,7 @@ test_degrades_on_transcript_without_assistant_usage
 test_degrades_on_corrupt_transcript
 test_degrades_on_empty_transcript
 test_degrades_without_jq
-test_valid_json_scalar_line_does_not_abort_the_measurement
+test_valid_json_non_object_lines_are_skipped
 test_truncated_last_line_measures_last_valid_entry
 test_active_in_main_primary
 test_active_in_secondmate_home

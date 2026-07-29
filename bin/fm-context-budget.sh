@@ -56,22 +56,40 @@
 # which exits 2, uses stderr, because that path IS delivered to the model.
 # docs/verification/context-budget.md records both readings.
 #
+# THE DEFAULT REPORTS TO THE CAPTAIN, NOT THE SESSION. systemMessage is a
+# user-facing channel: a session asked about one it had visibly received answered
+# that it had not seen it. Only the blocking exit-2 path reaches the model, so the
+# automatic handoff-and-clear needs enforcement switched on. Worse, rendering is
+# not guaranteed at all: a controlled experiment confirmed 30 emissions with zero
+# renders. That is why the file-based TRIP RECORD below, not the notice, is the
+# channel this feature relies on for observing how often the ceiling is crossed.
+#
+# THE TRIP RECORD IS WRITE-ONLY: every stage firing appends one line to
+# state/.context-budget-trips, and NO code path ever reads it back to decide
+# anything. Only its own length is consulted, to keep it bounded. Losing or
+# corrupting it therefore costs visibility and can never change a decision, which
+# is exactly what keeps it out of the record loss-path class below.
+#
 # RECORD IDENTITY IS THE SESSION: both records are named per session_id, which is
 # the identity of the context accumulation itself (the transcript file is
 # literally <session_id>.jsonl). Two primary sessions in one home therefore
 # cannot alias onto one record and wipe each other's stand-down. A missing or
 # unsafe session_id makes the turn inert rather than merging distinct sessions
-# under one shared identity, and the records are cleared only by a POSITIVE
-# measurement back below the advisory - never by a zero, absent, or unreadable
-# number, because losing a stand-down costs repeated forced handoffs while
-# keeping a stale one costs at most one missed warning.
+# under one shared identity, and the records are cleared only by evidence of a
+# GENUINE reset - never by a zero, absent, or unreadable number, because losing a
+# stand-down costs repeated forced handoffs while keeping a stale one costs at
+# most one missed warning. There are exactly two such proofs: a POSITIVE
+# measurement back below the advisory, and a NEW compaction boundary in the
+# transcript. The second one matters because compaction does not change
+# session_id, so a session-keyed record would otherwise stay stood down across a
+# real reset whose post-compaction total is still above the advisory.
 #
 # THE ONE VALVE: write a handoff and clear. This guard instructs and never types
 # into a pane: it never injects /compact, /clear, or any other command, and it
 # never spawns a replacement agent. docs/context-budget.md records the away-mode
 # consequence this creates.
 #
-# NEVER WEDGE A SESSION: every measurement failure - absent jq, missing or
+# NEVER WEDGE A SESSION: every measurement failure - absent jq or awk, missing or
 # unreadable transcript_path, missing or corrupt transcript, no assistant usage,
 # a zero measurement, no usable session_id, empty or malformed stdin - is a silent
 # exit 0, and a block count that cannot be written degrades to the visible
@@ -169,42 +187,58 @@ TRANSCRIPT=$(printf '%s' "$PAYLOAD" | jq -r '.transcript_path // empty' 2>/dev/n
 [ -r "$TRANSCRIPT" ] || exit 0
 
 # --- the measurement ---------------------------------------------------------
-# ONE streaming pass: jq -R reads a line at a time, drops it unless it parses to
-# a JSON OBJECT that is a countable assistant entry, and emits just that entry's
-# total. Nothing is slurped, so MEMORY is constant in the transcript's size; the
-# time is still linear, and it is paid at every turn end including the common
-# case far below the advisory.
+# ONE streaming pass: jq -R reads a line at a time and emits a tagged token for
+# each line worth counting - "t <total>" for a countable assistant entry, "c" for
+# a compaction boundary. awk then reduces the stream to the LAST total and the
+# COUNT of boundaries. Nothing is slurped at either stage, so MEMORY is constant
+# in the transcript's size; the time is still linear, and it is paid at every turn
+# end including the common case far below the advisory.
 #   fromjson? drops malformed or truncated lines instead of aborting, so a
 #   partially written transcript degrades to "measure what parsed".
-#   select(type == "object") drops a line that parses to a valid JSON SCALAR,
-#   which would otherwise make the .isSidechain lookup a hard jq error and abort
-#   the whole measurement.
+#   select(type == "object") skips a line that parses to a valid JSON SCALAR or
+#   array. It is not abort protection: with jq -R every line is its own input, so
+#   an error on one line is reported and the next line still runs. What the clause
+#   buys is that such a line is skipped deliberately rather than by way of a
+#   suppressed per-line error, which keeps the pass's diagnostics meaningful.
 #   select(. > 0) drops a synthetic zero-usage entry (rule 3 in the header): a
 #   real long session never measures 0, so a 0 here is a missing measurement
 #   masquerading as a reset, and taking the last POSITIVE total instead reports
 #   the session's real size.
-# sed takes the last emitted total, which is the LAST rule; the trailing sed is
-# already a dependency of this script, so the pass adds no new tool.
+#   The compaction tally rides along in the same pass, so proving a genuine reset
+#   costs no second read of the transcript.
 measure_context() {
-  jq -R -c '
+  jq -R -r '
     def usage_total:
       (.input_tokens // 0) + (.cache_creation_input_tokens // 0)
       + (.cache_read_input_tokens // 0) + (.output_tokens // 0);
     (fromjson? // empty)
     | select(type == "object")
-    | select((.isSidechain != true)
-      and (.type == "assistant")
-      and ((.message.usage | type) == "object"))
-    | .message.usage
-    | usage_total
-    | floor
-    | select(. > 0)
-  ' "$TRANSCRIPT" 2>/dev/null | sed -n '$p'
+    | if (.type == "system" and .subtype == "compact_boundary") then "c"
+      else
+        select((.isSidechain != true)
+          and (.type == "assistant")
+          and ((.message.usage | type) == "object"))
+        | .message.usage
+        | usage_total
+        | floor
+        | select(. > 0)
+        | "t \(.)"
+      end
+  ' "$TRANSCRIPT" 2>/dev/null | awk '
+    $1 == "c" { compacts += 1; next }
+    $1 == "t" { total = $2 }
+    END { printf "%s %s\n", (total == "" ? "0" : total), compacts + 0 }
+  '
 }
 
-TOTAL=$(measure_context) || exit 0
+MEASURED=$(measure_context) || exit 0
+TOTAL=${MEASURED%% *}
+COMPACTS=${MEASURED##* }
 case "$TOTAL" in
   ''|*[!0-9]*) exit 0 ;;
+esac
+case "$COMPACTS" in
+  ''|*[!0-9]*) COMPACTS=0 ;;
 esac
 # A non-positive measurement is not evidence of anything: it means nothing
 # countable was found, not that the context is empty. Stay completely inert on it
@@ -223,8 +257,9 @@ esac
 [ "${#SESSION_ID}" -le 128 ] || exit 0
 
 # The consecutive-block record doubles as the STICKY stand-down record: once the
-# recorded standdown flag is set it stays set, and only a positive measurement
-# back below the advisory removes the file.
+# recorded standdown flag is set it stays set, and only evidence of a genuine
+# reset - a positive measurement back below the advisory, or a compaction
+# boundary newer than the one this record was written with - removes the file.
 BUDGET_FILE="$STATE/.context-budget-blocks-$SESSION_ID"
 # Which visible notice stage this session has already been shown, so neither the
 # advisory nor the warning-only ceiling notice repeats inside one episode.
@@ -233,23 +268,33 @@ NOTICE_FILE="$STATE/.context-budget-notice-$SESSION_ID"
 # One session's records belong to that session and nothing else clears them, so
 # prune only records old enough that no live session could own them. The sticky
 # path refreshes its own record on every stood-down turn end, so pruning can
-# never take a stand-down away from a session that is still running.
+# never take a stand-down away from a session that is still running. The trip
+# record is deliberately not in this sweep: it spans sessions and is bounded by
+# its own size cap instead.
 prune_dead_records() {
-  find "$STATE" -maxdepth 1 -type f -name '.context-budget-*' -mtime +30 \
-    -delete >/dev/null 2>&1 || true
+  find "$STATE" -maxdepth 1 -type f \
+    \( -name '.context-budget-blocks-*' -o -name '.context-budget-notice-*' \) \
+    -mtime +30 -delete >/dev/null 2>&1 || true
+}
+
+# One field out of a record, matched by key rather than by line number so a field
+# can be added without re-numbering the readers.
+record_field() {  # <file> <key>
+  sed -n "s/^$2=//p" "$1" 2>/dev/null | sed -n '1p'
 }
 
 # True when this session has already been shown the named notice stage.
 notice_seen() {  # <stage>
-  [ "$(sed -n '1s/^stage=//p' "$NOTICE_FILE" 2>/dev/null || true)" = "$1" ]
+  [ "$(record_field "$NOTICE_FILE" stage)" = "$1" ]
 }
 
 # A notice that cannot be recorded may repeat on a later turn end. That is the
 # deliberate degrade: a repeated visible warning is harmless, while suppressing
-# it would lose the only observable behavior the shipped default has.
+# it would lose the shipped default's only rendered behavior.
 notice_record() {  # <stage>
   [ -e "$NOTICE_FILE" ] || prune_dead_records
-  printf 'stage=%s\nsession=%s\n' "$1" "$SESSION_ID" > "$NOTICE_FILE" 2>/dev/null || true
+  printf 'stage=%s\ncompacts=%s\nsession=%s\n' "$1" "$COMPACTS" "$SESSION_ID" \
+    > "$NOTICE_FILE" 2>/dev/null || true
 }
 
 BUDGET_COUNT=0
@@ -260,8 +305,8 @@ BUDGET_STOOD_DOWN=0
 budget_read() {
   local raw_count raw_standdown
   [ -e "$BUDGET_FILE" ] || return 0
-  raw_count=$(sed -n '1s/^count=//p' "$BUDGET_FILE" 2>/dev/null || true)
-  raw_standdown=$(sed -n '2s/^standdown=//p' "$BUDGET_FILE" 2>/dev/null || true)
+  raw_count=$(record_field "$BUDGET_FILE" count)
+  raw_standdown=$(record_field "$BUDGET_FILE" standdown)
   case "$raw_count" in
     ''|*[!0-9]*) BUDGET_STOOD_DOWN=1; return 0 ;;
   esac
@@ -275,7 +320,50 @@ budget_read() {
 # blocking on it would repeat every turn end with no bound at all.
 budget_record() {  # <count> <standdown 0|1>
   [ -e "$BUDGET_FILE" ] || prune_dead_records
-  printf 'count=%s\nstanddown=%s\nsession=%s\n' "$1" "$2" "$SESSION_ID" > "$BUDGET_FILE" 2>/dev/null
+  printf 'count=%s\nstanddown=%s\ncompacts=%s\nsession=%s\n' \
+    "$1" "$2" "$COMPACTS" "$SESSION_ID" > "$BUDGET_FILE" 2>/dev/null
+}
+
+# --- the trip record: WRITE-ONLY observation ----------------------------------
+# The shipped default cannot rely on a rendered notice, so every stage firing is
+# also appended here, where the captain can count crossings after the fact.
+# Nothing in this script ever reads a decision out of this file; the only thing
+# read back is its own size, to keep it bounded. Deleting, corrupting, or
+# truncating it therefore changes no behavior at all.
+TRIP_FILE="$STATE/.context-budget-trips"
+TRIP_MAX_BYTES=131072
+TRIP_MAX_LINES=500
+
+trip_trim() {
+  local bytes lines kept
+  bytes=$(wc -c < "$TRIP_FILE" 2>/dev/null) || return 0
+  bytes=${bytes//[![:digit:]]/}
+  [ -n "$bytes" ] || return 0
+  [ "$bytes" -gt "$TRIP_MAX_BYTES" ] || return 0
+  lines=$(wc -l < "$TRIP_FILE" 2>/dev/null) || return 0
+  lines=${lines//[![:digit:]]/}
+  [ -n "$lines" ] || return 0
+  if [ "$lines" -gt "$TRIP_MAX_LINES" ]; then
+    kept=$(sed -n "$((lines - TRIP_MAX_LINES + 1)),\$p" "$TRIP_FILE" 2>/dev/null) || return 0
+    [ -n "$kept" ] || return 0
+    printf '%s\n' "$kept" > "$TRIP_FILE" 2>/dev/null || return 0
+  else
+    # Over the byte cap on too few lines to trim by line means the content is not
+    # trip lines at all. Start clean rather than let it grow unbounded.
+    : > "$TRIP_FILE" 2>/dev/null || return 0
+  fi
+  return 0
+}
+
+trip_record() {  # <stage>
+  local stamp
+  stamp=$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null) || stamp=unknown
+  [ -n "$stamp" ] || stamp=unknown
+  printf '%s stage=%s total=%s ceiling=%s advisory=%s enforce=%s session=%s\n' \
+    "$stamp" "$1" "$TOTAL" "$CEILING" "$ADVISORY" "$ENFORCE" "$SESSION_ID" \
+    >> "$TRIP_FILE" 2>/dev/null || return 0
+  trip_trim
+  return 0
 }
 
 # A systemMessage object on stdout: the one channel a successful Stop hook has.
@@ -307,10 +395,31 @@ notice_once() {  # <stage> <text>
   system_message "$2"
 }
 
+# --- a new compaction boundary is a genuine reset -----------------------------
+# Compaction does not change session_id, so without this a session-keyed record
+# would stay stood down across a real reset whose post-compaction total is still
+# above the advisory. A record whose own boundary count is absent or unreadable
+# is KEPT, because retention is the bias everywhere in this file.
+record_predates_a_compaction() {  # <file>
+  local seen
+  [ -e "$1" ] || return 1
+  seen=$(record_field "$1" compacts)
+  case "$seen" in
+    ''|*[!0-9]*) return 1 ;;
+  esac
+  [ "$COMPACTS" -gt "$seen" ]
+}
+
+for record in "$BUDGET_FILE" "$NOTICE_FILE"; do
+  if record_predates_a_compaction "$record"; then
+    rm -f "$record" 2>/dev/null || true
+  fi
+done
+
 # --- below the advisory: silent, and re-arm the whole episode -----------------
-# This is the ONLY place the sticky stand-down is cleared, and only a POSITIVE
-# measurement reaches here, so a session that has already spent its block budget
-# is never blocked again until it genuinely drops back under the advisory.
+# The other place a record is cleared, and only a POSITIVE measurement reaches
+# here, so a session that has already spent its block budget is never blocked
+# again until it genuinely drops back under the advisory or genuinely compacts.
 if [ "$TOTAL" -lt "$ADVISORY" ]; then
   rm -f "$BUDGET_FILE" "$NOTICE_FILE" 2>/dev/null || true
   exit 0
@@ -318,6 +427,7 @@ fi
 
 # --- between advisory and ceiling: one non-blocking notice per episode ---------
 if [ "$TOTAL" -lt "$CEILING" ]; then
+  trip_record advisory
   notice_once advisory "$(
     printf 'CONTEXT BUDGET ADVISORY - %s tokens, ceiling %s\n' "$TOTAL" "$CEILING"
     printf 'About %s tokens of headroom left before the ceiling.\n' "$((CEILING - TOTAL))"
@@ -326,6 +436,8 @@ if [ "$TOTAL" -lt "$CEILING" ]; then
   )"
   exit 0
 fi
+
+trip_record ceiling
 
 # --- at or above the ceiling, shipped default: warn once, never block ---------
 if [ "$ENFORCE" -ne 1 ]; then

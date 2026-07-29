@@ -26,6 +26,7 @@ At every primary turn end, the guard measures the live session's context.
 Below the advisory point it is completely silent.
 Between the advisory point and the ceiling it prints one non-blocking notice per episode.
 At or above the ceiling it prints one visible ceiling notice per episode naming the handoff-and-clear valve, and by default allows the turn end.
+Every turn end at or above the advisory point also appends one line to a durable trip record, whether or not it produced a notice.
 
 **The shipped default warns and does not block.**
 Enforcement is fully implemented and switched on with `FM_CONTEXT_BUDGET_ENFORCE=1`; with enforcement off, nothing in this guard can ever return a blocking exit status.
@@ -33,6 +34,15 @@ Enforcement is fully implemented and switched on with `FM_CONTEXT_BUDGET_ENFORCE
 That default is deliberate, and is not an unfinished enforcement path.
 A 180,000 ceiling on a million-token session will trip repeatedly in a normal working day, and every trip costs a handoff.
 The real frequency of those crossings has to be observed before the mechanism is allowed to interrupt anyone, so the first release stays out of the way and only reports.
+
+**The default reports to the captain, not to the session.**
+The automatic handoff-and-clear requires enabling enforcement.
+Every default-path notice is a `systemMessage`, which is a user-facing channel: only the blocking exit-2 path delivers text to the model, and a session asked in the next turn about a `systemMessage` it had visibly received answered that it had not seen it.
+So under the default the guard tells the captain that a crossing happened; nothing instructs the session, and nothing acts.
+
+Whether that notice is even rendered is outside this repo's control.
+A controlled experiment confirmed 30 emissions with zero renders, and the earlier renders that motivated the channel choice remain unexplained; [`verification/context-budget.md`](verification/context-budget.md) records both.
+The durable trip record below, not the notice, is the reliable way to observe how often the ceiling is crossed.
 
 ## Measurement
 
@@ -59,8 +69,13 @@ Nothing is slurped into memory, so its **memory** is constant in transcript size
 Its **time** is still linear, roughly 0.7 s per 80 MB of transcript on the measured host, and that cost is paid at every primary turn end including far below the advisory.
 
 Malformed transcript lines are dropped rather than aborting the pass, so a half-written final line degrades to the last line that parsed.
-A line that parses to a valid JSON scalar rather than an object is dropped by the same rule, so it cannot turn the sidechain lookup into an error that would abort the whole measurement.
+A line that parses to a valid JSON scalar or array rather than an object is skipped by an explicit type check.
+That check is not abort protection, and the earlier claim that it was has been corrected: with `jq -R` every line is its own input, so an error on one line is reported and the next line still runs.
+What the check buys is that such a line is skipped deliberately rather than by way of a suppressed per-line error, which keeps the pass's diagnostics meaningful.
 A measurement that comes back absent, non-numeric, or zero leaves the turn completely inert: it is a missing number, not evidence about the session's size.
+
+The same pass also counts compaction boundaries, which are `type == "system"` entries with `subtype == "compact_boundary"`.
+They are not part of the token measurement; they are the second proof of a genuine reset described under durable records below.
 
 ## Thresholds
 
@@ -77,7 +92,10 @@ The advisory point is derived as `ceiling - headroom`, so there is never a secon
 `FM_CONTEXT_BUDGET_CEILING` overrides the ceiling and defaults to 180000.
 `FM_CONTEXT_BUDGET_HEADROOM` overrides the headroom and defaults to 30000, about two worst-case turns on top of the valve's own cost.
 `FM_CONTEXT_BUDGET_BLOCK_BUDGET` overrides the consecutive-block bound and defaults to 3, well below Claude Code's own consecutive-block override cap recorded in [`verification/context-budget.md`](verification/context-budget.md).
-A non-numeric or zero value falls back to the default rather than disabling the guard.
+
+For `FM_CONTEXT_BUDGET_CEILING` and `FM_CONTEXT_BUDGET_BLOCK_BUDGET`, a non-numeric or zero value falls back to the default rather than disabling the guard.
+`FM_CONTEXT_BUDGET_HEADROOM` differs on purpose: only a non-numeric value falls back, and a zero is honoured.
+`FM_CONTEXT_BUDGET_HEADROOM=0` collapses the advisory point onto the ceiling, which simply removes the advisory stage and leaves the ceiling stage exactly as it was.
 
 Each notice prints once per episode and re-arms once the measurement drops back below the advisory point, the same shape `bin/fm-guard.sh` uses.
 The advisory notice and the warning-only ceiling notice are separate stages, so crossing from one into the other still produces exactly one new notice.
@@ -96,8 +114,32 @@ So the channel is chosen by what the guard is doing, not by convenience:
 | Sticky stand-down notice | 0 | `{"systemMessage": ...}` on stdout |
 | Blocking ceiling banner | 2 | stderr, which exit 2 delivers to the model |
 
-Under the shipped warning-only default every visible thing this guard does is a `systemMessage`, so that channel is the whole observable behavior of the feature rather than a detail.
+Under the shipped warning-only default every visible thing this guard does is a `systemMessage`, so that channel is the whole rendered behavior of the feature rather than a detail.
 `tests/fm-context-budget.test.sh` asserts the two streams separately and never merges them, because a merged capture cannot tell a rendered notice from a discarded one.
+
+Two limits of that channel are worth stating plainly, because together they decide what the default release actually delivers:
+
+- `systemMessage` is described by the harness's own hook-response schema as a warning shown to the *user*. It is not fed to the model, and a live session asked about one it had visibly received answered that it had not seen it. So the default reports to the captain and instructs nobody; only the blocking exit-2 path reaches the session.
+- Rendering is not guaranteed. A controlled experiment over eight trials, varying the number of emitting `Stop` hooks and single-line against multi-line bodies, confirmed 30 emissions and zero renders, while the same shape had rendered twice in that project earlier. That earlier behavior is unexplained and is recorded as an unproven property, not resolved.
+
+## The trip record
+
+Because rendering cannot be relied on, and because observing how often the ceiling is actually crossed is the whole point of shipping warning-only first, every stage firing also appends one line to `state/.context-budget-trips`:
+
+```
+2026-07-29T09:14:02Z stage=ceiling total=204118 ceiling=180000 advisory=150000 enforce=0 session=<session_id>
+```
+
+That is enough to answer how often the guardrail fires and at what size, without depending on a display behavior this repo does not control.
+A stage firing means a turn end at or above the advisory point, so it records repeats and stood-down turns too, not only the turns that produced a notice.
+A session below the advisory writes nothing at all.
+
+The record is write-only by contract, and that contract is what keeps it outside the loss-path class the durable records below belong to:
+
+- Nothing ever reads a decision out of it. The only thing read back is its own size, to keep it bounded.
+- Deleting, truncating, or corrupting it mid-session changes no behavior whatsoever, which `tests/fm-context-budget.test.sh` pins by replaying one identical session three ways and comparing every exit status and both streams.
+- It is bounded at roughly 128 KiB and trimmed back to its most recent 500 entries, so it cannot grow without limit.
+- It spans sessions rather than being keyed to one, and it is deliberately excluded from the 30-day prune that reaches the per-session records.
 
 ## Durable records
 
@@ -111,12 +153,13 @@ Every rule about these records biases toward keeping them.
 Losing a stand-down means repeated forced handoffs that grow the context this guard exists to cap; keeping a stale one costs at most one missed warning in one session.
 Concretely:
 
-- Only a positive measurement below the advisory point clears them. An absent, non-numeric, or zero measurement never does.
+- Exactly two things clear them, and both are evidence of a genuine reset: a positive measurement below the advisory point, and a compaction boundary newer than the one the record itself was written with. An absent, non-numeric, or zero measurement never does.
+- The compaction clause exists because compaction does not change `session_id`. Without it a session-keyed record would stay stood down across a real reset whose post-compaction total is still above the advisory. A record whose own boundary count is missing or unreadable is kept, not cleared, and a boundary already accounted for never clears the record twice.
 - An existing block record whose count cannot be parsed is read as a spent stand-down, not as a fresh budget.
 - The stand-down is recorded as a flag rather than a clamped count, so raising `FM_CONTEXT_BUDGET_BLOCK_BUDGET` mid-session cannot re-arm a budget that was already spent.
 - The state directory is canonicalized once per run, so a symlinked or relative path cannot split one session's records across two locations.
 - A block count that cannot be written is not swallowed. Blocking on a count that does not survive the turn could not be bounded, so that turn degrades to the visible warning instead.
-- Records are pruned only when older than 30 days, and a stood-down session refreshes its own record on every turn end, so pruning can never reach a session that is still running.
+- Records are pruned only when older than 30 days, and a stood-down session refreshes its own record on every turn end, so pruning can never reach a session that is still running. The prune names the two per-session record prefixes explicitly and does not touch the trip record.
 
 ## The valve
 
@@ -136,11 +179,13 @@ Compacting in place and spawning a fresh agent are not offered as alternatives; 
 
 ## The session cannot clear itself
 
-Steps 1 and 2 are fully autonomous.
-Step 3 is not: clearing the context is a local user action with no tool surface, so the session can prepare the handoff but cannot complete the reset itself.
+Steps 1 and 2 can be autonomous, but only under enforcement.
+Step 3 never is: clearing the context is a local user action with no tool surface, so the session can prepare the handoff but cannot complete the reset itself.
 A live session confirmed this directly, replying "I can't clear my own context; that's yours to do" ([`verification/context-budget.md`](verification/context-budget.md)).
 
-With the captain present this closes normally: the notice surfaces the instruction, the session stows and writes the note, and the captain clears.
+Under the shipped default the valve is fully captain-driven.
+The report reaches the captain, if it renders at all, and the trip record captures the crossing either way; the session is neither told nor asked to do anything, so steps 1 and 2 happen when the captain asks for them.
+With `FM_CONTEXT_BUDGET_ENFORCE=1` the blocking path does reach the session, and that is the only configuration in which it closes on its own up to step 3: the block surfaces the instruction, the session stows and writes the note, and the captain clears.
 
 ## Away mode: advisory only, by decision
 
@@ -148,7 +193,7 @@ While away mode is active there is no captain at the keyboard, so step 3 of the 
 This is accepted, deliberate behavior rather than an open defect.
 
 Nothing in firstmate may type a command into a live session, so there is no mechanism that could close the valve unattended, and none is being built.
-Under the shipped warning-only default the guard reports the crossing and the session keeps running.
+Under the shipped warning-only default the guard records the crossing in the trip record, reports it on a channel nobody is there to read, and the session keeps running.
 With enforcement switched on it blocks up to `FM_CONTEXT_BUDGET_BLOCK_BUDGET` times, which gets steps 1 and 2 written to disk, and then stands down for the rest of that session.
 
 The cost is plain and worth stating: the guardrail is effectively inert while away, which is exactly when sessions run longest unattended and when a ballooning context is most expensive.
@@ -160,7 +205,7 @@ It is not authorized, not verified, and nothing should be built toward it.
 
 ## Never wedge a session
 
-Every measurement failure is a silent exit 0: absent `jq`, missing or unreadable `transcript_path`, a missing, empty, unreadable, or corrupt transcript, a transcript with no assistant usage, a measurement that comes back zero, a payload with no usable `session_id`, and empty or malformed stdin.
+Every measurement failure is a silent exit 0: absent `jq` or `awk`, missing or unreadable `transcript_path`, a missing, empty, unreadable, or corrupt transcript, a transcript with no assistant usage, a measurement that comes back zero, a payload with no usable `session_id`, and empty or malformed stdin.
 A bare or unsupported-harness invocation is also inert rather than a blocking usage error.
 
 Under the shipped default the guard never blocks at all, so the ceiling can never contribute to a wedged session.
@@ -223,5 +268,5 @@ Firstmate measures and enforces this itself.
 
 ## Regression coverage
 
-`tests/fm-context-budget.test.sh` covers the three measurement correctness rules and the multi-block property that subsumes dedupe, the derived advisory and its per-episode dedup and re-arm, the absolute 180,000 default, the warning-only shipped default and the explicit enforcement switch, the channel each notice lands on with stdout and stderr captured separately, the sticky stand-down and its advisory-level re-arm, record durability against a trailing zero-usage synthetic entry, two sessions in one home, a missing or unsafe `session_id`, an unwritable record, a raised mid-session block budget and long-dead record pruning, the full degradation matrix including a valid-JSON scalar line, main and secondmate primary scope, crewmate and secondmate-child worktree exclusion, the bounded block budget and its per-session keying, claude-only mode gating, the tracked `Stop` registration, and the one-owner and no-injection boundaries.
+`tests/fm-context-budget.test.sh` covers the three measurement correctness rules and the multi-block property that subsumes dedupe, the derived advisory and its per-episode dedup and re-arm, the absolute 180,000 default, the warning-only shipped default and the exact enforcement opt-in, the channel each notice lands on with stdout and stderr captured separately, the sticky stand-down and its advisory-level re-arm, the compaction-boundary re-arm and its clear-once property, the trip record's content, its size bound, and its inability to influence any decision, record durability against a trailing zero-usage synthetic entry, two sessions in one home, a missing or unsafe `session_id`, an unwritable record, a raised mid-session block budget and long-dead record pruning, the full degradation matrix including valid-JSON non-object lines, main and secondmate primary scope, crewmate and secondmate-child worktree exclusion, the bounded block budget and its per-session keying, claude-only mode gating, the tracked `Stop` registration, and the one-owner and no-injection boundaries.
 [`verification/context-budget.md`](verification/context-budget.md) records the live measurements, the end-to-end block proof, and the secondmate and subagent characterization.
