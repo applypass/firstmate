@@ -57,7 +57,7 @@ That formula reproduces Claude Code's own accounting exactly rather than approxi
 Three correctness rules the measurement implements:
 
 - **Last, never max and never a sum.** Compaction resets the running total. A `max` implementation would latch the pre-compaction peak and disable the guard permanently after the first compaction, and a sum would report a multiple of the real total and fire the guard far too early.
-- **Exclude sidechains.** `isSidechain == true` marks subagent turns, which must never inflate the primary's measurement.
+- **Exclude sidechains.** `isSidechain == true` marks subagent turns, which must never inflate the primary's measurement. The exclusion is applied to the whole pass rather than to the token total alone, so it also covers the compaction tally below: a subagent's compaction is no evidence that the primary's context reset.
 - **Ignore zero-total entries.** Claude Code writes synthetic assistant entries - main chain, `model` of `<synthetic>`, all four usage fields `0` - whenever a turn ends abnormally, which is exactly when this hook fires. One is the last assistant entry at that moment, so counting it would read a long session as empty and that false zero would then look like proof the context had reset. The reader takes the last *positive* total instead.
 
 Taking the last entry also handles a multi-block assistant turn, with no separate dedupe step.
@@ -76,6 +76,7 @@ A measurement that comes back absent, non-numeric, or zero leaves the turn compl
 
 The same pass also counts compaction boundaries, which are `type == "system"` entries with `subtype == "compact_boundary"`.
 They are not part of the token measurement; they are the second proof of a genuine reset described under durable records below.
+A boundary marked `isSidechain` is excluded from that count like any other sidechain entry, because a boundary now clears a record and a subagent's compaction would otherwise re-arm a spent stand-down.
 
 ## Thresholds
 
@@ -97,7 +98,8 @@ For `FM_CONTEXT_BUDGET_CEILING` and `FM_CONTEXT_BUDGET_BLOCK_BUDGET`, a non-nume
 `FM_CONTEXT_BUDGET_HEADROOM` differs on purpose: only a non-numeric value falls back, and a zero is honoured.
 `FM_CONTEXT_BUDGET_HEADROOM=0` collapses the advisory point onto the ceiling, which simply removes the advisory stage and leaves the ceiling stage exactly as it was.
 
-Each notice prints once per episode and re-arms once the measurement drops back below the advisory point, the same shape `bin/fm-guard.sh` uses.
+Each notice prints once per episode and re-arms on either of the two genuine-reset proofs under durable records below: a positive measurement back below the advisory point, or a compaction boundary newer than the one the notice record was written with.
+Printing once per episode is the same shape `bin/fm-guard.sh` uses.
 The advisory notice and the warning-only ceiling notice are separate stages, so crossing from one into the other still produces exactly one new notice.
 
 ## Where the notices appear
@@ -212,7 +214,8 @@ Under the shipped default the guard never blocks at all, so the ceiling can neve
 
 With enforcement on, blocking is bounded and the stand-down is sticky.
 After `FM_CONTEXT_BUDGET_BLOCK_BUDGET` consecutive blocks in one session the guard allows the turn end with a visible `systemMessage` that still names the valve, then stays stood down for the rest of that session and says nothing further.
-Only a positive measurement back below the advisory point re-arms it, mirroring how the notices re-arm.
+Two things re-arm it, and only those two, exactly as they re-arm the notices: a positive measurement back below the advisory point, and a compaction boundary newer than the one the record was written with.
+A compaction is a genuine reset that does not change `session_id`, so leaving it out would strand a session that had actually cleared.
 
 That is deliberately different from the turn-end supervision guard in [`turnend-guard.md`](turnend-guard.md), which resets its block budget on every allow.
 The asymmetry is the point.
@@ -268,5 +271,5 @@ Firstmate measures and enforces this itself.
 
 ## Regression coverage
 
-`tests/fm-context-budget.test.sh` covers the three measurement correctness rules and the multi-block property that subsumes dedupe, the derived advisory and its per-episode dedup and re-arm, the absolute 180,000 default, the warning-only shipped default and the exact enforcement opt-in, the channel each notice lands on with stdout and stderr captured separately, the sticky stand-down and its advisory-level re-arm, the compaction-boundary re-arm and its clear-once property, the trip record's content, its size bound, and its inability to influence any decision, record durability against a trailing zero-usage synthetic entry, two sessions in one home, a missing or unsafe `session_id`, an unwritable record, a raised mid-session block budget and long-dead record pruning, the full degradation matrix including valid-JSON non-object lines, main and secondmate primary scope, crewmate and secondmate-child worktree exclusion, the bounded block budget and its per-session keying, claude-only mode gating, the tracked `Stop` registration, and the one-owner and no-injection boundaries.
+`tests/fm-context-budget.test.sh` covers the three measurement correctness rules and the multi-block property that subsumes dedupe, the derived advisory and its per-episode dedup and re-arm, the absolute 180,000 default, the warning-only shipped default and the exact enforcement opt-in, the channel each notice lands on with stdout and stderr captured separately, the sticky stand-down and its advisory-level re-arm, the compaction-boundary re-arm, its clear-once property, and its exclusion of a sidechain-marked boundary, the trip record's content, its size bound, and its inability to influence any decision, record durability against a trailing zero-usage synthetic entry, two sessions in one home, a missing or unsafe `session_id`, an unwritable record, a raised mid-session block budget and long-dead record pruning, the full degradation matrix including valid-JSON non-object lines, main and secondmate primary scope, crewmate and secondmate-child worktree exclusion, the bounded block budget and its per-session keying, claude-only mode gating, the tracked `Stop` registration, and the one-owner and no-injection boundaries.
 [`verification/context-budget.md`](verification/context-budget.md) records the live measurements, the end-to-end block proof, and the secondmate and subagent characterization.

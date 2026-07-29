@@ -183,6 +183,12 @@ Those `preTokens` and `postTokens` are real observed values across one boundary.
 The reader counts boundaries in the same streaming pass as the token measurement, so proving a reset costs no second read, and each record stores the count it was written with.
 A record is cleared only when the current count is strictly greater, so a boundary already accounted for cannot clear it twice, and a record whose own count is missing or unreadable is kept - the same retention bias as everywhere else in the file.
 
+Because a boundary now clears a record, the tally is part of the measurement and obeys the sidechain rule with it.
+The sidechain exclusion sits above the branch rather than inside the token arm, so a boundary carrying `isSidechain` counts for nothing.
+This is defensive rather than observed: Claude Code 2.1.220 writes subagent turns to a separate `<session-id>/subagents/agent-<id>.jsonl`, so no sidechain line of any kind reaches the parent transcript today, and none was found in any transcript on this host.
+It is guarded anyway because that layout is version-dependent, and the earlier feasibility scout got exactly this wrong by expecting sidechain entries inline.
+Left unguarded, an inflated tally would delete both records and put a spent stand-down back into service, which is the loss-path class the sticky record exists to close.
+
 ## A per-line jq error does not abort the streaming pass
 
 The streaming reader carries `select(type == "object")`, and the earlier records here and in the operator guide justified it as preventing a hard `jq` error from aborting the whole measurement.
@@ -345,6 +351,7 @@ Stated per change:
 | The trip record stays bounded | Yes. Against the previous script the 444 KB fixture is still 444 KB afterwards. |
 | The enforce opt-in row's `'1 '` value | Yes, but only against a mutated subject. Both the old and new rows pass against the shipped script. Loosening the enforce check to accept a trailing space makes the new row fail with `expected exit 0, got 2` while the old row still passes, which is the concrete demonstration that the old row was inert. |
 | Only a *new* boundary re-arms | No. The mechanism it bounds did not exist before, so it cannot fail against the previous script. It guards over-clearing in the new code. |
+| A sidechain boundary never re-arms a stand-down | Yes. Against the script as of `822781b` the row reports `a sidechain boundary must not re-arm the stand-down on turn 1: expected exit 0, got 2`, and it passes once the sidechain exclusion is hoisted above the branch. |
 | The trip record writes nothing below the advisory | No, for the same reason: there was no writer to be over-eager. |
 | The trip record cannot influence a decision | No. It pins a constraint on new code rather than repairing old behavior. |
 | Non-object transcript lines are skipped | No, and deliberately so. The reader is unchanged; the correction was to a wrong rationale and a vacuous assertion, and nothing observable distinguishes the clause's presence from its absence. |

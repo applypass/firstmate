@@ -95,8 +95,9 @@
 # exit 0, and a block count that cannot be written degrades to the visible
 # warning rather than to an unbounded block. When enforcement is on, blocking
 # is bounded by FM_CONTEXT_BUDGET_BLOCK_BUDGET and then STANDS DOWN STICKILY for
-# the rest of the session, re-arming only once the measurement drops back below
-# the advisory. That is deliberately unlike bin/fm-turnend-guard.sh, which resets
+# the rest of the session, re-arming only on one of the two genuine-reset proofs
+# above: a POSITIVE measurement back below the advisory, or a NEW compaction
+# boundary. That is deliberately unlike bin/fm-turnend-guard.sh, which resets
 # its budget on every allow: a blind turn end is a repairable condition and a
 # forced continuation is the repair prompt, whereas the context ceiling cannot
 # clear without a captain keystroke, so blocking again would only re-run the
@@ -204,6 +205,10 @@ TRANSCRIPT=$(printf '%s' "$PAYLOAD" | jq -r '.transcript_path // empty' 2>/dev/n
 #   real long session never measures 0, so a 0 here is a missing measurement
 #   masquerading as a reset, and taking the last POSITIVE total instead reports
 #   the session's real size.
+#   select(.isSidechain != true) sits ABOVE the branch, so rule 2 governs the
+#   WHOLE pass rather than only the token total. The boundary tally is part of
+#   that measurement now that a boundary CLEARS a record, and a subagent's
+#   compaction is no evidence at all that the primary's context reset.
 #   The compaction tally rides along in the same pass, so proving a genuine reset
 #   costs no second read of the transcript.
 measure_context() {
@@ -213,10 +218,10 @@ measure_context() {
       + (.cache_read_input_tokens // 0) + (.output_tokens // 0);
     (fromjson? // empty)
     | select(type == "object")
+    | select(.isSidechain != true)
     | if (.type == "system" and .subtype == "compact_boundary") then "c"
       else
-        select((.isSidechain != true)
-          and (.type == "assistant")
+        select((.type == "assistant")
           and ((.message.usage | type) == "object"))
         | .message.usage
         | usage_total

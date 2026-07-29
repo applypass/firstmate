@@ -97,8 +97,8 @@ synthetic_zero_line() {
 
 # The marker Claude Code writes across a compaction. Real observed values.
 compact_boundary_line() {
-  printf '{"type":"system","subtype":"compact_boundary","compactMetadata":{"preTokens":%s,"postTokens":%s}}\n' \
-    "${1:-318961}" "${2:-18947}"
+  printf '{"type":"system","subtype":"compact_boundary","isSidechain":%s,"compactMetadata":{"preTokens":%s,"postTokens":%s}}\n' \
+    "${3:-false}" "${1:-318961}" "${2:-18947}"
 }
 
 stop_payload() {
@@ -830,6 +830,37 @@ test_an_already_recorded_compaction_boundary_does_not_rearm_again() {
   pass "fm-context-budget: only a NEW compaction boundary re-arms, never one already recorded"
 }
 
+# Rule 2 - exclude sidechains - governs the WHOLE measurement pass, and the
+# boundary tally became part of that pass the moment a boundary started clearing
+# records. A subagent-marked boundary must therefore count for nothing: were it
+# tallied, the inflated count would delete both records and put a spent
+# stand-down back into service, reopening exactly the oscillation the sticky
+# record exists to end.
+test_a_sidechain_compaction_boundary_never_rearms_a_stand_down() {
+  local dir transcript payload out status i
+  dir=$(make_primary_dir "$TMP_ROOT/compact-sidechain")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 400000
+  payload=$(stop_payload "$transcript" sess-compact-sidechain)
+  run_budget_enforcing "$dir" "$payload" \
+    FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=1 >/dev/null; status=$?
+  expect_code 2 "$status" "the single block must be spent first"
+  out=$(run_budget_enforcing "$dir" "$payload" \
+    FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+  expect_code 0 "$status" "the stand-down must be recorded"
+  assert_contains "$out" "stands down" "the stand-down must announce itself once"
+  # A subagent's own compaction boundary, reaching the parent transcript. The
+  # primary's context did not reset, so nothing here is evidence of one.
+  compact_boundary_line 400000 210000 true >> "$transcript"
+  for i in 1 2 3; do
+    out=$(run_budget_enforcing "$dir" "$payload" \
+      FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
+    expect_code 0 "$status" "a sidechain boundary must not re-arm the stand-down on turn $i"
+    [ -z "$out" ] || fail "a sidechain compaction boundary re-armed the stand-down on turn $i: $out"
+  done
+  pass "fm-context-budget: a sidechain compaction boundary never re-arms a stand-down"
+}
+
 # --- The trip record: write-only observation ----------------------------------
 # The shipped default's only rendered output is a systemMessage, and rendering is
 # not something this repo controls: a controlled experiment confirmed 30
@@ -1297,6 +1328,7 @@ test_raising_the_block_budget_cannot_rearm_a_spent_stand_down
 test_long_dead_records_are_pruned_and_recent_ones_kept
 test_a_new_compaction_boundary_rearms_a_spent_stand_down
 test_an_already_recorded_compaction_boundary_does_not_rearm_again
+test_a_sidechain_compaction_boundary_never_rearms_a_stand_down
 test_trip_record_captures_each_stage_firing
 test_trip_record_is_not_written_below_the_advisory
 test_trip_record_stays_bounded
