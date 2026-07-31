@@ -409,7 +409,9 @@ Also the detection label used when firstmate runs as the **Cursor IDE chat** pri
 
 **Detection hazard:** Cursor IDE tool wrappers embed prior command text in `zsh -c` args. Never treat a bare `cursor-agent` substring in args as harness identity — match CLI basename or IDE process identity only (see `bin/fm-session-lock-lib.sh`).
 
-**Primary turn-end / pre-arm / session-start nudge:** not wired for cursor-agent yet. Cursor IDE chat primaries use the unknown-harness supervision fallback until a verified wake adapter exists. Crew dispatch and lock ownership are the supported surfaces for this adapter today.
+**Primary turn-end / pre-arm / session-start nudge:** no Cursor-native Stop hook or session-start nudge is verified yet.
+Named supervision recipe: `docs/supervision-protocols/cursor-agent.md` — background-notify via sole `bin/fm-watch-arm.sh` Shell call; Cursor wakes on shell-task completion.
+Crew dispatch and lock ownership remain supported; turn-end is the live arm, not a Stop-hook backstop.
 
 **Skill invocation:** natural language (e.g. ask the agent to run no-mistakes); no verified slash-form yet.
 
