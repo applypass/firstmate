@@ -1519,14 +1519,16 @@ fi
 spawn_send_key "$T" Enter
 if [ "$HARNESS" = cursor-agent ]; then
   # First launch in a worktree shows "Workspace Trust Required" with [a] Trust /
-  # [q] Quit. Already-trusted worktrees skip the dialog. Poll briefly and press
+  # [q] Quit. Already-trusted worktrees skip the dialog. Poll briefly and type
   # a only when the trust banner is visible (verified 2026-07-31).
+  # Use literal text send, not spawn_send_key: backends' named-key path is for
+  # Enter/Escape/C-c; the trust UI accepts the letter key as typed input.
   cursor_trust_deadline=$((SECONDS + 15))
   while [ "$SECONDS" -lt "$cursor_trust_deadline" ]; do
     cursor_tail=$(fm_backend_capture "$BACKEND" "$T" 40 "$W" 2>/dev/null || true)
     case "$cursor_tail" in
       *'Workspace Trust Required'*|*'Trust this workspace'*)
-        spawn_send_key "$T" a
+        spawn_send_literal "$T" "a"
         sleep 0.5
         break
         ;;

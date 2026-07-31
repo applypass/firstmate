@@ -22,7 +22,7 @@ When this session owns supervision and away mode is not active:
 8. Waiting is silent.
 9. Never use shell `&` for firstmate supervision.
 10. Never bundle the arm onto another command, never truncate its output through a pipe, and never prefix it with env assignments outside the X-mode source form above.
-    Cursor / firstmate PreToolUse seatbelts deny those anti-patterns (`bin/fm-arm-pretool-check.sh`).
+    The shared check script is `bin/fm-arm-pretool-check.sh`; no Cursor-native PreToolUse hook is verified yet, so this primary relies on protocol discipline rather than an automatic deny.
 
 When you see a shell-task completion or system notification for the arm:
 1. Run `bin/fm-wake-drain.sh` first.
