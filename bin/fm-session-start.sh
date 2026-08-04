@@ -35,6 +35,11 @@
 #                       also run only when locked.
 #   3. wake-drain     - mutates the durable wake queue, so it also only runs
 #                       when locked.
+#   3b. awaiting the captain - the short list of things held for him, the
+#                       one-line pointer to everything he has already answered,
+#                       and any released handover record. Early because the
+#                       items that were skipped were skipped for being late in
+#                       this digest; read-only, so it runs in both modes.
 #   4. context digest - data/projects.md, data/secondmates.md, data/captain.md,
 #                       data/captain-shared.md, data/learnings.md: read-only,
 #                       always safe, always runs.
@@ -305,6 +310,30 @@ else
   fi
 fi
 
+# --- 3b. awaiting the captain -------------------------------------------------
+# Early and short on purpose: the captain's own rules and two questions he had
+# already answered were skipped because they sat hundreds of lines into this
+# digest. bin/fm-awaiting-captain.sh owns what qualifies as waiting on him, the
+# line caps, and the one-line pointer to everything already answered; it reads
+# only local records, so it is safe and cheap in both locked and read-only mode.
+subsection "AWAITING THE CAPTAIN"
+AWAITING_OUT=$("$SCRIPT_DIR/fm-awaiting-captain.sh" 2>&1)
+if [ -n "$AWAITING_OUT" ]; then
+  printf '%s\n' "$AWAITING_OUT"
+else
+  printf '(nothing recorded as waiting on the captain)\n'
+fi
+
+# A released handover is the one thing a replacement must read before it acts, so
+# print the record itself here rather than a pointer to it.
+if "$SCRIPT_DIR/fm-handover.sh" pending 2>/dev/null; then
+  subsection "HANDOVER FROM THE PREVIOUS SESSION"
+  "$SCRIPT_DIR/fm-handover.sh" show 2>&1 || true
+  printf '\nThis record is ADVISORY. Reconcile every line against the durable records it\n'
+  printf 'names and against the fleet digest below; those win on any disagreement.\n'
+  printf 'Run bin/fm-handover.sh consume once you have picked it up.\n'
+fi
+
 # --- 4. supervision operating instructions ----------------------------------
 AFK_PRESENT=0
 [ -e "$STATE/.afk" ] && AFK_PRESENT=1
@@ -431,8 +460,9 @@ Do NOT bulk-read data/backlog.md now either: the compact identity/metadata
 listing was just printed with a pointer for targeted full-body follow-up.
 Do NOT bulk-read state/*.status now either: their bounded tails were just
 printed with full log paths for targeted follow-up when older wake-event
-history is actually needed. Re-reading everything defeats the entire point
-of this command. Re-read a file only if this digest flagged it ABSENT (then
+history is actually needed. Do NOT re-read data/handover.md if a handover was
+printed above - it was printed in full. Re-reading everything defeats the
+entire point of this command. Re-read a file only if this digest flagged it ABSENT (then
 rebuild or create it per AGENTS.md), its contents looked unparseable/corrupt,
 or an individual full status log is needed for older wake-event history.
 EOF

@@ -5,6 +5,9 @@ The predicate lives in `bin/fm-turnend-guard.sh`.
 Primary scope lives in `bin/fm-primary-scope-lib.sh`, shared with the native session-start nudge in [`sessionstart-nudge.md`](sessionstart-nudge.md).
 Harness hook files adapt each enabled primary harness integration's turn-end mechanism to that shared predicate.
 
+A sibling `Stop` hook rides the same event and the same shared scope to stamp the helm activity marker and report a due session handover.
+Its separate owner is [`session-handover.md`](session-handover.md); this guard's thresholds and loop safety say nothing about it, and that hook never blocks a turn end.
+
 Related PreToolUse guards deny unsafe commands before execution rather than detecting a blind turn end afterward.
 Their separate owners are [`arm-pretool-check.md`](arm-pretool-check.md), [`cd-guard.md`](cd-guard.md), and [`subagent-guard.md`](subagent-guard.md).
 Do not infer this guard's scope, loop safety, or compatibility tradeoffs for those guards.
