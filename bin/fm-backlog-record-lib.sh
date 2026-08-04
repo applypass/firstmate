@@ -15,8 +15,19 @@
 # hold is modelled separately as current_role "held" and is not waiting on
 # anyone yet.
 #
+# Reading a field out of a meta file is NOT one of this lib's contracts:
+# fm_meta_get in bin/fm-backend.sh owns it, and its last-wins tie-break matters
+# because meta files are append-oriented. That owner is pulled in below when a
+# caller has not already sourced it, rather than mirrored here.
+#
 # Usage: . bin/fm-backlog-record-lib.sh
 # Requires jq. The caller checks for it and degrades on its own terms.
+
+if ! declare -f fm_meta_get >/dev/null 2>&1; then
+  # shellcheck source=bin/fm-backend.sh
+  # shellcheck disable=SC1091
+  . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-backend.sh"
+fi
 
 fm_backlog_records_json() {  # [<backlog-path>] - defaults to this home's $BACKLOG
   local backlog=${1:-${BACKLOG:-}}
@@ -182,7 +193,7 @@ fm_first_pr_url_in_file() {  # <file>
 # pr_source. A local read only: this never asks a forge anything.
 fm_recorded_pr() {
   local meta=$1 status_log=$2 pr
-  pr=$(sed -n 's/^pr=//p' "$meta" 2>/dev/null | head -1)
+  pr=$(fm_meta_get "$meta" pr)
   if [ -n "$pr" ]; then
     printf '%s\t%s\n' "$pr" meta
     return 0

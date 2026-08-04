@@ -523,6 +523,28 @@ test_awaiting_block_lists_held_decisions_and_caps_them() {
   pass "fm-awaiting-captain: lists only what waits on the captain, capped, never silently truncated"
 }
 
+# A read that failed must never render as an empty list: "(none)" reads as
+# "nothing is waiting on you", which is the failure this whole block exists to
+# prevent, and the cap protects the same property at the other end.
+test_awaiting_block_says_so_when_the_record_model_cannot_be_read() {
+  local home fakebin out
+  home=$(make_home "$TMP_ROOT/awaiting-unreadable")
+  fakebin=$(fm_fakebin "$TMP_ROOT/awaiting-unreadable")
+  printf -- '- [ ] fe-signin - Sign in with a code (repo: fe) (kind: captain) (hold: grill first) (hold-kind: captain)\n' \
+    >> "$home/data/backlog.md"
+  fm_write_meta "$home/state/beta-task.meta" "window=fm:beta-task" "pr=https://github.com/x/y/pull/3"
+  cat > "$fakebin/jq" <<'SH'
+#!/usr/bin/env bash
+echo "jq: broken on this host" >&2
+exit 5
+SH
+  chmod +x "$fakebin/jq"
+  out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" 2>&1)
+  assert_contains "$out" "held decisions unread" "a failed read must say so, never render as an empty list"
+  assert_not_contains "$out" "(none)" "a failed read must not be reported as nothing waiting"
+  pass "fm-awaiting-captain: an unreadable record model is reported, never shown as nothing waiting"
+}
+
 test_awaiting_block_surfaces_a_waiting_handover() {
   local home fakebin holder out
   home=$(make_home "$TMP_ROOT/awaiting-handover")
@@ -578,6 +600,7 @@ run_all() {
   test_decided_record_keeps_one_answer_per_key
   test_decided_search_excludes_the_open_items_view
   test_awaiting_block_lists_held_decisions_and_caps_them
+  test_awaiting_block_says_so_when_the_record_model_cannot_be_read
   test_awaiting_block_surfaces_a_waiting_handover
 }
 

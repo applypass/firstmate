@@ -89,10 +89,23 @@ if [ ! -f "$DATA/backlog.md" ]; then
 elif ! command -v jq >/dev/null 2>&1; then
   printf '(held decisions unread: jq is not installed, so the backlog record model cannot be read)\n'
 else
-  fm_backlog_records_json "$DATA/backlog.md" 2>/dev/null \
-    | jq -r '.records[]? | select(.captain_actionable == true)
-             | "- \(.id) - \(.title // "")"' 2>/dev/null \
-    | print_capped "held decision(s)"
+  # Each stage is run and checked on its own, because a failed read that renders
+  # as an empty list is exactly the "nothing is waiting" lie this block exists to
+  # prevent. A command substitution around the whole pipeline would lose the
+  # per-stage status, so the stages are separate.
+  HELD_UNREAD=0
+  RECORDS_JSON=$(fm_backlog_records_json "$DATA/backlog.md" 2>&1) || HELD_UNREAD=1
+  HELD=''
+  if [ "$HELD_UNREAD" -eq 0 ]; then
+    HELD=$(printf '%s\n' "$RECORDS_JSON" \
+      | jq -r '.records[]? | select(.captain_actionable == true)
+               | "- \(.id) - \(.title // "")"' 2>&1) || HELD_UNREAD=1
+  fi
+  if [ "$HELD_UNREAD" -eq 1 ]; then
+    printf '(held decisions unread: the backlog record model could not be read, so this list is NOT empty - it is unknown)\n'
+  else
+    printf '%s\n' "$HELD" | print_capped "held decision(s)"
+  fi
 fi
 
 # --- work recorded as waiting for the captain's merge -----------------------

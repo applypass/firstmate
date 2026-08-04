@@ -679,6 +679,12 @@ families_for_changed_path() {
     bin/fm-bearings-snapshot.sh|bin/fm-fleet-snapshot.sh|bin/fm-fleet-view.sh)
       printf '%s\n' snapshot-bearings
       ;;
+    # The canonical backlog record model: the session-start awaiting block reads
+    # it directly, and the snapshot and bearings projections are built on it.
+    bin/fm-backlog-record-lib.sh)
+      printf '%s\n' session-bootstrap
+      printf '%s\n' snapshot-bearings
+      ;;
     bin/fm-install-herdr.sh|bin/fm-install-treehouse.sh|bin/fm-herdr-ci-cleanup.sh)
       printf '%s\n' pure-contract-unit
       # Pin or cleanup changes also select the real-Herdr family so the required
