@@ -189,14 +189,27 @@ fm_first_pr_url_in_file() {  # <file>
 
 # fm_recorded_pr <meta> <status-log>: the pull request recorded LOCALLY for a
 # task, printed as "<url><TAB><source>" where source is meta or status_event.
-# Returns non-zero when nothing is recorded, which is the snapshot's absent
-# pr_source. A local read only: this never asks a forge anything.
+# A local read only: this never asks a forge anything.
+#
+# The two ways of finding nothing are DIFFERENT and get different exit statuses,
+# because a caller that collapses them reports an unreadable record as an absent
+# one, and "no pull request is waiting" is not something an unread file can say:
+#   1 - every source was readable and none records a pull request, which is the
+#       snapshot's absent pr_source.
+#   2 - a source this answer depends on exists but could not be read, so the
+#       answer is unknown rather than absent.
 fm_recorded_pr() {
   local meta=$1 status_log=$2 pr
+  if [ -e "$meta" ] && [ ! -r "$meta" ]; then
+    return 2
+  fi
   pr=$(fm_meta_get "$meta" pr)
   if [ -n "$pr" ]; then
     printf '%s\t%s\n' "$pr" meta
     return 0
+  fi
+  if [ -e "$status_log" ] && [ ! -r "$status_log" ]; then
+    return 2
   fi
   pr=$(fm_first_pr_url_in_file "$status_log" 2>/dev/null || true)
   if [ -n "$pr" ]; then

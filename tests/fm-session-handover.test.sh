@@ -545,6 +545,22 @@ SH
   pass "fm-awaiting-captain: an unreadable record model is reported, never shown as nothing waiting"
 }
 
+# The same property one list down: a task whose records cannot be read has an
+# UNKNOWN pull-request state, and reporting that as "no pull request" is the
+# same lie. bin/fm-pr-check.sh writes metas at 0600, so an unreadable-but-present
+# meta is a real filesystem state rather than a hypothetical one.
+test_awaiting_block_says_so_when_a_task_meta_cannot_be_read() {
+  local home out
+  home=$(make_home "$TMP_ROOT/awaiting-unreadable-meta")
+  fm_write_meta "$home/state/locked-task.meta" "window=fm:locked-task" "pr=https://github.com/x/y/pull/7"
+  chmod 000 "$home/state/locked-task.meta"
+  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" 2>&1)
+  chmod 600 "$home/state/locked-task.meta"
+  assert_contains "$out" "locked-task: UNREAD" "an unreadable task record must be named, not dropped"
+  assert_contains "$out" "unknown, not no" "the marker must say the answer is unknown rather than absent"
+  pass "fm-awaiting-captain: a task whose records cannot be read is named, never silently dropped"
+}
+
 test_awaiting_block_surfaces_a_waiting_handover() {
   local home fakebin holder out
   home=$(make_home "$TMP_ROOT/awaiting-handover")
@@ -601,6 +617,7 @@ run_all() {
   test_decided_search_excludes_the_open_items_view
   test_awaiting_block_lists_held_decisions_and_caps_them
   test_awaiting_block_says_so_when_the_record_model_cannot_be_read
+  test_awaiting_block_says_so_when_a_task_meta_cannot_be_read
   test_awaiting_block_surfaces_a_waiting_handover
 }
 

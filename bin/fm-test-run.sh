@@ -638,9 +638,14 @@ families_for_changed_path() {
       printf '%s\n' backend-dispatch
       printf '%s\n' orca
       ;;
+    # fm_meta_get lives here, and both the session-start awaiting block and the
+    # canonical backlog record model read task metadata through it, so a change
+    # here selects those two families as well.
     bin/fm-backend.sh|bin/fm-backend-hometag-lib.sh)
       printf '%s\n' backend-dispatch
       printf '%s\n' real-herdr-gated
+      printf '%s\n' session-bootstrap
+      printf '%s\n' snapshot-bearings
       ;;
     bin/fm-watch*|bin/fm-wake*|\
     bin/fm-classify-lib.sh|bin/fm-daemon*|bin/fm-turnend-guard*|bin/fm-guard.sh)

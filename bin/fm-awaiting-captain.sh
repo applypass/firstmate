@@ -16,6 +16,14 @@
 # Silent truncation would read as "nothing else is waiting", which is the exact
 # failure this block exists to prevent.
 #
+# A FAILED READ IS NEVER RENDERED AS ABSENCE, and that is a property of this
+# WHOLE FILE, not of any one list. Every read here - the backlog record model,
+# each task's records, the answered-decision count, the pending-handover test -
+# either produces its answer or prints an explicit marker saying the answer is
+# unknown. A missing tool, an unreadable file, or a helper that failed must never
+# come out looking the same as "nothing is waiting on you". Keep that property
+# when adding anything to this file.
+#
 # ONE OWNER PER CONTRACT: what counts as a captain hold waiting on the captain,
 # and where a task's pull request is recorded, are both defined once in
 # bin/fm-backlog-record-lib.sh and consumed here. This file never restates them.
@@ -70,7 +78,12 @@ print_capped() {
 # section, and a second title there would just read as a duplicate.
 #
 # --- a handover the captain already triggered -------------------------------
-if "$SCRIPT_DIR/fm-handover.sh" pending 2>/dev/null; then
+"$SCRIPT_DIR/fm-handover.sh" pending 2>/dev/null
+HANDOVER_STATUS=$?
+if [ "$HANDOVER_STATUS" -gt 1 ]; then
+  printf 'HANDOVER STATE UNKNOWN: bin/fm-handover.sh pending failed (status %s), so this session\n' "$HANDOVER_STATUS"
+  printf '  cannot tell whether a previous session left a handover. Run it by hand before acting.\n'
+elif [ "$HANDOVER_STATUS" -eq 0 ]; then
   if [ "$HANDOVER_PRINTED_BELOW" -eq 1 ]; then
     printf 'HANDOVER WAITING: a previous session prepared and released one. It is printed in full\n'
     printf '  below, so do not re-read the record. Reconcile it against the durable records it\n'
@@ -93,13 +106,16 @@ else
   # as an empty list is exactly the "nothing is waiting" lie this block exists to
   # prevent. A command substitution around the whole pipeline would lose the
   # per-stage status, so the stages are separate.
+  # Stderr is kept OUT of the captured value: a warning on a readable backlog
+  # would otherwise be parsed as part of the JSON and report a file that was
+  # read fine as unreadable. The exit status is the signal, not the noise.
   HELD_UNREAD=0
-  RECORDS_JSON=$(fm_backlog_records_json "$DATA/backlog.md" 2>&1) || HELD_UNREAD=1
+  RECORDS_JSON=$(fm_backlog_records_json "$DATA/backlog.md" 2>/dev/null) || HELD_UNREAD=1
   HELD=''
   if [ "$HELD_UNREAD" -eq 0 ]; then
     HELD=$(printf '%s\n' "$RECORDS_JSON" \
       | jq -r '.records[]? | select(.captain_actionable == true)
-               | "- \(.id) - \(.title // "")"' 2>&1) || HELD_UNREAD=1
+               | "- \(.id) - \(.title // "")"' 2>/dev/null) || HELD_UNREAD=1
   fi
   if [ "$HELD_UNREAD" -eq 1 ]; then
     printf '(held decisions unread: the backlog record model could not be read, so this list is NOT empty - it is unknown)\n'
@@ -116,14 +132,17 @@ printf 'Recorded pull requests waiting to land:\n'
   for meta in "$STATE"/*.meta; do
     [ -f "$meta" ] || continue
     id=$(basename "$meta" .meta)
-    record=$(fm_recorded_pr "$meta" "$STATE/$id.status") || continue
-    printf -- '- %s (%s, recorded in %s)\n' "${record%%	*}" "$id" "${record#*	}"
+    record=$(fm_recorded_pr "$meta" "$STATE/$id.status")
+    case $? in
+      0) printf -- '- %s (%s, recorded in %s)\n' "${record%%	*}" "$id" "${record#*	}" ;;
+      2) printf -- '- %s: UNREAD - its records could not be read, so whether it has a pull request waiting is unknown, not no\n' "$id" ;;
+    esac
   done
 } | print_capped "recorded pull request(s)"
 
 # --- the one line about what is already answered ----------------------------
 "$SCRIPT_DIR/fm-decided.sh" count 2>/dev/null \
-  || printf 'Search before escalating anything: bin/fm-decided.sh search <terms>\n'
+  || printf 'The answered-decision count could not be read, so treat it as unknown. Search before escalating anything: bin/fm-decided.sh search <terms>\n'
 
 # Standing preferences are not decisions and are never summarized here; this is
 # only the early pointer to the file that holds them, which prints in full
