@@ -83,14 +83,19 @@ A forked or resumed background window stays alive indefinitely while doing nothi
 
 `bin/fm-helm-lib.sh` owns the replacement decision, and it requires **two independent proofs**:
 
-- **Silence.** The newest of three mtimes: the turn-end activity marker `state/.helm-activity`, the transcript that marker names, and the session lock itself. The transcript grows during a turn, so a holder working through one long turn reads as busy rather than idle. The lock's own mtime is the baseline for a holder that has not ended a turn yet. `FM_HELM_IDLE_TAKEOVER` sets the required silence and defaults to 1800 seconds.
+- **Silence.** The newer of two mtimes, and nothing else: the turn-end activity marker `state/.helm-activity`, which must be readable, non-empty, and stamped with this holder's own pid, and the transcript that marker names. The transcript grows during a turn, so a holder working through one long turn reads as busy rather than idle. `FM_HELM_IDLE_TAKEOVER` sets the required silence and defaults to 1800 seconds.
 - **Unattended.** The holder has no controlling terminal at all, read from `ps -o tty=`.
 
-A timer alone is never sufficient.
-An attended holder keeps the helm however long it has been quiet, and any unreadable input - no marker and no lock mtime, or a terminal `ps` will not report - refuses rather than proceeding.
+The session lock's own mtime is **not** evidence of anything.
+`bin/fm-lock.sh` writes `state/.lock` once when a session claims the helm and nothing ever refreshes it, so its age is the session's age rather than its quietness: a live, busy holder measured as 7200 seconds silent through it.
+Measuring silence that way over-estimates it, and over-estimating silence is the direction that permits a takeover, so the lock was dropped as a source entirely.
 
-The marker is stamped by the `claude` pulse only, so on a primary running another harness the silence measurement falls back to the session lock's own mtime.
-That is coarser but not unsafe: it can only over-estimate silence, and the unattended proof is still required, so an attended session on any harness keeps the helm.
+A timer alone is never sufficient.
+An attended holder keeps the helm however long it has been quiet, and every unprovable input refuses rather than proceeding: a terminal `ps` will not report, and equally a holder with no pid-matched marker, whose silence is simply unmeasurable.
+The rule is fail-closed by design - no proof of work means no takeover - and the accepted cost is that a holder which cannot prove it is working keeps the helm until someone clears it by hand.
+
+Only the `claude` pulse stamps the marker today, so on a primary running codex, opencode, pi, grok, or kimi an automatic takeover never happens at all: the acquisition prints the refusal, and the operator's path is `bin/fm-lock.sh clear --pid <holder>`.
+Giving those harnesses the stamp is a separate follow-up slice, not a gap being ignored.
 
 The tradeoff in using "no controlling terminal" as the unattended proof: a session the captain is using owns a terminal device, while a session its own harness forked inherits none.
 A named terminal always means refuse, even when the process-group flag suggests the session is in the background, because handing the helm away from a session someone is using is worse than one extra refusal.
@@ -109,6 +114,8 @@ The fix is not more text earlier.
 
 `bin/fm-awaiting-captain.sh` prints a short block near the top of the digest: decisions held for the captain, work recorded as waiting to land, any released handover, and one line pointing at the captain's standing preferences.
 It reads only local records - no network, no forge calls - so it stays cheap enough that nobody skips it.
+What counts as a decision held for the captain, and where a task's pull request is recorded, are the canonical snapshot definitions shared through `bin/fm-backlog-record-lib.sh`; the block renders them and never re-derives them, so a hold that is blocked or already in flight is not listed as waiting.
+When the digest prints a released handover in full, the block points at what was printed instead of telling the reader to open the record.
 Each list has a hard cap (`FM_AWAITING_MAX`, default 20) and says how many entries it dropped, because a silently truncated list reads as "nothing else is waiting".
 
 Answered decisions are **searched, not preloaded**.

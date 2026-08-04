@@ -287,9 +287,19 @@ test_prepared_record_is_advisory_and_carries_the_unrecorded_facts() {
   assert_grep "- record data/backlog.md" "$record" "the record must point at the durable queue"
   assert_grep "- record data/captain.md" "$record" "the record must point at the captain's own rules"
   assert_grep "fm-session-start.sh" "$record" "the record must send the replacement to fresh fleet state"
-  case "$record" in
-    /tmp/*|/var/folders/*/T/*) fail "the record must never live in a temp directory: $record" ;;
-  esac
+  # The record must live in the home, never in the OS temp dir: a temp clone
+  # vanished here once and read as data loss. The whole fixture is itself under a
+  # temp root, so the proof is a canary TMPDIR that must stay empty rather than a
+  # pattern match on the record's path.
+  local canary
+  canary="$TMP_ROOT/prep-record-tmpdir"
+  mkdir -p "$canary"
+  TMPDIR="$canary" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare \
+    --next "merge the open PR once its checks pass" \
+    --worker alpha-task="halfway through the second review round" >/dev/null 2>&1 \
+    || fail "prepare must still succeed with TMPDIR redirected"
+  [ -z "$(find "$canary" -mindepth 1 2>/dev/null)" ] \
+    || fail "the record must never live in a temp directory: prepare wrote into $canary"
   assert_grep "prepared=" "$home/state/.handover" "prepare must record that a handover is prepared"
   pass "fm-handover prepare: writes an advisory, durable record carrying only the unrecorded facts"
 }
@@ -473,26 +483,38 @@ test_decided_search_excludes_the_open_items_view() {
 test_awaiting_block_lists_held_decisions_and_caps_them() {
   local home out i
   home=$(make_home "$TMP_ROOT/awaiting")
+  # The canonical record model (bin/fm-backlog-record-lib.sh) decides this:
+  # a hold waits on the captain only when it is QUEUED, kind captain, hold-kind
+  # captain, has a reason, and has no unresolved blocker.
   {
-    printf -- '- [ ] fe-signin - Sign in with a code (repo: fe) (kind: ship) (hold: captain grill first) (hold-kind: captain)\n'
+    printf -- '- [ ] inflight-hold - Being worked already (repo: fe) (kind: captain) (hold: mid-flight) (hold-kind: captain)\n'
     printf -- '- [ ] busy-task - Something under way (repo: fe) (kind: ship)\n'
-    printf '## Done\n- [x] old-thing - answered long ago (hold-kind: captain)\n'
+    printf '## Queued\n'
+    printf -- '- [ ] fe-signin - Sign in with a code (repo: fe) (kind: captain) (hold: captain grill first) (hold-kind: captain)\n'
+    printf -- '- [ ] blocked-hold - Waiting on other work (repo: fe) (kind: captain) (hold: needs the migration) (hold-kind: captain) blocked-by: busy-task\n'
+    printf '## Done\n- [x] old-thing - answered long ago (kind: captain) (hold: settled) (hold-kind: captain)\n'
   } >> "$home/data/backlog.md"
   fm_write_meta "$home/state/busy-task.meta" "window=fm:busy-task" "pr=https://github.com/x/y/pull/9"
+  fm_write_meta "$home/state/event-task.meta" "window=fm:event-task"
+  printf 'pr opened: https://github.com/x/y/pull/11\n' > "$home/state/event-task.status"
   out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" 2>&1)
   assert_contains "$out" "Decisions held for you:" "the block must name what waits on the captain"
   assert_contains "$out" "fe-signin - Sign in with a code" "a decision held for the captain must be listed"
   assert_not_contains "$out" "busy-task - Something under way" "ordinary work under way is not waiting on the captain"
+  assert_not_contains "$out" "inflight-hold" "a hold already being worked is not waiting on the captain"
+  assert_not_contains "$out" "blocked-hold" "a hold whose blocker is still open is not actionable yet"
   assert_not_contains "$out" "old-thing" "a finished item must not be listed as waiting"
   assert_contains "$out" "https://github.com/x/y/pull/9" "work recorded as waiting to land must be listed"
+  assert_contains "$out" "https://github.com/x/y/pull/11" \
+    "a pull request recorded only in a status event must be listed too"
   assert_contains "$out" "Search before escalating anything" "the block must carry the one-line search instruction"
   assert_contains "$out" "data/captain.md" "the block must point at the captain's standing preferences early"
   # Rebuild the backlog in order, so the extra held items land in a live section
   # rather than after the Done heading.
-  printf '# Backlog\n\n## In flight\n' > "$home/data/backlog.md"
+  printf '# Backlog\n\n## Queued\n' > "$home/data/backlog.md"
   i=0
   while [ "$i" -lt 6 ]; do
-    printf -- '- [ ] held-%s - held item %s (repo: fe) (hold: waiting) (hold-kind: captain)\n' "$i" "$i" >> "$home/data/backlog.md"
+    printf -- '- [ ] held-%s - held item %s (repo: fe) (kind: captain) (hold: waiting) (hold-kind: captain)\n' "$i" "$i" >> "$home/data/backlog.md"
     i=$((i + 1))
   done
   out=$(FM_AWAITING_MAX=3 FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" 2>&1)

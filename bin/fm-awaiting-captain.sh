@@ -16,7 +16,13 @@
 # Silent truncation would read as "nothing else is waiting", which is the exact
 # failure this block exists to prevent.
 #
-# Usage: fm-awaiting-captain.sh
+# ONE OWNER PER CONTRACT: what counts as a captain hold waiting on the captain,
+# and where a task's pull request is recorded, are both defined once in
+# bin/fm-backlog-record-lib.sh and consumed here. This file never restates them.
+#
+# Usage: fm-awaiting-captain.sh [--handover-printed-below]
+#   --handover-printed-below: the caller prints the handover record itself, so
+#     point at what it printed instead of telling the reader to open the file.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,10 +34,16 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 MAX=${FM_AWAITING_MAX:-20}
 case "$MAX" in ''|*[!0-9]*|0) MAX=20 ;; esac
 
+# shellcheck source=bin/fm-backlog-record-lib.sh
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/fm-backlog-record-lib.sh"
+
+HANDOVER_PRINTED_BELOW=0
 case "${1:-}" in
   -h|--help) sed -n '2,${/^set -u/q;p;}' "${BASH_SOURCE[0]}"; exit 0 ;;
+  --handover-printed-below) HANDOVER_PRINTED_BELOW=1 ;;
   '') : ;;
-  *) echo "usage: $(basename "$0")" >&2; exit 2 ;;
+  *) echo "usage: $(basename "$0") [--handover-printed-below]" >&2; exit 2 ;;
 esac
 
 # print_capped <label>: read lines from stdin, print at most MAX of them, and
@@ -59,39 +71,40 @@ print_capped() {
 #
 # --- a handover the captain already triggered -------------------------------
 if "$SCRIPT_DIR/fm-handover.sh" pending 2>/dev/null; then
-  printf 'HANDOVER WAITING: a previous session prepared and released one. Read data/handover.md,\n'
-  printf '  reconcile it against the durable records it points at, then run bin/fm-handover.sh consume.\n'
+  if [ "$HANDOVER_PRINTED_BELOW" -eq 1 ]; then
+    printf 'HANDOVER WAITING: a previous session prepared and released one. It is printed in full\n'
+    printf '  below, so do not re-read the record. Reconcile it against the durable records it\n'
+    printf '  points at, then run bin/fm-handover.sh consume.\n'
+  else
+    printf 'HANDOVER WAITING: a previous session prepared and released one. Read data/handover.md,\n'
+    printf '  reconcile it against the durable records it points at, then run bin/fm-handover.sh consume.\n'
+  fi
 fi
 
 # --- decisions held for the captain -----------------------------------------
+# bin/fm-backlog-record-lib.sh decides what is actionable; this only renders it.
 printf 'Decisions held for you:\n'
-if [ -f "$DATA/backlog.md" ]; then
-  awk '
-    /^## Done/ { done_section = 1 }
-    done_section { next }
-    /^- \[ \]/ && /hold-kind: captain/ {
-      line = $0
-      id = line
-      sub(/^- \[ \] /, "", id)
-      sub(/ .*$/, "", id)
-      title = line
-      sub(/^- \[ \] [^ ]* - /, "", title)
-      sub(/ \(repo:.*$/, "", title)
-      printf "- %s - %s\n", id, title
-    }
-  ' "$DATA/backlog.md" | print_capped "held decision(s)"
-else
+if [ ! -f "$DATA/backlog.md" ]; then
   printf '(no backlog record)\n'
+elif ! command -v jq >/dev/null 2>&1; then
+  printf '(held decisions unread: jq is not installed, so the backlog record model cannot be read)\n'
+else
+  fm_backlog_records_json "$DATA/backlog.md" 2>/dev/null \
+    | jq -r '.records[]? | select(.captain_actionable == true)
+             | "- \(.id) - \(.title // "")"' 2>/dev/null \
+    | print_capped "held decision(s)"
 fi
 
 # --- work recorded as waiting for the captain's merge -----------------------
+# Same owner as the snapshot's pr/pr_source, so a PR recorded only in a status
+# event is listed too. Still a local read: nothing here asks a forge anything.
 printf 'Recorded pull requests waiting to land:\n'
 {
   for meta in "$STATE"/*.meta; do
     [ -f "$meta" ] || continue
-    pr=$(sed -n 's/^pr=//p' "$meta" 2>/dev/null | head -1)
-    [ -n "$pr" ] || continue
-    printf -- '- %s (%s)\n' "$pr" "$(basename "$meta" .meta)"
+    id=$(basename "$meta" .meta)
+    record=$(fm_recorded_pr "$meta" "$STATE/$id.status") || continue
+    printf -- '- %s (%s, recorded in %s)\n' "${record%%	*}" "$id" "${record#*	}"
   done
 } | print_capped "recorded pull request(s)"
 

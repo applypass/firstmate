@@ -15,6 +15,15 @@
 # A timer alone is never sufficient. An attended session that has simply been
 # quiet keeps the helm, and the refusal names what holds it and how to clear it.
 #
+# FAIL-CLOSED ON EVIDENCE: silence is measured ONLY from positive proof of work -
+# the marker this lib stamps, and the transcript that marker names. Absence of
+# evidence is never read as silence. The session lock is deliberately NOT an
+# evidence source: bin/fm-lock.sh writes state/.lock once at acquisition and
+# nothing anywhere refreshes it, so its mtime is the session's AGE, not its
+# quietness, and a live busy holder measured as 7200s silent through it. A holder
+# that cannot prove it is working therefore keeps the helm, and the captain
+# clears it by hand with the command the refusal prints.
+#
 # WHY "no controlling terminal" is the unattended proof: a harness the captain is
 # sitting in front of owns a terminal device and is the foreground process group
 # of it, while any session the harness itself forked inherits neither. Measured
@@ -54,22 +63,40 @@ fm_helm_marker() {
 # can see mid-turn growth in it and not mistake a busy session for an idle one.
 # A write failure is never fatal: a missing marker only costs measurability, and
 # the caller is a turn-end hook that must never wedge a session.
+#
+# The write is ATOMIC - built in a temp file beside the marker and moved into
+# place - so a concurrent reader sees either the whole previous marker or the
+# whole new one. A truncating redirect leaves the marker zero-length for the
+# width of the fork that produces the timestamp, and an empty marker reads as
+# "this holder cannot prove it is working", which is a takeover decision made on
+# a race. On any failure the temp file goes and the existing marker stands.
 fm_helm_stamp() {
-  local state=$1 pid=$2 transcript=${3:-} marker
+  local state=$1 pid=$2 transcript=${3:-} marker tmp now
   marker=$(fm_helm_marker "$state")
   [ -d "$state" ] || return 1
-  {
+  now=$(date +%s 2>/dev/null) || return 1
+  [ -n "$now" ] || return 1
+  tmp="$marker.tmp.$$"
+  if ! {
     printf 'pid=%s\n' "$pid"
-    printf 'epoch=%s\n' "$(date +%s)"
+    printf 'epoch=%s\n' "$now"
     printf 'transcript=%s\n' "$transcript"
-  } > "$marker" 2>/dev/null || return 1
+  } > "$tmp" 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null
+    return 1
+  fi
+  if ! mv -f "$tmp" "$marker" 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null
+    return 1
+  fi
 }
 
-# fm_helm_marker_field <state> <field>: read one marker field.
+# fm_helm_marker_field <state> <field>: read one marker field. An empty marker
+# has no fields: it proves nothing and must not read as a match.
 fm_helm_marker_field() {
   local state=$1 field=$2 marker
   marker=$(fm_helm_marker "$state")
-  [ -f "$marker" ] || return 1
+  [ -s "$marker" ] || return 1
   sed -n "s/^$field=//p" "$marker" 2>/dev/null | head -1
 }
 
@@ -78,39 +105,35 @@ fm_helm_marker_field() {
 # used. Globals rather than output, for the same reason as fm_helm_attendance: a
 # command substitution would strip the companion value.
 #
-# Evidence is the NEWEST of three mtimes, so any one of them being fresh proves
-# activity:
-#   marker      - the holder's last completed turn.
-#   transcript  - grows DURING a turn, so a long single turn still reads as busy.
-#   lock        - written when the session claimed the helm, the baseline for a
-#                 holder that has not ended a turn yet or predates the marker.
-# Returns non-zero when no evidence exists at all, which is unmeasurable and must
-# never be read as silence.
+# Evidence is POSITIVE PROOF OF WORK only, and the newest of these two mtimes
+# wins, so either one being fresh proves activity:
+#   marker      - the holder's last completed turn, from a readable, non-empty
+#                 state/.helm-activity whose pid matches this holder.
+#   transcript  - the file that marker names, which grows DURING a turn, so a
+#                 long single turn still reads as busy rather than idle.
+# The session lock is NOT evidence: its mtime is written once at acquisition and
+# never refreshed, so it measures the session's age, not its quietness. Nothing
+# weaker is substituted for a missing marker. Without a pid-matched, non-empty
+# marker the silence is UNMEASURABLE and this returns non-zero, which refuses the
+# takeover rather than permitting one on absent evidence.
 fm_helm_silence_seconds() {
-  local state=$1 holder=$2 marker newest='' newest_src='' m mpid transcript now
+  local state=$1 holder=$2 newest='' newest_src='' m mpid transcript now
   # shellcheck disable=SC2034 # Read by callers (fm-lock.sh) after this returns.
   FM_HELM_SILENCE_SOURCE=none
   FM_HELM_SILENCE=
-  marker=$(fm_helm_marker "$state")
   mpid=$(fm_helm_marker_field "$state" pid 2>/dev/null || true)
   # A marker left by a DIFFERENT session says nothing about this holder.
-  if [ -f "$marker" ] && [ "$mpid" = "$holder" ]; then
-    m=$(fm_path_mtime "$marker" 2>/dev/null || true)
-    case "$m" in ''|*[!0-9]*) m= ;; esac
-    if [ -n "$m" ]; then newest=$m; newest_src=marker; fi
-    transcript=$(fm_helm_marker_field "$state" transcript 2>/dev/null || true)
-    if [ -n "$transcript" ] && [ -f "$transcript" ]; then
-      m=$(fm_path_mtime "$transcript" 2>/dev/null || true)
-      case "$m" in ''|*[!0-9]*) m= ;; esac
-      if [ -n "$m" ] && { [ -z "$newest" ] || [ "$m" -gt "$newest" ]; }; then
-        newest=$m; newest_src=transcript
-      fi
-    fi
-  fi
-  m=$(fm_path_mtime "$state/.lock" 2>/dev/null || true)
+  [ -n "$mpid" ] && [ "$mpid" = "$holder" ] || return 1
+  m=$(fm_path_mtime "$(fm_helm_marker "$state")" 2>/dev/null || true)
   case "$m" in ''|*[!0-9]*) m= ;; esac
-  if [ -n "$m" ] && { [ -z "$newest" ] || [ "$m" -gt "$newest" ]; }; then
-    newest=$m; newest_src=lock
+  if [ -n "$m" ]; then newest=$m; newest_src=marker; fi
+  transcript=$(fm_helm_marker_field "$state" transcript 2>/dev/null || true)
+  if [ -n "$transcript" ] && [ -f "$transcript" ]; then
+    m=$(fm_path_mtime "$transcript" 2>/dev/null || true)
+    case "$m" in ''|*[!0-9]*) m= ;; esac
+    if [ -n "$m" ] && { [ -z "$newest" ] || [ "$m" -gt "$newest" ]; }; then
+      newest=$m; newest_src=transcript
+    fi
   fi
   [ -n "$newest" ] || return 1
   now=$(date +%s)
@@ -170,7 +193,7 @@ fm_helm_takeover_allowed() {
       ;;
   esac
   if ! fm_helm_silence_seconds "$state" "$holder"; then
-    FM_HELM_REFUSE_REASON="it has no recorded activity at all, so its silence cannot be measured"
+    FM_HELM_REFUSE_REASON="it has not proved it is doing any work (no readable turn-end activity marker of its own), so it keeps the helm"
     return 1
   fi
   silence=$FM_HELM_SILENCE

@@ -10,6 +10,11 @@
 # helm automatically. A timer alone is never enough, an attended holder always
 # keeps it, and every refusal names the holder and the command that clears it.
 #
+# Silence is measured from POSITIVE evidence only - the holder's own turn-end
+# activity marker and the transcript it names. The session lock's mtime is not
+# evidence, so a holder that cannot prove it is working keeps the helm however
+# old that lock is. Several cases below exist only to hold that line.
+#
 # Hermetic: `ps` is faked so ancestry, harness identity, and the controlling
 # terminal are all controlled, while holder pids are real background processes so
 # the liveness check is genuine.
@@ -143,6 +148,19 @@ backdate() {
   touch -t "$stamp" "$f" || fail "could not backdate $f"
 }
 
+# stamp_marker <seconds-ago> [transcript-path]: the holder's own turn-end
+# activity marker, aged deterministically. This is the only admissible proof
+# that the holder is working, so every measurable scenario needs one.
+stamp_marker() {
+  local age=$1 transcript=${2:-} marker="$HOME_DIR/state/.helm-activity"
+  {
+    printf 'pid=%s\n' "$HOLDER_PID"
+    printf 'epoch=%s\n' "$(date +%s)"
+    printf 'transcript=%s\n' "$transcript"
+  } > "$marker"
+  backdate "$marker" "$age"
+}
+
 run_lock() {
   env PATH="$FAKEBIN:$PATH" FM_ROOT_OVERRIDE="$HOME_DIR" "$@" \
     bash "$ROOT/bin/fm-lock.sh" 2>&1
@@ -169,11 +187,74 @@ test_refuses_an_attended_holder_and_prints_the_clearing_command() {
 test_refuses_an_unattended_holder_that_is_still_working() {
   local out status
   make_home "$TMP_ROOT/recent"
+  # Unambiguous: it proved it was working 60 seconds ago, well inside the
+  # threshold, so the refusal is the recently-active one and nothing else.
+  stamp_marker 60
   out=$(run_lock FM_HELM_IDLE_TAKEOVER=3600); status=$?
   expect_code 1 "$status" "silence shorter than the threshold must not lose the helm"
   assert_contains "$out" "was active" "the refusal must say the holder was recently active"
   assert_contains "$out" "of silence" "the refusal must name the silence the takeover needs"
   pass "fm-lock: an unattended holder that was recently active keeps the helm"
+}
+
+test_refuses_a_holder_whose_only_evidence_is_the_session_lock() {
+  local out status
+  make_home "$TMP_ROOT/lock-only"
+  # No marker at all: the lock's mtime is the session's AGE, never its quietness,
+  # so however old it is, it can never authorize a takeover.
+  backdate "$HOME_DIR/state/.lock" 86400
+  out=$(run_lock); status=$?
+  expect_code 1 "$status" "an unprovable holder must keep the helm however old the lock is"
+  assert_contains "$out" "has not proved it is doing any work" \
+    "the refusal must say the holder never proved it was working"
+  assert_contains "$out" "clear --pid $HOLDER_PID" "the refusal must print the one command that clears it"
+  assert_grep "$HOLDER_PID" "$HOME_DIR/state/.lock" "a refused acquisition must leave the holder recorded"
+  pass "fm-lock: the session lock's age is not evidence, so it never takes the helm on its own"
+}
+
+test_refuses_an_empty_or_foreign_activity_marker() {
+  local out status
+  make_home "$TMP_ROOT/bad-marker"
+  backdate "$HOME_DIR/state/.lock" 7200
+  # The zero-length window a non-atomic stamp would leave behind.
+  : > "$HOME_DIR/state/.helm-activity"
+  backdate "$HOME_DIR/state/.helm-activity" 7200
+  out=$(run_lock); status=$?
+  expect_code 1 "$status" "an empty marker proves nothing and must not authorize a takeover"
+  assert_contains "$out" "has not proved it is doing any work" "an empty marker must read as unprovable"
+  # A marker left by some other session says nothing about this holder either.
+  {
+    printf 'pid=%s\n' "$((HOLDER_PID + 100000))"
+    printf 'epoch=%s\n' "$(date +%s)"
+    printf 'transcript=\n'
+  } > "$HOME_DIR/state/.helm-activity"
+  backdate "$HOME_DIR/state/.helm-activity" 7200
+  out=$(run_lock); status=$?
+  expect_code 1 "$status" "a marker from a different session must not authorize a takeover"
+  assert_contains "$out" "has not proved it is doing any work" "a foreign marker must read as unprovable"
+  assert_grep "$HOLDER_PID" "$HOME_DIR/state/.lock" "a refused acquisition must leave the holder recorded"
+  pass "fm-lock: an empty or foreign activity marker is not proof of anything"
+}
+
+# The stamp itself must never be observable as the empty file the previous case
+# proves is unusable, so it is built beside the marker and moved into place.
+test_the_activity_stamp_is_never_observable_as_empty() {
+  local state marker i
+  state="$TMP_ROOT/atomic-stamp/state"
+  mkdir -p "$state"
+  marker="$state/.helm-activity"
+  # shellcheck source=bin/fm-helm-lib.sh
+  . "$ROOT/bin/fm-helm-lib.sh"
+  i=0
+  while [ "$i" -lt 40 ]; do
+    fm_helm_stamp "$state" 4242 "" || fail "the stamp must succeed on a writable state dir"
+    [ -s "$marker" ] || fail "the marker was observable as a zero-length file after a stamp"
+    i=$((i + 1))
+  done
+  assert_grep 'pid=4242' "$marker" "the stamp must record the holder pid"
+  [ -z "$(find "$state" -name '.helm-activity.tmp.*' 2>/dev/null)" ] \
+    || fail "the stamp must not leave a temp file behind"
+  pass "fm-helm-lib: the activity stamp lands whole, never as an empty file"
 }
 
 test_refuses_when_the_terminal_cannot_be_read() {
@@ -192,13 +273,8 @@ test_mid_turn_work_counts_as_activity() {
   make_home "$TMP_ROOT/midturn"
   transcript="$HOME_DIR/transcript.jsonl"
   printf 'partial turn\n' > "$transcript"
-  {
-    printf 'pid=%s\n' "$HOLDER_PID"
-    printf 'epoch=%s\n' "$(date +%s)"
-    printf 'transcript=%s\n' "$transcript"
-  } > "$HOME_DIR/state/.helm-activity"
   # Its last completed turn and its claim on the helm are both long past.
-  backdate "$HOME_DIR/state/.helm-activity" 7200
+  stamp_marker 7200 "$transcript"
   backdate "$HOME_DIR/state/.lock" 7200
   # It has not ended a turn since, but it is still writing.
   printf 'more of the same turn\n' >> "$transcript"
@@ -213,8 +289,9 @@ test_mid_turn_work_counts_as_activity() {
 test_takes_the_helm_from_a_silent_unattended_holder() {
   local out status
   make_home "$TMP_ROOT/takeover"
-  # Two hours of silence, well past the 1800-second default, which this exercises
-  # rather than overriding.
+  # It proved it was working, and that proof is two hours old - well past the
+  # 1800-second default, which this exercises rather than overriding.
+  stamp_marker 7200
   backdate "$HOME_DIR/state/.lock" 7200
   out=$(run_lock); status=$?
   expect_code 0 "$status" "a provably unattended, silent holder must lose the helm"
@@ -251,6 +328,7 @@ test_status_reports_the_holder_and_whether_a_takeover_is_available() {
   assert_contains "$out" "ttys009" "status must report the holder's terminal"
   assert_contains "$out" "takeover: refused" "status must say whether the helm can be taken"
   rm -f "$FAKEBIN/.tty-$HOLDER_PID"
+  stamp_marker 7200
   backdate "$HOME_DIR/state/.lock" 7200
   out=$(env PATH="$FAKEBIN:$PATH" FM_ROOT_OVERRIDE="$HOME_DIR" \
     bash "$ROOT/bin/fm-lock.sh" status 2>&1)
@@ -296,6 +374,9 @@ run_all() {
   test_refuses_an_attended_holder_and_prints_the_clearing_command
   test_refuses_an_unattended_holder_that_is_still_working
   test_refuses_when_the_terminal_cannot_be_read
+  test_refuses_a_holder_whose_only_evidence_is_the_session_lock
+  test_refuses_an_empty_or_foreign_activity_marker
+  test_the_activity_stamp_is_never_observable_as_empty
   test_mid_turn_work_counts_as_activity
   test_takes_the_helm_from_a_silent_unattended_holder
   test_a_dead_holder_still_loses_the_helm_immediately

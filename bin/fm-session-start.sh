@@ -316,8 +316,16 @@ fi
 # digest. bin/fm-awaiting-captain.sh owns what qualifies as waiting on him, the
 # line caps, and the one-line pointer to everything already answered; it reads
 # only local records, so it is safe and cheap in both locked and read-only mode.
+# A released handover prints in full further down, so the block is told to point
+# at what is printed rather than tell the reader to open the record: a printed
+# handover must never be re-read, and two conflicting instructions in one digest
+# are worse than either alone.
 subsection "AWAITING THE CAPTAIN"
-AWAITING_OUT=$("$SCRIPT_DIR/fm-awaiting-captain.sh" 2>&1)
+AWAITING_ARGS=()
+if "$SCRIPT_DIR/fm-handover.sh" pending 2>/dev/null; then
+  AWAITING_ARGS=(--handover-printed-below)
+fi
+AWAITING_OUT=$("$SCRIPT_DIR/fm-awaiting-captain.sh" "${AWAITING_ARGS[@]:-}" 2>&1)
 if [ -n "$AWAITING_OUT" ]; then
   printf '%s\n' "$AWAITING_OUT"
 else

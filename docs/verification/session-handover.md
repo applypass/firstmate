@@ -3,6 +3,17 @@
 Active evidence for the guarantees in [`../session-handover.md`](../session-handover.md).
 Recorded 2026-08-05 on macOS 26.5.1 (arm64), bash 5.3.0, jq 1.8.2, git 2.55.0, Claude Code 2.1.221.
 
+## The silence proof is positive evidence only
+
+The claim: a takeover is granted only against proof that the holder is working, never against the absence of such proof.
+
+`state/.lock` was measured and rejected as an evidence source.
+`bin/fm-lock.sh` writes it once at acquisition and nothing anywhere refreshes it - there is no second writer and no `touch` of it in `bin/` - so its mtime is the session's age.
+A live, busy holder read as 7200 seconds silent through it, which is why the lock now proves nothing and `bin/fm-helm-lib.sh` reads only a pid-matched, non-empty `state/.helm-activity` and the transcript that marker names.
+
+The guarantee that replaces it is fail-closed: with no such marker the silence is unmeasurable, the acquisition refuses and names the holder, and the only way past it is the captain running `bin/fm-lock.sh clear --pid <holder>`.
+The stamp is written to a temp file beside the marker and moved into place, so a concurrent reader never sees the zero-length window a truncating redirect leaves while it forks for the timestamp.
+
 ## The unattended proof
 
 The claim: a Firstmate session the captain is using owns a controlling terminal, while a process the session itself spawns owns none, so an absent terminal is a usable proof that nobody is at the keyboard.
@@ -67,6 +78,9 @@ $ bash tests/fm-helm-takeover.test.sh
 ok - fm-lock: refuses an attended holder, naming it, its terminal, and the clearing command
 ok - fm-lock: an unattended holder that was recently active keeps the helm
 ok - fm-lock: silence alone never takes the helm - the unattended proof is required
+ok - fm-lock: the session lock's age is not evidence, so it never takes the helm on its own
+ok - fm-lock: an empty or foreign activity marker is not proof of anything
+ok - fm-helm-lib: the activity stamp lands whole, never as an empty file
 ok - fm-lock: a holder working through a long single turn is not mistaken for an idle one
 ok - fm-lock: takes the helm from a provably unattended, measurably silent holder and says so
 ok - fm-lock: a dead holder's helm is still claimed immediately, with no takeover ceremony

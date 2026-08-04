@@ -92,6 +92,9 @@ meta_field() {
 }
 
 # live_ids: every task or direct report this home currently records as under way.
+# "Has a state/*.meta" is deliberately broader than the fleet snapshot's state
+# model: it errs toward demanding MORE accounting and never less, because a
+# worker whose endpoint has already died still has to be accounted for here.
 live_ids() {
   local meta id
   for meta in "$STATE"/*.meta; do

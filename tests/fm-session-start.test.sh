@@ -798,12 +798,14 @@ EOF
   make_fake_toolchain "$fakebin"
   make_fake_ps_claude "$fakebin"
 
-  printf '# Backlog\n\n## In flight\n' > "$home/data/backlog.md"
-  printf -- '- [ ] fe-signin - Sign in with a code (repo: fe) (kind: ship) (hold: captain grill first) (hold-kind: captain)\n' \
-    >> "$home/data/backlog.md"
   printf 'Report format: one line, outcomes only.\n' > "$home/data/captain.md"
   fm_write_meta "$home/state/alpha-task.meta" "window=fm-sess:alpha" "kind=ship"
-  printf -- '- [ ] alpha-task - a task (repo: alpha) (kind: ship)\n' >> "$home/data/backlog.md"
+  {
+    printf '# Backlog\n\n## In flight\n'
+    printf -- '- [ ] alpha-task - a task (repo: alpha) (kind: ship)\n'
+    printf '## Queued\n'
+    printf -- '- [ ] fe-signin - Sign in with a code (repo: fe) (kind: captain) (hold: captain grill first) (hold-kind: captain)\n'
+  } > "$home/data/backlog.md"
 
   # A handover prepared and released by the previous session, exactly as
   # bin/fm-handover.sh leaves it.
@@ -829,6 +831,10 @@ EOF
   assert_contains "$out" "halfway through the second review round" \
     "the replacement must learn what each live worker was mid-way through"
   assert_contains "$out" "ADVISORY" "the handover must reach the replacement labeled advisory"
+  assert_contains "$out" "do not re-read the record" \
+    "a digest that prints the record must not also tell the reader to open it"
+  assert_not_contains "$out" "Read data/handover.md" \
+    "the digest must not carry two conflicting instructions about the same record"
   assert_contains "$out" "alpha-task" "the queued event that survived the gap must be drained and printed"
   assert_contains "$out" "read them before reporting anything" \
     "the early block must point at the captain's standing preferences"

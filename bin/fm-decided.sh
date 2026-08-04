@@ -204,11 +204,27 @@ cmd_record() {
   fi
 
   if [ -n "$existing" ]; then
-    local tmp
+    # The index is LOCAL and gitignored, so a truncated rewrite loses answers
+    # with no backup. Every step is checked and the replacement is installed only
+    # when the whole file was rebuilt: grep exits 1 when it matched nothing, which
+    # is a legitimate empty result, but anything above that is a read or write
+    # failure and must leave the record alone.
+    local tmp grep_status
     tmp="$INDEX.tmp.$$"
-    grep -v "^- \[$key\] " "$INDEX" > "$tmp" 2>/dev/null || true
-    printf '%s\n' "$line" >> "$tmp"
-    mv -f "$tmp" "$INDEX" || die "cannot replace the answer for $key"
+    grep -v "^- \[$key\] " "$INDEX" > "$tmp" 2>/dev/null
+    grep_status=$?
+    if [ "$grep_status" -gt 1 ]; then
+      rm -f "$tmp" 2>/dev/null
+      die "cannot rewrite $(rel_path "$INDEX") (reading it failed with status $grep_status); the record is unchanged"
+    fi
+    if ! printf '%s\n' "$line" >> "$tmp"; then
+      rm -f "$tmp" 2>/dev/null
+      die "cannot write the replacement index at $(rel_path "$tmp"); $(rel_path "$INDEX") is unchanged"
+    fi
+    if ! mv -f "$tmp" "$INDEX"; then
+      rm -f "$tmp" 2>/dev/null
+      die "cannot install the rewritten $(rel_path "$INDEX"); the record is unchanged"
+    fi
     printf 'superseded: %s\n' "$line"
   else
     printf '%s\n' "$line" >> "$INDEX" || die "cannot append to $(rel_path "$INDEX")"

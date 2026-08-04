@@ -33,6 +33,7 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-primary-scope-lib.sh` | Shared marker-or-plain-checkout primary-home predicate for tracked hooks             |
 | `fm-session-lock-lib.sh` | Shared session-lock harness identity (ancestry walk and holder liveness) for fm-lock.sh and the Claude Stop auto-arm |
 | `fm-helm-lib.sh`         | Shared decision on whether the session holding the helm is working and may lose it (docs/session-handover.md) |
+| `fm-backlog-record-lib.sh` | Single owner of the canonical backlog record model, actionable captain holds, and where a task's pull request is recorded |
 | `fm-session-pulse.sh`    | Claude Stop hook stamping the helm activity marker and reporting a due handover once |
 | `fm-context-measure-lib.sh` | Single owner of the turn-end context measurement read from the payload's transcript |
 | `fm-claude-stop-autoarm.sh` | Claude Stop `asyncRewake` hook owning tokenless watcher continuity with single-flight exit-2 rewake (docs/watcher-continuity.md) |
