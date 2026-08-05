@@ -26,7 +26,7 @@ At every primary turn end, the guard measures the live session's context.
 Below the advisory point it is completely silent.
 Between the advisory point and the ceiling it prints one non-blocking notice per episode.
 At or above the ceiling it prints one visible ceiling notice per episode naming the handoff-and-clear valve, and by default allows the turn end.
-Every turn end at or above the advisory point also appends one line to a durable trip record, whether or not it produced a notice.
+Entering a stage also appends one line to a durable trip record, one line per crossing rather than one per turn end.
 
 **The shipped default warns and does not block.**
 Enforcement is fully implemented and switched on with `FM_CONTEXT_BUDGET_ENFORCE=1`; with enforcement off, nothing in this guard can ever return a blocking exit status.
@@ -142,7 +142,7 @@ Two limits of that channel are worth stating plainly, because together they deci
 
 ## The trip record
 
-Because rendering cannot be relied on, and because observing how often the ceiling is actually crossed is the whole point of shipping warning-only first, every stage firing also appends one line to `state/.context-budget-trips`:
+Because rendering cannot be relied on, and because observing how often the ceiling is actually crossed is the whole point of shipping warning-only first, entering a stage also appends one line to `state/.context-budget-trips`:
 
 ```
 2026-07-29T09:14:02Z stage=ceiling total=204118 ceiling=180000 advisory=150000 enforce=0 session=<session_id>

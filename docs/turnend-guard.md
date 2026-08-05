@@ -7,7 +7,7 @@ Harness hook files adapt each enabled primary harness integration's turn-end mec
 
 Two sibling `Stop` hooks ride the same event and the same shared scope, and this guard's thresholds and loop safety say nothing about either.
 One stamps the helm activity marker and reports a due session handover, owned by [`session-handover.md`](session-handover.md); that hook never blocks a turn end.
-The other enforces the context ceiling, owned by [`context-budget.md`](context-budget.md).
+The other watches the context ceiling, warning by default and blocking only under an explicit opt-in, owned by [`context-budget.md`](context-budget.md).
 
 Related PreToolUse guards deny unsafe commands before execution rather than detecting a blind turn end afterward.
 Their separate owners are [`arm-pretool-check.md`](arm-pretool-check.md), [`cd-guard.md`](cd-guard.md), and [`subagent-guard.md`](subagent-guard.md).

@@ -421,8 +421,8 @@ budget_record() {  # <count> <standdown 0|1>
 }
 
 # --- the trip record: WRITE-ONLY observation ----------------------------------
-# The shipped default cannot rely on a rendered notice, so every stage firing is
-# also appended here, where the captain can count crossings after the fact.
+# The shipped default cannot rely on a rendered notice, so entering a stage also
+# appends one line here, where the captain can count crossings after the fact.
 # Nothing in this script ever reads a decision out of this file; the only thing
 # read back is its own size, to keep it bounded. Deleting, corrupting, or
 # truncating it therefore changes no behavior at all.

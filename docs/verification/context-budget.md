@@ -139,13 +139,13 @@ The honest statement of the shipped default's behavior is therefore that the not
 
 `state/.context-budget-trips` exists because of the section above: how often the ceiling is crossed is the question the warning-only first release is meant to answer, and a display behavior this repo does not control cannot be the answer's source.
 
-Its four constraints are structural rather than measured, and each has a fixture in `tests/fm-context-budget.test.sh`:
+Its constraints are structural rather than measured, and each has a fixture in `tests/fm-context-budget.test.sh`:
 
 | Constraint | How it is pinned |
 | --- | --- |
 | Write-only, never read for a decision | One identical scripted session replayed three ways - record kept, deleted before every turn end, corrupted with NUL bytes before every turn end - comparing every exit status and both streams. All three are byte-identical, and the replay reaches both the blocking path and the stand-down. |
 | Bounded | A 4,000-line, 444 KB fixture is trimmed on the next turn end to under the 128 KiB cap and at most the most recent 500 entries, keeping the newest and dropping the oldest. |
-| Records each firing, with size | Asserted on the exact line shape, including stage, measured total, ceiling, advisory, enforcement state, and session. |
+| Records each crossing, with size | Asserted on the exact line shape, including stage, measured total, ceiling, advisory, enforcement state, and session. |
 | Silent below the advisory | No file is created at all for an ordinary session. |
 | One line per crossing, not per turn end | 12 turn ends at a steady 160,000 write one advisory line; dropping below the advisory point and climbing back adds exactly one more. Six enforcing turn ends across two blocks, the stand-down, and three stood-down turns write one ceiling line. |
 | A parse failure is traced | An unparseable block record writes one `stage=record-unparseable` line naming the session. |
@@ -248,8 +248,9 @@ Three facts follow, and they are what the guard's own bound is set against:
 - A cap of `0` or less disables the override entirely.
 
 Because the counter is shared, per-hook block budgets do not compose: several independently-budgeted blockers firing out of phase can keep consecutive stops blocked past the cap even though no single hook exceeds its own budget.
-`bin/fm-context-budget.sh` answers that by standing down stickily once its budget is spent, which removes it from the shared count for the rest of that session.
-The stand-down record is keyed to `session_id` and is only ever cleared by evidence of a genuine reset - a positive measurement below the advisory, or a compaction boundary newer than the one the record was written with - so a second session in the same home, an unreadable record, a raised block budget, or a zero measurement cannot put this guard back into that shared count.
+`bin/fm-context-budget.sh` answers that by standing down stickily once its budget is spent, which removes it from the shared count for as long as the stand-down holds.
+The stand-down record is keyed to `session_id` and is only ever cleared by evidence of a genuine reset - a positive measurement below the advisory, or a compaction boundary newer than the one the record was written with - so a second session in the same home, a raised block budget, or a zero measurement cannot put this guard back into that shared count.
+Each of those two proofs can occur mid-session, so what is bounded is each armed stretch and not the session total; an unparseable count is read as no record at all and likewise leaves the guard armed, bounded by its own budget again.
 
 ## The session cannot clear itself
 
