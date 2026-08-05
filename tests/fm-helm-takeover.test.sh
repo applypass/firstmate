@@ -149,14 +149,35 @@ backdate() {
 }
 
 # stamp_marker <seconds-ago> [transcript-path]: the holder's own turn-end
-# activity marker, aged deterministically. This is the only admissible proof
-# that the holder is working, so every measurable scenario needs one.
+# activity marker, aged deterministically, naming a transcript that exists.
+# Only that pair is admissible proof that the holder is working, so every
+# measurable scenario needs both, and both are backdated because the newer of
+# the two mtimes is what the reader measures.
 stamp_marker() {
   local age=$1 transcript=${2:-} marker="$HOME_DIR/state/.helm-activity"
+  if [ -z "$transcript" ]; then
+    transcript="$HOME_DIR/transcript-$age.jsonl"
+    printf 'a completed turn\n' > "$transcript"
+  fi
   {
     printf 'pid=%s\n' "$HOLDER_PID"
     printf 'epoch=%s\n' "$(date +%s)"
     printf 'transcript=%s\n' "$transcript"
+  } > "$marker"
+  backdate "$marker" "$age"
+  [ -f "$transcript" ] && backdate "$transcript" "$age"
+}
+
+# write_raw_marker <seconds-ago> <transcript-field>: a marker put on disk WITHOUT
+# going through fm_helm_stamp, which is the only way to reach the case a
+# write-time rule can never constrain - a marker that predates the rule, or one
+# whose transcript has since gone.
+write_raw_marker() {
+  local age=$1 field=$2 marker="$HOME_DIR/state/.helm-activity"
+  {
+    printf 'pid=%s\n' "$HOLDER_PID"
+    printf 'epoch=%s\n' "$(date +%s)"
+    printf 'transcript=%s\n' "$field"
   } > "$marker"
   backdate "$marker" "$age"
 }
@@ -259,57 +280,129 @@ test_the_activity_stamp_is_never_observable_as_empty() {
   pass "fm-helm-lib: the activity stamp lands whole, never as an empty file"
 }
 
-# A marker with no transcript would rest the whole silence measurement on its own
+# A marker naming no usable transcript rests the whole measurement on its own
 # mtime, which proves a turn ENDED once and not that the session is working now -
 # so a holder working through one long turn would lose the helm mid-turn. The
-# stamp refuses instead, and a pulse that quietly stops stamping would be a safety
-# mechanism failing in silence, so the refusal is recorded and the lock quotes it.
-test_a_stamp_without_a_resolvable_transcript_is_declined_and_explained() {
-  local out status marker_file declined
-  make_home "$TMP_ROOT/no-transcript"
-  marker_file="$HOME_DIR/state/.helm-activity"
-  declined="$HOME_DIR/state/.helm-activity-declined"
-  (
-    # shellcheck source=bin/fm-helm-lib.sh
-    . "$ROOT/bin/fm-helm-lib.sh"
-    fm_helm_stamp "$HOME_DIR/state" "$HOLDER_PID" "" \
-      && { echo "a stamp with no transcript at all must be refused" >&2; exit 1; }
-    fm_helm_stamp "$HOME_DIR/state" "$HOLDER_PID" "$HOME_DIR/gone.jsonl" \
-      && { echo "a stamp naming a missing transcript must be refused" >&2; exit 1; }
-    exit 0
-  ) || fail "fm_helm_stamp must refuse a stamp with no resolvable transcript"
-  assert_absent "$marker_file" "a declined stamp must leave no marker at all"
-  assert_present "$declined" "a declined stamp must be recorded, never silent"
-  assert_grep "pid=$HOLDER_PID" "$declined" "the declination must name the holder that could not stamp"
-  assert_grep "does not exist" "$declined" "the declination must carry the reason it declined"
+# READER refuses it, which is the only place that can: these markers are written
+# straight to disk, exactly as an upgrade from an older stamp leaves them, so no
+# write-time rule could ever have reached them.
+test_a_marker_naming_no_usable_transcript_is_not_evidence() {
+  local out status
+  make_home "$TMP_ROOT/marker-no-transcript"
   backdate "$HOME_DIR/state/.lock" 86400
+  write_raw_marker 7200 ""
   out=$(run_lock); status=$?
-  expect_code 1 "$status" "an unstamped holder must keep the helm"
+  expect_code 1 "$status" "a marker naming no transcript must not authorize a takeover"
   assert_contains "$out" "has not proved it is doing any work" "silence must read as unmeasurable"
-  assert_contains "$out" "no activity marker exists because" \
-    "the refusal must point at the recorded declination rather than a file nobody knows about"
-  assert_contains "$out" "does not exist" "the refusal must carry the reason the stamp was declined"
-  pass "fm-helm-lib: a stamp with no resolvable transcript is refused, recorded, and named in the refusal"
+  assert_contains "$out" "names no transcript" "the refusal must say which piece of proof was missing"
+  assert_grep "$HOLDER_PID" "$HOME_DIR/state/.lock" "a refused acquisition must leave the holder recorded"
+
+  write_raw_marker 7200 "$HOME_DIR/never-existed.jsonl"
+  out=$(run_lock); status=$?
+  expect_code 1 "$status" "a marker naming a transcript that is not there must not authorize a takeover"
+  assert_contains "$out" "no longer exists" "the refusal must distinguish a missing transcript from an unnamed one"
+  assert_contains "$out" "never-existed.jsonl" "the refusal must name the transcript it could not find"
+  pass "fm-lock: a marker that names no usable transcript is not proof of work, whoever wrote it"
 }
 
-# The declination is a single current answer, not an unbounded log, and a later
-# successful stamp must not leave a stale explanation behind for a refusal to
-# quote.
-test_a_successful_stamp_clears_an_earlier_declination() {
-  local transcript_file declined
-  make_home "$TMP_ROOT/stamp-clears"
+# The same hole reached the other way: the marker was written correctly, and the
+# transcript it names disappeared afterwards. No check at write time can survive
+# this, which is why the reader is the authority.
+test_a_transcript_that_vanishes_after_the_stamp_ends_the_measurement() {
+  local out status transcript_file
+  make_home "$TMP_ROOT/transcript-vanished"
   transcript_file="$HOME_DIR/t.jsonl"
-  printf 'a turn\n' > "$transcript_file"
+  printf 'a completed turn\n' > "$transcript_file"
+  (
+    # shellcheck source=bin/fm-helm-lib.sh
+    . "$ROOT/bin/fm-helm-lib.sh"
+    fm_helm_stamp "$HOME_DIR/state" "$HOLDER_PID" "$transcript_file"
+  ) || fail "the stamp must succeed while the transcript is there"
+  rm -f "$transcript_file"
+  backdate "$HOME_DIR/state/.helm-activity" 7200
+  backdate "$HOME_DIR/state/.lock" 7200
+  out=$(run_lock); status=$?
+  expect_code 1 "$status" "a holder whose transcript is gone must keep the helm"
+  assert_contains "$out" "no longer exists" "the refusal must say the named transcript went missing"
+  pass "fm-lock: a transcript deleted after the stamp ends the measurement rather than granting a takeover"
+}
+
+# The stamp writes THIS turn's truth even when there is no transcript to name.
+# Refusing to write would leave the previous, more optimistic marker standing,
+# and the reader would then measure an older turn's evidence while the holder
+# works on one nothing observes.
+test_a_stamp_without_a_transcript_still_overwrites_the_previous_marker() {
+  local out status marker_file transcript_file
+  make_home "$TMP_ROOT/stamp-overwrites"
+  marker_file="$HOME_DIR/state/.helm-activity"
+  transcript_file="$HOME_DIR/t.jsonl"
+  printf 'turn one\n' > "$transcript_file"
+  (
+    # shellcheck source=bin/fm-helm-lib.sh
+    . "$ROOT/bin/fm-helm-lib.sh"
+    fm_helm_stamp "$HOME_DIR/state" "$HOLDER_PID" "$transcript_file" || exit 1
+    fm_helm_stamp "$HOME_DIR/state" "$HOLDER_PID" ""
+  ) || fail "a stamp with no transcript must still be written"
+  assert_present "$marker_file" "the marker must always carry the latest turn"
+  grep -q '^transcript=$' "$marker_file" \
+    || fail "the marker must record that this turn resolved no transcript, replacing the earlier claim"
+  backdate "$marker_file" 7200
+  backdate "$transcript_file" 7200
+  backdate "$HOME_DIR/state/.lock" 7200
+  out=$(run_lock); status=$?
+  expect_code 1 "$status" "the overwritten marker must read as unmeasurable, not as an old good turn"
+  assert_contains "$out" "names no transcript" "the refusal must reflect the latest turn, not the earlier one"
+  pass "fm-helm-lib: a stamp with no transcript overwrites the previous marker instead of leaving it standing"
+}
+
+# The declination record outlives the session that wrote it, so a refusal that
+# quoted it blindly would send the operator to fix a predecessor's problem.
+test_the_declination_note_belongs_to_one_holder_only() {
+  local out status declined
+  make_home "$TMP_ROOT/declination-pid"
   declined="$HOME_DIR/state/.helm-activity-declined"
   (
     # shellcheck source=bin/fm-helm-lib.sh
     . "$ROOT/bin/fm-helm-lib.sh"
-    fm_helm_stamp "$HOME_DIR/state" "$HOLDER_PID" "" || true
-    fm_helm_stamp "$HOME_DIR/state" "$HOLDER_PID" "$transcript_file"
-  ) || fail "a stamp naming a real transcript must succeed"
-  assert_present "$HOME_DIR/state/.helm-activity" "the stamp must land once the transcript resolves"
-  assert_absent "$declined" "a successful stamp must clear the earlier declination"
-  pass "fm-helm-lib: a successful stamp replaces the declination rather than leaving it stale"
+    fm_helm_record_declination "$HOME_DIR/state" "$((HOLDER_PID + 100000))" \
+      "jq is unavailable, so the turn-end payload could not be read at all"
+  ) || fail "the declination record must be writable"
+  backdate "$HOME_DIR/state/.lock" 86400
+  out=$(run_lock); status=$?
+  expect_code 1 "$status" "the holder still keeps the helm"
+  assert_contains "$out" "has not proved it is doing any work" "silence must read as unmeasurable"
+  assert_not_contains "$out" "jq is unavailable" \
+    "a record left by another session must never be quoted as this holder's reason"
+
+  (
+    # shellcheck source=bin/fm-helm-lib.sh
+    . "$ROOT/bin/fm-helm-lib.sh"
+    fm_helm_record_declination "$HOME_DIR/state" "$HOLDER_PID" \
+      "jq is unavailable, so the turn-end payload could not be read at all"
+  ) || fail "the declination record must be writable"
+  out=$(run_lock); status=$?
+  expect_code 1 "$status" "the holder still keeps the helm"
+  assert_contains "$out" "jq is unavailable" "this holder's own reason must be quoted in the refusal"
+  assert_present "$declined" "a refusal must not consume the record it quotes"
+  pass "fm-lock: only the current holder's own declination is quoted in its refusal"
+}
+
+# The record is one current answer, not a log, and it must not survive the helm
+# changing hands.
+test_releasing_the_helm_clears_the_declination_record() {
+  local declined
+  make_home "$TMP_ROOT/declination-cleared"
+  declined="$HOME_DIR/state/.helm-activity-declined"
+  printf '%s\n' "$ME_PID" > "$HOME_DIR/state/.lock"
+  (
+    # shellcheck source=bin/fm-helm-lib.sh
+    . "$ROOT/bin/fm-helm-lib.sh"
+    fm_helm_record_declination "$HOME_DIR/state" "$ME_PID" "the turn-end payload carried no transcript path"
+  ) || fail "the declination record must be writable"
+  env PATH="$FAKEBIN:$PATH" FM_ROOT_OVERRIDE="$HOME_DIR" bash "$ROOT/bin/fm-lock.sh" release >/dev/null 2>&1 \
+    || fail "the holder must be able to release its own helm"
+  assert_absent "$declined" "giving up the helm must not leave an explanation for the next holder to inherit"
+  pass "fm-lock release: the declination record does not outlive the session that held the helm"
 }
 
 test_refuses_when_the_terminal_cannot_be_read() {
@@ -446,8 +539,11 @@ run_all() {
   test_refuses_a_holder_whose_only_evidence_is_the_session_lock
   test_refuses_an_empty_or_foreign_activity_marker
   test_the_activity_stamp_is_never_observable_as_empty
-  test_a_stamp_without_a_resolvable_transcript_is_declined_and_explained
-  test_a_successful_stamp_clears_an_earlier_declination
+  test_a_marker_naming_no_usable_transcript_is_not_evidence
+  test_a_transcript_that_vanishes_after_the_stamp_ends_the_measurement
+  test_a_stamp_without_a_transcript_still_overwrites_the_previous_marker
+  test_the_declination_note_belongs_to_one_holder_only
+  test_releasing_the_helm_clears_the_declination_record
   test_mid_turn_work_counts_as_activity
   test_takes_the_helm_from_a_silent_unattended_holder
   test_a_dead_holder_still_loses_the_helm_immediately

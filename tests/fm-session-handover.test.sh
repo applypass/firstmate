@@ -265,6 +265,39 @@ test_pulse_does_not_stamp_for_a_session_without_the_helm() {
   pass "fm-session-pulse: only the session holding the helm stamps its activity"
 }
 
+# The record of why a turn end resolved no transcript is diagnostics that explain
+# a later refusal, so each reason must point at the thing that actually failed:
+# a payload naming a transcript that is gone is a different problem from a
+# payload that named none at all.
+test_pulse_records_why_it_could_not_resolve_a_transcript() {
+  local home fakebin holder declined
+  home=$(make_home "$TMP_ROOT/pulse-declined")
+  fakebin=$(fm_fakebin "$TMP_ROOT/pulse-declined")
+  start_holder; holder=$HOLDER_PID
+  make_fake_ps "$fakebin" "$holder"
+  printf '%s\n' "$holder" > "$home/state/.lock"
+  declined="$home/state/.helm-activity-declined"
+
+  run_pulse "$home" "$(stop_payload "$home/gone.jsonl")" PATH="$fakebin:$PATH" >/dev/null
+  assert_present "$home/state/.helm-activity" \
+    "the marker must still be written, so no earlier turn's marker stands in for this one"
+  grep -q '^transcript=$' "$home/state/.helm-activity" \
+    || fail "a turn that resolved no transcript must say so in the marker"
+  assert_present "$declined" "a turn end that resolved no transcript must record why"
+  assert_grep "pid=$holder" "$declined" "the record must name the session it belongs to"
+  assert_grep "gone.jsonl" "$declined" \
+    "a payload naming a transcript that is not there must not read as a payload naming none"
+
+  run_pulse "$home" '{"session_id":"s"}' PATH="$fakebin:$PATH" >/dev/null
+  assert_grep "carried no transcript path" "$declined" \
+    "a payload with no transcript path at all must say exactly that"
+
+  write_transcript "$home/t.jsonl" 1000
+  run_pulse "$home" "$(stop_payload "$home/t.jsonl")" PATH="$fakebin:$PATH" >/dev/null
+  assert_absent "$declined" "a turn end that does resolve a transcript must clear the record"
+  pass "fm-session-pulse: records why a transcript could not be resolved, naming the real cause"
+}
+
 # --- the handover record: pointers, not assertions ---------------------------
 
 test_prepare_refuses_an_unaccounted_worker() {
@@ -710,6 +743,7 @@ run_all() {
   test_pulse_degrades_silently_on_unmeasurable_input
   test_pulse_stamps_the_helm_activity_marker
   test_pulse_does_not_stamp_for_a_session_without_the_helm
+  test_pulse_records_why_it_could_not_resolve_a_transcript
   test_prepare_refuses_an_unaccounted_worker
   test_prepared_record_is_advisory_and_carries_the_unrecorded_facts
   test_check_refuses_when_a_pointed_at_record_is_sabotaged

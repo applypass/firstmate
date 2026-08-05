@@ -87,7 +87,7 @@ A forked or resumed background window stays alive indefinitely while doing nothi
 
 `bin/fm-helm-lib.sh` owns the replacement decision, and it requires **two independent proofs**:
 
-- **Silence.** The newer of two mtimes, and nothing else: the turn-end activity marker `state/.helm-activity`, which must be readable, non-empty, and stamped with this holder's own pid, and the transcript that marker names. The transcript grows during a turn, so a holder working through one long turn reads as busy rather than idle. `FM_HELM_IDLE_TAKEOVER` sets the required silence and defaults to 1800 seconds.
+- **Silence.** The newer of two mtimes, and nothing else: the turn-end activity marker `state/.helm-activity`, which must be readable, non-empty, stamped with this holder's own pid, and naming a transcript file that still exists, and that transcript itself. The transcript grows during a turn, so a holder working through one long turn reads as busy rather than idle. `FM_HELM_IDLE_TAKEOVER` sets the required silence and defaults to 1800 seconds.
 - **Unattended.** The holder has no controlling terminal at all, read from `ps -o tty=`.
 
 The session lock's own mtime is **not** evidence of anything.
@@ -95,19 +95,24 @@ The session lock's own mtime is **not** evidence of anything.
 Measuring silence that way over-estimates it, and over-estimating silence is the direction that permits a takeover, so the lock was dropped as a source entirely.
 
 A timer alone is never sufficient.
-An attended holder keeps the helm however long it has been quiet, and every unprovable input refuses rather than proceeding: a terminal `ps` will not report, and equally a holder with no pid-matched marker, whose silence is simply unmeasurable.
+An attended holder keeps the helm however long it has been quiet, and every unprovable input refuses rather than proceeding: a terminal `ps` will not report, and equally a holder with no pid-matched marker, or one whose marker names no usable transcript, whose silence is simply unmeasurable.
 The rule is fail-closed by design - no proof of work means no takeover - and the accepted cost is that a holder which cannot prove it is working keeps the helm until someone clears it by hand.
 
-A marker always names a transcript that exists, and that is enforced where the marker is WRITTEN rather than checked again where it is read, so admissible evidence has exactly one definition.
-`fm_helm_stamp` refuses to write a marker at all unless it is given a transcript path that resolves.
-Without the transcript, silence would rest on the marker's own mtime, which proves a turn ended once rather than that the session is working now, and a holder working through one turn longer than the threshold would lose the helm mid-turn.
+The READ path is the single authority on what counts as evidence: `fm_helm_silence_seconds` requires a marker that is readable, non-empty, pid-matched to this holder, and names a transcript file that still exists, and it returns unmeasurable when any of those fails.
+A marker that names no usable transcript is not evidence, so the takeover is refused rather than decided on the marker's own mtime, which proves a turn ended once rather than that the session is working now.
+The check cannot live where the marker is written, because a marker is a persisted claim that outlives the file it names: it may predate any write-time rule, and the transcript can be deleted, rotated, or moved afterwards.
+The refusal says which part was missing - no marker for this holder, a marker naming no transcript, or a marker naming a transcript that is gone - because a person debugging a refused takeover needs to know which.
 
-A refused stamp is recorded, never silent: `state/.helm-activity-declined` holds the holder's pid, the time, and the reason - no transcript in the turn-end payload, a transcript path that does not exist, or `jq` unavailable to read the payload at all.
-It is one record, overwritten rather than appended, and a successful stamp clears it.
-When `bin/fm-lock.sh` then refuses a takeover because silence is unmeasurable, it quotes that reason in the refusal, because the person asking "why did this not take the helm" reads the refusal and not a file they do not know exists.
-A pulse that quietly stopped stamping would be a safety mechanism failing without saying so.
+`fm_helm_stamp` therefore always writes, even when the turn end has no transcript to name.
+Refusing to write would leave the PREVIOUS marker standing: a turn that stamps a good transcript, followed by one that resolves nothing, would leave the reader measuring silence from the earlier turn while the holder works on a turn nothing observes.
+Overwriting with this turn's truth, including "no transcript this time", makes that case fail closed.
 
-So with `jq` unavailable or the transcript unresolvable, no marker is written, an automatic takeover never happens, and the operator's path is the printed refusal plus `bin/fm-lock.sh clear --pid <holder>`.
+The pulse records why a transcript could not be resolved in `state/.helm-activity-declined`: the holder's pid, the time, and the reason - no transcript path in the payload, a path that was named but does not resolve, or `jq` unavailable to read the payload at all.
+It is diagnostics, not a gate: it explains a refusal and never causes one.
+It is one record, overwritten rather than appended, cleared by a turn end that does resolve a transcript and wherever the helm changes hands, and it is read back pid-matched so a dead session's reason is never attributed to the current holder.
+When `bin/fm-lock.sh` refuses a takeover because silence is unmeasurable, it quotes that reason, because the person asking "why did this not take the helm" reads the refusal and not a file they do not know exists.
+
+So with `jq` unavailable or the transcript unresolvable, silence stays unmeasurable, an automatic takeover never happens, and the operator's path is the printed refusal plus `bin/fm-lock.sh clear --pid <holder>`.
 The same is true on a primary running codex, opencode, pi, grok, or kimi, because only the `claude` pulse stamps the marker today.
 Giving those harnesses the stamp is a separate follow-up slice, not a gap being ignored.
 

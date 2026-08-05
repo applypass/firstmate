@@ -59,15 +59,16 @@ holder_description() {
   fi
 }
 
-# print_declination_note <pid>: when silence is unmeasurable and the holder's
-# pulse recorded WHY it never stamped a marker, say so here. A person debugging
-# "why did this not take the helm" reads the refusal, not a file they do not
-# know exists.
+# print_declination_note <holder-pid>: when silence is unmeasurable and THIS
+# holder's own turn end recorded why it could not resolve a transcript, say so
+# here. A person debugging "why did this not take the helm" reads the refusal,
+# not a file they do not know exists. The note is pid-matched inside the lib, so
+# a record left by a previous session is never attributed to this holder.
 print_declination_note() {
   local note
   fm_helm_silence_seconds "$STATE" "$1" 2>/dev/null && return 0
-  note=$(fm_helm_declination_note "$STATE" 2>/dev/null) || return 0
-  printf 'no activity marker exists because %s\n' "$note"
+  note=$(fm_helm_declination_note "$STATE" "$1" 2>/dev/null) || return 0
+  printf '%s\n' "$note"
 }
 
 if [ "${1:-}" = "status" ]; then
@@ -107,6 +108,7 @@ if [ "${1:-}" = "release" ]; then
     echo "error: cannot remove the session lock $LOCK" >&2
     exit 1
   }
+  fm_helm_clear_declination "$STATE"
   echo "lock released: this session no longer holds the helm"
   exit 0
 fi
@@ -137,6 +139,7 @@ if [ "${1:-}" = "clear" ]; then
     echo "error: cannot remove the session lock $LOCK" >&2
     exit 1
   }
+  fm_helm_clear_declination "$STATE"
   printf 'lock cleared: pid %s no longer holds the helm. That session is still running and was not touched - quit it so two sessions do not work the same fleet.\n' "$old"
   exit 0
 fi
@@ -206,6 +209,7 @@ fi
 release_claim_lock
 echo "lock acquired: harness pid $me"
 if [ -n "${TAKEOVER_FROM:-}" ]; then
+  fm_helm_clear_declination "$STATE"
   # Loud on purpose: a takeover is rare, and the session that lost the helm may
   # still be running, so this must never read as an ordinary acquisition.
   printf 'HELM TAKEN OVER: pid %s held it and %s.\n' "$TAKEOVER_FROM" "$TAKEOVER_WHY"

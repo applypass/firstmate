@@ -108,7 +108,7 @@ state/               volatile runtime signals; gitignored
   x-poll.error x-poll.claim-error  generated X-mode relay and offer-claim diagnostic dedupe markers
   .wake-queue        durable queued wakes: epoch<TAB>seq<TAB>kind<TAB>key<TAB>payload
   .helm-activity     turn-end marker proving the session holding the helm is working, not merely alive; bin/fm-helm-lib.sh
-  .helm-activity-declined  why the last stamp was refused (no resolvable transcript), quoted by a takeover refusal; bin/fm-helm-lib.sh
+  .helm-activity-declined  diagnostics: why the last turn end could not resolve a transcript, quoted by a takeover refusal; bin/fm-helm-lib.sh
   .handover .handover-due .helm-takeover  handover progress, the once-per-session threshold notice, and the auditable record of a taken helm
   .afk               durable away-mode flag; present = sub-supervisor may inject escalations (set by /afk, cleared on user return)
   .watch.lock .wake-queue.lock watcher singleton and queue serialization locks

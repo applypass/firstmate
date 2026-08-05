@@ -64,5 +64,5 @@ Session start prints the record in full, so do not re-read it.
 ## Taking the helm from an idle holder
 
 A fresh session takes the helm automatically only when the previous holder is provably unattended and measurably silent; `bin/fm-lock.sh` reports it loudly when it does.
-When it refuses instead, it names what holds the helm, why - including why the holder never stamped an activity marker, when that is the reason - and the one command that clears it.
+When it refuses instead, it names what holds the helm, why - including which piece of proof was missing when the holder's activity could not be measured - and the one command that clears it.
 Relay that to the captain as a plain choice - the old session is still open and someone may be using it - and never clear the helm from a session the captain has not agreed to give up.
