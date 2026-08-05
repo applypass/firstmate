@@ -149,6 +149,7 @@ Its four constraints are structural rather than measured, and each has a fixture
 | Silent below the advisory | No file is created at all for an ordinary session. |
 | One line per crossing, not per turn end | 12 turn ends at a steady 160,000 write one advisory line; dropping below the advisory point and climbing back adds exactly one more. Six enforcing turn ends across two blocks, the stand-down, and three stood-down turns write one ceiling line. |
 | A parse failure is traced | An unparseable block record writes one `stage=record-unparseable` line naming the session. |
+| A lost block bound is traced | A block count that could not be written writes one `stage=ceiling-unrecorded` line, even when the ceiling notice was already spent, and six such turn ends still write one line. |
 | That trace is bounded too | A record that is corrupt *and* cannot be rewritten is re-read at every turn end; six such turn ends write one line, not six. |
 
 Granularity was measured before it was corrected: 12 turn ends at a steady 160,000, with the measurement never changing, produced 12 trip lines and exactly one notice.

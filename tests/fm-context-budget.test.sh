@@ -822,9 +822,10 @@ plant_unwritable_block_record() {  # <dir> <session> <count>
 # tell you when it breaks and then says nothing is the worst shape available, so
 # the degrade carries its own key.
 test_unrecorded_degrade_is_its_own_notice_key() {
-  local dir transcript payload status
+  local dir transcript payload status trips
   dir=$(make_primary_dir "$TMP_ROOT/degrade-own-key")
   transcript="$dir/transcript.jsonl"
+  trips="$dir/state/.context-budget-trips"
   write_transcript "$transcript" 210000
   payload=$(stop_payload "$transcript" sess-degrade)
   # Spend the `ceiling` key first, exactly as a warning-only turn would.
@@ -840,13 +841,15 @@ test_unrecorded_degrade_is_its_own_notice_key() {
   assert_system_message_contains "$BUDGET_STDOUT" "could not be recorded" \
     "a spent ceiling notice must not silence the count-not-recorded degrade"
   [ -z "$BUDGET_STDERR" ] || fail "the degrade must not use the discarded stderr channel: $BUDGET_STDERR"
+  assert_grep 'stage=ceiling-unrecorded' "$trips" \
+    "the lost block bound must leave a durable trace, not only a notice that may never render"
   pass "fm-context-budget: the count-not-recorded degrade has its own notice key and survives a spent ceiling notice"
 }
 
 # Its own key, not an unconditional message: while the block record stays
 # unwritable the degrade would otherwise repeat at every single turn end.
 test_unrecorded_degrade_prints_once_per_episode() {
-  local dir transcript payload i
+  local dir transcript payload i lines
   dir=$(make_primary_dir "$TMP_ROOT/degrade-dedup")
   transcript="$dir/transcript.jsonl"
   write_transcript "$transcript" 210000
@@ -864,6 +867,9 @@ test_unrecorded_degrade_prints_once_per_episode() {
       || fail "the degrade repeated on turn $i instead of printing once per episode: $BUDGET_STDOUT"
   done
   chmod 600 "$dir/state/.context-budget-blocks-sess-dd"
+  lines=$(trip_count "$dir/state/.context-budget-trips" ceiling-unrecorded)
+  [ "$lines" -eq 1 ] \
+    || fail "the degrade trace must stay one line per episode, found $lines"
   pass "fm-context-budget: the degrade prints once per episode rather than at every turn end"
 }
 

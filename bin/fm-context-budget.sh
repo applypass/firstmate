@@ -72,8 +72,9 @@
 # One line per CROSSING, not per turn end above the advisory: the question it
 # answers is how OFTEN the guard fires, and a line per turn end answers how long a
 # session lingered instead, inflating the count by the length of every episode.
-# A parse failure on the block record is recorded here too, since a corrupt record
-# leaving no trace is the one silent failure this file will not accept.
+# A parse failure on the block record is recorded here too, and so is a block count
+# that could not be written, since a record failure leaving no trace is the one
+# silent failure this file will not accept.
 #
 # RECORD IDENTITY IS THE SESSION: both records are named per session_id, which is
 # the identity of the context accumulation itself (the transcript file is
@@ -401,10 +402,7 @@ budget_read() {
       # cannot be rewritten is re-read at every turn end, and the trip record is
       # bounded, so a line each time would crowd out the crossing history the
       # warning-only release exists to collect.
-      if ! notice_seen record-unparseable; then
-        notice_record record-unparseable
-        trip_record record-unparseable
-      fi
+      stage_enter record-unparseable || true
       return 0
       ;;
   esac
@@ -486,24 +484,20 @@ ceiling_text() {  # <closing line>
   printf 'This is a cost and reasoning-quality policy, not an overflow warning.\n'
 }
 
-# Entering a threshold stage. Writing the stage into the record IS the crossing,
-# so the ONE trip line for it is appended here and nowhere else: that is what makes
-# the trip record count how OFTEN the guard fires rather than how long a session
-# lingered above the advisory. Returns 0 only when the stage is new, so every path
-# below - including the enforcing one, which prints its banner on every blocked
-# turn and so cannot dedupe through a notice - records its crossing exactly once.
-stage_enter() {  # <advisory|ceiling>
+# Entering a stage: a threshold crossing, or a malfunction the guard reports the
+# same way. Writing the stage into the record IS the crossing, so the ONE trip
+# line for it is appended here and nowhere else: that is what makes the trip
+# record count how OFTEN the guard fires rather than how long a session lingered
+# above the advisory. Returns 0 only when the stage is new, so every path below -
+# including the enforcing one, which prints its banner on every blocked turn and
+# so cannot dedupe through a notice - records its crossing exactly once. Every
+# stage goes through here, so no stage can report itself to the session without
+# also leaving the durable line the notice channel cannot be trusted to deliver.
+stage_enter() {  # <stage>
   notice_seen "$1" && return 1
   notice_record "$1"
   trip_record "$1"
   return 0
-}
-
-# One visible non-blocking notice per notice key per episode, on stdout.
-notice_once() {  # <notice> <text>
-  notice_seen "$1" && return 0
-  notice_record "$1"
-  system_message "$2"
 }
 
 # --- a new compaction boundary is a genuine reset -----------------------------
@@ -593,7 +587,11 @@ if ! budget_record "$COUNT" 0; then
   # Its OWN notice key, never the ceiling key: this reports a MALFUNCTION of the
   # guard rather than a threshold crossing, and sharing a key meant a ceiling
   # notice already shown this episode silenced it from its very first occurrence.
-  notice_once ceiling-unrecorded "$(ceiling_text 'This turn is allowed rather than blocked because the block count could not be recorded.')"
+  # Through stage_enter, so the loss of the bound leaves a trip line behind
+  # instead of resting on a notice that may never render.
+  if stage_enter ceiling-unrecorded; then
+    system_message "$(ceiling_text 'This turn is allowed rather than blocked because the block count could not be recorded.')"
+  fi
   exit 0
 fi
 

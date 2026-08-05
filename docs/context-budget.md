@@ -161,6 +161,9 @@ A failure to parse the block record is recorded here as well, under `stage=recor
 That is the one trace a corrupt record leaves, and it is why treating it as no record is not a silent decision.
 It is written once per episode, like a notice: a record that is corrupt and also cannot be rewritten is re-read at every turn end, and a line each time would crowd the crossing history out of the bounded file.
 
+A block count that could not be written is recorded the same way, under `stage=ceiling-unrecorded`, and also once per episode.
+That case loses the bound on blocking, so the same argument applies: reporting it only through a notice would leave the guard's own malfunction to a channel that may never render.
+
 The record is write-only by contract, and that contract is what keeps it outside the loss-path class the durable records below belong to:
 
 - Nothing ever reads a decision out of it.
