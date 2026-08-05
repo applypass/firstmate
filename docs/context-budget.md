@@ -11,7 +11,7 @@ Do not infer one guard's thresholds, loop safety, or degradation behavior from t
 ## What this is for
 
 Firstmate sessions run toward roughly 800,000 tokens before Claude's own auto-compaction fires.
-This guard fires far earlier, at an absolute 180,000 tokens, and asks for a handoff so the balloon never forms.
+This guard fires far earlier, at an absolute 180,000 tokens, and reports it so a handover happens before the balloon forms.
 
 That makes it a deliberate cost and reasoning-quality policy, not overflow prevention.
 Nothing crashes at 180,000 tokens on a 1M-context session.
@@ -25,18 +25,18 @@ The window is not inferable from the transcript: a 1M session records `message.m
 At every primary turn end, the guard measures the live session's context.
 Below the advisory point it is completely silent.
 Between the advisory point and the ceiling it prints one non-blocking notice per episode.
-At or above the ceiling it prints one visible ceiling notice per episode naming the handoff-and-clear valve, and by default allows the turn end.
+At or above the ceiling it prints one visible ceiling notice per episode pointing at the handover, and by default allows the turn end.
 Entering a stage also appends one line to a durable trip record, one line per crossing rather than one per turn end.
 
 **The shipped default warns and does not block.**
 Enforcement is fully implemented and switched on with `FM_CONTEXT_BUDGET_ENFORCE=1`; with enforcement off, nothing in this guard can ever return a blocking exit status.
 
 That default is deliberate, and is not an unfinished enforcement path.
-A 180,000 ceiling on a million-token session will trip repeatedly in a normal working day, and every trip costs a handoff.
+A 180,000 ceiling on a million-token session will trip repeatedly in a normal working day, and every trip costs a handover.
 The real frequency of those crossings has to be observed before the mechanism is allowed to interrupt anyone, so the first release stays out of the way and only reports.
 
 **The default reports to the captain, not to the session.**
-The automatic handoff-and-clear requires enabling enforcement.
+Reaching the session at all requires enabling enforcement.
 Every default-path notice is a `systemMessage`, which is a user-facing channel: only the blocking exit-2 path delivers text to the model, and a session asked in the next turn about a `systemMessage` it had visibly received answered that it had not seen it.
 So under the default the guard tells the captain that a crossing happened; nothing instructs the session, and nothing acts.
 
@@ -203,47 +203,36 @@ Concretely:
 - Records are pruned only when older than 30 days, and a stood-down session refreshes its own record on every turn end, so pruning can never reach a session that is still running.
   The prune names the two per-session record prefixes explicitly and does not touch the trip record.
 
-## The valve
+## This guard does not own the valve
 
-There is exactly one valve: write a handoff and clear.
+The handover mechanism owns it, through the `handover` skill and `bin/fm-handover.sh`; AGENTS.md states the precedence.
+This guard reports a crossing earlier than the 250,000 handover threshold and stops there.
+It never stalls the session: report it, keep working, and tell the captain at the next natural reply.
 
-1. Run `/stow` to write durable knowledge, decisions, and unfinished work to disk.
-2. Write a handoff note naming what the session was doing and the exact next step.
-3. Clear the context and resume from the stowed record.
-
-The valve is built on `/stow`, which is tracked in `.agents/skills/stow/` and already exists to leave a session safe to reset.
-It is deliberately not built on `/handoff`, which is a personal untracked skill absent on other machines.
-Where `/handoff` happens to be installed it is an optional local enhancement, never a requirement.
+Running `/stow` first is still worth doing, because it writes durable knowledge, decisions, and unfinished work to disk and `.agents/skills/stow/` tracks it on every machine.
+That is a step inside a handover, not a second valve standing beside it.
 
 The guard instructs and nothing more.
 It never types into a pane, never injects `/compact`, `/clear`, or any other command, and never spawns a replacement agent.
-Compacting in place and spawning a fresh agent are not offered as alternatives; there is one deterministic valve.
+Compacting in place and spawning a replacement are not offered as alternatives.
 
-## The session cannot clear itself
+## Clearing is not what closes it
 
-Steps 1 and 2 can be autonomous, but only under enforcement.
-Step 3 never is: clearing the context is a local user action with no tool surface, so the session can prepare the handoff but cannot complete the reset itself.
-A live session confirmed this directly, replying "I can't clear my own context; that's yours to do" ([`verification/context-budget.md`](verification/context-budget.md)).
+A session cannot clear its own context.
+Clearing is a local user action with no tool surface, and a live session confirmed it directly, replying "I can't clear my own context; that's yours to do" ([`verification/context-budget.md`](verification/context-budget.md)).
 
-Under the shipped default the valve is fully captain-driven.
-The report reaches the captain, if it renders at all, and the trip record captures the crossing either way; the session is neither told nor asked to do anything, so steps 1 and 2 happen when the captain asks for them.
-With `FM_CONTEXT_BUDGET_ENFORCE=1` the blocking path does reach the session, and that is the only configuration in which it closes on its own up to step 3: the block surfaces the instruction, the session stows and writes the note, and the captain clears.
+That measurement still holds and no longer constrains anything here, because a handover does not clear a context.
+It releases the helm, and a successor session picks the work up from disk.
+So nothing in this guard waits on a captain keystroke.
 
-## Away mode: advisory only, by decision
+## Away mode
 
-While away mode is active there is no captain at the keyboard, so step 3 of the valve cannot run.
-This is accepted, deliberate behavior rather than an open defect.
+While away mode is active nobody is there to read the report, so under the shipped default the crossing goes to the trip record and the session keeps running.
+With enforcement switched on it blocks up to `FM_CONTEXT_BUDGET_BLOCK_BUDGET` times and then stands down for the rest of that session.
 
-Nothing in firstmate may type a command into a live session, so there is no mechanism that could close the valve unattended, and none is being built.
-Under the shipped warning-only default the guard records the crossing in the trip record, reports it on a channel nobody is there to read, and the session keeps running.
-With enforcement switched on it blocks up to `FM_CONTEXT_BUDGET_BLOCK_BUDGET` times, which gets steps 1 and 2 written to disk, and then stands down for the rest of that session.
-
-The cost is plain and worth stating: the guardrail is effectively inert while away, which is exactly when sessions run longest unattended and when a ballooning context is most expensive.
-That is preferred to the alternatives.
-Injecting keystrokes into a live session was ruled out deliberately, and a guard that nagged an unattended session every turn would grow the very context it exists to cap while doing nothing useful.
-
-Ending and restarting the session with the handoff as its opening context is recorded here as an unverified lead only.
-It is not authorized, not verified, and nothing should be built toward it.
+That is accepted, deliberate behavior rather than an open defect.
+Nothing in firstmate may type a command into a live session, and a guard that nagged an unattended session every turn would grow the very context it exists to cap while doing nothing useful.
+The cost is worth stating plainly: this guard is close to inert while away, which is exactly when sessions run longest and a ballooning context is most expensive.
 
 ## Never wedge a session
 
@@ -260,7 +249,7 @@ A compaction is a genuine reset that does not change `session_id`, so leaving it
 That is deliberately different from the turn-end supervision guard in [`turnend-guard.md`](turnend-guard.md), which resets its block budget on every allow.
 The asymmetry is the point.
 A blind turn end is a repairable condition and a forced continuation is itself the repair prompt, so blocking again on a later turn is useful pressure.
-The context ceiling cannot clear without a captain keystroke, so a guard that reset its budget would oscillate between blocking and allowing forever, and each forced continuation would re-run the handoff and add tokens to the context it exists to cap.
+The measurement does not fall on its own inside an episode, so a guard that reset its budget would oscillate between blocking and allowing forever, and each forced continuation would add tokens to the context it exists to cap.
 Standing down is the correct end state here; it is not the correct end state there.
 
 While the stand-down holds, this guard contributes nothing to the harness's shared consecutive-block accounting, so stacking it alongside the other `Stop` hooks does not drive the union of blockers toward the harness's own override.

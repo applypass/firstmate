@@ -59,7 +59,7 @@
 # THE DEFAULT REPORTS TO THE CAPTAIN, NOT THE SESSION. systemMessage is a
 # user-facing channel: a session asked about one it had visibly received answered
 # that it had not seen it. Only the blocking exit-2 path reaches the model, so the
-# automatic handoff-and-clear needs enforcement switched on. Worse, rendering is
+# guard reaches the session at all only with enforcement switched on. Worse, rendering is
 # not guaranteed at all: a controlled experiment confirmed 30 emissions with zero
 # renders. That is why the file-based TRIP RECORD below, not the notice, is the
 # channel this feature relies on for observing how often the ceiling is crossed.
@@ -93,7 +93,9 @@
 # It does NOT extend to an unparseable RECORD, which is evidence of nothing and is
 # read as no record at all, leaving the guard armed; see budget_read.
 #
-# THE ONE VALVE: write a handoff and clear. This guard instructs and never types
+# THE VALVE IS THE HANDOVER, NOT THIS GUARD. This guard reports earlier than the
+# handover threshold and never stalls a session; AGENTS.md states the precedence and
+# docs/context-budget.md owns the detail. This guard instructs and never types
 # into a pane: it never injects /compact, /clear, or any other command, and it
 # never spawns a replacement agent. docs/context-budget.md records the away-mode
 # consequence this creates.
@@ -470,14 +472,15 @@ system_message() {  # <text>
 }
 
 valve_text() {
-  printf 'Take the valve now, before any other work:\n'
+  printf 'Do not stall the fleet: keep working, and tell the captain at the next natural reply.\n'
+  printf 'When you do hand over, the handover mechanism owns it:\n'
   printf '  1. Run /stow to write durable knowledge, decisions, and unfinished work to disk.\n'
-  printf '  2. Write a handoff note naming what you were doing and the exact next step.\n'
-  printf '  3. Clear the context and resume from the stowed record.\n'
+  printf '  2. Load the handover skill and release the helm with bin/fm-handover.sh.\n'
+  printf '  3. A successor session picks the work up from disk; nothing here clears a context.\n'
 }
 
 ceiling_text() {  # <closing line>
-  printf 'CONTEXT BUDGET CEILING REACHED - HAND OFF AND CLEAR\n'
+  printf 'CONTEXT BUDGET CEILING REACHED - HAND OVER\n'
   printf 'This session measures %s tokens, over the %s ceiling.\n' "$TOTAL" "$CEILING"
   valve_text
   printf '%s\n' "$1"
@@ -537,7 +540,7 @@ if [ "$TOTAL" -lt "$CEILING" ]; then
       printf 'CONTEXT BUDGET ADVISORY - %s tokens, ceiling %s\n' "$TOTAL" "$CEILING"
       printf 'About %s tokens of headroom left before the ceiling.\n' "$((CEILING - TOTAL))"
       printf 'Prefer cheap actions now and avoid large reads.\n'
-      printf 'Run /stow, write a handoff note, and clear before the ceiling is reached.\n'
+      printf 'Run /stow and hand over before the ceiling is reached.\n'
     )"
   fi
   exit 0
@@ -575,7 +578,7 @@ if [ "$COUNT" -gt "$BLOCK_BUDGET" ]; then
   # raising FM_CONTEXT_BUDGET_BLOCK_BUDGET mid-session cannot re-arm a budget
   # that was already spent. Say so exactly once, visibly.
   budget_record "$COUNT" 1
-  system_message "$(printf 'firstmate context budget: this session measures %s tokens, over the %s ceiling, and the block budget is exhausted so this guard now stands down for the rest of the session. Run /stow, write a handoff note, and clear before continuing.' \
+  system_message "$(printf 'firstmate context budget: this session measures %s tokens, over the %s ceiling, and the block budget is exhausted so this guard now stands down for the rest of the session. Run /stow and hand over; do not stall the fleet waiting on it.' \
     "$TOTAL" "$CEILING")"
   exit 0
 fi

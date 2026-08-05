@@ -175,9 +175,15 @@ test_blocks_over_ceiling_and_names_the_valve() {
   assert_contains "$out" "210000" "block banner must report the measured total"
   assert_contains "$out" "180000" "block banner must report the ceiling it enforced"
   assert_contains "$out" "/stow" "the valve must name /stow"
-  assert_contains "$out" "handoff note" "the valve must require a handoff note"
-  assert_contains "$out" "Clear the context" "the valve must require clearing the session"
-  pass "fm-context-budget: blocks above the ceiling under enforcement and names the handoff-and-clear valve"
+  # The handover mechanism owns the valve; this guard reports earlier and points at
+  # it. Two things it must NOT do, both retired deliberately: order the session to
+  # stall until the captain acts, and tell it to clear, which a session cannot do
+  # and which a handover does not need.
+  assert_contains "$out" "bin/fm-handover.sh" "the valve must point at the handover mechanism that owns it"
+  assert_not_contains "$out" "Clear the context" "the guard must not tell a session to clear"
+  assert_not_contains "$out" "before any other work" "the guard must not order the session to stall"
+  assert_contains "$out" "Do not stall the fleet" "the guard must say plainly that it does not stall the fleet"
+  pass "fm-context-budget: blocks above the ceiling under enforcement and points at the handover that owns the valve"
 }
 
 # The shipped default is deliberately warning-only: the ceiling has to be
@@ -1514,9 +1520,20 @@ test_settings_registers_the_stop_hook() {
   command=$(jq -r '.hooks.Stop[].hooks[] | select(.command | test("fm-context-budget\\.sh")) | .command' "$settings")
   assert_contains "$command" 'CLAUDE_PROJECT_DIR' "the Stop hook must anchor through CLAUDE_PROJECT_DIR"
   assert_contains "$command" '--claude' "the Stop hook must run in Claude mode"
-  jq -e '[.hooks.Stop[].hooks[]] | length == 3' "$settings" >/dev/null \
-    || fail "Stop must stack exactly three hooks: turn-end guard, context budget, auto-arm"
-  pass ".claude/settings.json: registers the context-budget guard as a sibling Stop hook"
+  # Four siblings now, and the exact set matters: the session pulse arrived
+  # alongside this guard and both measure context on the same event, so a rebase
+  # that dropped either one would still have produced a working hook array.
+  jq -e '[.hooks.Stop[].hooks[]] | length == 4' "$settings" >/dev/null \
+    || fail "Stop must stack exactly four hooks: turn-end guard, session pulse, context budget, auto-arm"
+  for command in fm-turnend-guard fm-session-pulse fm-context-budget fm-claude-stop-autoarm; do
+    jq -e --arg c "$command" '[.hooks.Stop[].hooks[] | select(.command | test($c))] | length == 1' "$settings" >/dev/null \
+      || fail "Stop must register exactly one $command hook"
+  done
+  # The auto-arm stays last: it rewakes the session, so anything after it would run
+  # against a turn end that has already been handed on.
+  jq -e '[.hooks.Stop[].hooks[].command] | last | test("fm-claude-stop-autoarm")' "$settings" >/dev/null \
+    || fail "the auto-arm hook must stay last in the Stop array"
+  pass ".claude/settings.json: registers the context-budget guard as one of four sibling Stop hooks"
 }
 
 test_hook_does_not_fold_into_the_turnend_guard() {
