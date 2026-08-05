@@ -139,6 +139,7 @@ A task's meta survives from merge until teardown removes it, so the pull-request
 When the digest prints a released handover in full, the block points at what was printed instead of telling the reader to open the record.
 A session refused the helm is shown the same handover and told not to consume it, rather than being shown less.
 Each list has a hard cap (`FM_AWAITING_MAX`, default 20) and says how many entries it dropped, because a silently truncated list reads as "nothing else is waiting".
+For the same reason a failed read is never rendered as absence anywhere in that block: a missing `jq`, an unreadable record model, a task whose records cannot be read, or a failed pending-handover test each prints an explicit unknown marker instead of an empty list, and an unreadable record model also says that the already-landed entries could not be filtered out.
 
 Answered decisions are **searched, not preloaded**.
 A preloaded list of every answered decision does not scale, is mostly irrelevant to any one session, never shrinks, and competes with the wake queue for the same first-read slot - which is how the wall of text that hid those answers got built.
