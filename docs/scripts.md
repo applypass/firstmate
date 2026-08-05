@@ -35,6 +35,7 @@ The shared no-mistakes gate refusal for fleet lifecycle entrypoints is summarize
 | `fm-helm-lib.sh`         | Shared decision on whether the session holding the helm is working and may lose it (docs/session-handover.md) |
 | `fm-backlog-record-lib.sh` | Single owner of the canonical backlog record model, actionable captain holds, and where a task's pull request is recorded |
 | `fm-session-pulse.sh`    | Claude Stop hook stamping the helm activity marker and reporting a due handover once |
+| `fm-context-budget.sh`   | Claude Stop hook watching the context ceiling: warn by default, block only under opt-in enforcement (docs/context-budget.md) |
 | `fm-context-measure-lib.sh` | Single owner of the turn-end context measurement read from the payload's transcript |
 | `fm-claude-stop-autoarm.sh` | Claude Stop `asyncRewake` hook owning tokenless watcher continuity with single-flight exit-2 rewake (docs/watcher-continuity.md) |
 | `fm-turnend-guard.sh`    | Shared primary turn-end guard predicate so no turn ends blind (docs/turnend-guard.md) |
