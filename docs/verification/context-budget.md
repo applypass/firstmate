@@ -457,6 +457,45 @@ If it ever does occur the failure mode is a notice at every turn end: noisy, har
 **Unproven:** whether the shared-key case that needed a writable notice record beside an unwritable block record arises naturally.
 It was produced deliberately with a read-only record file; no natural cause was found on this host.
 
+## The inline measurement is kept on purpose, and the lib is behind it
+
+A review of this branch asked it to source `bin/fm-context-measure-lib.sh` and delete the inline `measure_context`, on the grounds that the lib's own header names this branch and `docs/scripts.md` calls it the single owner of the turn-end measurement.
+
+**That was declined by standing decision, twice, and this record exists so the refusal reads as reasoned rather than skipped.**
+The adoption is not refused in principle - one owner is the agreed end state - but a straight swap today would delete working behavior.
+Four ways the lib is behind this implementation, the fourth found by that same review:
+
+| Behavior | This guard | `fm-context-measure-lib.sh` |
+| --- | --- | --- |
+| Memory over a huge transcript | One streaming pass, constant memory | Slurps with `jq -s` |
+| Compaction-boundary tally | Returned alongside the total, and `record_predates_a_compaction` needs it for genuine-reset detection | Absent, and cannot supply it |
+| Multi-block turns | Takes the last usage entry | Dedupes by `requestId` |
+| Rule 3, synthetic zero-usage entries | Dropped, so the last *positive* total is reported | **Not dropped** |
+
+The fourth row is the one that matters most, because it makes the lib's own caller wrong rather than merely differing.
+One transcript of a 300,010-token turn followed by the synthetic zero-usage entry Claude Code writes when a turn ends abnormally:
+
+```
+lib   -> 0        (exit status 0, so a caller reads it as a real measurement)
+guard -> 300010
+```
+
+The consequence is reachable in `bin/fm-session-pulse.sh`, which measures through the lib.
+A `0` is below its 250,000 threshold, so it takes the under-threshold branch and removes the once-per-session `state/.handover-due` marker.
+Reproduced end to end in a scratch primary home, one session, appending only the synthetic entry between turns:
+
+```
+turn 1, 300010 tokens over the threshold -> state/.handover-due created
+turn 2, synthetic zero entry appended    -> state/.handover-due WIPED
+```
+
+So an interrupted or errored turn makes that session forget a handover was due.
+That is a defect in the sibling hook rather than in this guard, it is not repaired by this branch, and it is tracked as `fm-session-pulse-false-zero`.
+
+Adopting the lib as it stands would import the same false zero into this guard, which is exactly what rule 3 exists to reject.
+The agreed end state is the reverse move: put this streaming implementation, with rule 3 and the compaction tally, into the lib and have both callers adopt it.
+That changes behavior for the other caller, so it carries its own tests and its own review, tracked as `fm-context-measure-lib-adoption`.
+
 ## Native knobs remain unusable
 
 Neither `CLAUDE_CODE_MAX_CONTEXT_TOKENS` nor `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` can enforce this ceiling; the feasibility scout recorded the decompiled reason for each.
