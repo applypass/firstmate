@@ -59,6 +59,17 @@ holder_description() {
   fi
 }
 
+# print_declination_note <pid>: when silence is unmeasurable and the holder's
+# pulse recorded WHY it never stamped a marker, say so here. A person debugging
+# "why did this not take the helm" reads the refusal, not a file they do not
+# know exists.
+print_declination_note() {
+  local note
+  fm_helm_silence_seconds "$STATE" "$1" 2>/dev/null && return 0
+  note=$(fm_helm_declination_note "$STATE" 2>/dev/null) || return 0
+  printf 'no activity marker exists because %s\n' "$note"
+}
+
 if [ "${1:-}" = "status" ]; then
   if [ ! -f "$LOCK" ]; then echo "lock: free"; exit 0; fi
   old=$(cat "$LOCK" 2>/dev/null) || {
@@ -68,10 +79,17 @@ if [ "${1:-}" = "status" ]; then
   if fm_harness_pid_alive "$old"; then
     echo "lock: held by live harness pid $old"
     holder_description "$old"
-    if fm_helm_takeover_allowed "$STATE" "$old"; then
+    # A takeover verdict about the caller's OWN helm reads as an invitation to
+    # take the helm from itself, so the usual caller - the holder - is told it
+    # holds it instead. The verdict is only meaningful about another session.
+    mine=$(fm_harness_ancestry_pid 2>/dev/null || printf '')
+    if [ -n "$mine" ] && [ "$mine" = "$old" ]; then
+      printf 'takeover: not applicable - this session holds the helm\n'
+    elif fm_helm_takeover_allowed "$STATE" "$old"; then
       printf 'takeover: available - %s\n' "$FM_HELM_TAKEOVER_REASON"
     else
       printf 'takeover: refused - %s\n' "$FM_HELM_REFUSE_REASON"
+      print_declination_note "$old"
     fi
   else
     echo "lock: stale (pid $old dead or not a harness)"
@@ -165,6 +183,7 @@ if [ -e "$LOCK" ] || [ -L "$LOCK" ]; then
         echo "error: another live firstmate session holds the lock (pid $old); operate read-only until resolved"
         holder_description "$old"
         printf 'refused to take the helm: %s\n' "$FM_HELM_REFUSE_REASON"
+        print_declination_note "$old"
         printf 'clear it with: %s clear --pid %s\n' "$0" "$old"
         printf '  That drops the recorded helm without touching the other session, so quit that session too.\n'
       } >&2

@@ -96,7 +96,11 @@ EOF
 
 cmd_count() {
   local indexed=0 logs=0 f
-  [ -f "$INDEX" ] && indexed=$(grep -c '^- \[' "$INDEX" 2>/dev/null || printf '0')
+  # `grep -c` PRINTS 0 and then exits 1 on no match, so a `|| printf '0'`
+  # fallback would append a second zero and put a stray bare 0 above the one
+  # startup line the searchable-decision design rests on.
+  [ -f "$INDEX" ] && indexed=$(grep -c '^- \[' "$INDEX" 2>/dev/null || true)
+  case "$indexed" in ''|*[!0-9]*) indexed=0 ;; esac
   while IFS= read -r f; do
     [ -n "$f" ] || continue
     [ "$f" = "$INDEX" ] && continue

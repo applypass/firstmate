@@ -24,6 +24,12 @@
 # that cannot prove it is working therefore keeps the helm, and the captain
 # clears it by hand with the command the refusal prints.
 #
+# ONE DEFINITION OF ADMISSIBLE EVIDENCE, and it is enforced at the WRITE: a
+# marker is only ever written with a transcript that exists, so no reader needs a
+# second gate. When a stamp is refused, the reason is recorded beside the marker
+# and a later refusal quotes it, because a safety mechanism that quietly stops
+# working is worse than one that never ran.
+#
 # WHY "no controlling terminal" is the unattended proof: a harness the captain is
 # sitting in front of owns a terminal device and is the foreground process group
 # of it, while any session the harness itself forked inherits neither. Measured
@@ -58,11 +64,64 @@ fm_helm_marker() {
   printf '%s\n' "$1/.helm-activity"
 }
 
-# fm_helm_stamp <state> <pid> [transcript]: record that the holder just finished
+# fm_helm_declination <state>: path of the record saying why the last stamp was
+# declined. It sits beside the marker and is overwritten, never appended: one
+# current answer to "why is there no marker", not a log nobody prunes.
+fm_helm_declination() {
+  printf '%s\n' "$1/.helm-activity-declined"
+}
+
+# fm_helm_record_declination <state> <pid> <reason>: remember that a stamp was
+# refused and why. Written atomically for the same reason the marker is, and
+# every failure is silent: the caller is a turn-end hook that must never wedge a
+# session, and a missing declination record only costs an explanation.
+fm_helm_record_declination() {
+  local state=$1 pid=$2 reason=$3 path tmp
+  path=$(fm_helm_declination "$state")
+  [ -d "$state" ] || return 1
+  tmp="$path.tmp.$$"
+  if ! {
+    printf 'pid=%s\n' "$pid"
+    printf 'epoch=%s\n' "$(date +%s 2>/dev/null || printf 0)"
+    printf 'at=%s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z' 2>/dev/null || printf unknown)"
+    printf 'reason=%s\n' "$reason"
+  } > "$tmp" 2>/dev/null; then
+    rm -f "$tmp" 2>/dev/null
+    return 1
+  fi
+  mv -f "$tmp" "$path" 2>/dev/null || { rm -f "$tmp" 2>/dev/null; return 1; }
+}
+
+# fm_helm_declination_note <state>: one captain-readable clause naming the last
+# declined stamp and its reason, or non-zero when nothing was declined. This is
+# what a refusal quotes, so "why did this not take the helm" is answerable from
+# the refusal itself rather than from a file the reader has to know about.
+fm_helm_declination_note() {
+  local state=$1 path reason pid at
+  path=$(fm_helm_declination "$state")
+  [ -s "$path" ] || return 1
+  reason=$(sed -n 's/^reason=//p' "$path" 2>/dev/null | head -1)
+  [ -n "$reason" ] || return 1
+  pid=$(sed -n 's/^pid=//p' "$path" 2>/dev/null | head -1)
+  at=$(sed -n 's/^at=//p' "$path" 2>/dev/null | head -1)
+  printf 'pid %s declined to stamp one at %s: %s\n' \
+    "${pid:-unknown}" "${at:-unknown}" "$reason"
+}
+
+# fm_helm_stamp <state> <pid> <transcript>: record that the holder just finished
 # a turn. The transcript path is recorded, not copied, so a later silence check
 # can see mid-turn growth in it and not mistake a busy session for an idle one.
 # A write failure is never fatal: a missing marker only costs measurability, and
 # the caller is a turn-end hook that must never wedge a session.
+#
+# A MARKER ALWAYS NAMES A RESOLVABLE TRANSCRIPT, and that is enforced here so
+# that admissible evidence has exactly one definition, in this file. Without the
+# transcript, silence rests on the marker's mtime alone, which proves a turn
+# ENDED once and not that the session is working now: a holder genuinely working
+# through one turn longer than the threshold would measure as silent and lose the
+# helm mid-turn. So a stamp with no resolvable transcript is refused outright,
+# the refusal is recorded next to the marker, and the holder degrades to
+# unmeasurable - which keeps the helm, the fail-closed direction.
 #
 # The write is ATOMIC - built in a temp file beside the marker and moved into
 # place - so a concurrent reader sees either the whole previous marker or the
@@ -71,9 +130,22 @@ fm_helm_marker() {
 # "this holder cannot prove it is working", which is a takeover decision made on
 # a race. On any failure the temp file goes and the existing marker stands.
 fm_helm_stamp() {
-  local state=$1 pid=$2 transcript=${3:-} marker tmp now
+  local state=$1 pid=$2 transcript=${3:-} marker tmp now reason=
   marker=$(fm_helm_marker "$state")
   [ -d "$state" ] || return 1
+  if [ -z "$transcript" ]; then
+    if command -v jq >/dev/null 2>&1; then
+      reason='the turn-end payload carried no transcript path'
+    else
+      reason='jq is unavailable, so the transcript path in the turn-end payload could not be read'
+    fi
+  elif [ ! -f "$transcript" ]; then
+    reason="the recorded transcript $transcript does not exist"
+  fi
+  if [ -n "$reason" ]; then
+    fm_helm_record_declination "$state" "$pid" "$reason"
+    return 1
+  fi
   now=$(date +%s 2>/dev/null) || return 1
   [ -n "$now" ] || return 1
   tmp="$marker.tmp.$$"
@@ -89,6 +161,7 @@ fm_helm_stamp() {
     rm -f "$tmp" 2>/dev/null
     return 1
   fi
+  rm -f "$(fm_helm_declination "$state")" 2>/dev/null || true
 }
 
 # fm_helm_marker_field <state> <field>: read one marker field. An empty marker

@@ -24,6 +24,11 @@
 # checks is re-checked at release time even if `prepare` just passed, because a
 # task can appear, and a record can be edited or truncated, in between.
 #
+# ONLY THE HELM HOLDER MOVES THE LIFECYCLE. prepare, release, and consume all
+# require this session to hold the session lock. A lock-refused session reads the
+# record and nothing more: one that rotates a record away, or marks it picked up,
+# leaves the session that actually takes the helm told nothing is waiting.
+#
 # WHAT IT NEVER DOES: it never stops a session, never touches unlanded work, and
 # never drains or clears the durable wake queue. The gap between the old session
 # ending and the replacement taking the helm is accepted, not hidden: queued wakes
@@ -58,6 +63,17 @@ RECORD="$DATA/handover.md"
 PREV_RECORD="$DATA/handover-prev.md"
 RUNTIME="$STATE/.handover"
 
+# fm_session_lock_owned_by_self: the one owner of "does this session hold the
+# helm?", which gates every command here that mutates the handover lifecycle.
+# shellcheck source=bin/fm-session-lock-lib.sh
+. "$SCRIPT_DIR/fm-session-lock-lib.sh"
+# fm_meta_get: the one owner of reading a field out of a meta file. Its LAST-wins
+# tie-break matters because meta files are append-oriented, so this file consumes
+# it rather than keeping a private first-wins reader beside it.
+# shellcheck source=bin/fm-backend.sh
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/fm-backend.sh"
+
 usage() {
   sed -n '2,${/^set -u/q;p;}' "${BASH_SOURCE[0]}"
 }
@@ -86,9 +102,18 @@ abs_path() {
   esac
 }
 
-meta_field() {
-  local meta=$1 field=$2
-  sed -n "s/^$field=//p" "$meta" 2>/dev/null | head -1
+# require_helm <verb>: only the session holding the helm may move the handover
+# lifecycle. A lock-refused session is deliberately still SHOWN the record - it
+# just cannot rotate it away or mark it picked up, because a record consumed by a
+# session with no authority leaves the real replacement told nothing is waiting.
+require_helm() {
+  fm_session_lock_owned_by_self "$STATE" && return 0
+  {
+    printf 'fm-handover: refusing to %s - this session does not hold the helm.\n' "$1"
+    printf 'Run "%s/fm-lock.sh status" to see what does. A session without the helm may read the\n' "$SCRIPT_DIR"
+    printf 'handover record with "fm-handover.sh show", but must not change it.\n'
+  } >&2
+  exit 1
 }
 
 # live_ids: every task or direct report this home currently records as under way.
@@ -105,7 +130,7 @@ live_ids() {
 }
 
 is_secondmate() {
-  [ "$(meta_field "$STATE/$1.meta" kind)" = secondmate ]
+  [ "$(fm_meta_get "$STATE/$1.meta" kind)" = secondmate ]
 }
 
 runtime_field() {
@@ -248,6 +273,10 @@ cmd_prepare() {
   done
   [ -n "$next" ] || die 'prepare needs --next "<the concrete next step>"; nothing else records it'
   [ -d "$DATA" ] || die "no data directory at $DATA"
+  # Before anything is rotated: prepare moves the existing record aside and
+  # writes a fresh one, so an ungated session could displace the record the real
+  # holder wrote with one composed by a session that has no authority.
+  require_helm "prepare a handover"
 
   # Refuse early on an unaccounted worker, rather than writing a record that
   # release would reject anyway.
@@ -351,7 +380,10 @@ cmd_release() {
     exit 1
   fi
   if [ -s "$STATE/.wake-queue" ]; then
-    queued=$(grep -c . "$STATE/.wake-queue" 2>/dev/null || printf '0')
+    # `|| true`, never `|| printf '0'`: grep -c prints its 0 before exiting 1, so
+    # a fallback value appends a second line to the count.
+    queued=$(grep -c . "$STATE/.wake-queue" 2>/dev/null || true)
+    case "$queued" in ''|*[!0-9]*) queued=0 ;; esac
   fi
   if ! "$SCRIPT_DIR/fm-lock.sh" release; then
     printf 'fm-handover: REFUSING to complete - the helm could not be released, so this session still holds it.\n' >&2
@@ -390,6 +422,7 @@ cmd_pending() {
 }
 
 cmd_consume() {
+  require_helm "consume the handover"
   if ! cmd_pending; then
     printf 'fm-handover: no released handover is waiting to be picked up\n' >&2
     exit 1

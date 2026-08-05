@@ -28,9 +28,11 @@
 # and where a task's pull request is recorded, are both defined once in
 # bin/fm-backlog-record-lib.sh and consumed here. This file never restates them.
 #
-# Usage: fm-awaiting-captain.sh [--handover-printed-below]
+# Usage: fm-awaiting-captain.sh [--handover-printed-below] [--read-only]
 #   --handover-printed-below: the caller prints the handover record itself, so
 #     point at what it printed instead of telling the reader to open the file.
+#   --read-only: this session was refused the helm, so it may read a waiting
+#     handover but must never consume it.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,12 +49,17 @@ case "$MAX" in ''|*[!0-9]*|0) MAX=20 ;; esac
 . "$SCRIPT_DIR/fm-backlog-record-lib.sh"
 
 HANDOVER_PRINTED_BELOW=0
-case "${1:-}" in
-  -h|--help) sed -n '2,${/^set -u/q;p;}' "${BASH_SOURCE[0]}"; exit 0 ;;
-  --handover-printed-below) HANDOVER_PRINTED_BELOW=1 ;;
-  '') : ;;
-  *) echo "usage: $(basename "$0") [--handover-printed-below]" >&2; exit 2 ;;
-esac
+READ_ONLY=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -h|--help) sed -n '2,${/^set -u/q;p;}' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --handover-printed-below) HANDOVER_PRINTED_BELOW=1 ;;
+    --read-only) READ_ONLY=1 ;;
+    '') : ;;
+    *) echo "usage: $(basename "$0") [--handover-printed-below] [--read-only]" >&2; exit 2 ;;
+  esac
+  shift
+done
 
 # print_capped <label>: read lines from stdin, print at most MAX of them, and
 # name what was dropped.
@@ -87,15 +94,29 @@ elif [ "$HANDOVER_STATUS" -eq 0 ]; then
   if [ "$HANDOVER_PRINTED_BELOW" -eq 1 ]; then
     printf 'HANDOVER WAITING: a previous session prepared and released one. It is printed in full\n'
     printf '  below, so do not re-read the record. Reconcile it against the durable records it\n'
-    printf '  points at, then run bin/fm-handover.sh consume.\n'
+    printf '  points at'
   else
     printf 'HANDOVER WAITING: a previous session prepared and released one. Read data/handover.md,\n'
-    printf '  reconcile it against the durable records it points at, then run bin/fm-handover.sh consume.\n'
+    printf '  reconcile it against the durable records it points at'
+  fi
+  # A session refused the helm may read the record, but consuming it would leave
+  # the session that does take the helm told nothing is waiting.
+  if [ "$READ_ONLY" -eq 1 ]; then
+    printf '. This session does not hold the helm, so it must NOT\n'
+    printf '  consume the handover; leave it for the session that takes the helm.\n'
+  else
+    printf ', then run bin/fm-handover.sh consume.\n'
   fi
 fi
 
 # --- decisions held for the captain -----------------------------------------
 # bin/fm-backlog-record-lib.sh decides what is actionable; this only renders it.
+#
+# LANDED_UNREAD starts at 1 - unknown - so a record model this never manages to
+# read leaves the pull-request list below unfiltered and says so, rather than
+# silently dropping nothing while implying it dropped what had landed.
+LANDED_IDS=''
+LANDED_UNREAD=1
 printf 'Decisions held for you:\n'
 if [ ! -f "$DATA/backlog.md" ]; then
   printf '(no backlog record)\n'
@@ -111,6 +132,17 @@ else
   # read fine as unreadable. The exit status is the signal, not the noise.
   HELD_UNREAD=0
   RECORDS_JSON=$(fm_backlog_records_json "$DATA/backlog.md" 2>/dev/null) || HELD_UNREAD=1
+  # The same read answers the pull-request list below: a record the local model
+  # already calls done or merged has landed, and reporting it back as waiting
+  # spends the captain's attention on work he has already finished.
+  if [ "$HELD_UNREAD" -eq 0 ]; then
+    if LANDED_IDS=$(printf '%s\n' "$RECORDS_JSON" \
+      | jq -r '.records[]? | select(.structured == true)
+               | select(.state == "done" or .completion.verb == "merged")
+               | .id' 2>/dev/null); then
+      LANDED_UNREAD=0
+    fi
+  fi
   HELD=''
   if [ "$HELD_UNREAD" -eq 0 ]; then
     HELD=$(printf '%s\n' "$RECORDS_JSON" \
@@ -127,18 +159,36 @@ fi
 # --- work recorded as waiting for the captain's merge -----------------------
 # Same owner as the snapshot's pr/pr_source, so a PR recorded only in a status
 # event is listed too. Still a local read: nothing here asks a forge anything.
-printf 'Recorded pull requests waiting to land:\n'
-{
+#
+# A task's meta survives from merge until teardown removes it, so listing every
+# recorded pull request reports work the captain already merged back to him as
+# still waiting. The local record model already knows which of them landed, so
+# those are dropped here - and the header says plainly that the rest are recorded
+# locally rather than verified, because buying that verification would cost the
+# local-only property that makes this block cheap enough to run every time.
+printf 'Recorded pull requests waiting to land (recorded locally, not verified against the forge):\n'
+# if/elif rather than case: bash 3.2 is the floor here and it mis-parses a case
+# statement's patterns inside a command substitution.
+PR_LINES=$(
   for meta in "$STATE"/*.meta; do
     [ -f "$meta" ] || continue
     id=$(basename "$meta" .meta)
+    if [ "$LANDED_UNREAD" -eq 0 ] && printf '%s\n' "$LANDED_IDS" | grep -qxF -- "$id"; then
+      continue
+    fi
     record=$(fm_recorded_pr "$meta" "$STATE/$id.status")
-    case $? in
-      0) printf -- '- %s (%s, recorded in %s)\n' "${record%%	*}" "$id" "${record#*	}" ;;
-      2) printf -- '- %s: UNREAD - its records could not be read, so whether it has a pull request waiting is unknown, not no\n' "$id" ;;
-    esac
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+      printf -- '- %s (%s, recorded in %s)\n' "${record%%	*}" "$id" "${record#*	}"
+    elif [ "$rc" -eq 2 ]; then
+      printf -- '- %s: UNREAD - its records could not be read, so whether it has a pull request waiting is unknown, not no\n' "$id"
+    fi
   done
-} | print_capped "recorded pull request(s)"
+)
+printf '%s\n' "$PR_LINES" | print_capped "recorded pull request(s)"
+if [ -n "$PR_LINES" ] && [ "$LANDED_UNREAD" -eq 1 ]; then
+  printf '(already-landed work could not be filtered out: the backlog record model could not be read, so an entry above may have landed already)\n'
+fi
 
 # --- the one line about what is already answered ----------------------------
 "$SCRIPT_DIR/fm-decided.sh" count 2>/dev/null \

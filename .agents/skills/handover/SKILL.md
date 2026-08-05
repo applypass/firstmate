@@ -58,10 +58,11 @@ Session start prints the record in full, so do not re-read it.
    Read the records the handover points at, and search `bin/fm-decided.sh search <terms>` before escalating any question - it may already be answered.
 3. Run `bin/fm-handover.sh consume` to close it out.
    It lists the records you were expected to read.
+   Only the session holding the helm may run it, so if this session was refused the lock, read the record and leave it waiting for the session that takes the helm.
 4. Report to the captain in one line: what is live, what the next step is, and which records you consulted.
 
 ## Taking the helm from an idle holder
 
 A fresh session takes the helm automatically only when the previous holder is provably unattended and measurably silent; `bin/fm-lock.sh` reports it loudly when it does.
-When it refuses instead, it names what holds the helm and the one command that clears it.
+When it refuses instead, it names what holds the helm, why - including why the holder never stamped an activity marker, when that is the reason - and the one command that clears it.
 Relay that to the captain as a plain choice - the old session is still open and someone may be using it - and never clear the helm from a session the captain has not agreed to give up.

@@ -297,7 +297,10 @@ fi
 subsection "WAKE QUEUE"
 if [ "$READ_ONLY" -eq 1 ]; then
   QLEN=0
-  [ -s "$STATE/.wake-queue" ] && QLEN=$(grep -c . "$STATE/.wake-queue" 2>/dev/null || printf '0')
+  # `|| true`, never `|| printf '0'`: grep -c prints its 0 before exiting 1, so
+  # a fallback value appends a second line to the count.
+  [ -s "$STATE/.wake-queue" ] && QLEN=$(grep -c . "$STATE/.wake-queue" 2>/dev/null || true)
+  case "$QLEN" in ''|*[!0-9]*) QLEN=0 ;; esac
   printf 'skipped (read-only session) - %s record(s) remain queued because this session lacks verified fleet-lock ownership.\n' "$QLEN"
   GUARD_OUT=$(FM_GUARD_READ_ONLY=1 "$SCRIPT_DIR/fm-guard.sh" 2>&1)
   [ -n "$GUARD_OUT" ] && printf '%s\n' "$GUARD_OUT"
@@ -323,7 +326,10 @@ fi
 subsection "AWAITING THE CAPTAIN"
 AWAITING_ARGS=()
 if "$SCRIPT_DIR/fm-handover.sh" pending 2>/dev/null; then
-  AWAITING_ARGS=(--handover-printed-below)
+  AWAITING_ARGS+=(--handover-printed-below)
+fi
+if [ "$READ_ONLY" -eq 1 ]; then
+  AWAITING_ARGS+=(--read-only)
 fi
 AWAITING_OUT=$("$SCRIPT_DIR/fm-awaiting-captain.sh" "${AWAITING_ARGS[@]:-}" 2>&1)
 if [ -n "$AWAITING_OUT" ]; then
@@ -334,12 +340,23 @@ fi
 
 # A released handover is the one thing a replacement must read before it acts, so
 # print the record itself here rather than a pointer to it.
+#
+# A read-only session still sees all of it and is told not to consume it: the
+# session that gets the helm is the one that must act on the record, and a
+# refused session that consumed it would leave the real replacement told nothing
+# is waiting. Information is never withheld from a refused session; only the
+# ability to mutate is, exactly as the rest of session start does it.
 if "$SCRIPT_DIR/fm-handover.sh" pending 2>/dev/null; then
   subsection "HANDOVER FROM THE PREVIOUS SESSION"
   "$SCRIPT_DIR/fm-handover.sh" show 2>&1 || true
   printf '\nThis record is ADVISORY. Reconcile every line against the durable records it\n'
   printf 'names and against the fleet digest below; those win on any disagreement.\n'
-  printf 'Run bin/fm-handover.sh consume once you have picked it up.\n'
+  if [ "$READ_ONLY" -eq 1 ]; then
+    printf 'READ-ONLY: this session does not hold the helm, so it must NOT consume this\n'
+    printf 'handover. Leave it waiting for the session that takes the helm.\n'
+  else
+    printf 'Run bin/fm-handover.sh consume once you have picked it up.\n'
+  fi
 fi
 
 # --- 4. supervision operating instructions ----------------------------------

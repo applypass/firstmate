@@ -108,6 +108,7 @@ state/               volatile runtime signals; gitignored
   x-poll.error x-poll.claim-error  generated X-mode relay and offer-claim diagnostic dedupe markers
   .wake-queue        durable queued wakes: epoch<TAB>seq<TAB>kind<TAB>key<TAB>payload
   .helm-activity     turn-end marker proving the session holding the helm is working, not merely alive; bin/fm-helm-lib.sh
+  .helm-activity-declined  why the last stamp was refused (no resolvable transcript), quoted by a takeover refusal; bin/fm-helm-lib.sh
   .handover .handover-due .helm-takeover  handover progress, the once-per-session threshold notice, and the auditable record of a taken helm
   .afk               durable away-mode flag; present = sub-supervisor may inject escalations (set by /afk, cleared on user return)
   .watch.lock .wake-queue.lock watcher singleton and queue serialization locks
@@ -377,6 +378,7 @@ Load the `handover` skill when the captain invokes `/handover` or asks to hand o
 The record is advisory and durable records win every disagreement with it; never assert a fact in it that no record supports.
 `bin/fm-handover.sh release` refuses until every open thread is backed by a durable record - fix what it names and run it again, never work around it, because once the outgoing session is gone a bad handover cannot be redone.
 When a fresh session cannot take the helm, relay what holds it and the clearing command it printed, and never clear the helm from a session the captain has not agreed to give up.
+A session that does not hold the helm may read a waiting handover but never prepares or consumes one: consuming it there leaves the session that does take the helm told nothing is waiting.
 
 ### Away-mode stub
 

@@ -808,12 +808,18 @@ EOF
   } > "$home/data/backlog.md"
 
   # A handover prepared and released by the previous session, exactly as
-  # bin/fm-handover.sh leaves it.
-  FM_HOME="$home" FM_ROOT_OVERRIDE="$root" "$ROOT/bin/fm-handover.sh" prepare \
+  # bin/fm-handover.sh leaves it. Only the session holding the helm may prepare
+  # one, and the fake ps reports every pid as a live claude, so the fixture
+  # records its own pid as the holder and execs prepare in that same process.
+  FM_HOME="$home" FM_ROOT_OVERRIDE="$root" PATH="$fakebin:$BASE_PATH" \
+    sh -c 'printf "%s\n" "$$" > "$1/state/.lock"; shift; exec "$@"' _ "$home" \
+    "$ROOT/bin/fm-handover.sh" prepare \
     --next "merge the open PR once its checks pass" \
     --worker alpha-task="halfway through the second review round" >/dev/null 2>&1 \
     || fail "could not prepare the handover fixture"
   printf 'released=%s\nreleased_at=fixture\n' "$(date +%s)" >> "$home/state/.handover"
+  # The previous session released the helm, so the replacement finds it free.
+  rm -f "$home/state/.lock"
 
   # An event queued during the gap between the two sessions.
   printf '%s\t1\tsignal\talpha-task\tdone\n' "$(date +%s)" > "$home/state/.wake-queue"

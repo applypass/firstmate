@@ -139,6 +139,16 @@ start_holder() {
   BG_PIDS+=("$HOLDER_PID")
 }
 
+# hold_helm <home> <fakebin>: make this test process look like the session
+# holding the home's helm, which prepare, release, and consume all require. The
+# fake ps resolves any ancestry walk to HOLDER_PID, and state/.lock records it.
+hold_helm() {
+  local home=$1 fakebin=$2
+  start_holder
+  make_fake_ps "$fakebin" "$HOLDER_PID"
+  printf '%s\n' "$HOLDER_PID" > "$home/state/.lock"
+}
+
 # --- the pulse: one report, never a block ------------------------------------
 
 test_pulse_reports_once_over_threshold_and_never_blocks() {
@@ -258,10 +268,12 @@ test_pulse_does_not_stamp_for_a_session_without_the_helm() {
 # --- the handover record: pointers, not assertions ---------------------------
 
 test_prepare_refuses_an_unaccounted_worker() {
-  local home out status
+  local home fakebin out status
   home=$(make_home "$TMP_ROOT/prep-refuse")
+  fakebin=$(fm_fakebin "$TMP_ROOT/prep-refuse")
+  hold_helm "$home" "$fakebin"
   add_task "$home" alpha-task
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare --next "merge the open PR" 2>&1); status=$?
+  out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare --next "merge the open PR" 2>&1); status=$?
   expect_code 1 "$status" "prepare must refuse while a live worker has no note"
   assert_contains "$out" "alpha-task" "the refusal must name the unaccounted worker"
   assert_contains "$out" "mid-way through" "the refusal must say what is missing"
@@ -270,10 +282,12 @@ test_prepare_refuses_an_unaccounted_worker() {
 }
 
 test_prepared_record_is_advisory_and_carries_the_unrecorded_facts() {
-  local home out record
+  local home fakebin out record
   home=$(make_home "$TMP_ROOT/prep-record")
+  fakebin=$(fm_fakebin "$TMP_ROOT/prep-record")
+  hold_helm "$home" "$fakebin"
   add_task "$home" alpha-task
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare \
+  out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare \
     --next "merge the open PR once its checks pass" \
     --worker alpha-task="halfway through the second review round" 2>&1) \
     || fail "prepare must succeed once every worker is accounted for: $out"
@@ -294,7 +308,7 @@ test_prepared_record_is_advisory_and_carries_the_unrecorded_facts() {
   local canary
   canary="$TMP_ROOT/prep-record-tmpdir"
   mkdir -p "$canary"
-  TMPDIR="$canary" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare \
+  TMPDIR="$canary" PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare \
     --next "merge the open PR once its checks pass" \
     --worker alpha-task="halfway through the second review round" >/dev/null 2>&1 \
     || fail "prepare must still succeed with TMPDIR redirected"
@@ -305,9 +319,11 @@ test_prepared_record_is_advisory_and_carries_the_unrecorded_facts() {
 }
 
 test_check_refuses_when_a_pointed_at_record_is_sabotaged() {
-  local home out status
+  local home fakebin out status
   home=$(make_home "$TMP_ROOT/check-sabotage")
-  FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare --next "keep going" >/dev/null 2>&1 \
+  fakebin=$(fm_fakebin "$TMP_ROOT/check-sabotage")
+  hold_helm "$home" "$fakebin"
+  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare --next "keep going" >/dev/null 2>&1 \
     || fail "prepare must succeed with no live workers"
   : > "$home/data/captain.md"
   out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" check 2>&1); status=$?
@@ -322,9 +338,11 @@ test_check_refuses_when_a_pointed_at_record_is_sabotaged() {
 }
 
 test_check_refuses_a_worker_with_no_durable_record() {
-  local home out status
+  local home fakebin out status
   home=$(make_home "$TMP_ROOT/check-orphan")
-  FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare --next "keep going" >/dev/null 2>&1
+  fakebin=$(fm_fakebin "$TMP_ROOT/check-orphan")
+  hold_helm "$home" "$fakebin"
+  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare --next "keep going" >/dev/null 2>&1
   # A worker that appeared after the record was written, with no backlog item.
   fm_write_meta "$home/state/ghost-task.meta" "window=fm:ghost-task" "project=alpha"
   out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" check 2>&1); status=$?
@@ -341,7 +359,7 @@ test_release_refuses_and_keeps_the_helm() {
   start_holder; holder=$HOLDER_PID
   make_fake_ps "$fakebin" "$holder"
   printf '%s\n' "$holder" > "$home/state/.lock"
-  FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare --next "keep going" >/dev/null 2>&1
+  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare --next "keep going" >/dev/null 2>&1
   rm -f "$home/data/backlog.md"
   out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" release 2>&1); status=$?
   expect_code 1 "$status" "release must refuse an incomplete handover"
@@ -361,7 +379,7 @@ test_release_hands_over_and_preserves_queued_events() {
   printf '%s\n' "$holder" > "$home/state/.lock"
   printf '111\t1\tsignal\talpha-task\tdone\n222\t2\tcheck\tbeta\tmerged\n' > "$home/state/.wake-queue"
   add_task "$home" alpha-task
-  FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare \
+  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare \
     --next "merge the open PR" --worker alpha-task="mid-review" >/dev/null 2>&1
   out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" release 2>&1) \
     || fail "release must succeed once the handover is complete: $out"
@@ -379,20 +397,66 @@ test_consume_refuses_without_a_released_handover_and_names_records_after() {
   local home fakebin holder out status
   home=$(make_home "$TMP_ROOT/consume")
   fakebin=$(fm_fakebin "$TMP_ROOT/consume")
-  start_holder; holder=$HOLDER_PID
-  make_fake_ps "$fakebin" "$holder"
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" consume 2>&1); status=$?
+  hold_helm "$home" "$fakebin"; holder=$HOLDER_PID
+  out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" consume 2>&1); status=$?
   expect_code 1 "$status" "consume must refuse when no handover was released"
-  printf '%s\n' "$holder" > "$home/state/.lock"
-  FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare --next "keep going" >/dev/null 2>&1
+  assert_contains "$out" "no released handover" "the refusal must name what is missing, not the helm"
+  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare --next "keep going" >/dev/null 2>&1
   PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" release >/dev/null 2>&1 \
     || fail "release must succeed for the consume case"
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" consume 2>&1) \
+  # release freed the helm, so the replacement takes it before picking the
+  # handover up - the same order a real session start follows.
+  printf '%s\n' "$holder" > "$home/state/.lock"
+  out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" consume 2>&1) \
     || fail "consume must succeed on a released handover: $out"
   assert_contains "$out" "data/backlog.md" "consume must name the records the replacement was expected to read"
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" consume 2>&1); status=$?
+  out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" consume 2>&1); status=$?
   expect_code 1 "$status" "a handover already picked up must not be picked up twice"
   pass "fm-handover consume: refuses without a release, then names the records consulted"
+}
+
+# A session refused the helm is shown the handover and must not be able to move
+# it: a consume from the wrong window leaves the session that actually takes the
+# helm told nothing is waiting, and a prepare from there replaces the outgoing
+# holder's record with one composed by a session that has no authority.
+test_a_session_without_the_helm_can_neither_prepare_nor_consume() {
+  local home fakebin holder other out status before
+  home=$(make_home "$TMP_ROOT/readonly-lifecycle")
+  fakebin=$(fm_fakebin "$TMP_ROOT/readonly-lifecycle")
+  hold_helm "$home" "$fakebin"; holder=$HOLDER_PID
+  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare \
+    --next "merge the open PR" >/dev/null 2>&1 || fail "the holder must be able to prepare"
+  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" release >/dev/null 2>&1 \
+    || fail "the holder must be able to release"
+  before=$(cat "$home/data/handover.md")
+
+  # A second window takes the helm; the released record is still waiting for it.
+  start_holder; other=$HOLDER_PID
+  printf '%s\n' "$other" > "$home/state/.lock"
+  # ...and the outgoing session, which no longer holds the helm, tries both.
+  make_fake_ps "$fakebin" "$holder"
+  out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" consume 2>&1); status=$?
+  expect_code 1 "$status" "a session without the helm must not consume the handover"
+  assert_contains "$out" "does not hold the helm" "the refusal must say why"
+  assert_contains "$out" "fm-lock.sh status" "the refusal must point at what does hold it"
+  if grep -q '^consumed=' "$home/state/.handover"; then
+    fail "a refused consume must not mark the handover picked up"
+  fi
+
+  out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare \
+    --next "something else entirely" 2>&1); status=$?
+  expect_code 1 "$status" "a session without the helm must not prepare a handover"
+  assert_contains "$out" "does not hold the helm" "the refusal must say why"
+  [ "$(cat "$home/data/handover.md")" = "$before" ] \
+    || fail "a refused prepare must leave the released record exactly as it was"
+  assert_absent "$home/data/handover-prev.md" "a refused prepare must not rotate the record away"
+
+  # The session that does hold the helm still picks it up.
+  make_fake_ps "$fakebin" "$other"
+  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" consume >/dev/null 2>&1 \
+    || fail "the session holding the helm must still be able to consume the handover"
+  assert_grep "consumed=" "$home/state/.handover" "the helm holder's consume must land"
+  pass "fm-handover: only the session holding the helm may prepare or consume a handover"
 }
 
 # --- the searchable record of answered questions -----------------------------
@@ -465,6 +529,21 @@ test_decided_record_keeps_one_answer_per_key() {
   assert_contains "$out" "1 answered decision(s) indexed" "count must report the indexed answers"
   assert_contains "$out" "Search before escalating anything" "count must carry the search instruction"
   pass "fm-decided record: one answer per stable key, superseded explicitly, counted for startup"
+}
+
+# The count is the ONE startup line the searchable-decision design rests on, and
+# an index that exists with no entries is ordinary: hand-created, or pruned.
+test_decided_count_of_an_empty_index_is_one_clean_line() {
+  local home out
+  home=$(make_home "$TMP_ROOT/decided-empty-index")
+  printf '# Answered decisions\n' > "$home/data/decided.md"
+  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-decided.sh" count 2>&1)
+  assert_contains "$out" "0 answered decision(s) indexed" "an empty index must report zero answers"
+  printf '%s\n' "$out" | grep -qx '0' \
+    && fail "the count printed a stray bare 0 line above the digest line: $out"
+  [ "$(printf '%s\n' "$out" | grep -c 'answered decision(s) indexed')" = 1 ] \
+    || fail "the count must print exactly one digest line: $out"
+  pass "fm-decided count: a zero-entry index reports one clean line, with no stray zero"
 }
 
 test_decided_search_excludes_the_open_items_view() {
@@ -561,6 +640,28 @@ test_awaiting_block_says_so_when_a_task_meta_cannot_be_read() {
   pass "fm-awaiting-captain: a task whose records cannot be read is named, never silently dropped"
 }
 
+# A task's meta survives from merge until teardown removes it, so listing every
+# recorded pull request reports work the captain already merged back to him as
+# still waiting. The local record model already knows; no forge call is allowed
+# here, because the local-only rule is what keeps this block cheap.
+test_awaiting_block_drops_pull_requests_the_local_record_says_have_landed() {
+  local home out
+  home=$(make_home "$TMP_ROOT/awaiting-landed")
+  {
+    printf -- '- [ ] open-task - still open (repo: fe) (kind: ship)\n'
+    printf '## Done\n'
+    printf -- '- [x] landed-task - shipped it (repo: fe) (kind: ship) (merged 2026-07-30)\n'
+  } >> "$home/data/backlog.md"
+  fm_write_meta "$home/state/landed-task.meta" "window=fm:landed-task" "pr=https://github.com/x/y/pull/41"
+  fm_write_meta "$home/state/open-task.meta" "window=fm:open-task" "pr=https://github.com/x/y/pull/42"
+  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" 2>&1)
+  assert_contains "$out" "pull/42" "a pull request the local record still calls open must be listed"
+  assert_not_contains "$out" "pull/41" "a pull request the local record already calls merged must not be listed as waiting"
+  assert_contains "$out" "not verified against the forge" \
+    "the list must not overclaim: these are recorded locally, not checked"
+  pass "fm-awaiting-captain: work the local record says has landed is not reported as waiting"
+}
+
 test_awaiting_block_surfaces_a_waiting_handover() {
   local home fakebin holder out
   home=$(make_home "$TMP_ROOT/awaiting-handover")
@@ -568,13 +669,19 @@ test_awaiting_block_surfaces_a_waiting_handover() {
   start_holder; holder=$HOLDER_PID
   make_fake_ps "$fakebin" "$holder"
   printf '%s\n' "$holder" > "$home/state/.lock"
-  FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare --next "merge the open PR" >/dev/null 2>&1
+  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare --next "merge the open PR" >/dev/null 2>&1
   out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" 2>&1)
   assert_not_contains "$out" "HANDOVER WAITING" "a prepared but unreleased handover is not waiting for a replacement"
   PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" release >/dev/null 2>&1
   out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" 2>&1)
   assert_contains "$out" "HANDOVER WAITING" "a released handover must be surfaced to the replacement"
   assert_contains "$out" "fm-handover.sh consume" "the replacement must be told how to close it out"
+  # A session refused the helm still sees the handover, and is told not to take it.
+  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" --read-only 2>&1)
+  assert_contains "$out" "HANDOVER WAITING" "a refused session must still be shown the waiting handover"
+  assert_contains "$out" "must NOT" "a refused session must be told not to consume it"
+  assert_not_contains "$out" "run bin/fm-handover.sh consume" \
+    "a refused session must not be told to run the command it is not allowed to run"
   pass "fm-awaiting-captain: surfaces a released handover, and only once it is released"
 }
 
@@ -610,14 +717,17 @@ run_all() {
   test_release_refuses_and_keeps_the_helm
   test_release_hands_over_and_preserves_queued_events
   test_consume_refuses_without_a_released_handover_and_names_records_after
+  test_a_session_without_the_helm_can_neither_prepare_nor_consume
   test_decided_search_finds_an_answer_in_an_existing_decision_log
   test_decided_search_requires_every_term_and_reports_no_match
   test_decided_search_caps_output_and_names_what_it_dropped
   test_decided_record_keeps_one_answer_per_key
+  test_decided_count_of_an_empty_index_is_one_clean_line
   test_decided_search_excludes_the_open_items_view
   test_awaiting_block_lists_held_decisions_and_caps_them
   test_awaiting_block_says_so_when_the_record_model_cannot_be_read
   test_awaiting_block_says_so_when_a_task_meta_cannot_be_read
+  test_awaiting_block_drops_pull_requests_the_local_record_says_have_landed
   test_awaiting_block_surfaces_a_waiting_handover
 }
 

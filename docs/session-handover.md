@@ -71,6 +71,10 @@ Everything is re-checked at release even when `prepare` just passed, because a t
 
 Nothing here discards anything: it never stops a session, never touches unlanded work, and never drains the durable wake queue.
 
+`prepare`, `release`, and `consume` all require this session to hold the helm.
+A session refused the lock still reads the record and is shown it in full at session start, but it may not rotate it away or mark it picked up: a `prepare` from a session with no authority would replace the outgoing holder's record with one it composed, and a `consume` from one would leave the session that actually takes the helm told nothing is waiting.
+Information is never withheld from a refused session; only its ability to mutate is.
+
 ## The gap
 
 Monitoring stops when the outgoing session ends and resumes when the replacement arms it.
@@ -94,7 +98,17 @@ A timer alone is never sufficient.
 An attended holder keeps the helm however long it has been quiet, and every unprovable input refuses rather than proceeding: a terminal `ps` will not report, and equally a holder with no pid-matched marker, whose silence is simply unmeasurable.
 The rule is fail-closed by design - no proof of work means no takeover - and the accepted cost is that a holder which cannot prove it is working keeps the helm until someone clears it by hand.
 
-Only the `claude` pulse stamps the marker today, so on a primary running codex, opencode, pi, grok, or kimi an automatic takeover never happens at all: the acquisition prints the refusal, and the operator's path is `bin/fm-lock.sh clear --pid <holder>`.
+A marker always names a transcript that exists, and that is enforced where the marker is WRITTEN rather than checked again where it is read, so admissible evidence has exactly one definition.
+`fm_helm_stamp` refuses to write a marker at all unless it is given a transcript path that resolves.
+Without the transcript, silence would rest on the marker's own mtime, which proves a turn ended once rather than that the session is working now, and a holder working through one turn longer than the threshold would lose the helm mid-turn.
+
+A refused stamp is recorded, never silent: `state/.helm-activity-declined` holds the holder's pid, the time, and the reason - no transcript in the turn-end payload, a transcript path that does not exist, or `jq` unavailable to read the payload at all.
+It is one record, overwritten rather than appended, and a successful stamp clears it.
+When `bin/fm-lock.sh` then refuses a takeover because silence is unmeasurable, it quotes that reason in the refusal, because the person asking "why did this not take the helm" reads the refusal and not a file they do not know exists.
+A pulse that quietly stopped stamping would be a safety mechanism failing without saying so.
+
+So with `jq` unavailable or the transcript unresolvable, no marker is written, an automatic takeover never happens, and the operator's path is the printed refusal plus `bin/fm-lock.sh clear --pid <holder>`.
+The same is true on a primary running codex, opencode, pi, grok, or kimi, because only the `claude` pulse stamps the marker today.
 Giving those harnesses the stamp is a separate follow-up slice, not a gap being ignored.
 
 The tradeoff in using "no controlling terminal" as the unattended proof: a session the captain is using owns a terminal device, while a session its own harness forked inherits none.
@@ -106,6 +120,7 @@ A takeover is reported loudly, says which session it took the helm from, states 
 When acquisition refuses instead, it prints the holder, its terminal, how long it has been quiet, why the takeover was refused, and `bin/fm-lock.sh clear --pid <holder>` - the one command that clears the helm.
 `clear` refuses any pid that is not the recorded holder, and never claims to have stopped anything.
 `bin/fm-lock.sh release` gives up the helm only for the session that holds it.
+`bin/fm-lock.sh status` reports the caller's own helm as held rather than printing a takeover verdict about it, because "takeover: available" about your own session reads as an invitation to take the helm from itself.
 
 ## What waits on the captain, and what is already answered
 
@@ -115,7 +130,9 @@ The fix is not more text earlier.
 `bin/fm-awaiting-captain.sh` prints a short block near the top of the digest: decisions held for the captain, work recorded as waiting to land, any released handover, and one line pointing at the captain's standing preferences.
 It reads only local records - no network, no forge calls - so it stays cheap enough that nobody skips it.
 What counts as a decision held for the captain, and where a task's pull request is recorded, are the canonical snapshot definitions shared through `bin/fm-backlog-record-lib.sh`; the block renders them and never re-derives them, so a hold that is blocked or already in flight is not listed as waiting.
+A task's meta survives from merge until teardown removes it, so the pull-request list drops the records that same shared model already calls done or merged, and says plainly that the rest are recorded locally rather than verified: a false entry there spends the captain's attention on work he has already finished, and buying the verification with a forge call would cost the local-only property that justifies the block.
 When the digest prints a released handover in full, the block points at what was printed instead of telling the reader to open the record.
+A session refused the helm is shown the same handover and told not to consume it, rather than being shown less.
 Each list has a hard cap (`FM_AWAITING_MAX`, default 20) and says how many entries it dropped, because a silently truncated list reads as "nothing else is waiting".
 
 Answered decisions are **searched, not preloaded**.

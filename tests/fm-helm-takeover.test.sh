@@ -239,15 +239,17 @@ test_refuses_an_empty_or_foreign_activity_marker() {
 # The stamp itself must never be observable as the empty file the previous case
 # proves is unusable, so it is built beside the marker and moved into place.
 test_the_activity_stamp_is_never_observable_as_empty() {
-  local state marker i
+  local state marker transcript i
   state="$TMP_ROOT/atomic-stamp/state"
   mkdir -p "$state"
   marker="$state/.helm-activity"
+  transcript="$TMP_ROOT/atomic-stamp/t.jsonl"
+  printf 'a turn\n' > "$transcript"
   # shellcheck source=bin/fm-helm-lib.sh
   . "$ROOT/bin/fm-helm-lib.sh"
   i=0
   while [ "$i" -lt 40 ]; do
-    fm_helm_stamp "$state" 4242 "" || fail "the stamp must succeed on a writable state dir"
+    fm_helm_stamp "$state" 4242 "$transcript" || fail "the stamp must succeed on a writable state dir"
     [ -s "$marker" ] || fail "the marker was observable as a zero-length file after a stamp"
     i=$((i + 1))
   done
@@ -255,6 +257,59 @@ test_the_activity_stamp_is_never_observable_as_empty() {
   [ -z "$(find "$state" -name '.helm-activity.tmp.*' 2>/dev/null)" ] \
     || fail "the stamp must not leave a temp file behind"
   pass "fm-helm-lib: the activity stamp lands whole, never as an empty file"
+}
+
+# A marker with no transcript would rest the whole silence measurement on its own
+# mtime, which proves a turn ENDED once and not that the session is working now -
+# so a holder working through one long turn would lose the helm mid-turn. The
+# stamp refuses instead, and a pulse that quietly stops stamping would be a safety
+# mechanism failing in silence, so the refusal is recorded and the lock quotes it.
+test_a_stamp_without_a_resolvable_transcript_is_declined_and_explained() {
+  local out status marker_file declined
+  make_home "$TMP_ROOT/no-transcript"
+  marker_file="$HOME_DIR/state/.helm-activity"
+  declined="$HOME_DIR/state/.helm-activity-declined"
+  (
+    # shellcheck source=bin/fm-helm-lib.sh
+    . "$ROOT/bin/fm-helm-lib.sh"
+    fm_helm_stamp "$HOME_DIR/state" "$HOLDER_PID" "" \
+      && { echo "a stamp with no transcript at all must be refused" >&2; exit 1; }
+    fm_helm_stamp "$HOME_DIR/state" "$HOLDER_PID" "$HOME_DIR/gone.jsonl" \
+      && { echo "a stamp naming a missing transcript must be refused" >&2; exit 1; }
+    exit 0
+  ) || fail "fm_helm_stamp must refuse a stamp with no resolvable transcript"
+  assert_absent "$marker_file" "a declined stamp must leave no marker at all"
+  assert_present "$declined" "a declined stamp must be recorded, never silent"
+  assert_grep "pid=$HOLDER_PID" "$declined" "the declination must name the holder that could not stamp"
+  assert_grep "does not exist" "$declined" "the declination must carry the reason it declined"
+  backdate "$HOME_DIR/state/.lock" 86400
+  out=$(run_lock); status=$?
+  expect_code 1 "$status" "an unstamped holder must keep the helm"
+  assert_contains "$out" "has not proved it is doing any work" "silence must read as unmeasurable"
+  assert_contains "$out" "no activity marker exists because" \
+    "the refusal must point at the recorded declination rather than a file nobody knows about"
+  assert_contains "$out" "does not exist" "the refusal must carry the reason the stamp was declined"
+  pass "fm-helm-lib: a stamp with no resolvable transcript is refused, recorded, and named in the refusal"
+}
+
+# The declination is a single current answer, not an unbounded log, and a later
+# successful stamp must not leave a stale explanation behind for a refusal to
+# quote.
+test_a_successful_stamp_clears_an_earlier_declination() {
+  local transcript_file declined
+  make_home "$TMP_ROOT/stamp-clears"
+  transcript_file="$HOME_DIR/t.jsonl"
+  printf 'a turn\n' > "$transcript_file"
+  declined="$HOME_DIR/state/.helm-activity-declined"
+  (
+    # shellcheck source=bin/fm-helm-lib.sh
+    . "$ROOT/bin/fm-helm-lib.sh"
+    fm_helm_stamp "$HOME_DIR/state" "$HOLDER_PID" "" || true
+    fm_helm_stamp "$HOME_DIR/state" "$HOLDER_PID" "$transcript_file"
+  ) || fail "a stamp naming a real transcript must succeed"
+  assert_present "$HOME_DIR/state/.helm-activity" "the stamp must land once the transcript resolves"
+  assert_absent "$declined" "a successful stamp must clear the earlier declination"
+  pass "fm-helm-lib: a successful stamp replaces the declination rather than leaving it stale"
 }
 
 test_refuses_when_the_terminal_cannot_be_read() {
@@ -337,6 +392,20 @@ test_status_reports_the_holder_and_whether_a_takeover_is_available() {
   pass "fm-lock status: reports the holder, its terminal, and whether the helm can be taken"
 }
 
+# The usual caller of `status` IS the holder, and "takeover: available" about
+# your own session reads as an invitation to take the helm from yourself.
+test_status_never_offers_a_takeover_of_the_callers_own_helm() {
+  local out
+  make_home "$TMP_ROOT/status-self"
+  printf '%s\n' "$ME_PID" > "$HOME_DIR/state/.lock"
+  out=$(env PATH="$FAKEBIN:$PATH" FM_ROOT_OVERRIDE="$HOME_DIR" \
+    bash "$ROOT/bin/fm-lock.sh" status 2>&1)
+  assert_contains "$out" "held by live harness pid $ME_PID" "status must still name the holder"
+  assert_contains "$out" "this session holds the helm" "status must say the caller holds its own helm"
+  assert_not_contains "$out" "takeover: available" "status must never offer a takeover of the caller's own helm"
+  pass "fm-lock status: reports the caller's own helm as held, never as available to take"
+}
+
 test_release_only_works_for_the_session_that_holds_the_helm() {
   local out status
   make_home "$TMP_ROOT/release"
@@ -377,10 +446,13 @@ run_all() {
   test_refuses_a_holder_whose_only_evidence_is_the_session_lock
   test_refuses_an_empty_or_foreign_activity_marker
   test_the_activity_stamp_is_never_observable_as_empty
+  test_a_stamp_without_a_resolvable_transcript_is_declined_and_explained
+  test_a_successful_stamp_clears_an_earlier_declination
   test_mid_turn_work_counts_as_activity
   test_takes_the_helm_from_a_silent_unattended_holder
   test_a_dead_holder_still_loses_the_helm_immediately
   test_status_reports_the_holder_and_whether_a_takeover_is_available
+  test_status_never_offers_a_takeover_of_the_callers_own_helm
   test_release_only_works_for_the_session_that_holds_the_helm
   test_clear_refuses_a_pid_that_does_not_hold_the_helm
 }
