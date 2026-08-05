@@ -77,6 +77,8 @@ data/                personal fleet records; LOCAL, gitignored as a whole
   backlog.md         task queue, dependencies, history
   captain.md         this home's domain-local captain preferences and working style; LOCAL, gitignored, canonical even if harness memory mirrors it, and updated with inspect-then-update
   captain-shared.md  main-authoritative shared captain preferences propagated read-only to secondmate homes; LOCAL, gitignored, owned by secondmate-provisioning
+  decided.md         searchable index of questions the captain has already answered; LOCAL, gitignored, owned by bin/fm-decided.sh (sections 6 and 9)
+  handover.md        advisory handover record left for the next session, with data/handover-prev.md holding the one before it; LOCAL, gitignored, owned by bin/fm-handover.sh (section 8)
   learnings.md       fleet-local operational facts and gotchas; LOCAL, gitignored; dated, evidence-backed, curated, and updated with inspect-then-update - rewrite and prune rather than append forever, the same contract as captain.md; created lazily, absent until this home has a learning to store
   projects.md        thin fleet navigation registry; firstmate-private, parsed by fm-project-mode.sh (section 6)
   secondmates.md      secondmate routing table; firstmate-private, maintained by fm-home-seed.sh (section 6)
@@ -105,6 +107,9 @@ state/               volatile runtime signals; gitignored
   x-outbox/          generated X-mode dry-run reply and dismiss previews; inspect it when FMX_DRY_RUN is set (section 14)
   x-poll.error x-poll.claim-error  generated X-mode relay and offer-claim diagnostic dedupe markers
   .wake-queue        durable queued wakes: epoch<TAB>seq<TAB>kind<TAB>key<TAB>payload
+  .helm-activity     turn-end marker proving the session holding the helm is working, not merely alive; bin/fm-helm-lib.sh
+  .helm-activity-declined  diagnostics: why the last turn end could not resolve a transcript, quoted by a takeover refusal; bin/fm-helm-lib.sh
+  .handover .handover-due .helm-takeover  handover progress, the once-per-session threshold notice, and the auditable record of a taken helm
   .afk               durable away-mode flag; present = sub-supervisor may inject escalations (set by /afk, cleared on user return)
   .watch.lock .wake-queue.lock watcher singleton and queue serialization locks
   .claude-autoarm.lock .claude-autoarm-epoch .turnend-claude-blocks   Claude Stop auto-arm single-flight, epoch, and guard-budget records; never touch
@@ -140,11 +145,13 @@ A lock-refused session must not spawn, steer, merge, drain the wake queue, repai
    The secondmate liveness sweep deterministically accounts for every registered secondmate: it relaunches only from the recovery-grade `dead` or `missing` states, preserves ambiguous or unreadable targets, and reports skipped or failed guarantees as `SECONDMATE_LIVENESS:` lines (`bin/fm-bootstrap.sh`; `bin/fm-backend.sh`'s `fm_backend_agent_state`).
 3. **Wake queue** - when locked, drains the durable wake queue and prints the raw records prominently as this turn's first work queue; a bounded, clearly labeled historical status-event annotation may follow a valid `signal` record but never replaces it or current-state reconciliation, and a lapsed watcher chain still surfaces here via the same guard alarm.
    When the lock could not be acquired and verified, the queue is left untouched because no session mutation is authorized, and the guard's tangle/watcher-liveness alarms still print in read-only advisory mode without drain, supervision repair, or checkout repair commands.
-4. **Context digest** - the full contents of `data/projects.md`, `data/secondmates.md`, `data/captain.md`, `data/captain-shared.md`, and `data/learnings.md`, each clearly delimited.
+4. **Awaiting the captain** - early and short: the decisions held for the captain, work recorded as waiting to land, one line saying how many of their answers are already on disk, and any handover a previous session released, printed in full.
+   Act on that block rather than re-reading its sources; a printed handover is complete, so never re-read the record itself.
+5. **Context digest** - the full contents of `data/projects.md`, `data/secondmates.md`, `data/captain.md`, `data/captain-shared.md`, and `data/learnings.md`, each clearly delimited.
    A file that does not exist prints an explicit `ABSENT` marker, never confused with an empty-but-present file: absence is meaningful (`captain.md` absent means use the firstmate repo's built-in defaults, `projects.md` absent means rebuild it from the clones under `projects/`, etc.).
-5. **Fleet-state digest** - the compact backlog listing owned by `bin/fm-session-start.sh`; every `state/<id>.meta`; a bounded tail of each task's `state/<id>.status` (labeled as wake-EVENT history, not current state, with the full log path printed for a deeper read); the `state/.afk` flag; and one cheap alive/dead read of each task's recorded backend endpoint.
+6. **Fleet-state digest** - the compact backlog listing owned by `bin/fm-session-start.sh`; every `state/<id>.meta`; a bounded tail of each task's `state/<id>.status` (labeled as wake-EVENT history, not current state, with the full log path printed for a deeper read); the `state/.afk` flag; and one cheap alive/dead read of each task's recorded backend endpoint.
    That liveness line is a fast presence check only, not a full state read - when you need a crew's actual current state (a run-step, not just "is the pane there"), read it with `bin/fm-crew-state.sh <id>` as before; the digest deliberately skips that deeper, slower read for every task so it stays fast and bounded.
-6. **Supervision operating instructions and next step** - after the wake queue and before context, the digest emits exactly one operating block for the detected primary harness.
+7. **Supervision operating instructions and next step** - after the wake queue and before context, the digest emits exactly one operating block for the detected primary harness.
    The closing reminder points back to that emitted block and preserves only the lock, afk, X-mode, and read-once reminders.
    The script itself never starts supervision; the emitted harness protocol owns the exact wait or wake mechanism.
 
@@ -209,6 +216,7 @@ Do not reconstruct or supervise a secondmate's child tree from the main home.
 Route durable knowledge to its most specific owner:
 
 - Home-domain captain preferences and working style belong in `data/captain.md` after inspect-then-update.
+- An answer the captain has given belongs in the searchable answered-decision record through `bin/fm-decided.sh record`, under a stable topic key, pointing at the log that holds the full reasoning.
 - Captain preferences shared across secondmate domains belong in the primary home's `data/captain-shared.md` under the `secondmate-provisioning` contract.
 - Fleet-local operational facts belong in curated, home-local `data/learnings.md`.
 - Task-scoped notes belong with the backlog item, and investigation findings belong in the scout report.
@@ -362,6 +370,16 @@ Queued wakes must be drained before other action, stale liveness must be repaire
 The spawn assertion and generated ship brief must both enforce that project work starts in an isolated disposable worktree, never the primary checkout.
 Harness-aware turn-end guards are structural backstops, not permission to omit the live cycle.
 
+### Context threshold and handover
+
+A session past 250,000 tokens reasons worse than a fresh one, so a turn end reports that a handover is due.
+Nothing is blocked: keep working, report it once, and tell the captain a handover is due at the next natural reply rather than stalling the fleet for their answer.
+Load the `handover` skill when the captain invokes `/handover` or asks to hand over, when a turn end reports one is due, and when a session start surfaces a handover a previous session released.
+The record is advisory and durable records win every disagreement with it; never assert a fact in it that no record supports.
+`bin/fm-handover.sh release` refuses until every open thread is backed by a durable record - fix what it names and run it again, never work around it, because once the outgoing session is gone a bad handover cannot be redone.
+When a fresh session cannot take the helm, relay what holds it and the clearing command it printed, and never clear the helm from a session the captain has not agreed to give up.
+A session that does not hold the helm may read a waiting handover but never prepares or consumes one: consuming it there leaves the session that does take the helm told nothing is waiting.
+
 ### Away-mode stub
 
 Invoke the `/afk` skill when the captain says `/afk`, says they are going afk, `state/.afk` exists, an incoming message starts with `FM_INJECT_MARK`, or any `state/.subsuper-*` marker is involved.
@@ -407,6 +425,9 @@ Private evidence reports may retain exact identifiers, paths, status lines, vali
 Every escalation must stand alone and remain concise.
 Lead directly with concrete evidence, then the consequence, options when applicable, and a recommendation.
 Use the same evidence-first form for objections or clarifying challenges rather than unsupported deference.
+
+Search the captain's answers before escalating a question: `bin/fm-decided.sh search <terms>` covers this home's answered-decision record and its decision logs.
+A question they have already settled must not reach them twice.
 
 Reach the captain immediately for:
 

@@ -150,6 +150,7 @@ family_for_basename() {
       printf '%s\n' secondmate
       ;;
     fm-bootstrap.test.sh|fm-fleet-sync.test.sh|fm-gate-refuse.test.sh|fm-gotmp.test.sh|\
+    fm-helm-takeover.test.sh|fm-session-handover.test.sh|\
     fm-session-start.test.sh|fm-sessionstart-nudge.test.sh|fm-tangle-guard.test.sh|\
     fm-update.test.sh)
       printf '%s\n' session-bootstrap
@@ -637,9 +638,14 @@ families_for_changed_path() {
       printf '%s\n' backend-dispatch
       printf '%s\n' orca
       ;;
+    # fm_meta_get lives here, and both the session-start awaiting block and the
+    # canonical backlog record model read task metadata through it, so a change
+    # here selects those two families as well.
     bin/fm-backend.sh|bin/fm-backend-hometag-lib.sh)
       printf '%s\n' backend-dispatch
       printf '%s\n' real-herdr-gated
+      printf '%s\n' session-bootstrap
+      printf '%s\n' snapshot-bearings
       ;;
     bin/fm-watch*|bin/fm-wake*|\
     bin/fm-classify-lib.sh|bin/fm-daemon*|bin/fm-turnend-guard*|bin/fm-guard.sh)
@@ -661,7 +667,9 @@ families_for_changed_path() {
       ;;
     bin/fm-session-start.sh|bin/fm-bootstrap.sh|bin/fm-fleet-sync.sh|\
     bin/fm-sessionstart-nudge.sh|bin/fm-tangle*|bin/fm-update.sh|\
-    bin/fm-gate-refuse*|bin/fm-lock*)
+    bin/fm-gate-refuse*|bin/fm-lock*|bin/fm-helm-lib.sh|bin/fm-handover.sh|\
+    bin/fm-decided.sh|bin/fm-awaiting-captain.sh|bin/fm-session-pulse.sh|\
+    bin/fm-context-measure-lib.sh)
       printf '%s\n' session-bootstrap
       ;;
     bin/fm-pr-*|bin/fm-merge-local.sh|bin/fm-teardown.sh|bin/fm-review-diff.sh|\
@@ -674,6 +682,12 @@ families_for_changed_path() {
       printf '%s\n' pure-contract-unit
       ;;
     bin/fm-bearings-snapshot.sh|bin/fm-fleet-snapshot.sh|bin/fm-fleet-view.sh)
+      printf '%s\n' snapshot-bearings
+      ;;
+    # The canonical backlog record model: the session-start awaiting block reads
+    # it directly, and the snapshot and bearings projections are built on it.
+    bin/fm-backlog-record-lib.sh)
+      printf '%s\n' session-bootstrap
       printf '%s\n' snapshot-bearings
       ;;
     bin/fm-install-herdr.sh|bin/fm-install-treehouse.sh|bin/fm-herdr-ci-cleanup.sh)

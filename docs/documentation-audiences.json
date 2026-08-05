@@ -148,6 +148,10 @@
       "audience": "agent-runtime"
     },
     {
+      "path": ".agents/skills/handover/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
       "path": ".agents/skills/harness-adapters/SKILL.md",
       "audience": "agent-runtime"
     },
@@ -256,6 +260,10 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/session-handover.md",
+      "audience": "operator-current"
+    },
+    {
       "path": "docs/scripts.md",
       "audience": "operator-current"
     },
@@ -298,6 +306,10 @@
     {
       "path": "docs/turnend-guard.md",
       "audience": "operator-current"
+    },
+    {
+      "path": "docs/verification/session-handover.md",
+      "audience": "maintainer-verification"
     },
     {
       "path": "docs/verification/runtime-backends.md",

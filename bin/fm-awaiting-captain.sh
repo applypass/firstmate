@@ -1,0 +1,202 @@
+#!/usr/bin/env bash
+# The short list of things waiting on the captain, plus the one-line pointer to
+# everything already answered.
+#
+# WHY IT IS SHORT AND WHY IT IS FIRST: the captain's own rules and two settled
+# answers were sitting in a session-start digest several hundred lines down, and
+# were skipped. The fix is not more text earlier - it is a few always-actionable
+# lines early, and a cheap lookup for the rest. So this block carries only what
+# is genuinely waiting on the captain, and one line saying how to search the rest.
+#
+# LOCAL READS ONLY: no network, no forge calls, no agent-state probes. This runs
+# at every session start, so it must stay cheap enough that nobody is tempted to
+# skip it. A recorded pull request is listed as recorded, never re-checked here.
+#
+# HARD LINE CAP: each list is bounded and says how many entries it dropped.
+# Silent truncation would read as "nothing else is waiting", which is the exact
+# failure this block exists to prevent.
+#
+# A FAILED READ IS NEVER RENDERED AS ABSENCE, and that is a property of this
+# WHOLE FILE, not of any one list. Every read here - the backlog record model,
+# each task's records, the answered-decision count, the pending-handover test -
+# either produces its answer or prints an explicit marker saying the answer is
+# unknown. A missing tool, an unreadable file, or a helper that failed must never
+# come out looking the same as "nothing is waiting on you". Keep that property
+# when adding anything to this file.
+#
+# ONE OWNER PER CONTRACT: what counts as a captain hold waiting on the captain,
+# and where a task's pull request is recorded, are both defined once in
+# bin/fm-backlog-record-lib.sh and consumed here. This file never restates them.
+#
+# Usage: fm-awaiting-captain.sh [--handover-printed-below] [--read-only]
+#   --handover-printed-below: the caller prints the handover record itself, so
+#     point at what it printed instead of telling the reader to open the file.
+#   --read-only: this session was refused the helm, so it may read a waiting
+#     handover but must never consume it.
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
+STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
+DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
+
+MAX=${FM_AWAITING_MAX:-20}
+case "$MAX" in ''|*[!0-9]*|0) MAX=20 ;; esac
+
+# shellcheck source=bin/fm-backlog-record-lib.sh
+# shellcheck disable=SC1091
+. "$SCRIPT_DIR/fm-backlog-record-lib.sh"
+
+HANDOVER_PRINTED_BELOW=0
+READ_ONLY=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -h|--help) sed -n '2,${/^set -u/q;p;}' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --handover-printed-below) HANDOVER_PRINTED_BELOW=1 ;;
+    --read-only) READ_ONLY=1 ;;
+    '') : ;;
+    *) echo "usage: $(basename "$0") [--handover-printed-below] [--read-only]" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+# print_capped <label>: read lines from stdin, print at most MAX of them, and
+# name what was dropped.
+print_capped() {
+  local label=$1 total=0 shown=0 line
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    total=$((total + 1))
+    if [ "$shown" -lt "$MAX" ]; then
+      printf '%s\n' "$line"
+      shown=$((shown + 1))
+    fi
+  done
+  if [ "$total" -eq 0 ]; then
+    printf '(none)\n'
+  elif [ "$total" -gt "$shown" ]; then
+    printf -- '--- %s more %s omitted by the %s-line cap; raise FM_AWAITING_MAX to see them ---\n' \
+      "$((total - shown))" "$label" "$MAX"
+  fi
+}
+
+# No banner of its own: bin/fm-session-start.sh heads this block as a digest
+# section, and a second title there would just read as a duplicate.
+#
+# --- a handover the captain already triggered -------------------------------
+"$SCRIPT_DIR/fm-handover.sh" pending 2>/dev/null
+HANDOVER_STATUS=$?
+if [ "$HANDOVER_STATUS" -gt 1 ]; then
+  printf 'HANDOVER STATE UNKNOWN: bin/fm-handover.sh pending failed (status %s), so this session\n' "$HANDOVER_STATUS"
+  printf '  cannot tell whether a previous session left a handover. Run it by hand before acting.\n'
+elif [ "$HANDOVER_STATUS" -eq 0 ]; then
+  if [ "$HANDOVER_PRINTED_BELOW" -eq 1 ]; then
+    printf 'HANDOVER WAITING: a previous session prepared and released one. It is printed in full\n'
+    printf '  below, so do not re-read the record. Reconcile it against the durable records it\n'
+    printf '  points at'
+  else
+    printf 'HANDOVER WAITING: a previous session prepared and released one. Read data/handover.md,\n'
+    printf '  reconcile it against the durable records it points at'
+  fi
+  # A session refused the helm may read the record, but consuming it would leave
+  # the session that does take the helm told nothing is waiting.
+  if [ "$READ_ONLY" -eq 1 ]; then
+    printf '. This session does not hold the helm, so it must NOT\n'
+    printf '  consume the handover; leave it for the session that takes the helm.\n'
+  else
+    printf ', then run bin/fm-handover.sh consume.\n'
+  fi
+fi
+
+# --- decisions held for the captain -----------------------------------------
+# bin/fm-backlog-record-lib.sh decides what is actionable; this only renders it.
+#
+# LANDED_UNREAD starts at 1 - unknown - so a record model this never manages to
+# read leaves the pull-request list below unfiltered and says so, rather than
+# silently dropping nothing while implying it dropped what had landed.
+LANDED_IDS=''
+LANDED_UNREAD=1
+printf 'Decisions held for you:\n'
+if [ ! -f "$DATA/backlog.md" ]; then
+  printf '(no backlog record)\n'
+elif ! command -v jq >/dev/null 2>&1; then
+  printf '(held decisions unread: jq is not installed, so the backlog record model cannot be read)\n'
+else
+  # Each stage is run and checked on its own, because a failed read that renders
+  # as an empty list is exactly the "nothing is waiting" lie this block exists to
+  # prevent. A command substitution around the whole pipeline would lose the
+  # per-stage status, so the stages are separate.
+  # Stderr is kept OUT of the captured value: a warning on a readable backlog
+  # would otherwise be parsed as part of the JSON and report a file that was
+  # read fine as unreadable. The exit status is the signal, not the noise.
+  HELD_UNREAD=0
+  RECORDS_JSON=$(fm_backlog_records_json "$DATA/backlog.md" 2>/dev/null) || HELD_UNREAD=1
+  # The same read answers the pull-request list below: a record the local model
+  # already calls done or merged has landed, and reporting it back as waiting
+  # spends the captain's attention on work he has already finished.
+  if [ "$HELD_UNREAD" -eq 0 ]; then
+    if LANDED_IDS=$(printf '%s\n' "$RECORDS_JSON" \
+      | jq -r '.records[]? | select(.structured == true)
+               | select(.state == "done" or .completion.verb == "merged")
+               | .id' 2>/dev/null); then
+      LANDED_UNREAD=0
+    fi
+  fi
+  HELD=''
+  if [ "$HELD_UNREAD" -eq 0 ]; then
+    HELD=$(printf '%s\n' "$RECORDS_JSON" \
+      | jq -r '.records[]? | select(.captain_actionable == true)
+               | "- \(.id) - \(.title // "")"' 2>/dev/null) || HELD_UNREAD=1
+  fi
+  if [ "$HELD_UNREAD" -eq 1 ]; then
+    printf '(held decisions unread: the backlog record model could not be read, so this list is NOT empty - it is unknown)\n'
+  else
+    printf '%s\n' "$HELD" | print_capped "held decision(s)"
+  fi
+fi
+
+# --- work recorded as waiting for the captain's merge -----------------------
+# Same owner as the snapshot's pr/pr_source, so a PR recorded only in a status
+# event is listed too. Still a local read: nothing here asks a forge anything.
+#
+# A task's meta survives from merge until teardown removes it, so listing every
+# recorded pull request reports work the captain already merged back to him as
+# still waiting. The local record model already knows which of them landed, so
+# those are dropped here - and the header says plainly that the rest are recorded
+# locally rather than verified, because buying that verification would cost the
+# local-only property that makes this block cheap enough to run every time.
+printf 'Recorded pull requests waiting to land (recorded locally, not verified against the forge):\n'
+# if/elif rather than case: bash 3.2 is the floor here and it mis-parses a case
+# statement's patterns inside a command substitution.
+PR_LINES=$(
+  for meta in "$STATE"/*.meta; do
+    [ -f "$meta" ] || continue
+    id=$(basename "$meta" .meta)
+    if [ "$LANDED_UNREAD" -eq 0 ] && printf '%s\n' "$LANDED_IDS" | grep -qxF -- "$id"; then
+      continue
+    fi
+    record=$(fm_recorded_pr "$meta" "$STATE/$id.status")
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+      printf -- '- %s (%s, recorded in %s)\n' "${record%%	*}" "$id" "${record#*	}"
+    elif [ "$rc" -eq 2 ]; then
+      printf -- '- %s: UNREAD - its records could not be read, so whether it has a pull request waiting is unknown, not no\n' "$id"
+    fi
+  done
+)
+printf '%s\n' "$PR_LINES" | print_capped "recorded pull request(s)"
+if [ -n "$PR_LINES" ] && [ "$LANDED_UNREAD" -eq 1 ]; then
+  printf '(already-landed work could not be filtered out: the backlog record model could not be read, so an entry above may have landed already)\n'
+fi
+
+# --- the one line about what is already answered ----------------------------
+"$SCRIPT_DIR/fm-decided.sh" count 2>/dev/null \
+  || printf 'The answered-decision count could not be read, so treat it as unknown. Search before escalating anything: bin/fm-decided.sh search <terms>\n'
+
+# Standing preferences are not decisions and are never summarized here; this is
+# only the early pointer to the file that holds them, which prints in full
+# further down the digest.
+if [ -s "$DATA/captain.md" ]; then
+  printf 'The captain'"'"'s standing preferences are in data/captain.md - read them before reporting anything.\n'
+fi
