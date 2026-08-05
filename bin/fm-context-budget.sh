@@ -64,11 +64,16 @@
 # renders. That is why the file-based TRIP RECORD below, not the notice, is the
 # channel this feature relies on for observing how often the ceiling is crossed.
 #
-# THE TRIP RECORD IS WRITE-ONLY: every stage firing appends one line to
+# THE TRIP RECORD IS WRITE-ONLY: every CROSSING appends one line to
 # state/.context-budget-trips, and NO code path ever reads it back to decide
 # anything. Only its own length is consulted, to keep it bounded. Losing or
 # corrupting it therefore costs visibility and can never change a decision, which
 # is exactly what keeps it out of the record loss-path class below.
+# One line per CROSSING, not per turn end above the advisory: the question it
+# answers is how OFTEN the guard fires, and a line per turn end answers how long a
+# session lingered instead, inflating the count by the length of every episode.
+# A parse failure on the block record is recorded here too, since a corrupt record
+# leaving no trace is the one silent failure this file will not accept.
 #
 # RECORD IDENTITY IS THE SESSION: both records are named per session_id, which is
 # the identity of the context accumulation itself (the transcript file is
@@ -76,13 +81,16 @@
 # cannot alias onto one record and wipe each other's stand-down. A missing or
 # unsafe session_id makes the turn inert rather than merging distinct sessions
 # under one shared identity, and the records are cleared only by evidence of a
-# GENUINE reset - never by a zero, absent, or unreadable number, because losing a
-# stand-down costs repeated forced handoffs while keeping a stale one costs at
-# most one missed warning. There are exactly two such proofs: a POSITIVE
+# GENUINE reset - never by a zero, absent, or unreadable MEASUREMENT, because
+# losing a stand-down costs repeated forced handoffs while keeping a stale one
+# costs at most one missed warning. There are exactly two such proofs: a POSITIVE
 # measurement back below the advisory, and a NEW compaction boundary in the
 # transcript. The second one matters because compaction does not change
 # session_id, so a session-keyed record would otherwise stay stood down across a
 # real reset whose post-compaction total is still above the advisory.
+# That retention bias protects a stand-down the session was actually TOLD about.
+# It does NOT extend to an unparseable RECORD, which is evidence of nothing and is
+# read as no record at all, leaving the guard armed; see budget_read.
 #
 # THE ONE VALVE: write a handoff and clear. This guard instructs and never types
 # into a pane: it never injects /compact, /clear, or any other command, and it
@@ -92,8 +100,10 @@
 # NEVER WEDGE A SESSION: every measurement failure - absent jq or awk, missing or
 # unreadable transcript_path, missing or corrupt transcript, no assistant usage,
 # a zero measurement, no usable session_id, empty or malformed stdin - is a silent
-# exit 0, and a block count that cannot be written degrades to the visible
-# warning rather than to an unbounded block. When enforcement is on, blocking
+# exit 0, and a block count that cannot be written degrades to the visible warning
+# rather than to an unbounded block. That degrade carries its OWN notice key, so a
+# ceiling notice already shown this episode cannot silence the guard's report that
+# it is malfunctioning. When enforcement is on, blocking
 # is bounded by FM_CONTEXT_BUDGET_BLOCK_BUDGET and then STANDS DOWN STICKILY for
 # the rest of the session, re-arming only on one of the two genuine-reset proofs
 # above: a POSITIVE measurement back below the advisory, or a NEW compaction
@@ -282,38 +292,121 @@ prune_dead_records() {
     -mtime +30 -delete >/dev/null 2>&1 || true
 }
 
+# KNOWN UNFIXED: a session oscillating across the ceiling re-notices on every turn
+# end. The recorded stage alternates ceiling, advisory, ceiling, so each crossing
+# back looks new and prints again, and the once-per-episode contract fails on a
+# DOWNWARD crossing.
+#
+# This is left unfixed on purpose. Replayed twice over real transcripts with the
+# shipped measurement and stage logic - 189 sessions and 41,244 turns, then 190
+# sessions and 41,353 turns - the condition occurred ZERO times: sessions that
+# reach the ceiling climb past it rather than hover, so the case is latent, not
+# live. Downward moves above the advisory do exist (155 of them), so the mechanism
+# is reachable in principle. But the measurement is also effectively monotonic
+# within an episode by arithmetic, since each total is the previous prompt plus
+# this turn's output plus whatever else arrived: it can only FALL on a reset, and a
+# compaction boundary already ends the episode.
+#
+# Do not "fix it while you are here". The obvious fixes - making the stage
+# monotonic, or recording the highest stage reached - both close this and make the
+# independent-key cases below strictly worse, because a recorded ceiling could then
+# never be superseded by the count-not-recorded degrade. If it ever does occur the
+# failure mode is a notice on every turn end: noisy, harmless, and self-announcing,
+# so we would know within one session. tests/fm-context-budget.test.sh pins the
+# current behavior deliberately.
+
 # One field out of a record, matched by key rather than by line number so a field
 # can be added without re-numbering the readers.
 record_field() {  # <file> <key>
   sed -n "s/^$2=//p" "$1" 2>/dev/null | sed -n '1p'
 }
 
-# True when this session has already been shown the named notice stage.
-notice_seen() {  # <stage>
-  [ "$(record_field "$NOTICE_FILE" stage)" = "$1" ]
+# The notice record tracks SEVERAL INDEPENDENT things, each in its own field,
+# because one field standing for several meant whichever fired first silenced the
+# others for the whole episode:
+#   stage       - the threshold notice last shown, advisory or ceiling.
+#   unrecorded  - the count-not-recorded degrade has been reported.
+#   badrecord   - an unparseable block record has been traced.
+# These are independent flags and NOT an ordering: nothing here ranks one above
+# another, which is what keeps this shape clear of the straddle case above.
+# `stage` holds a value and the others are 0/1, so the mapping lives in one place.
+notice_field() {  # <notice>
+  case "$1" in
+    ceiling-unrecorded) printf 'unrecorded\n' ;;
+    record-unparseable) printf 'badrecord\n' ;;
+    *) printf 'stage\n' ;;
+  esac
 }
 
+notice_seen() {  # <notice>
+  local field
+  field=$(notice_field "$1")
+  if [ "$field" = stage ]; then
+    [ "$(record_field "$NOTICE_FILE" stage)" = "$1" ]
+  else
+    [ "$(record_field "$NOTICE_FILE" "$field")" = 1 ]
+  fi
+}
+
+# Recording one notice PRESERVES every other field. A blind overwrite would put
+# these messages back on one key and resurrect the silent-degrade case.
 # A notice that cannot be recorded may repeat on a later turn end. That is the
 # deliberate degrade: a repeated visible warning is harmless, while suppressing
 # it would lose the shipped default's only rendered behavior.
-notice_record() {  # <stage>
+notice_record() {  # <notice>
+  local stage unrecorded badrecord
+  stage=$(record_field "$NOTICE_FILE" stage)
+  unrecorded=$(record_field "$NOTICE_FILE" unrecorded)
+  badrecord=$(record_field "$NOTICE_FILE" badrecord)
+  case "$(notice_field "$1")" in
+    unrecorded) unrecorded=1 ;;
+    badrecord) badrecord=1 ;;
+    *) stage=$1 ;;
+  esac
+  [ "$unrecorded" = 1 ] || unrecorded=0
+  [ "$badrecord" = 1 ] || badrecord=0
   [ -e "$NOTICE_FILE" ] || prune_dead_records
-  printf 'stage=%s\ncompacts=%s\nsession=%s\n' "$1" "$COMPACTS" "$SESSION_ID" \
-    > "$NOTICE_FILE" 2>/dev/null || true
+  # 2>/dev/null FIRST on every record write in this file: bash applies
+  # redirections left to right, so a trailing one is not in place yet when the
+  # output redirection itself fails on an unwritable record, and the shell's
+  # "Permission denied" would leak - onto the very stderr the blocking path uses
+  # to deliver the banner to the model.
+  printf 'stage=%s\nunrecorded=%s\nbadrecord=%s\ncompacts=%s\nsession=%s\n' \
+    "$stage" "$unrecorded" "$badrecord" "$COMPACTS" "$SESSION_ID" \
+    2>/dev/null > "$NOTICE_FILE" || true
 }
 
 BUDGET_COUNT=0
 BUDGET_STOOD_DOWN=0
-# An unparseable count in an existing record is read as a spent stand-down, not
-# as a fresh budget: re-arming on a record we cannot read is exactly the loss
-# this record exists to prevent.
+# An unparseable count is read as NO record, so the guard stays ARMED, and the
+# parse failure is recorded once.
+#
+# The retention bias everywhere else in this file protects a GENUINE stand-down:
+# once the session has been told, stay quiet. An unparseable record is not
+# evidence of that - it is evidence of nothing - and reading it as a spent
+# stand-down conflates unknown with dismissed, letting a corrupt file impersonate
+# a dismissal and silence the guard for the whole session. The asymmetry decides
+# it: this guard only ever warns, so a spurious warning costs one printed line
+# while a suppressed one costs a session blown past the ceiling with nothing to
+# explain why. Failing toward the warning is right, and failing silently is not,
+# which is why the parse failure leaves a line behind.
 budget_read() {
   local raw_count raw_standdown
   [ -e "$BUDGET_FILE" ] || return 0
   raw_count=$(record_field "$BUDGET_FILE" count)
   raw_standdown=$(record_field "$BUDGET_FILE" standdown)
   case "$raw_count" in
-    ''|*[!0-9]*) BUDGET_STOOD_DOWN=1; return 0 ;;
+    ''|*[!0-9]*)
+      # Once per episode, not once per turn end. A record that is corrupt AND
+      # cannot be rewritten is re-read at every turn end, and the trip record is
+      # bounded, so a line each time would crowd out the crossing history the
+      # warning-only release exists to collect.
+      if ! notice_seen record-unparseable; then
+        notice_record record-unparseable
+        trip_record record-unparseable
+      fi
+      return 0
+      ;;
   esac
   BUDGET_COUNT=$raw_count
   [ "$raw_standdown" = 1 ] && BUDGET_STOOD_DOWN=1
@@ -326,7 +419,7 @@ budget_read() {
 budget_record() {  # <count> <standdown 0|1>
   [ -e "$BUDGET_FILE" ] || prune_dead_records
   printf 'count=%s\nstanddown=%s\ncompacts=%s\nsession=%s\n' \
-    "$1" "$2" "$COMPACTS" "$SESSION_ID" > "$BUDGET_FILE" 2>/dev/null
+    "$1" "$2" "$COMPACTS" "$SESSION_ID" 2>/dev/null > "$BUDGET_FILE"
 }
 
 # --- the trip record: WRITE-ONLY observation ----------------------------------
@@ -351,11 +444,11 @@ trip_trim() {
   if [ "$lines" -gt "$TRIP_MAX_LINES" ]; then
     kept=$(sed -n "$((lines - TRIP_MAX_LINES + 1)),\$p" "$TRIP_FILE" 2>/dev/null) || return 0
     [ -n "$kept" ] || return 0
-    printf '%s\n' "$kept" > "$TRIP_FILE" 2>/dev/null || return 0
+    printf '%s\n' "$kept" 2>/dev/null > "$TRIP_FILE" || return 0
   else
     # Over the byte cap on too few lines to trim by line means the content is not
     # trip lines at all. Start clean rather than let it grow unbounded.
-    : > "$TRIP_FILE" 2>/dev/null || return 0
+    : 2>/dev/null > "$TRIP_FILE" || return 0
   fi
   return 0
 }
@@ -366,7 +459,7 @@ trip_record() {  # <stage>
   [ -n "$stamp" ] || stamp=unknown
   printf '%s stage=%s total=%s ceiling=%s advisory=%s enforce=%s session=%s\n' \
     "$stamp" "$1" "$TOTAL" "$CEILING" "$ADVISORY" "$ENFORCE" "$SESSION_ID" \
-    >> "$TRIP_FILE" 2>/dev/null || return 0
+    2>/dev/null >> "$TRIP_FILE" || return 0
   trip_trim
   return 0
 }
@@ -393,8 +486,21 @@ ceiling_text() {  # <closing line>
   printf 'This is a cost and reasoning-quality policy, not an overflow warning.\n'
 }
 
-# One visible non-blocking notice per stage per episode, on stdout.
-notice_once() {  # <stage> <text>
+# Entering a threshold stage. Writing the stage into the record IS the crossing,
+# so the ONE trip line for it is appended here and nowhere else: that is what makes
+# the trip record count how OFTEN the guard fires rather than how long a session
+# lingered above the advisory. Returns 0 only when the stage is new, so every path
+# below - including the enforcing one, which prints its banner on every blocked
+# turn and so cannot dedupe through a notice - records its crossing exactly once.
+stage_enter() {  # <advisory|ceiling>
+  notice_seen "$1" && return 1
+  notice_record "$1"
+  trip_record "$1"
+  return 0
+}
+
+# One visible non-blocking notice per notice key per episode, on stdout.
+notice_once() {  # <notice> <text>
   notice_seen "$1" && return 0
   notice_record "$1"
   system_message "$2"
@@ -432,21 +538,26 @@ fi
 
 # --- between advisory and ceiling: one non-blocking notice per episode ---------
 if [ "$TOTAL" -lt "$CEILING" ]; then
-  trip_record advisory
-  notice_once advisory "$(
-    printf 'CONTEXT BUDGET ADVISORY - %s tokens, ceiling %s\n' "$TOTAL" "$CEILING"
-    printf 'About %s tokens of headroom left before the ceiling.\n' "$((CEILING - TOTAL))"
-    printf 'Prefer cheap actions now and avoid large reads.\n'
-    printf 'Run /stow, write a handoff note, and clear before the ceiling is reached.\n'
-  )"
+  if stage_enter advisory; then
+    system_message "$(
+      printf 'CONTEXT BUDGET ADVISORY - %s tokens, ceiling %s\n' "$TOTAL" "$CEILING"
+      printf 'About %s tokens of headroom left before the ceiling.\n' "$((CEILING - TOTAL))"
+      printf 'Prefer cheap actions now and avoid large reads.\n'
+      printf 'Run /stow, write a handoff note, and clear before the ceiling is reached.\n'
+    )"
+  fi
   exit 0
 fi
 
-trip_record ceiling
+# Record the ceiling crossing once, whichever path below then handles it.
+CEILING_IS_NEW=0
+stage_enter ceiling && CEILING_IS_NEW=1
 
 # --- at or above the ceiling, shipped default: warn once, never block ---------
 if [ "$ENFORCE" -ne 1 ]; then
-  notice_once ceiling "$(ceiling_text 'This is a warning: the ceiling does not block by default.')"
+  if [ "$CEILING_IS_NEW" -eq 1 ]; then
+    system_message "$(ceiling_text 'This is a warning: the ceiling does not block by default.')"
+  fi
   exit 0
 fi
 
@@ -479,7 +590,10 @@ if ! budget_record "$COUNT" 0; then
   # The count could not be persisted, so blocking could not be bounded by it.
   # Degrade to the visible warning instead of blocking on a count that does not
   # survive the turn.
-  notice_once ceiling "$(ceiling_text 'This turn is allowed rather than blocked because the block count could not be recorded.')"
+  # Its OWN notice key, never the ceiling key: this reports a MALFUNCTION of the
+  # guard rather than a threshold crossing, and sharing a key meant a ceiling
+  # notice already shown this episode silenced it from its very first occurrence.
+  notice_once ceiling-unrecorded "$(ceiling_text 'This turn is allowed rather than blocked because the block count could not be recorded.')"
   exit 0
 fi
 

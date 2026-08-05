@@ -56,9 +56,13 @@ That formula reproduces Claude Code's own accounting exactly rather than approxi
 
 Three correctness rules the measurement implements:
 
-- **Last, never max and never a sum.** Compaction resets the running total. A `max` implementation would latch the pre-compaction peak and disable the guard permanently after the first compaction, and a sum would report a multiple of the real total and fire the guard far too early.
-- **Exclude sidechains.** `isSidechain == true` marks subagent turns, which must never inflate the primary's measurement. The exclusion is applied to the whole pass rather than to the token total alone, so it also covers the compaction tally below: a subagent's compaction is no evidence that the primary's context reset.
-- **Ignore zero-total entries.** Claude Code writes synthetic assistant entries - main chain, `model` of `<synthetic>`, all four usage fields `0` - whenever a turn ends abnormally, which is exactly when this hook fires. One is the last assistant entry at that moment, so counting it would read a long session as empty and that false zero would then look like proof the context had reset. The reader takes the last *positive* total instead.
+- **Last, never max and never a sum.** Compaction resets the running total.
+  A `max` implementation would latch the pre-compaction peak and disable the guard permanently after the first compaction, and a sum would report a multiple of the real total and fire the guard far too early.
+- **Exclude sidechains.** `isSidechain == true` marks subagent turns, which must never inflate the primary's measurement.
+  The exclusion is applied to the whole pass rather than to the token total alone, so it also covers the compaction tally below: a subagent's compaction is no evidence that the primary's context reset.
+- **Ignore zero-total entries.** Claude Code writes synthetic assistant entries - main chain, `model` of `<synthetic>`, all four usage fields `0` - whenever a turn ends abnormally, which is exactly when this hook fires.
+  One is the last assistant entry at that moment, so counting it would read a long session as empty and that false zero would then look like proof the context had reset.
+  The reader takes the last *positive* total instead.
 
 Taking the last entry also handles a multi-block assistant turn, with no separate dedupe step.
 Every JSONL line of one such turn carries that turn's own cumulative usage rather than a slice of it, so the last line already is the turn's total.
@@ -102,6 +106,14 @@ Each notice prints once per episode and re-arms on either of the two genuine-res
 Printing once per episode is the same shape `bin/fm-guard.sh` uses.
 The advisory notice and the warning-only ceiling notice are separate stages, so crossing from one into the other still produces exactly one new notice.
 
+The notice record carries several independent keys, not one: the threshold stage, whether the count-not-recorded degrade under durable records below has been reported, and whether an unparseable record has been traced.
+They are independent flags rather than a ranking, because those are different messages and a single key meant whichever fired first silenced the others for the whole episode.
+
+One known case is deliberately left unfixed: a session oscillating across the ceiling notices on every turn end, because the recorded stage alternates and each crossing back looks new.
+Replayed twice over real transcripts, across 41,244 and then 41,353 measured turns, the condition occurred zero times, since sessions that reach the ceiling climb past it rather than hover.
+The measurement is also effectively monotonic inside an episode by arithmetic, and the obvious fixes would make the independent-key case above strictly worse.
+`bin/fm-context-budget.sh` records the reasoning and the numbers where the next reader will be, and the test suite pins the current behavior so it is not "fixed while someone is there".
+
 ## Where the notices appear
 
 Claude Code discards a successful `Stop` hook's stderr.
@@ -121,8 +133,12 @@ Under the shipped warning-only default every visible thing this guard does is a 
 
 Two limits of that channel are worth stating plainly, because together they decide what the default release actually delivers:
 
-- `systemMessage` is described by the harness's own hook-response schema as a warning shown to the *user*. It is not fed to the model, and a live session asked about one it had visibly received answered that it had not seen it. So the default reports to the captain and instructs nobody; only the blocking exit-2 path reaches the session.
-- Rendering is not guaranteed. A controlled experiment over eight trials, varying the number of emitting `Stop` hooks and single-line against multi-line bodies, confirmed 30 emissions and zero renders, while the same shape had rendered twice in that project earlier. That earlier behavior is unexplained and is recorded as an unproven property, not resolved.
+- `systemMessage` is described by the harness's own hook-response schema as a warning shown to the *user*.
+  It is not fed to the model, and a live session asked about one it had visibly received answered that it had not seen it.
+  So the default reports to the captain and instructs nobody; only the blocking exit-2 path reaches the session.
+- Rendering is not guaranteed.
+  A controlled experiment over eight trials, varying the number of emitting `Stop` hooks and single-line against multi-line bodies, confirmed 30 emissions and zero renders, while the same shape had rendered twice in that project earlier.
+  That earlier behavior is unexplained and is recorded as an unproven property, not resolved.
 
 ## The trip record
 
@@ -133,12 +149,22 @@ Because rendering cannot be relied on, and because observing how often the ceili
 ```
 
 That is enough to answer how often the guardrail fires and at what size, without depending on a display behavior this repo does not control.
-A stage firing means a turn end at or above the advisory point, so it records repeats and stood-down turns too, not only the turns that produced a notice.
+
+One line per crossing, not per turn end.
+A crossing means entering a threshold stage the session was not already in, so a long stretch above the advisory at a steady measurement records one line rather than one per turn.
+That is the difference between how often the guard fires and how long a session lingered: measured before this was corrected, 12 turn ends at a steady 160,000 wrote 12 lines.
+The line is written exactly where the stage is recorded, so the enforcing path records its crossing once too even though it prints its banner on every blocked turn.
+A genuine re-crossing after dropping back below the advisory point is a second crossing and adds one more line.
 A session below the advisory writes nothing at all.
+
+A failure to parse the block record is recorded here as well, under `stage=record-unparseable`.
+That is the one trace a corrupt record leaves, and it is why treating it as no record is not a silent decision.
+It is written once per episode, like a notice: a record that is corrupt and also cannot be rewritten is re-read at every turn end, and a line each time would crowd the crossing history out of the bounded file.
 
 The record is write-only by contract, and that contract is what keeps it outside the loss-path class the durable records below belong to:
 
-- Nothing ever reads a decision out of it. The only thing read back is its own size, to keep it bounded.
+- Nothing ever reads a decision out of it.
+  The only thing read back is its own size, to keep it bounded.
 - Deleting, truncating, or corrupting it mid-session changes no behavior whatsoever, which `tests/fm-context-budget.test.sh` pins by replaying one identical session three ways and comparing every exit status and both streams.
 - It is bounded at roughly 128 KiB and trimmed back to its most recent 500 entries, so it cannot grow without limit.
 - It spans sessions rather than being keyed to one, and it is deliberately excluded from the 30-day prune that reaches the per-session records.
@@ -155,13 +181,24 @@ Every rule about these records biases toward keeping them.
 Losing a stand-down means repeated forced handoffs that grow the context this guard exists to cap; keeping a stale one costs at most one missed warning in one session.
 Concretely:
 
-- Exactly two things clear them, and both are evidence of a genuine reset: a positive measurement below the advisory point, and a compaction boundary newer than the one the record itself was written with. An absent, non-numeric, or zero measurement never does.
-- The compaction clause exists because compaction does not change `session_id`. Without it a session-keyed record would stay stood down across a real reset whose post-compaction total is still above the advisory. A record whose own boundary count is missing or unreadable is kept, not cleared, and a boundary already accounted for never clears the record twice.
-- An existing block record whose count cannot be parsed is read as a spent stand-down, not as a fresh budget.
+- Exactly two things clear them, and both are evidence of a genuine reset: a positive measurement below the advisory point, and a compaction boundary newer than the one the record itself was written with.
+  An absent, non-numeric, or zero measurement never does.
+- The compaction clause exists because compaction does not change `session_id`.
+  Without it a session-keyed record would stay stood down across a real reset whose post-compaction total is still above the advisory.
+  A record whose own boundary count is missing or unreadable is kept, not cleared, and a boundary already accounted for never clears the record twice.
+- An existing block record whose count cannot be parsed is read as **no record**, leaving the guard active, and the parse failure is recorded in the trip record above.
+  The retention bias protects a stand-down the session was actually told about; an unparseable record is evidence of nothing, and reading it as a spent stand-down would let a corrupt file impersonate that dismissal and silence the guard for the whole session.
+  The asymmetry settles it: this guard only ever warns, so a spurious warning costs one printed line while a suppressed one costs a session blown past the ceiling with nothing to explain why.
+  Leaving the guard armed does not cost the block bound, which matters because unbounded blocking is the one thing this guard may never do: a writable record is rewritten on the first blocked turn and counts normally from there, and an unwritable one degrades to the visible warning instead of blocking.
 - The stand-down is recorded as a flag rather than a clamped count, so raising `FM_CONTEXT_BUDGET_BLOCK_BUDGET` mid-session cannot re-arm a budget that was already spent.
 - The state directory is canonicalized once per run, so a symlinked or relative path cannot split one session's records across two locations.
-- A block count that cannot be written is not swallowed. Blocking on a count that does not survive the turn could not be bounded, so that turn degrades to the visible warning instead.
-- Records are pruned only when older than 30 days, and a stood-down session refreshes its own record on every turn end, so pruning can never reach a session that is still running. The prune names the two per-session record prefixes explicitly and does not touch the trip record.
+- A block count that cannot be written is not swallowed.
+  Blocking on a count that does not survive the turn could not be bounded, so that turn degrades to the visible warning instead.
+  That warning carries its own notice key, so a ceiling notice already shown this episode cannot silence the guard's report that it is malfunctioning.
+  It still prints once per episode rather than at every turn end, because a repeated report of a condition that is not clearing is noise.
+  When the whole state directory is unwritable nothing can be deduped, so it repeats; repeating a visible warning is the acceptable end of that trade, and going silent about a broken safety mechanism is not.
+- Records are pruned only when older than 30 days, and a stood-down session refreshes its own record on every turn end, so pruning can never reach a session that is still running.
+  The prune names the two per-session record prefixes explicitly and does not touch the trip record.
 
 ## The valve
 
@@ -223,7 +260,10 @@ A blind turn end is a repairable condition and a forced continuation is itself t
 The context ceiling cannot clear without a captain keystroke, so a guard that reset its budget would oscillate between blocking and allowing forever, and each forced continuation would re-run the handoff and add tokens to the context it exists to cap.
 Standing down is the correct end state here; it is not the correct end state there.
 
-The sticky stand-down also keeps this guard out of the harness's consecutive-block accounting for the rest of the session, so stacking it alongside the other `Stop` hooks cannot drive the union of blockers into the harness's own override.
+While the stand-down holds, this guard contributes nothing to the harness's shared consecutive-block accounting, so stacking it alongside the other `Stop` hooks does not drive the union of blockers toward the harness's own override.
+That is not a whole-session guarantee.
+The stand-down clears on either genuine-reset proof above, and after that this guard can block again and count again, up to its own bound each time.
+What is bounded is each armed stretch, not the session total.
 
 ## Scope
 
@@ -232,8 +272,10 @@ A secondmate runs its own primary session and is measured and enforced exactly l
 
 Crew subagent turns are inert, by two independent mechanisms:
 
-- The guard is registered on `Stop`, which fires for the primary turn only. A subagent's completion fires `SubagentStop`, which the guard is not registered on.
-- Claude Code 2.1.220 writes subagent turns to a separate `<session-id>/subagents/agent-<id>.jsonl` file. The `transcript_path` in the payload points at the parent transcript, which contains none of them, and the `isSidechain` filter excludes them regardless of layout.
+- The guard is registered on `Stop`, which fires for the primary turn only.
+  A subagent's completion fires `SubagentStop`, which the guard is not registered on.
+- Claude Code 2.1.220 writes subagent turns to a separate `<session-id>/subagents/agent-<id>.jsonl` file.
+  The `transcript_path` in the payload points at the parent transcript, which contains none of them, and the `isSidechain` filter excludes them regardless of layout.
 
 Crewmate and scout task worktrees are outside scope through the shared primary predicate, because their git dir differs from their git common dir and they never carry the secondmate marker.
 
@@ -260,7 +302,7 @@ Stacking a third `Stop` hook is the established pattern, not a new mechanism.
 
 The harness's consecutive-block override counts a stop where *any* hook blocked, so it is shared across all registered hooks rather than per hook.
 [`verification/context-budget.md`](verification/context-budget.md) records the decompiled cap, its default, and the environment variable that raises it; do not restate the number from memory.
-This guard's sticky stand-down keeps it from contributing to that shared count for the rest of a session once its own budget is spent.
+What this guard contributes to that shared count, and the limit of that claim, is stated once under "Never wedge a session" above.
 
 The guard is deliberately not folded into `bin/fm-turnend-guard.sh`, which owns exactly one predicate, and it deliberately does not use `PreToolUse`, which would run many times per turn for no extra safety and cannot act at a safe boundary.
 
@@ -271,5 +313,5 @@ Firstmate measures and enforces this itself.
 
 ## Regression coverage
 
-`tests/fm-context-budget.test.sh` covers the three measurement correctness rules and the multi-block property that subsumes dedupe, the derived advisory and its per-episode dedup and re-arm, the absolute 180,000 default, the warning-only shipped default and the exact enforcement opt-in, the channel each notice lands on with stdout and stderr captured separately, the sticky stand-down and its advisory-level re-arm, the compaction-boundary re-arm, its clear-once property, and its exclusion of a sidechain-marked boundary, the trip record's content, its size bound, and its inability to influence any decision, record durability against a trailing zero-usage synthetic entry, two sessions in one home, a missing or unsafe `session_id`, an unwritable record, a raised mid-session block budget and long-dead record pruning, the full degradation matrix including valid-JSON non-object lines, main and secondmate primary scope, crewmate and secondmate-child worktree exclusion, the bounded block budget and its per-session keying, claude-only mode gating, the tracked `Stop` registration, and the one-owner and no-injection boundaries.
+`tests/fm-context-budget.test.sh` covers the three measurement correctness rules and the multi-block property that subsumes dedupe, the derived advisory and its per-episode dedup and re-arm, the absolute 180,000 default, the warning-only shipped default and the exact enforcement opt-in, the channel each notice lands on with stdout and stderr captured separately, the sticky stand-down and its advisory-level re-arm, the compaction-boundary re-arm, its clear-once property, and its exclusion of a sidechain-marked boundary, the trip record's content, its size bound, its inability to influence any decision, and its one-line-per-crossing granularity under both the default and enforcement, the deliberately unfixed ceiling straddle, the count-not-recorded degrade's own notice key and its once-per-episode bound, an unparseable block record leaving the guard active without unbounding the block budget and tracing the parse failure once per episode, record durability against a trailing zero-usage synthetic entry, two sessions in one home, a missing or unsafe `session_id`, an unwritable record and a wholly unwritable state directory, a raised mid-session block budget and long-dead record pruning, the full degradation matrix including valid-JSON non-object lines, main and secondmate primary scope, crewmate and secondmate-child worktree exclusion, the bounded block budget and its per-session keying, claude-only mode gating, the tracked `Stop` registration, and the one-owner and no-injection boundaries.
 [`verification/context-budget.md`](verification/context-budget.md) records the live measurements, the end-to-end block proof, and the secondmate and subagent characterization.

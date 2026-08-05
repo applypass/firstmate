@@ -147,6 +147,20 @@ Its four constraints are structural rather than measured, and each has a fixture
 | Bounded | A 4,000-line, 444 KB fixture is trimmed on the next turn end to under the 128 KiB cap and at most the most recent 500 entries, keeping the newest and dropping the oldest. |
 | Records each firing, with size | Asserted on the exact line shape, including stage, measured total, ceiling, advisory, enforcement state, and session. |
 | Silent below the advisory | No file is created at all for an ordinary session. |
+| One line per crossing, not per turn end | 12 turn ends at a steady 160,000 write one advisory line; dropping below the advisory point and climbing back adds exactly one more. Six enforcing turn ends across two blocks, the stand-down, and three stood-down turns write one ceiling line. |
+| A parse failure is traced | An unparseable block record writes one `stage=record-unparseable` line naming the session. |
+| That trace is bounded too | A record that is corrupt *and* cannot be rewritten is re-read at every turn end; six such turn ends write one line, not six. |
+
+Granularity was measured before it was corrected: 12 turn ends at a steady 160,000, with the measurement never changing, produced 12 trip lines and exactly one notice.
+
+```
+2026-08-04T04:27:51Z stage=advisory total=160000 ceiling=180000 advisory=150000 enforce=0 session=tripsess
+2026-08-04T04:27:51Z stage=advisory total=160000 ceiling=180000 advisory=150000 enforce=0 session=tripsess
+```
+
+That answers how long a session lingered above the advisory point rather than how often the guard fired, and the two differ by the length of every episode.
+The line is now written where the stage is recorded, so entering a stage is what emits it.
+The enforcing path prints its banner on every blocked turn and so cannot dedupe through the notice; it records its crossing separately, which is why the six-turn row above exists.
 
 **Unproven:** the retention and garbage-collection question raised by the attachment-durability work is not answered here.
 How long a harness keeps a `hook_success` attachment, and whether anything reclaims it, was not established, and nothing in this guard depends on it.
@@ -226,8 +240,10 @@ if (Kt > 0 && _o > Kt) return ... `A hook blocked the turn from ending ${_o} con
 
 Three facts follow, and they are what the guard's own bound is set against:
 
-- The cap defaults to 8 and is adjustable through `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`. The same binary's user-facing text confirms it: "For Stop/SubagentStop hooks, check `stop_hook_active` in the input and return success while it's true. Set `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` to raise this limit."
-- The counter it is compared against is incremented once per stop where *any* hook blocked, guarded by `blockingErrors.length > 0`. It is therefore session-wide and shared across every registered `Stop` hook, not per hook.
+- The cap defaults to 8 and is adjustable through `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP`.
+  The same binary's user-facing text confirms it: "For Stop/SubagentStop hooks, check `stop_hook_active` in the input and return success while it's true. Set `CLAUDE_CODE_STOP_HOOK_BLOCK_CAP` to raise this limit."
+- The counter it is compared against is incremented once per stop where *any* hook blocked, guarded by `blockingErrors.length > 0`.
+  It is therefore session-wide and shared across every registered `Stop` hook, not per hook.
 - A cap of `0` or less disables the override entirely.
 
 Because the counter is shared, per-hook block budgets do not compose: several independently-budgeted blockers firing out of phase can keep consecutive stops blocked past the cap even though no single hook exceeds its own budget.
@@ -355,6 +371,63 @@ Stated per change:
 | The trip record writes nothing below the advisory | No, for the same reason: there was no writer to be over-eager. |
 | The trip record cannot influence a decision | No. It pins a constraint on new code rather than repairing old behavior. |
 | Non-object transcript lines are skipped | No, and deliberately so. The reader is unchanged; the correction was to a wrong rationale and a vacuous assertion, and nothing observable distinguishes the clause's presence from its absence. |
+| The trip record counts crossings, not turn ends | Yes. Against the previous script the row reports `12 turn ends at one steady measurement must record ONE advisory crossing, got 12`. |
+| An enforced ceiling crossing is recorded once | Yes. Against the previous script the row reports `six enforcing turn ends over one ceiling crossing must record ONE line, got 6`. |
+| The count-not-recorded degrade has its own notice key | Yes. Against the previous script, with the `ceiling` key already spent by a warning-only turn, the row reports `a spent ceiling notice must not silence the count-not-recorded degrade: stdout carried no systemMessage:` with an empty stdout. |
+| An unparseable block record leaves the guard active | Yes. Against the previous script the row reports `an unparseable record must leave the guard active, not stand it down: expected exit 2, got 0`. |
+| An unparseable block record records the parse failure | Yes. Against the previous script the row reports `the parse failure must name itself in the record`. |
+| That trace is one line per episode | Yes, twice over. Against the previous script the row reports `got 0`, since nothing traced a parse failure at all; against the first cut of this round's own fix, with the trace unconditional, it reports `six turn ends on one stuck corrupt record must trace it ONCE, got 6`. |
+| An unparseable record does not unbound blocking | Yes. Against the previous script the row reports `an unparseable record must leave the guard armed enough to block at least once, blocked 0 times`, which is the silenced guard this round removes. The upper half of the row - at most two blocks against a budget of two - passes against both, and is what proves leaving the guard armed did not cost the bound. |
+| The straddle stays a known unfixed case | Partly. The three behavioral assertions pass against the previous script, because the behavior is deliberately unchanged. Only the two assertions on the recorded reasoning fail before this round: `the straddle must be recorded in the code as a known unfixed case`. The row's purpose is to fail on a later *removal* of that record or a silent change to the behavior, not to repair anything now. |
+| The degrade prints once per episode | No. The previous script already deduped it, under the wrong key. This row exists to reject the unconditional variant, which would repeat at every turn end while the record stays unwritable. |
+| An unwritable state directory never blocks and never goes silent | No. It passes against both scripts. It is coverage of a named failure mode rather than a repair, added because nothing previously pinned the harsher shape where neither record can be written. |
+
+Two rows in this round are therefore green before and after, and neither is claimed as a fix.
+The redirection-ordering correction below was found by one of the new rows and is a real defect fix with a failing-before state.
+
+## A failed record write leaked the shell's error onto stderr
+
+Every record write in `bin/fm-context-budget.sh` suppressed its own failure with a trailing `2>/dev/null`.
+Bash applies redirections left to right, so on an unwritable record the output redirection fails while stderr is still the inherited one, and the shell's own message escapes.
+
+```
+$ printf 'x\n' > f && chmod 400 f
+$ bash -c "printf 'y\n' > f 2>/dev/null"
+bash: line 1: f: Permission denied
+$ bash -c "printf 'y\n' 2>/dev/null > f"
+$
+```
+
+That matters beyond tidiness: the blocking path uses stderr precisely because exit 2 delivers it to the model, so a stray `Permission denied` would land in the same channel as the banner.
+All five record writes now place `2>/dev/null` first.
+Found by `test_unrecorded_degrade_is_its_own_notice_key`, which asserts the degrade leaves stderr empty.
+That row reaches the stderr assertion only once the notice-key fix is in place, so the leak surfaced on the first green of the key fix and not against the previous script, where the row fails earlier on the silenced notice.
+With the key fix in and the ordering uncorrected it reports `the degrade must not use the discarded stderr channel:` followed by the record path and `Permission denied`.
+
+## The ceiling straddle is latent, not live
+
+A session oscillating across the ceiling re-notices on every turn end, because the recorded stage alternates and each crossing back looks new.
+The defect is real in code and was measured for reachability rather than fixed.
+
+| Replay | Sessions | Measured turns | Ceiling down-crossings |
+| --- | --- | --- | --- |
+| First | 189 | 41,244 | 0 |
+| Second, independent | 190 | 41,353 | 0 |
+
+Both replays used the shipped measurement and stage logic over real transcripts.
+Downward moves above the advisory point do exist - 155 of them, p90 13,581 - so the mechanism is reachable in principle, but sessions that reach the ceiling climb past it rather than hover.
+
+The measurement is also effectively monotonic inside an episode by arithmetic: each total is the previous prompt plus that turn's output plus whatever else arrived, so it can only fall on a reset, and a compaction boundary already ends the episode.
+
+An earlier argument for reachability was withdrawn as wrong.
+A p90 turn-to-turn delta of 6,710 is a magnitude, not a direction, and those deltas are growth, so a band argument does not establish that the condition is reached.
+
+The case is left unfixed deliberately.
+Making the stage monotonic, or recording the highest stage reached, would close it and make the independent-key case strictly worse, because a recorded `ceiling` could then never be superseded by the count-not-recorded degrade.
+If it ever does occur the failure mode is a notice at every turn end: noisy, harmless, and self-announcing within one session.
+
+**Unproven:** whether the shared-key case that needed a writable notice record beside an unwritable block record arises naturally.
+It was produced deliberately with a read-only record file; no natural cause was found on this host.
 
 ## Native knobs remain unusable
 

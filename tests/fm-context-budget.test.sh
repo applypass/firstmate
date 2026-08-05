@@ -424,6 +424,39 @@ test_ceiling_notice_prints_once_per_episode() {
   pass "fm-context-budget: the warning-only ceiling notice is its own stage and prints once per episode"
 }
 
+# A session oscillating across the ceiling alternates the recorded stage, so each
+# crossing back is a new stage and prints again. That is a real defect in this
+# code and a DELIBERATELY unfixed one: replayed twice over real transcripts - 189
+# sessions and 41,244 turns, then 190 sessions and 41,353 turns - the condition
+# occurred zero times, because sessions that reach the ceiling climb past it
+# rather than hover. The measurement is also effectively monotonic inside an
+# episode by arithmetic, since each total is the previous prompt plus this turn's
+# output, so it can only fall on a reset and a reset already ends the episode.
+# Making the stage monotonic would close this and make the shared-key instances
+# strictly worse, so this test pins the CURRENT behavior and the recorded
+# reasoning, and a later reader who "fixes it while they are here" fails here.
+test_the_ceiling_straddle_stays_a_known_unfixed_case() {
+  local dir transcript out
+  dir=$(make_primary_dir "$TMP_ROOT/straddle-known")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 181000
+  out=$(run_budget "$dir" "$(stop_payload "$transcript" sess-straddle)" FM_CONTEXT_BUDGET_CEILING=180000)
+  assert_contains "$out" "CONTEXT BUDGET CEILING" "the first crossing must warn at the ceiling"
+  write_transcript "$transcript" 179000
+  out=$(run_budget "$dir" "$(stop_payload "$transcript" sess-straddle)" FM_CONTEXT_BUDGET_CEILING=180000)
+  assert_contains "$out" "CONTEXT BUDGET ADVISORY" \
+    "a downward crossing prints again: the known, measured, unfixed case"
+  write_transcript "$transcript" 181000
+  out=$(run_budget "$dir" "$(stop_payload "$transcript" sess-straddle)" FM_CONTEXT_BUDGET_CEILING=180000)
+  assert_contains "$out" "CONTEXT BUDGET CEILING" "and again on the way back up"
+  # The reasoning has to live where the next reader is, not only in a report.
+  assert_grep 'KNOWN UNFIXED' "$ROOT/bin/fm-context-budget.sh" \
+    "the straddle must be recorded in the code as a known unfixed case"
+  assert_grep '41,353' "$ROOT/bin/fm-context-budget.sh" \
+    "the recorded case must carry the measured numbers, not just an assertion"
+  pass "fm-context-budget: the ceiling straddle stays a recorded, measured, deliberately unfixed case"
+}
+
 # --- Block-budget safety: bounded blocking, then a STICKY stand-down ---------
 
 test_block_budget_stands_down_visibly() {
@@ -485,8 +518,11 @@ test_block_budget_is_per_session() {
   pass "fm-context-budget: the block budget is keyed to the session, not the home"
 }
 
-# The stand-down re-arms on exactly one condition: the measurement drops back
-# below the advisory, which is the same condition that re-arms the notices.
+# Two conditions re-arm the stand-down, and this row covers one of them: the
+# measurement drops back below the advisory. The other is a compaction boundary
+# newer than the one the record was written with, covered by
+# test_a_new_compaction_boundary_rearms_a_spent_stand_down. Both are the same two
+# conditions that re-arm the notices.
 test_stand_down_rearms_below_the_advisory() {
   local dir transcript out status
   dir=$(make_primary_dir "$TMP_ROOT/block-reset")
@@ -495,8 +531,8 @@ test_stand_down_rearms_below_the_advisory() {
   run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-r)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1 >/dev/null
   out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-r)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
   expect_code 0 "$status" "the budget is spent, so this turn stands down"
-  # Still over the ceiling but back under the advisory does NOT re-arm: only
-  # dropping below the advisory does.
+  # Back under the ceiling but still inside the advisory band does NOT re-arm.
+  # Only a drop BELOW the advisory point counts as the measurement clearing.
   write_transcript "$transcript" 160000
   run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-r)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1 >/dev/null
   write_transcript "$transcript" 210000
@@ -508,7 +544,7 @@ test_stand_down_rearms_below_the_advisory() {
   write_transcript "$transcript" 210000
   out=$(run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-r)" FM_CONTEXT_BUDGET_BLOCK_BUDGET=1); status=$?
   expect_code 2 "$status" "dropping below the advisory must re-arm the block budget"
-  pass "fm-context-budget: only a measurement below the advisory re-arms the stand-down"
+  pass "fm-context-budget: a measurement below the advisory re-arms the stand-down, and a dip into the advisory band does not"
 }
 
 # --- CHANNELS: every notice on a stream the runtime actually renders ----------
@@ -731,6 +767,201 @@ test_unwritable_record_degrades_to_a_visible_warning() {
   pass "fm-context-budget: a record it cannot write degrades to a visible warning, never a block"
 }
 
+# The whole state directory unwritable is the harsher shape: NEITHER record can be
+# written, so nothing can be deduped and the degrade necessarily repeats. Repeating
+# a visible warning is the acceptable end of this trade; blocking on a bound that
+# cannot be stored is not, and going silent about a broken safety mechanism is not.
+test_unwritable_state_dir_never_blocks_and_stays_visible() {
+  local dir transcript payload i status
+  dir=$(make_primary_dir "$TMP_ROOT/state-dir-unwritable")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  payload=$(stop_payload "$transcript" sess-rodir)
+  chmod 500 "$dir/state"
+  if touch "$dir/state/.writable-probe" 2>/dev/null; then
+    rm -f "$dir/state/.writable-probe"
+    chmod 755 "$dir/state"
+    pass "fm-context-budget: skipped unwritable-state-dir row (test host ignores mode 500)"
+    return 0
+  fi
+  for i in 1 2 3; do
+    run_budget_channels_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_CEILING=180000
+    status=$?
+    if [ "$status" -ne 0 ]; then
+      chmod 755 "$dir/state"
+      fail "turn $i blocked on a bound that could not be stored: expected exit 0, got $status"
+    fi
+    if ! printf '%s' "$BUDGET_STDOUT" | grep -q 'could not be recorded'; then
+      chmod 755 "$dir/state"
+      fail "turn $i went silent about a block count it could not record: $BUDGET_STDOUT"
+    fi
+  done
+  chmod 755 "$dir/state"
+  pass "fm-context-budget: an unwritable state directory never blocks and never goes silent"
+}
+
+# Plant a block record this session can READ but can never REWRITE, so the write
+# failure is isolated to the block record and the notice record stays writable.
+# Returns non-zero when the host ignores the mode, so the caller can skip.
+plant_unwritable_block_record() {  # <dir> <session> <count>
+  local file=$1/state/.context-budget-blocks-$2
+  printf 'count=%s\nstanddown=0\ncompacts=0\nsession=%s\n' "$3" "$2" > "$file"
+  chmod 400 "$file"
+  # 2>/dev/null FIRST: bash applies redirections left to right, so a trailing one
+  # would not be in place yet when the failing append reports itself.
+  if printf 'probe\n' 2>/dev/null >> "$file"; then
+    chmod 600 "$file"
+    return 1
+  fi
+  return 0
+}
+
+# The count-not-recorded degrade is a different MESSAGE from the ceiling notice,
+# and the record's single `stage` key stood for both: whichever fired first
+# silenced the other for the whole episode. A safety mechanism that promises to
+# tell you when it breaks and then says nothing is the worst shape available, so
+# the degrade carries its own key.
+test_unrecorded_degrade_is_its_own_notice_key() {
+  local dir transcript payload status
+  dir=$(make_primary_dir "$TMP_ROOT/degrade-own-key")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  payload=$(stop_payload "$transcript" sess-degrade)
+  # Spend the `ceiling` key first, exactly as a warning-only turn would.
+  run_budget "$dir" "$payload" FM_CONTEXT_BUDGET_CEILING=180000 >/dev/null
+  if ! plant_unwritable_block_record "$dir" sess-degrade 0; then
+    pass "fm-context-budget: skipped degrade-key row (test host ignores mode 400)"
+    return 0
+  fi
+  run_budget_channels_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_CEILING=180000
+  status=$?
+  chmod 600 "$dir/state/.context-budget-blocks-sess-degrade"
+  expect_code 0 "$status" "an unrecordable block count must never block the turn end"
+  assert_system_message_contains "$BUDGET_STDOUT" "could not be recorded" \
+    "a spent ceiling notice must not silence the count-not-recorded degrade"
+  [ -z "$BUDGET_STDERR" ] || fail "the degrade must not use the discarded stderr channel: $BUDGET_STDERR"
+  pass "fm-context-budget: the count-not-recorded degrade has its own notice key and survives a spent ceiling notice"
+}
+
+# Its own key, not an unconditional message: while the block record stays
+# unwritable the degrade would otherwise repeat at every single turn end.
+test_unrecorded_degrade_prints_once_per_episode() {
+  local dir transcript payload i
+  dir=$(make_primary_dir "$TMP_ROOT/degrade-dedup")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  payload=$(stop_payload "$transcript" sess-dd)
+  if ! plant_unwritable_block_record "$dir" sess-dd 0; then
+    pass "fm-context-budget: skipped degrade-dedup row (test host ignores mode 400)"
+    return 0
+  fi
+  run_budget_channels_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_CEILING=180000
+  assert_system_message_contains "$BUDGET_STDOUT" "could not be recorded" \
+    "the first degrade must be visible"
+  for i in 1 2 3 4; do
+    run_budget_channels_enforcing "$dir" "$payload" FM_CONTEXT_BUDGET_CEILING=180000
+    [ -z "$BUDGET_STDOUT" ] \
+      || fail "the degrade repeated on turn $i instead of printing once per episode: $BUDGET_STDOUT"
+  done
+  chmod 600 "$dir/state/.context-budget-blocks-sess-dd"
+  pass "fm-context-budget: the degrade prints once per episode rather than at every turn end"
+}
+
+# An unparseable record is evidence of NOTHING. Reading it as a spent stand-down
+# conflated unknown with dismissed and let a corrupt file impersonate the
+# captain's dismissal, silencing the guard for the whole session.
+test_unparseable_budget_record_keeps_the_guard_active() {
+  local dir transcript status
+  dir=$(make_primary_dir "$TMP_ROOT/record-unparseable")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  printf 'count=not-a-number\nstanddown=1\ncompacts=0\nsession=sess-bad\n' \
+    > "$dir/state/.context-budget-blocks-sess-bad"
+  run_budget_channels_enforcing "$dir" "$(stop_payload "$transcript" sess-bad)" \
+    FM_CONTEXT_BUDGET_CEILING=180000
+  status=$?
+  expect_code 2 "$status" "an unparseable record must leave the guard active, not stand it down"
+  assert_contains "$BUDGET_STDERR" "CONTEXT BUDGET CEILING" \
+    "the still-active guard must deliver its blocking banner"
+  pass "fm-context-budget: an unparseable block record is read as no record and the guard stays active"
+}
+
+# Failing toward warning is right, and failing SILENTLY is not: the parse failure
+# is the only trace of a corrupt record, so it is recorded once where every other
+# firing is recorded.
+test_unparseable_budget_record_records_the_parse_failure() {
+  local dir transcript trips
+  dir=$(make_primary_dir "$TMP_ROOT/record-unparseable-log")
+  transcript="$dir/transcript.jsonl"
+  trips="$dir/state/.context-budget-trips"
+  write_transcript "$transcript" 210000
+  printf 'count=\nstanddown=0\ncompacts=0\nsession=sess-badlog\n' \
+    > "$dir/state/.context-budget-blocks-sess-badlog"
+  run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-badlog)" \
+    FM_CONTEXT_BUDGET_CEILING=180000 >/dev/null 2>&1
+  assert_present "$trips" "a parse failure must leave a durable trace"
+  assert_grep 'stage=record-unparseable' "$trips" \
+    "the parse failure must name itself in the record"
+  assert_grep 'session=sess-badlog' "$trips" "the parse failure must name the session"
+  pass "fm-context-budget: an unparseable block record records the parse failure"
+}
+
+# A record that is corrupt AND cannot be rewritten is re-read at every turn end. The
+# trace must stay one line per episode: the trip record is bounded, so a line per
+# turn end there would crowd out the crossing history the whole warning-only
+# release exists to collect.
+test_unparseable_record_trace_is_bounded() {
+  local dir transcript trips file i lines
+  dir=$(make_primary_dir "$TMP_ROOT/record-unparseable-bounded")
+  transcript="$dir/transcript.jsonl"
+  trips="$dir/state/.context-budget-trips"
+  file="$dir/state/.context-budget-blocks-sess-stuck"
+  write_transcript "$transcript" 210000
+  printf 'count=corrupt\nstanddown=0\ncompacts=0\nsession=sess-stuck\n' > "$file"
+  chmod 400 "$file"
+  if printf 'probe\n' 2>/dev/null >> "$file"; then
+    chmod 600 "$file"
+    pass "fm-context-budget: skipped bounded-parse-failure row (test host ignores mode 400)"
+    return 0
+  fi
+  for i in $(seq 1 6); do
+    run_budget_enforcing "$dir" "$(stop_payload "$transcript" sess-stuck)" \
+      FM_CONTEXT_BUDGET_CEILING=180000 >/dev/null 2>&1
+  done
+  chmod 600 "$file"
+  lines=$(trip_count "$trips" record-unparseable)
+  [ "$lines" = 1 ] \
+    || fail "six turn ends on one stuck corrupt record must trace it ONCE, got $lines"
+  pass "fm-context-budget: a corrupt unrewritable record is traced once, not at every turn end"
+}
+
+# Leaving the guard armed on an unparseable record must not cost the bound. If the
+# record were re-read as a fresh budget at every turn end the guard would block
+# forever, which is the one thing it may never do. Two paths close it: a writable
+# record is rewritten on the first blocked turn and counts normally from there, and
+# an unwritable one degrades to the visible warning instead of blocking.
+test_unparseable_record_does_not_unbound_blocking() {
+  local dir transcript payload i status blocks
+  dir=$(make_primary_dir "$TMP_ROOT/record-unparseable-bound")
+  transcript="$dir/transcript.jsonl"
+  write_transcript "$transcript" 210000
+  payload=$(stop_payload "$transcript" sess-nb)
+  printf 'count=??\nstanddown=0\ncompacts=0\nsession=sess-nb\n' \
+    > "$dir/state/.context-budget-blocks-sess-nb"
+  blocks=0
+  for i in $(seq 1 8); do
+    run_budget_channels_enforcing "$dir" "$payload" \
+      FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=2
+    status=$?
+    [ "$status" -eq 2 ] && blocks=$((blocks + 1))
+  done
+  [ "$blocks" -le 2 ] \
+    || fail "an unparseable record must not unbound the block budget: blocked $blocks times over 8 turns with a budget of 2"
+  [ "$blocks" -ge 1 ] \
+    || fail "an unparseable record must leave the guard armed enough to block at least once, blocked $blocks times"
+  pass "fm-context-budget: an unparseable record leaves the guard armed without unbounding the block budget"
+}
+
 # Raising the budget mid-session must not resurrect a stand-down that was already
 # spent, which a clamped count alone could not prevent.
 test_raising_the_block_budget_cannot_rearm_a_spent_stand_down() {
@@ -922,6 +1153,67 @@ test_trip_record_stays_bounded() {
   assert_no_grep 'session=sess-old-0001' "$trips" "the oldest trips must be the ones dropped"
   assert_grep 'session=sess-old-4000' "$trips" "the most recent old trips must be kept"
   pass "fm-context-budget: the trip record is bounded and keeps the most recent entries"
+}
+
+# Count the trip lines for one stage. grep -c exits non-zero on no match, which is
+# a legitimate answer of zero here rather than an error.
+trip_count() {  # <file> <stage>
+  grep -c "stage=$2 " "$1" 2>/dev/null || true
+}
+
+# The captain asked how OFTEN the guard fires. A line per turn end above the
+# advisory answers a different question - how long a session lingered there - and
+# at a steady measurement it inflates the count by the length of the episode.
+# Measured before this was corrected: 12 turn ends at a steady 160,000 produced 12
+# trip lines and exactly one notice.
+test_trip_record_counts_crossings_not_turn_ends() {
+  local dir transcript trips i lines
+  dir=$(make_primary_dir "$TMP_ROOT/trip-crossings")
+  transcript="$dir/transcript.jsonl"
+  trips="$dir/state/.context-budget-trips"
+  write_transcript "$transcript" 160000
+  for i in $(seq 1 12); do
+    run_budget "$dir" "$(stop_payload "$transcript" sess-cross)" \
+      FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_HEADROOM=30000 >/dev/null
+  done
+  lines=$(trip_count "$trips" advisory)
+  [ "$lines" = 1 ] \
+    || fail "12 turn ends at one steady measurement must record ONE advisory crossing, got $lines"
+  # A genuine re-crossing is a second crossing and must be counted as one.
+  write_transcript "$transcript" 30000
+  run_budget "$dir" "$(stop_payload "$transcript" sess-cross)" \
+    FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_HEADROOM=30000 >/dev/null
+  write_transcript "$transcript" 160000
+  for i in 1 2 3; do
+    run_budget "$dir" "$(stop_payload "$transcript" sess-cross)" \
+      FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_HEADROOM=30000 >/dev/null
+  done
+  lines=$(trip_count "$trips" advisory)
+  [ "$lines" = 2 ] \
+    || fail "a genuine re-crossing after dropping below the advisory must add exactly one line, got $lines"
+  pass "fm-context-budget: the trip record counts crossings, not turn ends above the advisory"
+}
+
+# The enforcing ceiling prints its banner on EVERY blocked turn, so it cannot
+# dedupe through the notice path. The crossing itself must still be recorded once,
+# or switching enforcement on would lose the observation the trip record exists for.
+test_ceiling_crossing_is_tripped_once_under_enforcement() {
+  local dir transcript trips payload i lines
+  dir=$(make_primary_dir "$TMP_ROOT/trip-enforce")
+  transcript="$dir/transcript.jsonl"
+  trips="$dir/state/.context-budget-trips"
+  write_transcript "$transcript" 210000
+  payload=$(stop_payload "$transcript" sess-trip-enf)
+  # Two blocked turns, the stand-down turn, then three stood-down turns.
+  for i in $(seq 1 6); do
+    run_budget_enforcing "$dir" "$payload" \
+      FM_CONTEXT_BUDGET_CEILING=180000 FM_CONTEXT_BUDGET_BLOCK_BUDGET=2 >/dev/null
+  done
+  assert_present "$trips" "the enforcing ceiling must still record its crossing"
+  lines=$(trip_count "$trips" ceiling)
+  [ "$lines" = 1 ] \
+    || fail "six enforcing turn ends over one ceiling crossing must record ONE line, got $lines"
+  pass "fm-context-budget: an enforced ceiling crossing is recorded exactly once"
 }
 
 # The property that keeps the trip record outside the record loss-path class: it
@@ -1309,6 +1601,7 @@ test_advisory_prints_once_per_episode
 test_advisory_rearms_after_dropping_below
 test_silent_well_below_advisory
 test_ceiling_notice_prints_once_per_episode
+test_the_ceiling_straddle_stays_a_known_unfixed_case
 test_block_budget_stands_down_visibly
 test_stand_down_is_sticky_for_the_rest_of_the_session
 test_block_budget_is_per_session
@@ -1324,6 +1617,13 @@ test_two_sessions_in_one_home_keep_separate_budgets
 test_missing_session_id_is_inert
 test_unsafe_session_id_is_inert
 test_unwritable_record_degrades_to_a_visible_warning
+test_unwritable_state_dir_never_blocks_and_stays_visible
+test_unrecorded_degrade_is_its_own_notice_key
+test_unrecorded_degrade_prints_once_per_episode
+test_unparseable_budget_record_keeps_the_guard_active
+test_unparseable_budget_record_records_the_parse_failure
+test_unparseable_record_trace_is_bounded
+test_unparseable_record_does_not_unbound_blocking
 test_raising_the_block_budget_cannot_rearm_a_spent_stand_down
 test_long_dead_records_are_pruned_and_recent_ones_kept
 test_a_new_compaction_boundary_rearms_a_spent_stand_down
@@ -1332,6 +1632,8 @@ test_a_sidechain_compaction_boundary_never_rearms_a_stand_down
 test_trip_record_captures_each_stage_firing
 test_trip_record_is_not_written_below_the_advisory
 test_trip_record_stays_bounded
+test_trip_record_counts_crossings_not_turn_ends
+test_ceiling_crossing_is_tripped_once_under_enforcement
 test_trip_record_never_influences_a_decision
 test_degrades_on_empty_stdin
 test_degrades_on_malformed_stdin
