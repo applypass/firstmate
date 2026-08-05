@@ -112,7 +112,7 @@ state/               volatile runtime signals; gitignored
   .handover .handover-due .helm-takeover  handover progress, the once-per-session threshold notice, and the auditable record of a taken helm
   .afk               durable away-mode flag; present = sub-supervisor may inject escalations (set by /afk, cleared on user return)
   .watch.lock .wake-queue.lock watcher singleton and queue serialization locks
-  .claude-autoarm.lock .claude-autoarm-epoch .turnend-claude-blocks   Claude Stop auto-arm single-flight, epoch, and guard-budget records; never touch
+  .claude-autoarm.lock .claude-autoarm-epoch .turnend-claude-blocks .context-budget-blocks-<session> .context-budget-notice-<session> .context-budget-trips   Claude Stop auto-arm single-flight, epoch, guard-budget, per-session context-ceiling stand-down and notice records, and the bounded write-only context-ceiling trip log; never touch
   .hash-* .count-* .stale-* .stale-since-* .paused-* .wedge-escalations-* .seen-* .hb-surfaced-* .last-* .heartbeat-streak   watcher internals; never touch
   .watch-triage.log  watcher's absorbed-wake debug log (size-capped); never relied on, safe to delete
   .last-watcher-beat watcher liveness beacon, touched every poll (including while absorbing benign wakes); guard scripts read it
@@ -379,6 +379,13 @@ The record is advisory and durable records win every disagreement with it; never
 `bin/fm-handover.sh release` refuses until every open thread is backed by a durable record - fix what it names and run it again, never work around it, because once the outgoing session is gone a bad handover cannot be redone.
 When a fresh session cannot take the helm, relay what holds it and the clearing command it printed, and never clear the helm from a session the captain has not agreed to give up.
 A session that does not hold the helm may read a waiting handover but never prepares or consumes one: consuming it there leaves the session that does take the helm told nothing is waiting.
+
+### Context ceiling
+
+An advisory at 150,000 tokens and a ceiling notice at 180,000 report that this session is spending more and reasoning worse than a fresh one would.
+Both fire before the 250,000 threshold above, and under the shipped default neither blocks: report it, keep working, and tell the captain at the next natural reply.
+Above 250,000 every threshold applies at once, and the handover mechanism above owns the valve in every case - hand over rather than running a second valve beside it.
+`docs/context-budget.md` owns the measurement, the opt-in enforcement switch, and the per-harness support.
 
 ### Away-mode stub
 

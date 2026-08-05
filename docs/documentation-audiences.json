@@ -224,6 +224,10 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/context-budget.md",
+      "audience": "operator-current"
+    },
+    {
       "path": "docs/decision-hold-lifecycle.md",
       "audience": "maintainer-architecture"
     },
@@ -306,6 +310,10 @@
     {
       "path": "docs/turnend-guard.md",
       "audience": "operator-current"
+    },
+    {
+      "path": "docs/verification/context-budget.md",
+      "audience": "maintainer-verification"
     },
     {
       "path": "docs/verification/session-handover.md",
