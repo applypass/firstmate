@@ -357,6 +357,32 @@ The shipped hook end to end over that same 81 MB transcript, in a primary-shaped
 The cost is linear in transcript size, roughly 0.7 s per 80 MB on this host, and it is paid at every primary turn end including far below the advisory.
 That tradeoff is accepted at these magnitudes; only the claim needed narrowing from "constant cost" to "constant memory".
 
+## The test bar for this change, and one machine-local exception
+
+The suites this change is required to keep green are the ones it touches: `tests/fm-context-budget.test.sh` in full, plus `bin/fm-lint.sh` and `bin/fm-doc-audience-check.sh`.
+
+`bin/fm-test-run.sh --all` reports one failure on the development host used here, in `tests/fm-kimi-harness.test.sh`:
+
+```
+not ok - Kimi hook install refused a realistic config
+```
+
+The cause is the machine's `python3`, an asdf shim that needs `$HOME/.asdf` to resolve a tool version:
+
+```sh
+$ HOME=$(mktemp -d) python3 -c 'print("ok")'; echo "exit=$?"
+exit=126
+```
+
+That test deliberately overrides `HOME` and links the shim into a fake `PATH`, so the shim cannot resolve and exits 126.
+
+It is pre-existing and unrelated to the context budget.
+Reproduced on untouched base `1672d95`, which predates this work, by two workers on two dates, with the same single failing assertion.
+Every other file in that run passes: 102 files, that one failure.
+
+It is deliberately not repaired here, because a change that also fixes an unrelated machine-local environment failure stops being reviewable.
+It is tracked separately as `fm-kimi-harness-test-env`, which owns it.
+
 ## Which regression rows could show a failing-before state
 
 Not every row in `tests/fm-context-budget.test.sh` can demonstrate one, and claiming otherwise would overstate the coverage.
