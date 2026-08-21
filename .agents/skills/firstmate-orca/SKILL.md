@@ -13,7 +13,7 @@ It does not replace `AGENTS.md`, `docs/orca-backend.md`, or `harness-adapters`.
 
 Orca is a runtime backend, not an agent harness.
 The runtime backend owns the task endpoint and, for Orca, the task worktree.
-The harness is the agent process launched inside that endpoint, such as `claude`, `codex`, `opencode`, `pi`, `grok`, or `kimi`.
+The harness is the agent process launched inside that endpoint, such as `claude`, `codex`, `opencode`, `pi`, `pi-signed`, `grok`, or `kimi`.
 Load `harness-adapters` for harness-specific launch, interrupt, resume, trust-dialog, and skill-invocation facts.
 
 Implementation details, metadata fields, teardown guarantees, and limitations live in `docs/orca-backend.md`.
@@ -75,7 +75,7 @@ For a messy Orca-backed task:
 6. Stop and inspect if the recorded worktree path, Orca worktree id, or project checkout no longer matches expectations.
 
 Teardown remains governed by the normal firstmate landing rules.
-Scout work can be torn down after the report exists and the `decision-hold-lifecycle` completion gate passes.
+Scout work can be torn down after the report exists and the `captain-hold-lifecycle` completion gate passes.
 Ship work can be torn down only after the work is landed by its project mode.
 
 ## Smoke Test
