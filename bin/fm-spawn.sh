@@ -1721,8 +1721,8 @@ validate_spawn_worktree() {  # <source> <inspect-target>
   if ! wt_top_real=$(cd "$wt_top" 2>/dev/null && pwd -P); then
     wt_top_real=
   fi
-  if [ -z "$wt_real" ] || [ -z "$wt_top_real" ] || [ "$wt_real" != "$wt_top_real" ] \
-     || [ ! -d "$WT" ] || [ ! -d "$PROJ_ABS" ] || [ "$WT" -ef "$PROJ_ABS" ]; then
+  if [ -z "$wt_real" ] || [ -z "$wt_top_real" ] || [ ! -d "$WT" ] || [ ! -d "$wt_top" ] \
+     || [ ! -d "$PROJ_ABS" ] || [ ! "$WT" -ef "$wt_top" ] || [ "$WT" -ef "$PROJ_ABS" ]; then
     echo "error: $source did not yield an isolated worktree (resolved '$WT'; worktree root '${wt_top:-none}'; primary '$PROJ_ABS'); refusing to launch to avoid tangling the primary checkout. Inspect target $inspect_target" >&2
     exit 1
   fi

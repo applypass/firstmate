@@ -171,8 +171,16 @@ if [ -f "$LOCK" ] && [ ! -L "$LOCK" ]; then
     exit 0
   fi
   if fm_harness_pid_alive "$old"; then
-    echo "error: another live firstmate session holds the lock (pid $old); operate read-only until resolved" >&2
-    exit 1
+    if ! fm_helm_takeover_allowed "$STATE" "$old"; then
+      {
+        echo "error: another live firstmate session holds the lock (pid $old); operate read-only until resolved"
+        holder_description "$old"
+        [ -z "${FM_HELM_REFUSE_REASON:-}" ] || printf 'refused to take the helm: %s\n' "$FM_HELM_REFUSE_REASON"
+        print_declination_note "$old"
+        printf 'clear it with: %s clear --pid %s\n' "$0" "$old"
+      } >&2
+      exit 1
+    fi
   fi
 fi
 
