@@ -2342,14 +2342,6 @@ spawn_worktree_isolated() {  # <path>
     SPAWN_WT_REASON="it is not inside a git worktree"
     return 1
   fi
-  if [ "$wt_real" != "$wt_top_real" ]; then
-    SPAWN_WT_REASON="it is a subdirectory of worktree root '$wt_top_real', not a worktree root"
-    return 1
-  fi
-  if [ "$wt_real" = "$PROJ_ABS_REAL" ]; then
-    SPAWN_WT_REASON="it is the spawning project itself"
-    return 1
-  fi
   # The primary checkout uses the repository's common git dir as its own git
   # dir. A linked spawning home has a different top-level, but the same common
   # dir, so comparing only the two working directories cannot protect primary.
@@ -2363,6 +2355,14 @@ spawn_worktree_isolated() {  # <path>
   fi
   if [ "$wt_git_dir" = "$proj_common" ]; then
     SPAWN_WT_REASON="it is the repository's primary checkout (its git dir is the spawning project's common git dir)"
+    return 1
+  fi
+  if [ "$wt_real" != "$wt_top_real" ]; then
+    SPAWN_WT_REASON="it is a subdirectory of worktree root '$wt_top_real', not a worktree root"
+    return 1
+  fi
+  if [ "$wt_real" = "$PROJ_ABS_REAL" ]; then
+    SPAWN_WT_REASON="it is the spawning project itself"
     return 1
   fi
   return 0
