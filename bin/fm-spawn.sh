@@ -2350,6 +2350,13 @@ spawn_worktree_isolated() {  # <path>
     SPAWN_WT_REASON="it is the spawning project itself"
     return 1
   fi
+  # A locked worktree is held by another operation; adopting it would put two
+  # workers in one checkout even though the path is otherwise isolated.
+  if [ -e "$wt_real/.git" ] && git -C "$path" worktree list --porcelain 2>/dev/null \
+     | awk -v t="$wt_real" '$1=="worktree"{w=($2==t)} w&&$1=="locked"{found=1} END{exit !found}'; then
+    SPAWN_WT_REASON="its worktree is locked by another operation"
+    return 1
+  fi
   # The primary checkout uses the repository's common git dir as its own git
   # dir. A linked spawning home has a different top-level, but the same common
   # dir, so comparing only the two working directories cannot protect primary.
