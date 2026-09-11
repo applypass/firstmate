@@ -2148,9 +2148,17 @@ validate_spawn_worktree() {  # <source> <inspect-target>
     && wt_git_dir=$(cd "$wt_git_dir" 2>/dev/null && pwd -P) || wt_git_dir=
   proj_common=$(git -C "$PROJ_ABS" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
     && proj_common=$(cd "$proj_common" 2>/dev/null && pwd -P) || proj_common=
-  if [ -z "$wt_real" ] || [ -z "$wt_top_real" ] || [ "$wt_real" != "$wt_top_real" ] \
-     || [ "$wt_real" = "$proj_real" ] || [ -z "$wt_git_dir" ] || [ -z "$proj_common" ] \
-     || [ "$wt_git_dir" = "$proj_common" ]; then
+  # Compare by filesystem identity (device+inode), not path text. `pwd -P`
+  # resolves symlinks but does not case-fold, so on a case-insensitive
+  # filesystem the same directory reached under a variant spelling compares
+  # unequal as text and a genuine isolated worktree is falsely refused. Each
+  # operand is confirmed an existing directory first, because `test -ef` is
+  # also false when a side cannot be stat'd and that must refuse, not read as
+  # distinct.
+  if [ ! -d "$wt_real" ] || [ ! -d "$wt_top_real" ] || [ ! "$wt_real" -ef "$wt_top_real" ] \
+     || [ ! -d "$proj_real" ] || [ "$wt_real" -ef "$proj_real" ] \
+     || [ ! -d "$wt_git_dir" ] || [ ! -d "$proj_common" ] \
+     || [ "$wt_git_dir" -ef "$proj_common" ]; then
     echo "error: $source did not yield an isolated worktree (resolved '$WT'; worktree root '${wt_top:-none}'; spawning project '$PROJ_ABS'); refusing to launch to avoid tangling the primary checkout. Inspect target $inspect_target" >&2
     exit 1
   fi
