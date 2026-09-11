@@ -323,6 +323,8 @@ fm_backlog_directory_present "$STATE" "state directory" || {
 . "$SCRIPT_DIR/fm-trace-context-lib.sh"
 # shellcheck source=bin/fm-remote-readiness-lib.sh
 . "$SCRIPT_DIR/fm-remote-readiness-lib.sh"
+# shellcheck source=bin/fm-worktree-identity-lib.sh
+. "$SCRIPT_DIR/fm-worktree-identity-lib.sh"
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never spawn
 # a direct report (see bin/fm-gate-refuse-lib.sh).
 fm_refuse_if_gate_agent
@@ -1971,7 +1973,9 @@ validate_spawn_worktree() {  # <source> <inspect-target>
   if ! wt_top_real=$(cd "$wt_top" 2>/dev/null && pwd -P); then
     wt_top_real=
   fi
-  if [ -z "$wt_real" ] || [ -z "$wt_top_real" ] || [ "$wt_real" != "$wt_top_real" ] || [ "$wt_real" = "$proj_real" ]; then
+  # Identity, not path text; bin/fm-worktree-identity-lib.sh owns the test.
+  if ! fm_wt_same_object "$wt_real" "$wt_top_real" \
+     || [ ! -d "$proj_real" ] || fm_wt_same_object "$wt_real" "$proj_real"; then
     echo "error: $source did not yield an isolated worktree (resolved '$WT'; worktree root '${wt_top:-none}'; primary '$PROJ_ABS'); refusing to launch to avoid tangling the primary checkout. Inspect target $inspect_target" >&2
     exit 1
   fi
