@@ -2318,14 +2318,14 @@ real_path_or_raw() {  # <path>
 SPAWN_WT_TOP=
 SPAWN_WT_REASON=
 spawn_worktree_isolated() {  # <path>
-  local path=$1 wt_real wt_top_real wt_git_dir proj_common
+  local path=$1 wt_resolved wt_top_real wt_git_dir proj_common
   SPAWN_WT_TOP=
   SPAWN_WT_REASON=
-  wt_real=
-  if ! wt_real=$(cd "$path" 2>/dev/null && pwd -P); then
-    wt_real=
+  wt_resolved=
+  if ! wt_resolved=$(cd "$path" 2>/dev/null && pwd -P); then
+    wt_resolved=
   fi
-  if [ -z "$wt_real" ]; then
+  if [ -z "$wt_resolved" ]; then
     SPAWN_WT_REASON="it is not a readable directory"
     return 1
   fi
@@ -2342,11 +2342,11 @@ spawn_worktree_isolated() {  # <path>
     SPAWN_WT_REASON="it is not inside a git worktree"
     return 1
   fi
-  if [ "$wt_real" != "$wt_top_real" ]; then
+  if [ "$wt_resolved" != "$wt_top_real" ]; then
     SPAWN_WT_REASON="it is a subdirectory of worktree root '$wt_top_real', not a worktree root"
     return 1
   fi
-  if [ "$wt_real" = "$PROJ_ABS_REAL" ]; then
+  if [ "$wt_resolved" = "$PROJ_ABS_REAL" ]; then
     SPAWN_WT_REASON="it is the spawning project itself"
     return 1
   fi
