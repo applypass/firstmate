@@ -2343,7 +2343,7 @@ spawn_worktree_isolated() {  # <path>
     return 1
   fi
   if [ "$wt_real" != "$wt_top_real" ]; then
-    SPAWN_WT_REASON="it is a subdirectory of worktree root '$wt_top_real', not a worktree root"
+    SPAWN_WT_REASON="it sits inside worktree '$wt_top_real' rather than at its top"
     return 1
   fi
   if [ "$wt_real" = "$PROJ_ABS_REAL" ]; then
