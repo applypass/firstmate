@@ -204,6 +204,74 @@ test_spawn_isolation_abort() {
   pass "fm-spawn: aborts unless the resolved worktree is a genuine, isolated worktree"
 }
 
+# The isolation predicate compares filesystem identity (device and inode), not
+# path text, because its two sides disagree on spelling: `git rev-parse
+# --show-toplevel` reports the path the kernel canonicalizes to, while bash's
+# `pwd -P` builtin only resolves symlink components and otherwise echoes back the
+# spelling it was handed. A genuine linked worktree reached under a non-canonical
+# spelling of its own path therefore compared unequal as text and was refused
+# with the misleading "not a worktree root", while the spawning project under
+# such a spelling was refused only by accident of that same mismatch. Identity
+# compares fix the false refusal and refuse the project by the check that names
+# it.
+#
+# A case variant is the spelling this can construct portably, so the two rows
+# that need one are guarded: on a case-sensitive filesystem ".../WT1" is simply
+# a different directory and there is nothing to test. The same bug also fires
+# with no case variance at all wherever two real paths reach one directory, such
+# as a macOS firmlink ("/System/Volumes/Data/Users/..." for "/Users/..."), which
+# no portable fixture can create.
+test_spawn_isolation_is_identity_not_path_text() {
+  local home proj fakebin wt wt_variant proj_variant out status case_insensitive
+  home="$TMP_ROOT/spawn-ident-home"
+  mkdir -p "$home/data"
+  proj=$(make_repo "$TMP_ROOT/spawn-ident-proj")
+  fakebin=$(make_spawn_fakebin "$TMP_ROOT/spawn-ident-fake")
+  fm_test_fake_sleep_noop "$fakebin"
+  wt="$TMP_ROOT/spawn-ident-wt"
+  git -C "$proj" worktree add -q --detach "$wt" >/dev/null 2>&1
+
+  # Probe the filesystem rather than the platform: only a case-insensitive one
+  # can reach the same directory under a variant spelling at all.
+  mkdir -p "$TMP_ROOT/spawn-ident-probe/Case"
+  case_insensitive=0
+  [ -d "$TMP_ROOT/spawn-ident-probe/case" ] && case_insensitive=1
+
+  # A genuine worktree under its canonical spelling still spawns.
+  out=$(run_spawn "$home" ident-canonical-a1 "$proj" "$wt" "$fakebin"); status=$?
+  expect_code 0 "$status" "canonical spelling of a genuine worktree should spawn"
+  assert_not_contains "$out" "isolated worktree" "canonical worktree wrongly tripped the isolation guard"
+
+  # The spawning project is refused, and by the reason that names it rather than
+  # by the worktree-root check catching it.
+  out=$(run_spawn "$home" ident-primary-c3 "$proj" "$proj" "$fakebin"); status=$?
+  expect_code 1 "$status" "spawn resolving to the spawning project should abort"
+  assert_contains "$out" "the spawning project itself" \
+    "primary-checkout refusal did not name the spawning project as the cause"
+
+  if [ "$case_insensitive" = 1 ]; then
+    # The fix: the SAME worktree reached under a variant spelling is the same
+    # directory and must be allowed.
+    wt_variant="$TMP_ROOT/SPAWN-IDENT-WT"
+    out=$(run_spawn "$home" ident-variant-b2 "$proj" "$wt_variant" "$fakebin"); status=$?
+    expect_code 0 "$status" "a genuine worktree under a case-variant spelling should spawn"
+    assert_not_contains "$out" "not a worktree root" \
+      "case-variant worktree was refused as a non-root (the false refusal this guards)"
+
+    # The project under a variant spelling stays refused, still by the check that
+    # names it rather than by the accidental text mismatch.
+    proj_variant="$TMP_ROOT/SPAWN-IDENT-PROJ"
+    out=$(run_spawn "$home" ident-primvar-d4 "$proj" "$proj_variant" "$fakebin"); status=$?
+    expect_code 1 "$status" "the spawning project under a case-variant spelling must still abort"
+    assert_contains "$out" "the spawning project itself" \
+      "case-variant project was not refused as the spawning project"
+    assert_absent "$home/state/ident-primvar-d4.meta" "aborted spawn must not record meta"
+    pass "fm-spawn: isolation compares filesystem identity, allowing a case-variant worktree and still refusing the project"
+  else
+    pass "fm-spawn: isolation compares filesystem identity (case-variant rows need a case-insensitive filesystem)"
+  fi
+}
+
 # --- GUARD 1c: fm-spawn tmux window construction ----------------------------
 
 # The prevention guard also depends on fm-spawn building robust tmux commands
@@ -291,4 +359,5 @@ test_guard_banner
 test_bootstrap_line
 test_brief_assertion_precedes_branch
 test_spawn_isolation_abort
+test_spawn_isolation_is_identity_not_path_text
 test_spawn_tmux_window_construction
