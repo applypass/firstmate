@@ -1971,7 +1971,12 @@ validate_spawn_worktree() {  # <source> <inspect-target>
   if ! wt_top_real=$(cd "$wt_top" 2>/dev/null && pwd -P); then
     wt_top_real=
   fi
-  if [ -z "$wt_real" ] || [ -z "$wt_top_real" ] || [ "$wt_real" != "$wt_top_real" ] || [ "$wt_real" = "$proj_real" ]; then
+  # Compare by filesystem identity (device+inode), not path text: `pwd -P`
+  # does not case-fold, so one directory yields two spellings on a
+  # case-insensitive filesystem. Each operand is confirmed present first
+  # because `test -ef` is also false for a side it cannot stat.
+  if [ ! -d "$wt_real" ] || [ ! -d "$wt_top_real" ] || [ ! "$wt_real" -ef "$wt_top_real" ] \
+     || [ ! -d "$proj_real" ] || [ "$wt_real" -ef "$proj_real" ]; then
     echo "error: $source did not yield an isolated worktree (resolved '$WT'; worktree root '${wt_top:-none}'; primary '$PROJ_ABS'); refusing to launch to avoid tangling the primary checkout. Inspect target $inspect_target" >&2
     exit 1
   fi
