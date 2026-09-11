@@ -436,6 +436,8 @@ fm_backlog_directory_present "$STATE" "state directory" || {
 . "$SCRIPT_DIR/fm-trace-context-lib.sh"
 # shellcheck source=bin/fm-remote-readiness-lib.sh
 . "$SCRIPT_DIR/fm-remote-readiness-lib.sh"
+# shellcheck source=bin/fm-worktree-identity-lib.sh
+. "$SCRIPT_DIR/fm-worktree-identity-lib.sh"
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never spawn
 # a direct report (see bin/fm-gate-refuse-lib.sh).
 fm_refuse_if_gate_agent
@@ -2368,9 +2370,39 @@ spawn_worktree_isolated() {  # <path>
   return 0
 }
 
+# applypass: the same question, decided by filesystem identity where the answer
+# above turned on path text. spawn_worktree_isolated compares resolved path
+# STRINGS, and `pwd -P` does not case-fold while `git rev-parse --show-toplevel`
+# returns git's canonical spelling, so one directory yields two strings on a
+# case-insensitive filesystem: a genuine isolated worktree entered as `.../WT1`
+# is refused as "not a worktree root". Only that one refusal can be a spelling
+# artifact, so only that one is re-decided, by asking the check again about the
+# worktree root it named. Every other refusal, and every acceptance, is passed
+# through unchanged, so upstream keeps owning what isolation means.
+fm_spawn_worktree_isolated() {  # <path>
+  local wt_real top
+  # `test -ef` is false for a side it cannot stat, so a project path that has
+  # gone away must refuse here rather than read as distinct further down.
+  if [ ! -d "$PROJ_ABS_REAL" ]; then
+    SPAWN_WT_REASON="the spawning project did not resolve to a directory"
+    return 1
+  fi
+  spawn_worktree_isolated "$1" && return 0
+  case $SPAWN_WT_REASON in
+    *"not a worktree root"*) ;;
+    *) return 1 ;;
+  esac
+  top=$SPAWN_WT_TOP
+  wt_real=$(cd "$1" 2>/dev/null && pwd -P) || return 1
+  fm_wt_same_object "$wt_real" "$top" || return 1
+  # It is that root, spelled differently. Re-put the canonical spelling through
+  # the same check so every remaining condition still decides this launch.
+  spawn_worktree_isolated "$top"
+}
+
 validate_spawn_worktree() {  # <source> <inspect-target>
   local source=$1 inspect_target=$2
-  if ! spawn_worktree_isolated "$WT"; then
+  if ! fm_spawn_worktree_isolated "$WT"; then
     echo "error: $source did not yield an isolated worktree (resolved '$WT'; worktree root '${SPAWN_WT_TOP:-none}'; spawning project '$PROJ_ABS'); refusing to launch to avoid tangling the primary checkout. Inspect target $inspect_target" >&2
     exit 1
   fi
@@ -3101,7 +3133,7 @@ elif [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
   for _ in $(seq 1 60); do
     p=$(spawn_current_path "$WT_TARGET" || true)
     [ -z "$p" ] || last_seen="$p"
-    if [ -n "$p" ] && spawn_worktree_isolated "$p"; then
+    if [ -n "$p" ] && fm_spawn_worktree_isolated "$p"; then
       p_real=$(real_path_or_raw "$p")
       last_reason="it is an isolated worktree, but no second read agreed with it"
       if [ -n "$candidate" ] && [ "$p_real" = "$candidate" ]; then
