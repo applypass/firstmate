@@ -376,6 +376,8 @@ fm_backlog_directory_present "$STATE" "state directory" || {
 . "$SCRIPT_DIR/fm-trace-context-lib.sh"
 # shellcheck source=bin/fm-remote-readiness-lib.sh
 . "$SCRIPT_DIR/fm-remote-readiness-lib.sh"
+# shellcheck source=bin/fm-worktree-identity-lib.sh
+. "$SCRIPT_DIR/fm-worktree-identity-lib.sh"
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never spawn
 # a direct report (see bin/fm-gate-refuse-lib.sh).
 fm_refuse_if_gate_agent
@@ -2148,9 +2150,13 @@ validate_spawn_worktree() {  # <source> <inspect-target>
     && wt_git_dir=$(cd "$wt_git_dir" 2>/dev/null && pwd -P) || wt_git_dir=
   proj_common=$(git -C "$PROJ_ABS" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
     && proj_common=$(cd "$proj_common" 2>/dev/null && pwd -P) || proj_common=
-  if [ -z "$wt_real" ] || [ -z "$wt_top_real" ] || [ "$wt_real" != "$wt_top_real" ] \
-     || [ "$wt_real" = "$proj_real" ] || [ -z "$wt_git_dir" ] || [ -z "$proj_common" ] \
-     || [ "$wt_git_dir" = "$proj_common" ]; then
+  # Each comparison asks whether two paths are one directory, not whether two
+  # strings match; bin/fm-worktree-identity-lib.sh owns that test and why. A
+  # must-be-distinct comparison needs its operands confirmed present first.
+  if ! fm_wt_same_object "$wt_real" "$wt_top_real" \
+     || [ ! -d "$proj_real" ] || fm_wt_same_object "$wt_real" "$proj_real" \
+     || [ ! -d "$wt_git_dir" ] || [ ! -d "$proj_common" ] \
+     || fm_wt_same_object "$wt_git_dir" "$proj_common"; then
     echo "error: $source did not yield an isolated worktree (resolved '$WT'; worktree root '${wt_top:-none}'; spawning project '$PROJ_ABS'); refusing to launch to avoid tangling the primary checkout. Inspect target $inspect_target" >&2
     exit 1
   fi
