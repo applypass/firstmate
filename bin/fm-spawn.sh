@@ -436,6 +436,8 @@ fm_backlog_directory_present "$STATE" "state directory" || {
 . "$SCRIPT_DIR/fm-trace-context-lib.sh"
 # shellcheck source=bin/fm-remote-readiness-lib.sh
 . "$SCRIPT_DIR/fm-remote-readiness-lib.sh"
+# shellcheck source=bin/fm-worktree-identity-lib.sh
+. "$SCRIPT_DIR/fm-worktree-identity-lib.sh"
 # Fail closed before any fleet mutation: a no-mistakes gate agent must never spawn
 # a direct report (see bin/fm-gate-refuse-lib.sh).
 fm_refuse_if_gate_agent
@@ -2342,11 +2344,19 @@ spawn_worktree_isolated() {  # <path>
     SPAWN_WT_REASON="it is not inside a git worktree"
     return 1
   fi
-  if [ "$wt_real" != "$wt_top_real" ]; then
+  # Each comparison below asks whether two paths are one directory, which is not
+  # the same question as whether two strings match; bin/fm-worktree-identity-lib.sh
+  # owns that test and why. Its must-be-distinct comparisons need their operands
+  # confirmed present first, so the spawning project is checked here.
+  if [ ! -d "$PROJ_ABS_REAL" ]; then
+    SPAWN_WT_REASON="the spawning project did not resolve to a directory"
+    return 1
+  fi
+  if ! fm_wt_same_object "$wt_real" "$wt_top_real"; then
     SPAWN_WT_REASON="it is a subdirectory of worktree root '$wt_top_real', not a worktree root"
     return 1
   fi
-  if [ "$wt_real" = "$PROJ_ABS_REAL" ]; then
+  if fm_wt_same_object "$wt_real" "$PROJ_ABS_REAL"; then
     SPAWN_WT_REASON="it is the spawning project itself"
     return 1
   fi
@@ -2357,11 +2367,11 @@ spawn_worktree_isolated() {  # <path>
     && wt_git_dir=$(cd "$wt_git_dir" 2>/dev/null && pwd -P) || wt_git_dir=
   proj_common=$(git -C "$PROJ_ABS" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) \
     && proj_common=$(cd "$proj_common" 2>/dev/null && pwd -P) || proj_common=
-  if [ -z "$wt_git_dir" ] || [ -z "$proj_common" ]; then
+  if [ ! -d "$wt_git_dir" ] || [ ! -d "$proj_common" ]; then
     SPAWN_WT_REASON="its git directory could not be resolved"
     return 1
   fi
-  if [ "$wt_git_dir" = "$proj_common" ]; then
+  if fm_wt_same_object "$wt_git_dir" "$proj_common"; then
     SPAWN_WT_REASON="it is the repository's primary checkout (its git dir is the spawning project's common git dir)"
     return 1
   fi
