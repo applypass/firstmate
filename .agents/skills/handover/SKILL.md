@@ -1,6 +1,6 @@
 ---
 name: handover
-description: Hand this firstmate session over to a fresh one when its context passes the thinking-quality threshold. Use when the captain invokes /handover or asks to hand over, when a turn end reports that a handover is due, and when a session start surfaces a handover left by the previous session. Prepares a durable advisory record of the next step and what each worker is mid-way through, verifies every open thread is backed by a durable record, refuses to give up the helm until it is, then releases the helm so a replacement can take it and pick the work up from disk.
+description: Hand this firstmate session over to a fresh one. Use when the captain invokes /handover or asks to hand over, and when a session start surfaces a handover left by the previous session. Prepares a durable advisory record of the next step and what each worker is mid-way through, verifies every open thread is backed by a durable record, refuses to give up the helm until it is, then releases the helm so a replacement can take it and pick the work up from disk.
 user-invocable: true
 metadata:
   internal: true
@@ -8,17 +8,15 @@ metadata:
 
 # handover
 
-A session past 250,000 tokens reasons worse than a fresh one, so the captain replaces it.
+A long session reasons worse than a fresh one, so the captain replaces it.
 This skill covers both sides: the outgoing session that prepares and releases, and the replacement that picks the work up.
 
+Nothing here decides when that moment arrives.
+No turn end measures this session, and no timer starts a handover.
+It begins when the captain asks for one.
+
 `bin/fm-handover.sh --help` owns the exact commands and their mechanics.
-`docs/session-handover.md` owns the thresholds, the record format, and the tradeoffs.
-
-## When a turn end says a handover is due
-
-Nothing is blocked and nothing is urgent.
-Keep working through whatever is in flight, and at the next natural reply tell the captain in one line that a handover is due and that you have one ready.
-Do not stall the fleet waiting for the captain, and do not report it twice.
+`docs/session-handover.md` owns the record format and the tradeoffs.
 
 ## Preparing, as the outgoing session
 
@@ -32,7 +30,7 @@ Do not stall the fleet waiting for the captain, and do not report it twice.
    If it refuses, fix the named item - usually a missing note, or a task with no backlog item - and prepare again.
 
 Never invent a fact for the record.
-A session at its threshold is exactly the session whose recollection should not be trusted: this fleet has already lost a day to a worker that wrote itself a note claiming an approval the captain never gave, then acted on it later.
+A session old enough to be replaced is exactly the session whose recollection should not be trusted: this fleet has already lost a day to a worker that wrote itself a note claiming an approval the captain never gave, then acted on it later.
 Anything you cannot point at, leave out.
 
 ## Releasing, on the captain's word
@@ -55,14 +53,17 @@ Session start prints the record in full, so do not re-read it.
 1. Treat it as advisory.
    Check each line against the records it names and against the fleet digest; those win.
 2. Do not re-derive anything a durable record already answers.
-   Read the records the handover points at, and search `bin/fm-decided.sh search <terms>` before escalating any question - it may already be answered.
+   Read the records the handover points at before escalating any question.
 3. Run `bin/fm-handover.sh consume` to close it out.
    It lists the records you were expected to read.
    Only the session holding the helm may run it, so if this session was refused the lock, read the record and leave it waiting for the session that takes the helm.
 4. Report to the captain in one line: what is live, what the next step is, and which records you consulted.
 
-## Taking the helm from an idle holder
+## When the helm is still held
 
-A fresh session takes the helm automatically only when the previous holder is provably unattended and measurably silent; `bin/fm-lock.sh` reports it loudly when it does.
-When it refuses instead, it names what holds the helm, why - including which piece of proof was missing when the holder's activity could not be measured - and the one command that clears it.
+A fresh session never takes the helm from a live holder.
+Nothing measures how busy that holder is, and nothing stops it.
+`bin/fm-lock.sh` refuses, names the pid that holds the helm, and prints the one command that clears the record: `bin/fm-lock.sh clear --pid <holder-pid>`.
+
 Relay that to the captain as a plain choice - the old session is still open and someone may be using it - and never clear the helm from a session the captain has not agreed to give up.
+Clearing drops the recorded helm only; the other session keeps running, so it has to be quit as well or two sessions work the same fleet.

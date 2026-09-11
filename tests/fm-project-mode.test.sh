@@ -115,29 +115,32 @@ test_prefixless_ticket_flag_warns() {
   pass "fm-project-mode.sh: a +ticket flag with no prefix warns and drops to ticketless"
 }
 
-# An unrecognized mode NAME in a registered bracket must REFUSE, not default to
-# the remote-pushing "no-mistakes": a typo of a local-only project must never
-# silently become a push-and-PR project. It exits non-zero with no stdout.
-test_unknown_mode_refuses() {
-  local home out err rc
+# An unrecognized mode NAME warns and falls back to the safest registered
+# posture. bin/fm-project-mode.sh owns that warn-and-default, and adding the
+# ticket flag must not change it. The flags stay independent of the mode, so a
+# mistyped mode still resolves the ticket mandate the captain did register.
+test_unknown_mode_warns_and_defaults() {
+  local home out err
   home=$(make_home unknown-mode '- bogus [sideways +ticket:sc] - unknown delivery mode (added 2026-07-01)')
-  out=$(FM_HOME="$home" "$PROJECT_MODE" bogus 2>/dev/null); rc=$?
-  [ "$rc" -ne 0 ] || fail "unknown mode must refuse with a non-zero exit, got rc=$rc"
-  [ -z "$out" ] || fail "unknown mode must emit no mode on stdout, got \"$out\""
-  err=$(FM_HOME="$home" "$PROJECT_MODE" bogus 2>&1 >/dev/null || true)
-  assert_contains "$err" "unknown mode" "unknown mode must explain the refusal on stderr"
-  assert_contains "$err" "refusing" "unknown mode must state that it refuses"
+  err=$(FM_HOME="$home" "$PROJECT_MODE" bogus 2>&1 >/dev/null)
+  out=$(resolve "$home" bogus)
+  [ "$out" = "no-mistakes off sc" ] \
+    || fail "unknown mode must default to no-mistakes off and keep its ticket prefix, got \"$out\""
+  assert_contains "$err" "unknown mode" "unknown mode must explain the fallback on stderr"
+  pass "fm-project-mode.sh: an unrecognized mode name warns and falls back without losing the ticket flag"
+}
 
-  # A typo'd mode written AFTER a flag lands in the leftover-token path, not the
-  # position-1 mode check, so it must refuse there too rather than warn-and-default
-  # to the remote-pushing no-mistakes (a mistyped local-only must never push).
-  home=$(make_home flag-first-typo '- appA [+yolo locl-only] - typo mode after a flag (added 2026-07-01)')
-  out=$(FM_HOME="$home" "$PROJECT_MODE" appA 2>/dev/null); rc=$?
-  [ "$rc" -ne 0 ] || fail "a typo'd mode after a flag must refuse, got rc=$rc"
-  [ -z "$out" ] || fail "a typo'd mode after a flag must emit no mode, got \"$out\""
-  err=$(FM_HOME="$home" "$PROJECT_MODE" appA 2>&1 >/dev/null || true)
-  assert_contains "$err" "refusing" "a typo'd mode after a flag must state that it refuses"
-  pass "fm-project-mode.sh: an unrecognized mode name refuses instead of defaulting to no-mistakes"
+# no-mistakes-prod-only is a conditional registry policy, not a task mode. The
+# ticket flag rides alongside it unchanged on both the mapped and --raw paths.
+test_conditional_policy_keeps_its_ticket_prefix() {
+  local home out
+  home=$(make_home prod-only '- conditional [no-mistakes-prod-only +ticket:sc] - conditional policy (added 2026-07-01)')
+  out=$(resolve "$home" conditional)
+  [ "$out" = "no-mistakes off sc" ] || fail "conditional: mapped output should be \"no-mistakes off sc\", got \"$out\""
+  out=$(FM_HOME="$home" "$PROJECT_MODE" --raw conditional 2>/dev/null)
+  [ "$out" = "no-mistakes-prod-only off sc" ] \
+    || fail "conditional: --raw should keep the annotation and the prefix, got \"$out\""
+  pass "fm-project-mode.sh: a conditional policy keeps its ticket prefix on both paths"
 }
 
 # A mode written after the bracket flags used to be discarded in silence, which
@@ -169,4 +172,5 @@ test_misordered_mode_is_honored_and_warns
 test_third_field_reads_empty_when_ticketless
 test_invalid_ticket_prefix_falls_back_to_ticketless
 test_prefixless_ticket_flag_warns
-test_unknown_mode_refuses
+test_unknown_mode_warns_and_defaults
+test_conditional_policy_keeps_its_ticket_prefix

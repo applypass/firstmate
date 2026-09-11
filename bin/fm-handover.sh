@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 # Prepare, verify, and complete a firstmate session handover.
 #
-# WHY A HANDOVER EXISTS: past its thinking-quality threshold a session reasons
-# worse, so the captain replaces it. A watcher cannot respawn the interactive
-# session in the captain's terminal, so this is captain-triggered: firstmate
-# detects the threshold, prepares, verifies, and the captain runs one command.
+# WHY A HANDOVER EXISTS: a long session reasons worse than a fresh one, so the
+# captain replaces it. Nothing here decides when that moment arrives. This file
+# measures no token count, no silence, and no transcript; it starts when the
+# captain asks for a handover and does nothing at all until then.
 #
-# THE RECORD POINTS, IT DOES NOT ASSERT. A session at its threshold is exactly
-# the session whose recollections should not be trusted: this fleet has already
-# lost a day to a worker that wrote itself a note claiming an approval the captain
-# never gave, then acted on it in a later session. So the record is explicitly
+# A watcher cannot respawn the interactive session in the captain's terminal, so
+# the last step is always the captain's: firstmate prepares and verifies the
+# record, and the captain starts the replacement.
+#
+# THE RECORD POINTS, IT DOES NOT ASSERT. A session old enough to be replaced is
+# exactly the session whose recollections should not be trusted: this fleet has
+# already lost a day to a worker that wrote itself a note claiming an approval the
+# captain never gave, then acted on it in a later session. So the record is explicitly
 # advisory, durable records win every conflict, and the only content it asserts is
 # the content that exists nowhere else - the concrete next step, and what each
 # live worker is mid-way through. Everything else is a pointer the replacement can
@@ -236,7 +240,6 @@ default_pointers() {
   printf '%s\t%s\n' "$DATA/learnings.md" "operational facts and gotchas already learned in this home"
   printf '%s\t%s\n' "$DATA/projects.md" "which projects exist and how each one delivers"
   printf '%s\t%s\n' "$DATA/secondmates.md" "registered direct reports and their scopes"
-  printf '%s\t%s\n' "$DATA/decided.md" "questions already answered - search this before escalating anything"
   while IFS= read -r id; do
     [ -n "$id" ] || continue
     for report in "$DATA/$id/report.md" "$DATA/$id/brief.md"; do

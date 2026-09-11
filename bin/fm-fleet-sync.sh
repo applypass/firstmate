@@ -13,6 +13,11 @@
 # stashed, or discarded.
 # Still skips (benignly) local-only/no-origin projects, missing remotes/branches,
 # and fetch failures.
+# A candidate under projects/ must be the root of its own work tree: git discovery
+# walks up, so a plain nested directory would otherwise resolve to the enclosing
+# repository (the firstmate checkout) and be synced under that directory's label.
+# Anything else is reported as "skipped: not a clone root" naming the repository
+# that would have been touched.
 # Pruning never deletes the checked-out branch or a branch that still has a
 # worktree, so it cannot discard unlanded work; set FM_FLEET_PRUNE=0 to disable it.
 # When the fetch fails on an orphaned .git/packed-refs.lock (left by a ref rewrite
@@ -35,6 +40,9 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 PROJECTS="${FM_PROJECTS_OVERRIDE:-$FM_HOME/projects}"
 # shellcheck source=bin/fm-lock-lib.sh
 . "$SCRIPT_DIR/fm-lock-lib.sh"
+# Inert unless FM_TIMING_LOG names a file; only the deferred network stage sets it.
+# shellcheck source=bin/fm-timing-lib.sh
+. "$SCRIPT_DIR/fm-timing-lib.sh"
 FM_LOCK_LOG_PREFIX=fleet-sync
 "$FM_ROOT/bin/fm-guard.sh" || true
 
@@ -297,16 +305,31 @@ sync_project() {
     echo "$label: skipped: not a directory"
     return 0
   fi
-  if ! git -C "$PROJ" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  # Git repository discovery walks UP from $PROJ, so a plain directory merely
+  # nested inside a repository - a worktree container left under projects/, say -
+  # resolves to the ENCLOSING repository, which in a firstmate home is the
+  # firstmate checkout itself. Every later `git -C "$PROJ"` would then read, prune
+  # and fast-forward that repository under this project's label, turning a routine
+  # refresh into an unrequested self-update reported as a project sync. Require
+  # $PROJ to be the root of its own work tree before any other git command runs.
+  proj_top=$(git -C "$PROJ" rev-parse --show-toplevel 2>/dev/null) || proj_top=""
+  if [ -z "$proj_top" ]; then
     echo "$label: skipped: not a git repo"
     return 0
   fi
-  # Fail closed: if the mode cannot be resolved (e.g. a typo'd mode in the
-  # registry), skip rather than default to the remote-pushing "no-mistakes" - a
-  # mistyped local-only project must never be pushed. The warning is no longer
-  # discarded, so the operator sees why the project was skipped.
-  if ! mode_line=$("$FM_ROOT/bin/fm-project-mode.sh" "$label"); then
-    echo "$label: skipped: cannot resolve delivery mode (fix the registry bracket)"
+  # Both sides are physical paths (git resolves --show-toplevel through symlinks),
+  # so a symlinked clone dir still compares equal to its own root.
+  proj_abs=$(cd "$PROJ" && pwd -P) || proj_abs=""
+  if [ "$proj_top" != "$proj_abs" ]; then
+    echo "$label: skipped: not a clone root (git would act on $proj_top)"
+    return 0
+  fi
+  # Fail closed: an unresolvable posture must not resolve to a mode this sync
+  # will push. Defaulting the failure to "no-mistakes off" made a project the
+  # captain may have registered local-only fetchable and pushable on the strength
+  # of a registry read that did not succeed.
+  if ! mode_line=$("$FM_ROOT/bin/fm-project-mode.sh" "$label" 2>/dev/null); then
+    echo "$label: skipped: could not resolve the registered delivery posture"
     return 0
   fi
   mode=${mode_line%% *}
@@ -433,5 +456,10 @@ fi
 for proj in "$PROJECTS"/*; do
   [ -e "$proj" ] || continue
   [ -d "$proj" ] || continue
+  # Per-clone elapsed, so a fleet refresh that runs long names WHICH clone cost
+  # the time instead of only its total. Recording is a no-op unless the deferred
+  # network stage asked for it.
+  __fm_timing_stamp=$(fm_timing_now_ms)
   sync_project "$proj"
+  fm_timing_record clone sync "$__fm_timing_stamp" "$(basename "$proj")"
 done

@@ -15,8 +15,8 @@
 # abort - all hermetic over temp git repos and fakebins.
 set -u
 
-# shellcheck source=tests/lib.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/fixtures.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-tangle-lib.sh"
@@ -24,11 +24,12 @@ set -u
 TMP_ROOT=$(fm_test_tmproot fm-tangle-guard)
 fm_git_identity fmtest fmtest@example.invalid
 
-# A fresh git repo on `main` with one commit. Echoes its path.
+# A fresh git repo on `main` with one commit and a local origin. Echoes its path.
 make_repo() {
   local dir=$1
   git init -q -b main "$dir"
   git -C "$dir" commit -q --allow-empty -m init
+  fm_git_add_origin "$dir" "$dir.origin.git"
   printf '%s\n' "$dir"
 }
 
@@ -127,7 +128,7 @@ test_brief_assertion_precedes_branch() {
   local home brief iso br
   home="$TMP_ROOT/brief-home"
   mkdir -p "$home/data"
-  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" tangle-brief-cc3 alpha >/dev/null 2>&1
+  FM_HOME="$home" "$ROOT/bin/fm-brief.sh" tangle-brief-cc3 alpha --mode no-mistakes >/dev/null 2>&1
   brief="$home/data/tangle-brief-cc3/brief.md"
   assert_present "$brief" "brief was not scaffolded"
   assert_grep "blocked: launched in primary checkout, not an isolated worktree" "$brief" \
@@ -149,40 +150,12 @@ test_brief_assertion_precedes_branch() {
 
 # --- GUARD 1b: fm-spawn isolation abort -------------------------------------
 
-# A fake tmux that reports FM_FAKE_PANE_PATH as the post-`treehouse get` pane cwd
-# (so the spawn's worktree-resolution loop resolves to a path we control), names
-# the session on '#S', and swallows window ops. Echoes the fakebin dir.
-make_spawn_fakebin() {
-  local dir=$1 fakebin
-  fakebin=$(fm_fakebin "$dir")
-  cat > "$fakebin/tmux" <<'SH'
-#!/usr/bin/env bash
-set -u
-case "$*" in
-  *"#{pane_current_path}"*) printf '%s\n' "${FM_FAKE_PANE_PATH:-}"; exit 0 ;;
-esac
-case "${1:-}" in
-  display-message) printf 'firstmate\n'; exit 0 ;;
-  list-windows) exit 0 ;;
-  has-session|new-session|new-window|send-keys) exit 0 ;;
-esac
-exit 0
-SH
-  chmod +x "$fakebin/tmux"
-  fm_fake_exit0 "$fakebin" treehouse
-  printf '%s\n' "$fakebin"
-}
-
+# Spawn isolation uses the shared spawn fakebin (pane path + window ops).
 run_spawn() {
   local home=$1 id=$2 proj=$3 pane=$4 fakebin=$5
-  mkdir -p "$home/data/$id"
-  printf 'brief\n' > "$home/data/$id/brief.md"
-  FM_ROOT_OVERRIDE='' FM_HOME="$home" \
-    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
-    FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$pane" TMUX="fake,1,0" \
-    PATH="$fakebin:$PATH" \
-    "$ROOT/bin/fm-spawn.sh" "$id" "$proj" codex 2>&1
+  fm_test_spawn_brief "$home" "$id" brief
+  fm_test_run_spawn "$home" "$pane" "$fakebin" \
+    "$id" "$proj" codex --mode no-mistakes --yolo off
 }
 
 test_spawn_isolation_abort() {
@@ -191,81 +164,104 @@ test_spawn_isolation_abort() {
   mkdir -p "$home/data"
   proj=$(make_repo "$TMP_ROOT/spawn-proj")
   fakebin=$(make_spawn_fakebin "$TMP_ROOT/spawn-fake")
+  # The assertions concern identity, not how long an unchanged cwd is polled.
+  fm_test_fake_sleep_noop "$fakebin"
   # A genuine isolated linked worktree of the project, detached on the default.
   git -C "$proj" worktree add -q --detach "$TMP_ROOT/spawn-wt" >/dev/null 2>&1
-  mkdir -p "$TMP_ROOT/spawn-notgit" "$proj/sub"
+  # The non-git case must BE non-git wherever this suite runs. A directory under
+  # TMPDIR is not one when TMPDIR itself sits inside a git repository - git walks
+  # up and finds that repo, and the spawn reports the subdirectory cause instead.
+  # GIT_CEILING_DIRECTORIES stops that upward walk: git does not chdir up into a
+  # listed directory, though it never excludes the directory being searched, so
+  # the ceiling is the PARENT of the path handed to the spawn (git(1),
+  # "GIT_CEILING_DIRECTORIES").
+  mkdir -p "$TMP_ROOT/spawn-notgit-root/plain" "$proj/sub"
 
   # Abort: the pane resolves to a plain non-git directory (not a worktree at all).
-  out=$(run_spawn "$home" abort-notgit-dd4 "$proj" "$TMP_ROOT/spawn-notgit" "$fakebin"); status=$?
+  # The discovery poll screens every candidate with the isolation conditions, so
+  # a path like this is never adopted and the refusal comes from the poll's own
+  # deadline, naming the path and why it was rejected. The assertions pin which
+  # cause fired, not the operator wording that explains it.
+  out=$(GIT_CEILING_DIRECTORIES="$TMP_ROOT/spawn-notgit-root" \
+    run_spawn "$home" abort-notgit-dd4 "$proj" "$TMP_ROOT/spawn-notgit-root/plain" "$fakebin"); status=$?
   expect_code 1 "$status" "spawn into a non-worktree dir should abort"
-  assert_contains "$out" "did not yield an isolated worktree" "non-worktree spawn lacked the isolation error"
+  assert_contains "$out" "did not enter an isolated worktree" "non-worktree spawn lacked the isolation error"
+  assert_contains "$out" "not inside a git worktree" "non-worktree spawn did not say why the path was rejected"
   assert_absent "$home/state/abort-notgit-dd4.meta" "aborted spawn must not record meta"
 
   # Abort: the pane resolves INTO the primary checkout (a subdir of PROJ_ABS).
   out=$(run_spawn "$home" abort-primary-ee5 "$proj" "$proj/sub" "$fakebin"); status=$?
   expect_code 1 "$status" "spawn landing inside the primary checkout should abort"
-  assert_contains "$out" "did not yield an isolated worktree" "primary-checkout spawn lacked the isolation error"
+  assert_contains "$out" "did not enter an isolated worktree" "primary-checkout spawn lacked the isolation error"
+  assert_contains "$out" "not a worktree root" "primary-checkout spawn did not say why the path was rejected"
+  assert_absent "$home/state/abort-primary-ee5.meta" "aborted spawn must not record meta"
 
   # Proceed: the pane resolves to a genuine, isolated worktree.
   out=$(run_spawn "$home" ok-isolated-ff6 "$proj" "$TMP_ROOT/spawn-wt" "$fakebin"); status=$?
   expect_code 0 "$status" "spawn into a genuine isolated worktree should succeed"
   assert_contains "$out" "spawned ok-isolated-ff6" "isolated spawn did not report success"
-  assert_not_contains "$out" "did not yield an isolated worktree" "isolated spawn wrongly tripped the guard"
+  assert_not_contains "$out" "isolated worktree" "isolated spawn wrongly tripped the guard"
   pass "fm-spawn: aborts unless the resolved worktree is a genuine, isolated worktree"
 }
 
-# The isolation guard must compare filesystem IDENTITY, not path text.
-#
-# bash's `pwd -P` already resolves symlinks, `.`, `..`, and trailing slashes, so
-# those aliases of the primary checkout are caught before the guard even runs.
-# Case is the one thing it does NOT fold: on a case-insensitive filesystem
-# (macOS's default) the primary checkout spelled `.../proj` and `.../PROJ`
-# canonicalizes to two unequal strings for ONE directory, so a text compare
-# called it "isolated" and let the crewmate branch and commit in the primary
-# checkout (issue #2654). Comparing device + inode closes that gap and, unlike
-# the text compare it replaces, accepts a genuinely distinct worktree reached
-# under any spelling.
-#
-# same_dir <a> <b> is true when both paths are the same directory on disk.
-same_dir() {
-  [ -d "$1" ] && [ -d "$2" ] && [ "$1" -ef "$2" ]
-}
-
-test_spawn_isolation_compares_identity_not_text() {
-  local home proj fakebin out status variant wt wt_variant
+# The isolation predicate compares filesystem identity (device and inode), not
+# path text, because the two sources disagree on spelling: `git rev-parse
+# --show-toplevel` returns the canonical case while bash's `pwd -P` builtin does
+# not case-fold. Reproduced live on 2026-09-11 against both predicates: a
+# genuine linked worktree reached as ".../WT1" instead of ".../wt1" compared
+# unequal as text and was refused with the misleading "not a worktree root",
+# while the primary checkout under a variant spelling was refused only by
+# accident of that same text compare. Identity compares fix the false refusal
+# and refuse the primary for the correct, stated reason.
+test_spawn_isolation_is_identity_not_path_text() {
+  local home proj fakebin wt wt_variant proj_variant out status case_insensitive
   home="$TMP_ROOT/spawn-ident-home"
   mkdir -p "$home/data"
   proj=$(make_repo "$TMP_ROOT/spawn-ident-proj")
   fakebin=$(make_spawn_fakebin "$TMP_ROOT/spawn-ident-fake")
-  variant="$TMP_ROOT/SPAWN-IDENT-PROJ"
-
-  if same_dir "$proj" "$variant"; then
-    # The project argument names the primary checkout in a different case while
-    # the pane never leaves it. Before the fix this spawn succeeded and recorded
-    # the primary checkout as the task's worktree.
-    out=$(run_spawn "$home" abort-casefold-gg7 "$variant" "$proj" "$fakebin"); status=$?
-    expect_code 1 "$status" "spawn must abort when the launch path is the primary checkout under another case"
-    assert_contains "$out" "did not yield an isolated worktree" \
-      "case-variant primary checkout was blessed as an isolated worktree"
-    assert_absent "$home/state/abort-casefold-gg7.meta" \
-      "aborted case-variant spawn must not record meta"
-  else
-    echo "# note: case-sensitive filesystem - case-variant alias case not applicable"
-  fi
-
-  # No false rejections: a genuinely distinct worktree stays acceptable even
-  # when the pane reports it under a case-variant spelling. The text compare
-  # this replaces rejected exactly this launch, because git reports the
-  # worktree root in its true case while the pane reported the variant.
+  fm_test_fake_sleep_noop "$fakebin"
   wt="$TMP_ROOT/spawn-ident-wt"
   git -C "$proj" worktree add -q --detach "$wt" >/dev/null 2>&1
-  wt_variant="$TMP_ROOT/SPAWN-IDENT-WT"
-  same_dir "$wt" "$wt_variant" || wt_variant="$wt"
-  out=$(run_spawn "$home" ok-ident-ii9 "$proj" "$wt_variant" "$fakebin"); status=$?
-  expect_code 0 "$status" "a genuinely distinct worktree must still be accepted"
-  assert_not_contains "$out" "did not yield an isolated worktree" \
-    "distinct worktree wrongly tripped the identity guard"
-  pass "fm-spawn: isolation guard compares filesystem identity, not path text"
+
+  # Probe the filesystem rather than the platform: only a case-insensitive one
+  # can reach the same directory under a variant spelling at all.
+  mkdir -p "$TMP_ROOT/spawn-ident-probe/Case"
+  case_insensitive=0
+  [ -d "$TMP_ROOT/spawn-ident-probe/case" ] && case_insensitive=1
+
+  # Row 1 (unconditional): the genuine worktree under its canonical spelling.
+  out=$(run_spawn "$home" ident-canonical-a1 "$proj" "$wt" "$fakebin"); status=$?
+  expect_code 0 "$status" "canonical spelling of a genuine worktree should spawn"
+  assert_not_contains "$out" "isolated worktree" "canonical worktree wrongly tripped the isolation guard"
+
+  # Row 3 (unconditional, safety): the spawning project itself is refused, and
+  # by the reason that names it - not by the worktree-root check catching it.
+  out=$(run_spawn "$home" ident-primary-c3 "$proj" "$proj" "$fakebin"); status=$?
+  expect_code 1 "$status" "spawn resolving to the spawning project should abort"
+  assert_contains "$out" "the spawning project itself" \
+    "primary-checkout refusal did not name the spawning project as the cause"
+
+  if [ "$case_insensitive" = 1 ]; then
+    # Row 2 (the fix): the SAME worktree, reached under a variant spelling, is
+    # the same directory and must be allowed.
+    wt_variant="$TMP_ROOT/SPAWN-IDENT-WT"
+    out=$(run_spawn "$home" ident-variant-b2 "$proj" "$wt_variant" "$fakebin"); status=$?
+    expect_code 0 "$status" "a genuine worktree under a case-variant spelling should spawn"
+    assert_not_contains "$out" "not a worktree root" \
+      "case-variant worktree was refused as a non-root (the false refusal this guards)"
+
+    # Row 3 again, under a variant spelling: still refused, still for the reason
+    # that names the project rather than the accidental text mismatch.
+    proj_variant="$TMP_ROOT/SPAWN-IDENT-PROJ"
+    out=$(run_spawn "$home" ident-primvar-d4 "$proj" "$proj_variant" "$fakebin"); status=$?
+    expect_code 1 "$status" "the primary checkout under a case-variant spelling must still abort"
+    assert_contains "$out" "the spawning project itself" \
+      "case-variant primary checkout was not refused as the spawning project"
+    assert_absent "$home/state/ident-primvar-d4.meta" "aborted spawn must not record meta"
+    pass "fm-spawn: isolation compares filesystem identity, allowing a case-variant worktree and still refusing the primary"
+  else
+    pass "fm-spawn: isolation compares filesystem identity (case-variant rows need a case-insensitive filesystem)"
+  fi
 }
 
 # --- GUARD 1c: fm-spawn tmux window construction ----------------------------
@@ -308,15 +304,10 @@ SH
 
 run_spawn_record() {
   local home=$1 id=$2 proj=$3 pane=$4 fakebin=$5 rec=$6
-  mkdir -p "$home/data/$id"
-  printf 'brief\n' > "$home/data/$id/brief.md"
-  FM_ROOT_OVERRIDE='' FM_HOME="$home" \
-    FM_STATE_OVERRIDE="$home/state" FM_DATA_OVERRIDE="$home/data" \
-    FM_PROJECTS_OVERRIDE="$home/projects" FM_CONFIG_OVERRIDE="$home/config" \
-    FM_SPAWN_NO_GUARD=1 FM_FAKE_PANE_PATH="$pane" TMUX="fake,1,0" \
-    FM_TMUX_REC="$rec" \
-    PATH="$fakebin:$PATH" \
-    "$ROOT/bin/fm-spawn.sh" "$id" "$proj" codex 2>&1
+  fm_test_spawn_brief "$home" "$id" brief
+  FM_TMUX_REC="$rec" \
+    fm_test_run_spawn "$home" "$pane" "$fakebin" \
+    "$id" "$proj" codex --mode no-mistakes --yolo off
 }
 
 test_spawn_tmux_window_construction() {
@@ -360,5 +351,5 @@ test_guard_banner
 test_bootstrap_line
 test_brief_assertion_precedes_branch
 test_spawn_isolation_abort
-test_spawn_isolation_compares_identity_not_text
+test_spawn_isolation_is_identity_not_path_text
 test_spawn_tmux_window_construction

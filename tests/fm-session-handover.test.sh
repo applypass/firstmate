@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Behavior tests for the captain-triggered session handover
+# Behavior tests for the captain-invoked session handover
 # (docs/session-handover.md).
 #
 # Subjects:
-#   bin/fm-session-pulse.sh     - turn-end pulse: stamps the helm activity marker
-#                                 and reports a due handover ONCE, never blocking.
-#   bin/fm-handover.sh          - prepare, verify, release, consume, and above all
-#                                 REFUSE an incomplete handover.
-#   bin/fm-decided.sh           - the searchable record of answered questions.
-#   bin/fm-awaiting-captain.sh  - the short early block of what waits on the captain.
-#   bin/fm-session-start.sh     - surfacing both near the top of the digest.
+#   bin/fm-handover.sh  - prepare, verify, release, consume, and above all
+#                         REFUSE an incomplete handover.
+#   bin/fm-lock.sh      - release the helm this session holds, and the captain's
+#                         clear --pid override for the one it does not.
+#
+# Nothing here measures a session. The handover starts when the captain asks for
+# one, so these tests drive it the same way: by running the command.
 #
 # All hermetic over temp dirs: no real agent session, no network, no forge call.
 set -u
@@ -46,55 +46,10 @@ make_home() {
   printf '%s\n' "$dir"
 }
 
-# A genuine linked worktree, the shape every crewmate and scout task gets. Git
-# chatter is silenced so the echoed path stays the only output: a fixture that
-# leaks it produces a bogus path and a test that passes for the wrong reason.
-make_crewmate_worktree() {
-  local base=$1 dir=$2
-  git -C "$base" worktree add --quiet -b fm/handover-test-branch "$dir" >/dev/null 2>&1 \
-    || fail "could not create the crewmate worktree fixture"
-  mkdir -p "$dir/state" "$dir/data" "$dir/bin"
-  : > "$dir/AGENTS.md"
-  printf '%s\n' "$dir"
-}
-
 add_task() {
   local home=$1 id=$2
   fm_write_meta "$home/state/$id.meta" "window=fm:$id" "worktree=$home/wt-$id" "project=alpha"
   printf -- '- [ ] %s - a task (repo: alpha) (kind: ship)\n' "$id" >> "$home/data/backlog.md"
-}
-
-# One assistant transcript line whose four usage fields sum to $1.
-assistant_line() {
-  local total=$1 rid=${2:-req-1} sidechain=${3:-false}
-  printf '{"type":"assistant","isSidechain":%s,"requestId":"%s","message":{"usage":{"input_tokens":2,"cache_creation_input_tokens":8,"cache_read_input_tokens":%s,"output_tokens":10}}}\n' \
-    "$sidechain" "$rid" "$((total - 20))"
-}
-
-write_transcript() {
-  local path=$1 total
-  shift
-  : > "$path"
-  for total in "$@"; do
-    assistant_line "$total" "req-$total" >> "$path"
-  done
-}
-
-stop_payload() {
-  printf '{"session_id":"%s","stop_hook_active":false,"transcript_path":"%s"}' "${2:-sess-1}" "$1"
-}
-
-# A trailing synthetic entry, the shape Claude Code writes when a turn ends
-# abnormally: assistant, main chain, model "<synthetic>", all four usage fields 0.
-synthetic_zero_line() {
-  printf '{"type":"assistant","isSidechain":false,"message":{"model":"<synthetic>","usage":{"input_tokens":0,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":0}}}\n'
-}
-
-run_pulse() {
-  local home=$1 payload=$2
-  shift 2
-  printf '%s' "$payload" | env "$@" CLAUDECODE=1 FM_ROOT_OVERRIDE="$home" \
-    bash "$ROOT/bin/fm-session-pulse.sh" --claude 2>&1
 }
 
 # make_fake_ps <fakebin> <harness-pid>: report <harness-pid> as a live claude and
@@ -153,173 +108,6 @@ hold_helm() {
   start_holder
   make_fake_ps "$fakebin" "$HOLDER_PID"
   printf '%s\n' "$HOLDER_PID" > "$home/state/.lock"
-}
-
-# --- the pulse: one report, never a block ------------------------------------
-
-test_pulse_reports_once_over_threshold_and_never_blocks() {
-  local home transcript out status second
-  home=$(make_home "$TMP_ROOT/pulse-once")
-  transcript="$home/transcript.jsonl"
-  write_transcript "$transcript" 260000
-  out=$(run_pulse "$home" "$(stop_payload "$transcript")"); status=$?
-  expect_code 0 "$status" "the pulse must never block a turn end"
-  assert_contains "$out" "handover due" "the pulse must report that a handover is due"
-  assert_contains "$out" "260000" "the report must name the measured total"
-  assert_contains "$out" "250000" "the report must name the threshold it crossed"
-  assert_contains "$out" "Keep working" "the report must say the session carries on"
-  second=$(run_pulse "$home" "$(stop_payload "$transcript")")
-  [ -z "$second" ] || fail "the pulse reported twice in one session: $second"
-  pass "fm-session-pulse: reports a due handover once, keeps working, never blocks"
-}
-
-test_pulse_rearms_after_falling_back_below() {
-  local home over under out
-  home=$(make_home "$TMP_ROOT/pulse-rearm")
-  over="$home/over.jsonl"; under="$home/under.jsonl"
-  write_transcript "$over" 260000
-  write_transcript "$under" 40000
-  run_pulse "$home" "$(stop_payload "$over")" >/dev/null
-  run_pulse "$home" "$(stop_payload "$under")" >/dev/null
-  out=$(run_pulse "$home" "$(stop_payload "$over")")
-  assert_contains "$out" "handover due" "falling back below the threshold must re-arm the report"
-  pass "fm-session-pulse: re-arms after the session falls back below the threshold"
-}
-
-# fm-session-pulse-false-zero: a turn that ends abnormally leaves a trailing
-# synthetic all-zero-usage entry as the transcript's last countable assistant
-# entry. That must not read as an empty session and wipe a handover already due.
-test_pulse_does_not_wipe_handover_due_on_a_trailing_synthetic_zero() {
-  local home transcript due
-  home=$(make_home "$TMP_ROOT/pulse-false-zero")
-  transcript="$home/t.jsonl"
-  due="$home/state/.handover-due"
-  write_transcript "$transcript" 300010
-  run_pulse "$home" "$(stop_payload "$transcript")" >/dev/null
-  assert_present "$due" "a turn over the threshold must set the handover-due marker"
-  synthetic_zero_line >> "$transcript"
-  run_pulse "$home" "$(stop_payload "$transcript")" >/dev/null
-  assert_present "$due" \
-    "a trailing synthetic zero-usage entry must not wipe a handover already due"
-  pass "fm-session-pulse: a trailing synthetic zero-usage entry does not wipe a due handover"
-}
-
-test_pulse_threshold_is_a_flat_250000() {
-  local home transcript out
-  home=$(make_home "$TMP_ROOT/pulse-threshold")
-  transcript="$home/t.jsonl"
-  # Just under and just over the fixed number, with no override in play.
-  write_transcript "$transcript" 249999
-  out=$(run_pulse "$home" "$(stop_payload "$transcript")")
-  [ -z "$out" ] || fail "249999 tokens must stay silent under a 250000 threshold: $out"
-  write_transcript "$transcript" 250000
-  out=$(run_pulse "$home" "$(stop_payload "$transcript")")
-  assert_contains "$out" "250000" "250000 tokens must report against the flat 250000 threshold"
-  pass "fm-session-pulse: the threshold is a flat 250000 tokens, not a share of the window"
-}
-
-test_pulse_excludes_subagent_turns() {
-  local home transcript out
-  home=$(make_home "$TMP_ROOT/pulse-sidechain")
-  transcript="$home/t.jsonl"
-  : > "$transcript"
-  assistant_line 40000 req-primary false >> "$transcript"
-  assistant_line 900000 req-sub true >> "$transcript"
-  out=$(run_pulse "$home" "$(stop_payload "$transcript")")
-  [ -z "$out" ] || fail "a subagent turn must never inflate the primary measurement: $out"
-  pass "fm-session-pulse: a subagent's context never counts against the primary"
-}
-
-test_pulse_is_silent_in_a_crewmate_worktree() {
-  local base wt transcript out status
-  base="$TMP_ROOT/pulse-base"
-  fm_git_init_commit "$base"
-  wt=$(make_crewmate_worktree "$base" "$TMP_ROOT/pulse-wt")
-  transcript="$wt/t.jsonl"
-  write_transcript "$transcript" 900000
-  out=$(run_pulse "$wt" "$(stop_payload "$transcript")"); status=$?
-  expect_code 0 "$status" "the pulse must exit 0 inside a task worktree"
-  [ -z "$out" ] || fail "the pulse must be silent inside a crewmate worktree: $out"
-  pass "fm-session-pulse: inert inside a crewmate or scout task worktree"
-}
-
-test_pulse_degrades_silently_on_unmeasurable_input() {
-  local home out status
-  home=$(make_home "$TMP_ROOT/pulse-degrade")
-  out=$(run_pulse "$home" '{"session_id":"s","transcript_path":"/nope/missing.jsonl"}'); status=$?
-  expect_code 0 "$status" "a missing transcript must not block a turn end"
-  [ -z "$out" ] || fail "a missing transcript must degrade silently: $out"
-  out=$(printf '' | env CLAUDECODE=1 FM_ROOT_OVERRIDE="$home" bash "$ROOT/bin/fm-session-pulse.sh" --claude 2>&1); status=$?
-  expect_code 0 "$status" "empty stdin must not block a turn end"
-  [ -z "$out" ] || fail "empty stdin must degrade silently: $out"
-  pass "fm-session-pulse: every unmeasurable input is a silent, non-blocking no-op"
-}
-
-test_pulse_stamps_the_helm_activity_marker() {
-  local home fakebin holder transcript marker
-  home=$(make_home "$TMP_ROOT/pulse-stamp")
-  fakebin=$(fm_fakebin "$TMP_ROOT/pulse-stamp")
-  start_holder; holder=$HOLDER_PID
-  make_fake_ps "$fakebin" "$holder"
-  printf '%s\n' "$holder" > "$home/state/.lock"
-  transcript="$home/t.jsonl"
-  write_transcript "$transcript" 1000
-  run_pulse "$home" "$(stop_payload "$transcript")" PATH="$fakebin:$PATH" >/dev/null
-  marker="$home/state/.helm-activity"
-  assert_present "$marker" "the pulse must stamp the helm activity marker for the lock holder"
-  assert_grep "pid=$holder" "$marker" "the marker must record which session stamped it"
-  assert_grep "transcript=$transcript" "$marker" "the marker must record the transcript so mid-turn work is visible"
-  pass "fm-session-pulse: stamps the helm activity marker for the session holding the helm"
-}
-
-test_pulse_does_not_stamp_for_a_session_without_the_helm() {
-  local home fakebin holder other transcript
-  home=$(make_home "$TMP_ROOT/pulse-nostamp")
-  fakebin=$(fm_fakebin "$TMP_ROOT/pulse-nostamp")
-  start_holder; holder=$HOLDER_PID
-  start_holder; other=$HOLDER_PID
-  make_fake_ps "$fakebin" "$other"
-  # The helm belongs to a different session than the one ending a turn.
-  printf '%s\n' "$holder" > "$home/state/.lock"
-  transcript="$home/t.jsonl"
-  write_transcript "$transcript" 1000
-  run_pulse "$home" "$(stop_payload "$transcript")" PATH="$fakebin:$PATH" >/dev/null
-  assert_absent "$home/state/.helm-activity" \
-    "a session that does not hold the helm must not vouch for the holder's activity"
-  pass "fm-session-pulse: only the session holding the helm stamps its activity"
-}
-
-# The record of why a turn end resolved no transcript is diagnostics that explain
-# a later refusal, so each reason must point at the thing that actually failed:
-# a payload naming a transcript that is gone is a different problem from a
-# payload that named none at all.
-test_pulse_records_why_it_could_not_resolve_a_transcript() {
-  local home fakebin holder declined
-  home=$(make_home "$TMP_ROOT/pulse-declined")
-  fakebin=$(fm_fakebin "$TMP_ROOT/pulse-declined")
-  start_holder; holder=$HOLDER_PID
-  make_fake_ps "$fakebin" "$holder"
-  printf '%s\n' "$holder" > "$home/state/.lock"
-  declined="$home/state/.helm-activity-declined"
-
-  run_pulse "$home" "$(stop_payload "$home/gone.jsonl")" PATH="$fakebin:$PATH" >/dev/null
-  assert_present "$home/state/.helm-activity" \
-    "the marker must still be written, so no earlier turn's marker stands in for this one"
-  grep -q '^transcript=$' "$home/state/.helm-activity" \
-    || fail "a turn that resolved no transcript must say so in the marker"
-  assert_present "$declined" "a turn end that resolved no transcript must record why"
-  assert_grep "pid=$holder" "$declined" "the record must name the session it belongs to"
-  assert_grep "gone.jsonl" "$declined" \
-    "a payload naming a transcript that is not there must not read as a payload naming none"
-
-  run_pulse "$home" '{"session_id":"s"}' PATH="$fakebin:$PATH" >/dev/null
-  assert_grep "carried no transcript path" "$declined" \
-    "a payload with no transcript path at all must say exactly that"
-
-  write_transcript "$home/t.jsonl" 1000
-  run_pulse "$home" "$(stop_payload "$home/t.jsonl")" PATH="$fakebin:$PATH" >/dev/null
-  assert_absent "$declined" "a turn end that does resolve a transcript must clear the record"
-  pass "fm-session-pulse: records why a transcript could not be resolved, naming the real cause"
 }
 
 # --- the handover record: pointers, not assertions ---------------------------
@@ -516,259 +304,66 @@ test_a_session_without_the_helm_can_neither_prepare_nor_consume() {
   pass "fm-handover: only the session holding the helm may prepare or consume a handover"
 }
 
-# --- the searchable record of answered questions -----------------------------
+# --- the helm: release it, or clear the one this session does not hold --------
 
-test_decided_search_finds_an_answer_in_an_existing_decision_log() {
-  local home out
-  home=$(make_home "$TMP_ROOT/decided-search")
-  cat > "$home/data/stripe-decision-log.md" <<'LOG'
-# Stripe decisions
-**D35. Leave the existing duplicate customer records alone.** Only 26 have money
-on more than one record; those 26 need per-person review, never a bulk script.
-2026-07-29.
-LOG
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-decided.sh" search "duplicate customer" 2>&1) \
-    || fail "an already-answered question must be findable: $out"
-  assert_contains "$out" "D35" "the search must surface the settled decision"
-  assert_contains "$out" "stripe-decision-log.md" "the search must name the source so the answer stays checkable"
-  pass "fm-decided search: finds a question already answered in an existing decision log"
+test_release_refuses_from_a_session_that_does_not_hold_the_helm() {
+  local home fakebin holder other out status
+  home=$(make_home "$TMP_ROOT/lock-release")
+  fakebin=$(fm_fakebin "$TMP_ROOT/lock-release")
+  hold_helm "$home" "$fakebin"; holder=$HOLDER_PID
+
+  # A second window holds the helm, and this one tries to release it anyway.
+  start_holder; other=$HOLDER_PID
+  printf '%s\n' "$other" > "$home/state/.lock"
+  make_fake_ps "$fakebin" "$holder"
+  out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-lock.sh" release 2>&1); status=$?
+  expect_code 1 "$status" "release must refuse from a session that does not hold the helm"
+  assert_contains "$out" "does not hold the lock" "the refusal must say why"
+  assert_grep "$other" "$home/state/.lock" "a refused release must leave the helm exactly as it was"
+
+  # The holder releases its own helm, and releasing an already-free helm is fine.
+  make_fake_ps "$fakebin" "$other"
+  out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-lock.sh" release 2>&1) \
+    || fail "the holder must be able to release its own helm: $out"
+  assert_absent "$home/state/.lock" "release must free the helm"
+  out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-lock.sh" release 2>&1) \
+    || fail "releasing an already-free helm must succeed: $out"
+  assert_contains "$out" "already free" "an already-free helm must say so rather than fail"
+  pass "fm-lock release: only the session holding the helm may release it"
 }
 
-test_decided_search_requires_every_term_and_reports_no_match() {
-  local home out status
-  home=$(make_home "$TMP_ROOT/decided-and")
-  printf '# d\n**D1. Cancel keeps access until period end.** 2026-07-01.\n' > "$home/data/decisions.md"
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-decided.sh" search cancel access 2>&1) \
-    || fail "an AND search over one line must match: $out"
-  assert_contains "$out" "D1" "both terms on one line must match"
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-decided.sh" search cancel refund 2>&1); status=$?
-  expect_code 1 "$status" "a term that appears nowhere must report no match"
-  assert_contains "$out" "may genuinely be unanswered" "a miss must not read as a settled answer"
-  pass "fm-decided search: every term must match, and a miss says it may be unanswered"
-}
-
-test_decided_search_caps_output_and_names_what_it_dropped() {
-  local home out i
-  home=$(make_home "$TMP_ROOT/decided-cap")
-  : > "$home/data/decisions.md"
-  i=0
-  while [ "$i" -lt 12 ]; do
-    printf '**D%s. widget ruling number %s.** 2026-07-01.\n' "$i" "$i" >> "$home/data/decisions.md"
-    i=$((i + 1))
-  done
-  out=$(FM_DECIDED_MAX_LINES=5 FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-decided.sh" search widget 2>&1)
-  assert_contains "$out" "7 more match(es) omitted" "a capped search must say how many it dropped"
-  [ "$(printf '%s\n' "$out" | grep -c 'widget ruling')" = 5 ] \
-    || fail "the cap must bound the printed matches"
-  pass "fm-decided search: caps its output and says what it omitted rather than truncating silently"
-}
-
-test_decided_record_keeps_one_answer_per_key() {
-  local home out status
-  home=$(make_home "$TMP_ROOT/decided-record")
-  FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-decided.sh" record --key duplicate-customers \
-    --answer "leave them alone; the 26 with money get per-person review" \
-    --source data/stripe-decision-log.md --date 2026-07-29 >/dev/null \
-    || fail "record must accept a well-formed answer"
-  assert_grep "- [duplicate-customers] 2026-07-29" "$home/data/decided.md" "the answer must be indexed under its key"
-  assert_grep "(source: data/stripe-decision-log.md)" "$home/data/decided.md" "the answer must keep its source"
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-decided.sh" record --key duplicate-customers \
-    --answer "something else" 2>&1); status=$?
-  expect_code 1 "$status" "a second answer under one key must be refused"
-  assert_contains "$out" "already answered" "the refusal must show the existing answer"
-  FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-decided.sh" record --key duplicate-customers \
-    --answer "revised: consolidate after all" --supersede >/dev/null \
-    || fail "--supersede must replace the answer"
-  [ "$(grep -c '^- \[duplicate-customers\]' "$home/data/decided.md")" = 1 ] \
-    || fail "superseding must leave exactly one answer for the key"
-  assert_grep "revised: consolidate after all" "$home/data/decided.md" "the superseding answer must win"
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-decided.sh" count 2>&1)
-  assert_contains "$out" "1 answered decision(s) indexed" "count must report the indexed answers"
-  assert_contains "$out" "Search before escalating anything" "count must carry the search instruction"
-  pass "fm-decided record: one answer per stable key, superseded explicitly, counted for startup"
-}
-
-# The count is the ONE startup line the searchable-decision design rests on, and
-# an index that exists with no entries is ordinary: hand-created, or pruned.
-test_decided_count_of_an_empty_index_is_one_clean_line() {
-  local home out
-  home=$(make_home "$TMP_ROOT/decided-empty-index")
-  printf '# Answered decisions\n' > "$home/data/decided.md"
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-decided.sh" count 2>&1)
-  assert_contains "$out" "0 answered decision(s) indexed" "an empty index must report zero answers"
-  printf '%s\n' "$out" | grep -qx '0' \
-    && fail "the count printed a stray bare 0 line above the digest line: $out"
-  [ "$(printf '%s\n' "$out" | grep -c 'answered decision(s) indexed')" = 1 ] \
-    || fail "the count must print exactly one digest line: $out"
-  pass "fm-decided count: a zero-entry index reports one clean line, with no stray zero"
-}
-
-test_decided_search_excludes_the_open_items_view() {
-  local home out status
-  home=$(make_home "$TMP_ROOT/decided-open")
-  printf '# Decisions waiting on the captain\n\n- **should we widget?**\n' > "$home/data/NEED_DECISION.md"
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-decided.sh" search widget 2>&1); status=$?
-  expect_code 1 "$status" "an unanswered item must not match an answered-decision search"
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-decided.sh" sources 2>&1)
-  assert_not_contains "$out" "NEED_DECISION" "the open view must not be a source of answered decisions"
-  pass "fm-decided: the open-items view is never mistaken for a settled answer"
-}
-
-# --- what waits on the captain, early ----------------------------------------
-
-test_awaiting_block_lists_held_decisions_and_caps_them() {
-  local home out i
-  home=$(make_home "$TMP_ROOT/awaiting")
-  # The canonical record model (bin/fm-backlog-record-lib.sh) decides this:
-  # a hold waits on the captain only when it is QUEUED, kind captain, hold-kind
-  # captain, has a reason, and has no unresolved blocker.
-  {
-    printf -- '- [ ] inflight-hold - Being worked already (repo: fe) (kind: captain) (hold: mid-flight) (hold-kind: captain)\n'
-    printf -- '- [ ] busy-task - Something under way (repo: fe) (kind: ship)\n'
-    printf '## Queued\n'
-    printf -- '- [ ] fe-signin - Sign in with a code (repo: fe) (kind: captain) (hold: captain grill first) (hold-kind: captain)\n'
-    printf -- '- [ ] blocked-hold - Waiting on other work (repo: fe) (kind: captain) (hold: needs the migration) (hold-kind: captain) blocked-by: busy-task\n'
-    printf '## Done\n- [x] old-thing - answered long ago (kind: captain) (hold: settled) (hold-kind: captain)\n'
-  } >> "$home/data/backlog.md"
-  fm_write_meta "$home/state/busy-task.meta" "window=fm:busy-task" "pr=https://github.com/x/y/pull/9"
-  fm_write_meta "$home/state/event-task.meta" "window=fm:event-task"
-  printf 'pr opened: https://github.com/x/y/pull/11\n' > "$home/state/event-task.status"
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" 2>&1)
-  assert_contains "$out" "Decisions held for you:" "the block must name what waits on the captain"
-  assert_contains "$out" "fe-signin - Sign in with a code" "a decision held for the captain must be listed"
-  assert_not_contains "$out" "busy-task - Something under way" "ordinary work under way is not waiting on the captain"
-  assert_not_contains "$out" "inflight-hold" "a hold already being worked is not waiting on the captain"
-  assert_not_contains "$out" "blocked-hold" "a hold whose blocker is still open is not actionable yet"
-  assert_not_contains "$out" "old-thing" "a finished item must not be listed as waiting"
-  assert_contains "$out" "https://github.com/x/y/pull/9" "work recorded as waiting to land must be listed"
-  assert_contains "$out" "https://github.com/x/y/pull/11" \
-    "a pull request recorded only in a status event must be listed too"
-  assert_contains "$out" "Search before escalating anything" "the block must carry the one-line search instruction"
-  assert_contains "$out" "data/captain.md" "the block must point at the captain's standing preferences early"
-  # Rebuild the backlog in order, so the extra held items land in a live section
-  # rather than after the Done heading.
-  printf '# Backlog\n\n## Queued\n' > "$home/data/backlog.md"
-  i=0
-  while [ "$i" -lt 6 ]; do
-    printf -- '- [ ] held-%s - held item %s (repo: fe) (kind: captain) (hold: waiting) (hold-kind: captain)\n' "$i" "$i" >> "$home/data/backlog.md"
-    i=$((i + 1))
-  done
-  out=$(FM_AWAITING_MAX=3 FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" 2>&1)
-  [ "$(printf '%s\n' "$out" | grep -c '^- held-')" = 3 ] || fail "the cap must bound the held-decision list"
-  assert_contains "$out" "more held decision(s) omitted" "a capped list must say what it dropped"
-  pass "fm-awaiting-captain: lists only what waits on the captain, capped, never silently truncated"
-}
-
-# A read that failed must never render as an empty list: "(none)" reads as
-# "nothing is waiting on you", which is the failure this whole block exists to
-# prevent, and the cap protects the same property at the other end.
-test_awaiting_block_says_so_when_the_record_model_cannot_be_read() {
-  local home fakebin out
-  home=$(make_home "$TMP_ROOT/awaiting-unreadable")
-  fakebin=$(fm_fakebin "$TMP_ROOT/awaiting-unreadable")
-  printf -- '- [ ] fe-signin - Sign in with a code (repo: fe) (kind: captain) (hold: grill first) (hold-kind: captain)\n' \
-    >> "$home/data/backlog.md"
-  fm_write_meta "$home/state/beta-task.meta" "window=fm:beta-task" "pr=https://github.com/x/y/pull/3"
-  cat > "$fakebin/jq" <<'SH'
-#!/usr/bin/env bash
-echo "jq: broken on this host" >&2
-exit 5
-SH
-  chmod +x "$fakebin/jq"
-  out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" 2>&1)
-  assert_contains "$out" "held decisions unread" "a failed read must say so, never render as an empty list"
-  assert_not_contains "$out" "(none)" "a failed read must not be reported as nothing waiting"
-  pass "fm-awaiting-captain: an unreadable record model is reported, never shown as nothing waiting"
-}
-
-# The same property one list down: a task whose records cannot be read has an
-# UNKNOWN pull-request state, and reporting that as "no pull request" is the
-# same lie. bin/fm-pr-check.sh writes metas at 0600, so an unreadable-but-present
-# meta is a real filesystem state rather than a hypothetical one.
-test_awaiting_block_says_so_when_a_task_meta_cannot_be_read() {
-  local home out
-  home=$(make_home "$TMP_ROOT/awaiting-unreadable-meta")
-  fm_write_meta "$home/state/locked-task.meta" "window=fm:locked-task" "pr=https://github.com/x/y/pull/7"
-  chmod 000 "$home/state/locked-task.meta"
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" 2>&1)
-  chmod 600 "$home/state/locked-task.meta"
-  assert_contains "$out" "locked-task: UNREAD" "an unreadable task record must be named, not dropped"
-  assert_contains "$out" "unknown, not no" "the marker must say the answer is unknown rather than absent"
-  pass "fm-awaiting-captain: a task whose records cannot be read is named, never silently dropped"
-}
-
-# A task's meta survives from merge until teardown removes it, so listing every
-# recorded pull request reports work the captain already merged back to him as
-# still waiting. The local record model already knows; no forge call is allowed
-# here, because the local-only rule is what keeps this block cheap.
-test_awaiting_block_drops_pull_requests_the_local_record_says_have_landed() {
-  local home out
-  home=$(make_home "$TMP_ROOT/awaiting-landed")
-  {
-    printf -- '- [ ] open-task - still open (repo: fe) (kind: ship)\n'
-    printf '## Done\n'
-    printf -- '- [x] landed-task - shipped it (repo: fe) (kind: ship) (merged 2026-07-30)\n'
-  } >> "$home/data/backlog.md"
-  fm_write_meta "$home/state/landed-task.meta" "window=fm:landed-task" "pr=https://github.com/x/y/pull/41"
-  fm_write_meta "$home/state/open-task.meta" "window=fm:open-task" "pr=https://github.com/x/y/pull/42"
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" 2>&1)
-  assert_contains "$out" "pull/42" "a pull request the local record still calls open must be listed"
-  assert_not_contains "$out" "pull/41" "a pull request the local record already calls merged must not be listed as waiting"
-  assert_contains "$out" "not verified against the forge" \
-    "the list must not overclaim: these are recorded locally, not checked"
-  pass "fm-awaiting-captain: work the local record says has landed is not reported as waiting"
-}
-
-test_awaiting_block_surfaces_a_waiting_handover() {
-  local home fakebin holder out
-  home=$(make_home "$TMP_ROOT/awaiting-handover")
-  fakebin=$(fm_fakebin "$TMP_ROOT/awaiting-handover")
+# The captain's override is the escape hatch for a helm held by a session they
+# cannot recover. It must name itself in the refusal - a captain who is told only
+# that something else holds the helm has no way forward - and it must refuse a
+# pid that is not the recorded holder, so a stale reading cannot clear a helm
+# that has since changed hands.
+test_the_live_holder_refusal_names_the_exact_clear_command() {
+  local home fakebin holder out status
+  home=$(make_home "$TMP_ROOT/lock-clear")
+  fakebin=$(fm_fakebin "$TMP_ROOT/lock-clear")
   start_holder; holder=$HOLDER_PID
   make_fake_ps "$fakebin" "$holder"
   printf '%s\n' "$holder" > "$home/state/.lock"
-  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" prepare --next "merge the open PR" >/dev/null 2>&1
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" 2>&1)
-  assert_not_contains "$out" "HANDOVER WAITING" "a prepared but unreleased handover is not waiting for a replacement"
-  PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-handover.sh" release >/dev/null 2>&1
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" 2>&1)
-  assert_contains "$out" "HANDOVER WAITING" "a released handover must be surfaced to the replacement"
-  assert_contains "$out" "fm-handover.sh consume" "the replacement must be told how to close it out"
-  # A session refused the helm still sees the handover, and is told not to take it.
-  out=$(FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-awaiting-captain.sh" --read-only 2>&1)
-  assert_contains "$out" "HANDOVER WAITING" "a refused session must still be shown the waiting handover"
-  assert_contains "$out" "must NOT" "a refused session must be told not to consume it"
-  assert_not_contains "$out" "run bin/fm-handover.sh consume" \
-    "a refused session must not be told to run the command it is not allowed to run"
-  pass "fm-awaiting-captain: surfaces a released handover, and only once it is released"
-}
 
-# The pulse only measures anything if the harness actually calls it, and a
-# cwd-relative command would silently never fire from a task worktree.
-test_pulse_is_registered_as_a_stop_hook() {
-  local settings found
-  settings="$ROOT/.claude/settings.json"
-  assert_present "$settings" "tracked .claude/settings.json is missing"
-  found=$(jq -r '[.hooks.Stop[].hooks[].command] | map(select(test("fm-session-pulse\\.sh"))) | .[0] // empty' "$settings")
-  [ -n "$found" ] || fail "the turn-end pulse is not registered as a Stop hook"
-  assert_contains "$found" 'CLAUDE_PROJECT_DIR' "the pulse hook must resolve via CLAUDE_PROJECT_DIR, not a cwd-relative path"
-  assert_contains "$found" '--claude' "the pulse must be invoked in its only supported mode"
-  found=$(jq -r '.hooks.Stop[0].hooks[0].command // empty' "$settings")
-  assert_contains "$found" 'fm-turnend-guard.sh' "the pulse must not displace the turn-end guard from first position"
-  pass "fm-session-pulse: registered as a Stop hook without displacing the turn-end guard"
+  out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-lock.sh" status 2>&1)
+  assert_contains "$out" "held by live harness pid $holder" "status must name the live holder"
+  assert_contains "$out" "clear --pid $holder" "status must name the exact command that clears it"
+
+  out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-lock.sh" clear --pid $((holder + 1)) 2>&1); status=$?
+  expect_code 1 "$status" "clear must refuse a pid that does not hold the helm"
+  assert_contains "$out" "does not hold the lock" "the refusal must say the pid is not the holder"
+  assert_grep "$holder" "$home/state/.lock" "a refused clear must leave the helm exactly as it was"
+
+  out=$(PATH="$fakebin:$PATH" FM_ROOT_OVERRIDE="$home" "$ROOT/bin/fm-lock.sh" clear --pid "$holder" 2>&1) \
+    || fail "clear must succeed on the recorded holder: $out"
+  assert_contains "$out" "still running and was not touched" \
+    "clear must say it dropped the record and stopped nothing"
+  assert_absent "$home/state/.lock" "clear must drop the recorded helm"
+  kill -0 "$holder" 2>/dev/null || fail "clear must never stop the session that held the helm"
+  pass "fm-lock clear: names itself in the refusal, requires the holder pid, and stops no session"
 }
 
 run_all() {
-  test_pulse_is_registered_as_a_stop_hook
-  test_pulse_reports_once_over_threshold_and_never_blocks
-  test_pulse_rearms_after_falling_back_below
-  test_pulse_does_not_wipe_handover_due_on_a_trailing_synthetic_zero
-  test_pulse_threshold_is_a_flat_250000
-  test_pulse_excludes_subagent_turns
-  test_pulse_is_silent_in_a_crewmate_worktree
-  test_pulse_degrades_silently_on_unmeasurable_input
-  test_pulse_stamps_the_helm_activity_marker
-  test_pulse_does_not_stamp_for_a_session_without_the_helm
-  test_pulse_records_why_it_could_not_resolve_a_transcript
   test_prepare_refuses_an_unaccounted_worker
   test_prepared_record_is_advisory_and_carries_the_unrecorded_facts
   test_check_refuses_when_a_pointed_at_record_is_sabotaged
@@ -777,22 +372,8 @@ run_all() {
   test_release_hands_over_and_preserves_queued_events
   test_consume_refuses_without_a_released_handover_and_names_records_after
   test_a_session_without_the_helm_can_neither_prepare_nor_consume
-  test_decided_search_finds_an_answer_in_an_existing_decision_log
-  test_decided_search_requires_every_term_and_reports_no_match
-  test_decided_search_caps_output_and_names_what_it_dropped
-  test_decided_record_keeps_one_answer_per_key
-  test_decided_count_of_an_empty_index_is_one_clean_line
-  test_decided_search_excludes_the_open_items_view
-  test_awaiting_block_lists_held_decisions_and_caps_them
-  test_awaiting_block_says_so_when_the_record_model_cannot_be_read
-  test_awaiting_block_says_so_when_a_task_meta_cannot_be_read
-  test_awaiting_block_drops_pull_requests_the_local_record_says_have_landed
-  test_awaiting_block_surfaces_a_waiting_handover
+  test_release_refuses_from_a_session_that_does_not_hold_the_helm
+  test_the_live_holder_refusal_names_the_exact_clear_command
 }
-
-if ! command -v jq >/dev/null 2>&1; then
-  printf 'skip: jq not found - the context measurement needs it\n'
-  exit 0
-fi
 
 run_all

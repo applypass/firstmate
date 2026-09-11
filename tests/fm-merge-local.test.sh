@@ -32,7 +32,7 @@ TMP_ROOT=$(fm_test_tmproot fm-merge-local-tests)
 make_case() {
   local name=$1 case_dir
   case_dir="$TMP_ROOT/$name"
-  mkdir -p "$case_dir/state"
+  mkdir -p "$case_dir/state" "$case_dir/data"
 
   fm_git_init_commit "$case_dir/project"
   git -C "$case_dir/project" branch -M main
@@ -63,7 +63,7 @@ write_attached_meta() {
 run_merge_local() {
   local case_dir=$1
   shift
-  FM_STATE_OVERRIDE="$case_dir/state" \
+  FM_HOME="$case_dir" FM_STATE_OVERRIDE="$case_dir/state" \
     "$MERGE_LOCAL" "$@"
 }
 
@@ -375,7 +375,7 @@ test_unknown_argument_refuses() {
   err=$(cat "$case_dir/stderr")
 
   [ "$rc" -ne 0 ] || fail "bad-arg: must refuse an unrecognized argument"
-  assert_contains "$err" "unknown argument" "bad-arg: must name the unrecognized argument"
+  assert_contains "$err" "invalid local merge request" "bad-arg: must refuse the malformed request"
   [ "$(main_head "$case_dir")" = "$before" ] || fail "bad-arg: main must be untouched"
   pass "fm-merge-local refuses an unrecognized argument instead of ignoring it"
 }

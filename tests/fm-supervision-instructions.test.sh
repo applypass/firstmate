@@ -51,7 +51,11 @@ test_repair_lines() {
 
   out=$(FM_HOME="$home" "$RENDER" --harness claude --queue-pending 1 --repair-line)
   assert_contains "$out" "After draining queued wakes" "queue-pending prefix missing"
-  assert_contains "$out" "Claude Code background task" "claude repair line missing background-task mechanism"
+  assert_contains "$out" "watcher supervision needs Stop-owned automatic recovery" "claude pre-verification repair line is not neutral"
+  assert_not_contains "$out" "is broken" "claude pre-verification repair line claimed a verified mechanism failure"
+  assert_not_contains "$out" "FAILED" "claude pre-verification repair line emitted a verified failure notice"
+  assert_not_contains "$out" "manual background" "claude pre-verification repair line directed a manual background arm"
+  assert_not_contains "$out" "bin/fm-watch-arm.sh" "claude pre-verification repair line directed an arm command"
 
   : > "$home/config/x-mode.env"
   out=$(FM_HOME="$home" FM_CODEX_WATCH_CHECKPOINT=7 "$RENDER" --harness codex --x-mode 1 --repair-line)
@@ -64,6 +68,10 @@ test_repair_lines() {
   out=$(FM_HOME="$home" "$RENDER" --harness pi --repair-line)
   assert_contains "$out" "Pi tool fm_watch_arm_pi" "pi repair line does not direct the model to the extension-owned tool"
   assert_not_contains "$out" "extension command /fm-watch-arm-pi" "pi repair line still directs the model to the human slash command"
+  out=$(FM_HOME="$home" "$RENDER" --harness omp --repair-line)
+  assert_contains "$out" "omp tool fm_watch_arm_omp" "omp repair line does not direct the model to the extension-owned tool"
+  assert_contains "$out" ".omp/extensions/fm-primary-turnend-guard.ts" "omp repair line does not name its own turn-end extension"
+  assert_not_contains "$out" "fm_watch_arm_pi" "omp repair line must not borrow the Pi tool"
   pass "renderer repair-line mode is harness-aware and honors conditional state"
 }
 
@@ -76,6 +84,17 @@ test_cross_harness_ordinary_continuation_and_repair_matrix() {
   assert_not_contains "$ordinary" "fm_watch_arm_pi" "pi ordinary-wake line incorrectly calls the recovery tool"
   out=$("$RENDER" --harness pi --repair-line)
   assert_contains "$out" "fm_watch_arm_pi" "pi recovery line lost the extension-owned repair tool"
+
+  out=$("$RENDER" --harness omp)
+  assert_contains "$out" "primary harness: omp" "omp heading missing"
+  assert_contains "$out" "Mode: omp (Oh My Pi) extension background wake." "omp snippet missing"
+  assert_contains "$out" "the omp extension already owns watcher continuity" "omp ordinary-wake line does not leave continuity to the extension"
+  assert_contains "$out" ".omp/extensions/fm-primary-omp-watch.ts" "omp snippet did not substitute its watch extension path"
+  assert_not_contains "$out" "__FM_OMP_EXT__" "omp snippet left a placeholder unsubstituted"
+  assert_not_contains "$out" "__FM_OMP_TURNEND_EXT__" "omp snippet left the turn-end placeholder unsubstituted"
+  assert_not_contains "$out" "project trust" "omp snippet must not carry Pi's trust prerequisite"
+  out=$("$RENDER" --harness omp --repair-line)
+  assert_contains "$out" "fm_watch_arm_omp" "omp recovery line lost the extension-owned repair tool"
 
   out=$("$RENDER" --harness opencode)
   ordinary=$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')
@@ -91,8 +110,9 @@ test_cross_harness_ordinary_continuation_and_repair_matrix() {
   assert_contains "$ordinary" "do not arm another cycle" "claude ordinary-wake line does not forbid a model re-arm"
   assert_not_contains "$ordinary" "bin/fm-watch-arm.sh" "claude ordinary-wake line incorrectly calls the manual arm"
   out=$("$RENDER" --harness claude --repair-line)
-  assert_contains "$out" "Claude Code background task" "claude recovery line lost its tracked background repair"
-  assert_contains "$out" "bin/fm-watch-arm.sh" "claude recovery line lost the arm command"
+  assert_contains "$out" "watcher supervision needs Stop-owned automatic recovery" "claude recovery line lost its neutral automatic-recovery guidance"
+  assert_not_contains "$out" "is broken" "claude recovery line claimed failure before verification"
+  assert_not_contains "$out" "bin/fm-watch-arm.sh" "claude recovery line must not create a repeatable manual arm loop"
 
   out=$("$RENDER" --harness grok)
   ordinary=$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')
@@ -102,15 +122,6 @@ test_cross_harness_ordinary_continuation_and_repair_matrix() {
   out=$("$RENDER" --harness grok --repair-line)
   assert_contains "$out" "Grok tracked background task" "grok recovery line lost its tracked background repair"
   assert_contains "$out" "bin/fm-watch-arm.sh" "grok recovery line lost the arm command"
-
-  out=$("$RENDER" --harness cursor-agent)
-  ordinary=$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')
-  assert_contains "$ordinary" "re-arm" "cursor-agent ordinary-wake line does not tell the model to re-arm"
-  assert_contains "$ordinary" "Cursor Shell command" "cursor-agent ordinary-wake line lost Cursor Shell ownership"
-  assert_contains "$ordinary" "bin/fm-watch-arm.sh" "cursor-agent ordinary-wake line lost the background arm command"
-  out=$("$RENDER" --harness cursor-agent --repair-line)
-  assert_contains "$out" "Cursor Shell command" "cursor-agent recovery line lost its Shell repair shape"
-  assert_contains "$out" "bin/fm-watch-arm.sh" "cursor-agent recovery line lost the arm command"
 
   out=$("$RENDER" --harness codex)
   ordinary=$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')
@@ -122,6 +133,22 @@ test_cross_harness_ordinary_continuation_and_repair_matrix() {
   assert_contains "$out" "bin/fm-watch-checkpoint.sh" "codex recovery line lost the checkpoint command"
 
   pass "renderer preserves every harness ordinary-continuation and missing-cycle repair path"
+}
+
+test_pi_signed_preserves_identity_with_pi_supervision_protocol() {
+  local out ordinary
+  out=$("$RENDER" --harness pi-signed)
+  assert_contains "$out" "primary harness: pi-signed" \
+    "pi-signed supervision normalized the visible runtime identity to pi"
+  assert_contains "$out" "Mode: Pi extension background wake." \
+    "pi-signed did not reuse Pi's authoritative supervision protocol"
+  ordinary=$(printf '%s\n' "$out" | grep -F -- '- Ordinary wake:')
+  assert_contains "$ordinary" "Pi extension already owns watcher continuity" \
+    "pi-signed ordinary-wake semantics diverged from Pi"
+  out=$("$RENDER" --harness pi-signed --repair-line)
+  assert_contains "$out" "Pi tool fm_watch_arm_pi" \
+    "pi-signed repair semantics diverged from Pi"
+  pass "pi-signed keeps its identity while sharing Pi's supervision protocol"
 }
 
 test_grok_is_background_notify() {
@@ -148,31 +175,6 @@ test_grok_command_sources_effective_config() {
   pass "grok rendered command sources the effective x-mode config"
 }
 
-test_cursor_agent_is_background_notify() {
-  local out
-  out=$("$RENDER" --harness cursor-agent)
-  assert_contains "$out" "Mode: Cursor Agent background-notify supervision." "cursor-agent snippet missing background-notify mode"
-  assert_contains "$out" "primary harness: cursor-agent" "cursor-agent heading missing"
-  assert_contains "$out" "bin/fm-watch-arm.sh" "cursor-agent snippet missing watcher arm"
-  assert_contains "$out" "shell-task completion" "cursor-agent snippet missing Cursor wake delivery shape"
-  assert_not_contains "$out" "__FM_X_MODE_ENV" "renderer leaked an x-mode path placeholder"
-  assert_not_contains "$out" "foreground checkpoint" "cursor-agent snippet must not be Codex-style foreground checkpoint"
-  assert_not_contains "$out" "Mode: Unknown harness fallback." "cursor-agent must not fall through to unknown"
-  out=$("$RENDER" --harness cursor-agent --repair-line)
-  assert_contains "$out" "Cursor Shell command" "cursor-agent repair line is not Shell-shaped"
-  pass "cursor-agent supervision is background-notify via Cursor Shell wake"
-}
-
-test_cursor_agent_command_sources_effective_config() {
-  local home config out
-  home="$TMP_ROOT/cursor-agent-home"
-  config="$TMP_ROOT/cursor-agent-config"
-  mkdir -p "$home/state" "$config"
-  out=$(FM_HOME="$home" FM_CONFIG_OVERRIDE="$config" "$RENDER" --harness cursor-agent --x-mode 1)
-  assert_contains "$out" "[ -f '$config/x-mode.env' ] && . '$config/x-mode.env'; exec bin/fm-watch-arm.sh" "cursor-agent arm command did not use the effective x-mode config path"
-  pass "cursor-agent rendered command sources the effective x-mode config"
-}
-
 test_pi_snippet_uses_effective_extension_path() {
   local home out turnend watch
   home="$TMP_ROOT/pi-home"
@@ -183,6 +185,8 @@ test_pi_snippet_uses_effective_extension_path() {
   assert_contains "$out" "-e $turnend -e $watch" "pi snippet did not render both effective extension launch paths"
   assert_contains "$out" "The turn-end guard extension lives at \`$turnend\`" "pi snippet did not render the turn-end guard extension path"
   assert_contains "$out" "The watcher extension lives at \`$watch\`" "pi snippet did not render the watcher extension path"
+  assert_contains "$out" "MAIN must not re-drain, re-run, or acknowledge it" "pi snippet lost merged-event ownership"
+  assert_contains "$out" "MAIN applies judgment about whether and how to surface, summarize, reference, or incorporate a merged sailboat outcome" "pi snippet imposed a mechanical sailboat treatment"
   assert_not_contains "$out" "__FM_PI_EXT__" "renderer leaked the Pi extension path placeholder"
   assert_not_contains "$out" "__FM_PI_TURNEND_EXT__" "renderer leaked the Pi turn-end extension path placeholder"
   assert_not_contains "$out" "state/fm-primary-pi-watch.ts" "pi snippet kept the old generated state-relative extension path"
@@ -194,8 +198,7 @@ test_unknown_fallback
 test_conditional_stanzas
 test_repair_lines
 test_cross_harness_ordinary_continuation_and_repair_matrix
+test_pi_signed_preserves_identity_with_pi_supervision_protocol
 test_grok_is_background_notify
 test_grok_command_sources_effective_config
-test_cursor_agent_is_background_notify
-test_cursor_agent_command_sources_effective_config
 test_pi_snippet_uses_effective_extension_path
