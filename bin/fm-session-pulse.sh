@@ -3,13 +3,9 @@
 # own home. Crew subagent turns are inert (shared primary scope, plus the
 # sidechain filter inside the measurement).
 #
-# TWO duties on one Stop event, because both need the same payload and the same
-# scope check:
-#   1. STAMP the helm activity marker, so "this session is alive" and "this
-#      session is working" stop being the same claim. bin/fm-helm-lib.sh owns
-#      what the marker means and how a fresh session reads it.
-#   2. REPORT that a handover is due once the session's context crosses the
-#      threshold. bin/fm-context-measure-lib.sh owns the measurement.
+# ONE duty on the Stop event: REPORT that a handover is due once the session's
+# context crosses the threshold. bin/fm-context-measure-lib.sh owns the
+# measurement.
 #
 # IT NEVER BLOCKS. The threshold is a thinking-quality line, not a capacity one:
 # past it the session reasons worse, but a stalled fleet is worse still, so the
@@ -36,9 +32,7 @@
 # inside child task worktrees.
 #
 # Per-harness support is claude only in this slice: no other verified adapter's
-# turn-end payload carries a transcript pointer this can measure. The marker half
-# would work anywhere, but a half-armed pulse on a second harness would be a
-# second contract to keep in sync, so the fan-out lands with its measurement.
+# turn-end payload carries a transcript pointer this can measure.
 # docs/session-handover.md owns the per-harness table.
 set -u
 
@@ -78,52 +72,12 @@ PAYLOAD=$(cat 2>/dev/null || true)
 # turn end - costs a couple of git calls and no jq spawn at all.
 fm_primary_scope_matches "$FM_ROOT" "$STATE" || exit 0
 
-# shellcheck source=bin/fm-session-lock-lib.sh
-. "$SCRIPT_DIR/fm-session-lock-lib.sh"
-# shellcheck source=bin/fm-wake-lib.sh
-. "$SCRIPT_DIR/fm-wake-lib.sh"
-# shellcheck source=bin/fm-helm-lib.sh
-. "$SCRIPT_DIR/fm-helm-lib.sh"
 # shellcheck source=bin/fm-context-measure-lib.sh
 . "$SCRIPT_DIR/fm-context-measure-lib.sh"
 
 TRANSCRIPT=$(fm_context_payload_transcript "$PAYLOAD" 2>/dev/null || printf '')
 
-# --- duty 1: stamp the helm activity marker ----------------------------------
-# Only the session that actually holds the helm may stamp it. A read-only session
-# ending a turn says nothing about whether the holder is working.
-#
-# The marker is written whatever happened, including with an empty transcript
-# field: bin/fm-helm-lib.sh's reader decides what that marker proves, and writing
-# this turn's truth is what stops a stale earlier marker from standing in for it.
-#
-# WHY THE REASON IS BUILT HERE: only this script has the raw payload, so only it
-# can tell "the payload named no transcript at all" from "it named one that does
-# not resolve" - fm_context_payload_transcript collapses both to an empty string.
-# The record is DIAGNOSTICS: it explains a later refusal and never causes one.
-if fm_session_lock_owned_by_self "$STATE"; then
-  HOLDER=$(fm_harness_ancestry_pid 2>/dev/null || printf '')
-  if [ -n "$HOLDER" ]; then
-    fm_helm_stamp "$STATE" "$HOLDER" "$TRANSCRIPT" 2>/dev/null
-    if [ -n "$TRANSCRIPT" ]; then
-      fm_helm_clear_declination "$STATE"
-    else
-      if ! command -v jq >/dev/null 2>&1; then
-        WHY='jq is unavailable, so the turn-end payload could not be read at all'
-      else
-        RAW=$(printf '%s' "$PAYLOAD" | jq -r '.transcript_path // ""' 2>/dev/null || printf '')
-        if [ -n "$RAW" ]; then
-          WHY="the turn-end payload named the transcript $RAW, which is not a readable file"
-        else
-          WHY='the turn-end payload carried no transcript path'
-        fi
-      fi
-      fm_helm_record_declination "$STATE" "$HOLDER" "$WHY" 2>/dev/null || true
-    fi
-  fi
-fi
-
-# --- duty 2: report a due handover, once -------------------------------------
+# --- report a due handover, once ---------------------------------------------
 [ -n "$TRANSCRIPT" ] || exit 0
 # fm_context_measure_transcript prints "TOTAL COMPACTS"; the pulse only needs
 # the total, so the compaction tally (bin/fm-context-budget.sh's own

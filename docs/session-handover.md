@@ -26,7 +26,6 @@ The context-budget guard reads the same measurement's compaction tally alongside
 
 Per-harness support is `claude` only.
 No other verified adapter's turn-end payload carries a transcript pointer, so the pulse requires `--claude` and is inert otherwise.
-The pulse's activity marker would work on any harness, but shipping half of the pulse elsewhere would create a second contract to keep in sync, so the fan-out lands with its measurement.
 
 Every unmeasurable input - absent `jq`, a missing or unreadable transcript, a corrupt transcript, no assistant usage, empty stdin - is a silent exit 0.
 The pulse runs as a `Stop` hook and must never wedge a session.
