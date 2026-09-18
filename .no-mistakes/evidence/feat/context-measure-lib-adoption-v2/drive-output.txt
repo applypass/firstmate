@@ -1,0 +1,35 @@
+
+================ A: over-ceiling turn BLOCKS under enforcement (exit 2), names /stow + handover ================
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  CONTEXT BUDGET CEILING REACHED - HAND OVER
+●  This session measures 210000 tokens, over the 180000 ceiling.
+●  Do not stall the fleet: keep working, and tell the captain at the next natural reply.
+●  When you do hand over, the handover mechanism owns it:
+●    1. Run /stow to write durable knowledge, decisions, and unfinished work to disk.
+●    2. Load the handover skill and release the helm with bin/fm-handover.sh.
+●    3. A successor session picks the work up from disk; nothing here clears a context.
+●  Blocking is bounded, then this guard stands down for the session.
+●  This is a cost and reasoning-quality policy, not an overflow warning.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+exit=2
+
+
+================ B: multi-block turn - sum(100k+100k)=200k>ceiling, but LAST block 50k<advisory => NOT blocked ================
+exit=0  (0 = correct: measured last block, not the 250k sum)
+<silent>
+
+================ C: sidechain exclusion - 999,999-token SIDECHAIN line + 50k main => NOT blocked ================
+exit=0  (0 = correct: subagent turn never inflates the primary)
+<silent>
+
+================ D: genuine reset - pre-compaction 300k, boundary, post-compaction 20k => LAST wins, NOT blocked ================
+exit=0  (0 = correct: compaction reset, last total 20k, guard fell back below ceiling)
+<silent>
+
+================ E: session-pulse reports the SAME measurement from the shared lib (handover-due notice) ================
+/Users/uayyagari/.no-mistakes/evidence/01M2TVDSXM0QVT7SKEQ0E92XWS/home/bin/fm-session-pulse.sh: line 86: /Users/uayyagari/.no-mistakes/evidence/01M2TVDSXM0QVT7SKEQ0E92XWS/home/bin/fm-helm-lib.sh: No such file or directory
+exit=0
+firstmate handover due: this session measures 250000 tokens, over the 250000 threshold, so it is past the point where it reasons well. Keep working - nothing is blocked - and tell the captain a handover is due. Load the handover skill to prepare and verify one; the captain runs the one command it prints.
+
+================ F: single-owner check - the guard carries NO inline measurement copy ================
+guard calls fm_context_measure_transcript and defines no private formula: OK

@@ -1,0 +1,9 @@
+{"systemMessage":"CONTEXT BUDGET CEILING REACHED - HAND OVER
+This session measures 260000 tokens, over the 180000 ceiling.
+Do not stall the fleet: keep working, and tell the captain at the next natural reply.
+When you do hand over, the handover mechanism owns it:
+  1. Run /stow to write durable knowledge, decisions, and unfinished work to disk.
+  2. Load the handover skill and release the helm with bin/fm-handover.sh.
+  3. A successor session picks the work up from disk; nothing here clears a context.
+This is a warning: the ceiling does not block by default.
+This is a cost and reasoning-quality policy, not an overflow warning."}

@@ -1,0 +1,11 @@
+REAL worktree fm-session-pulse.sh sources fm-helm-lib.sh:
+# shellcheck source=bin/fm-helm-lib.sh
+. "$SCRIPT_DIR/fm-helm-lib.sh"
+
+But fm-helm-lib.sh does not exist in the tree:
+ls: bin/fm-helm-lib.sh: No such file or directory
+
+Nor is fm_helm_stamp / fm_helm_clear_declination / fm_helm_record_declination defined anywhere:
+  (undefined - no definition found)
+
+Direct bash -n + source check of the real hook file:
