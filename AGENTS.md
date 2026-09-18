@@ -450,7 +450,7 @@ Harness-aware turn-end guards are structural backstops, not permission to omit t
 
 ### Handover
 
-Replacing this session with a fresh one is the captain's call, and nothing measures this session to make it for them.
+Replacing this session with a fresh one is the captain's call; a context-budget notice may flag that a session has grown large, but nothing replaces it automatically and the captain starts every handover (docs/session-handover.md, docs/context-budget.md).
 Load the `handover` skill when the captain invokes `/handover` or asks to hand over, and when a session start surfaces a handover a previous session released.
 The record is advisory and durable records win every disagreement with it; never assert a fact in it that no record supports.
 `bin/fm-handover.sh release` refuses until every open thread is backed by a durable record - fix what it names and run it again, never work around it, because once the outgoing session is gone a bad handover cannot be redone.
