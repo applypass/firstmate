@@ -5,14 +5,34 @@ AGENTS.md section 8 carries the operating stub; the `handover` skill carries the
 
 The problem it closes: when the captain replaces a session, everything the outgoing one knew that never reached disk is lost, and the replacement re-derives it or gets it wrong.
 
-## Nothing here measures a session
+## The threshold
 
-There is no threshold, no token count, no silence timer, and no turn-end hook behind this.
-A handover starts when the captain asks for one, and until then this machinery does nothing at all.
+The threshold is a flat **250,000 tokens**, set in `bin/fm-session-pulse.sh` and overridable with `FM_HANDOVER_THRESHOLD` for tests and live proof.
 
-That is a deliberate limit rather than an omission.
-Measuring "is this session still reasoning well?" means reading the transcript on every turn end of every session, and the only honest answer that produces is a number with no agreed meaning.
-Judging when a session has gone on too long is the captain's call, and this contract starts where that call is already made.
+It is deliberately not a share of the context window.
+A percentage of a one-million-token window would park a session around 700,000 tokens, deep inside the degradation the threshold exists to avoid.
+This is a thinking-quality line, not a capacity line: nothing overflows at 250,000, and nothing is blocked there either.
+
+Crossing it produces one non-blocking notice per session.
+Falling back below it - after a handover, or after the harness compacts - re-arms the notice for a later episode.
+
+## Measuring the context
+
+No turn-end hook payload carries a token count, so the number comes from the transcript the payload points at.
+`bin/fm-context-measure-lib.sh` is the single owner of that measurement and of two rules every caller keeps: read `transcript_path` from the payload rather than deriving it from `$HOME`, and never write a second formula.
+
+The total is `input_tokens + cache_creation_input_tokens + cache_read_input_tokens + output_tokens` on the last non-sidechain `assistant` entry, with three correctness rules: take the last entry rather than the maximum (compaction resets the running total, and every JSONL line of one multi-block turn already carries that turn's own cumulative usage, so taking the last line also subsumes multi-block dedupe with no `requestId` grouping needed), exclude sidechains so a subagent's context never counts against the primary, and ignore a synthetic all-zero-usage entry - the shape Claude Code writes whenever a turn ends abnormally - so an interrupted turn is never misread as a reset to zero.
+The context-budget guard reads the same measurement's compaction tally alongside the total from one streaming pass; `docs/context-budget.md` owns that detail.
+
+Per-harness support is `claude` only.
+No other verified adapter's turn-end payload carries a transcript pointer, so the pulse requires `--claude` and is inert otherwise.
+
+Every unmeasurable input - absent `jq`, a missing or unreadable transcript, a corrupt transcript, no assistant usage, empty stdin - is a silent exit 0.
+The pulse runs as a `Stop` hook and must never wedge a session.
+
+The cost is one pass over the whole transcript at every primary turn end: measured at 1.6 seconds on a real 45 MB transcript, and nothing on a crewmate turn end because the scope check runs first.
+Reading only the tail would be cheaper, since the formula needs the last turn, but a tail window that cuts the only assistant entry in half degrades to unmeasurable and silently disables the notice.
+That optimization is deliberately not taken here: this runs inside the machinery that supervises live work, and the current pass is the one already proven correct.
 
 ## The handover is captain-triggered
 
@@ -59,7 +79,7 @@ That gap is accepted and made visible rather than hidden: queued wakes survive i
 ## The helm is never taken
 
 A fresh session never takes the helm from a live holder, and nothing here decides that a holder is idle enough to displace.
-Deciding that requires proving a session is not working, which needs the same transcript measurement this contract deliberately does not carry - and an over-estimate of silence is exactly the error that permits a wrongful takeover.
+Deciding that requires a proof of idleness this contract deliberately does not make - and an over-estimate of silence is exactly the error that permits a wrongful takeover.
 
 So `bin/fm-lock.sh` refuses, and the refusal has to be actionable on its own: it names the pid that holds the helm and prints `bin/fm-lock.sh clear --pid <holder>`, the one command that clears the record.
 `bin/fm-lock.sh status` prints the same command beside a live holder.
@@ -73,7 +93,7 @@ That is the safe direction: handing the helm away from a session someone is stil
 
 ## Not covered here
 
-- Any automatic trigger for a handover, whether by token count, silence, or elapsed time.
+- Any automatic handover. The threshold raises a non-blocking notice; the captain still starts every replacement.
 - Automatic respawn of crewmates at a context ceiling. The handover machinery is deliberately shared, but nothing drives it for a worker.
 - Cross-provider handoff when a provider's quota is exhausted. Quota is reported per provider, not per agent, so respawning on an exhausted provider yields an equally stuck worker; that is a separate concern.
 - A wedged agent that never ends a turn. `stuck-crewmate-recovery` owns those.

@@ -317,6 +317,10 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/context-budget.md",
+      "audience": "operator-current"
+    },
+    {
       "path": "docs/captain-hold-lifecycle.md",
       "audience": "maintainer-architecture"
     },
@@ -441,6 +445,10 @@
       "audience": "operator-current"
     },
     {
+      "path": "docs/verification/context-budget.md",
+      "audience": "maintainer-verification"
+    },
+    {
       "path": "docs/verification/dispatch-auth.md",
       "audience": "maintainer-verification"
     },
@@ -470,6 +478,10 @@
     },
     {
       "path": "docs/verification/secondmate-parent-channel.md",
+      "audience": "maintainer-verification"
+    },
+    {
+      "path": "docs/verification/session-handover.md",
       "audience": "maintainer-verification"
     },
     {
