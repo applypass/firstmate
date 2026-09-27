@@ -37,6 +37,14 @@ its inbox, and treat its report as the Done artifact.
 The scout reads `data/captain.md`, `data/captain-shared.md`, `data/learnings.md`, `AGENTS.md`,
 every `.agents/skills/*/SKILL.md`, `docs/**/*.md`, and the firstmate operational decision records -
 `data/decided.md`, `data/decisions/`, and the `data/fm-*-decision*` files.
+`data/` is gitignored, so it does not exist in the scout's worktree: every `data/...` path in this
+skill means this home's data dir, the same `$FM_HOME/data` that `bin/fm-brief.sh` uses for the
+report path.
+When filling `## Firstmate spec`, write each `data/` store as its resolved absolute path under that
+dir, and keep `AGENTS.md`, `.agents/skills/*/SKILL.md`, and `docs/**/*.md` repo-relative so the
+scout reads them from its own worktree.
+The brief must tell the scout that a listed `data/` store it cannot read is a blocker to report,
+not a file to skip.
 It edits no instruction file and builds no enforcement; its only deliverable is the report.
 
 **Out of scope for the surface itself:** project-specific decision dumps such as `data/stripe-*`,
