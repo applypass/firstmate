@@ -1,0 +1,20 @@
+Captain, the instructions for the audit scout are written and filled in. As you asked, I stopped before sending out a worker, so nothing has run yet.
+
+**What they cover:**
+- **The ask:** your words, "Audit my always-loaded surface and tell me what to cut or mechanize", plus a short note on what the report should decide.
+- **What to read:** these lab records, each at its full path: `captain.md`, `captain-shared.md`, `learnings.md`, `decided.md`, the `decisions/` folder (it holds `backend.md`) and `fm-spawn-decision.md`. The scout also reads `AGENTS.md`, every skill file and everything under `docs/` from its own copy of the repo. If any listed record can't be read, the scout must report that as a blocker rather than skip it.
+- **Left out on purpose:** `stripe-pricing.md` and any other project-specific decision file.
+- **Method:**
+  - First, list the checks, hooks and CI jobs that already enforce rules. A check that is wired but broken counts as a finding.
+  - Then decide which rules to drop outright.
+  - Sort what's left into: hook, CI check, delete and replace with a test, load only when needed, or keep as judgment.
+  - Each finding gets its source, the exact check or test proposed, whether it affects teammates, effort, and the risk if the advice is wrong.
+- **Limits:** the scout writes only the report and changes no instruction file. Any proposal that would affect teammates comes back to you as a decision, not a done deal.
+
+I didn't run the startup routine or add an entry to the lab's task list, since this lab has nowhere to launch a worker.
+
+Brief path:
+
+```
+/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.0O0gQN/data/enforce-audit-lab/brief.md
+```
