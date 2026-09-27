@@ -30,8 +30,7 @@ Invoking `/enforce-audit` writes a scout brief and dispatches a scout worker; it
 audit in the main session.
 Follow the ordinary section 7 scout dispatch contract: this task's project is firstmate itself, so
 scaffold with `bin/fm-brief.sh <task-id> firstmate --scout`, fill `## Captain's intent` with the
-captain's actual ask (or, for a nudge-triggered run, the framework's own purpose stated plainly),
-and fill `## Firstmate spec` with the framework below.
+captain's actual ask, and fill `## Firstmate spec` with the framework below.
 Then dispatch and supervise the scout exactly as any other scout: `bin/fm-spawn.sh`, steer through
 its inbox, and treat its report as the Done artifact.
 
