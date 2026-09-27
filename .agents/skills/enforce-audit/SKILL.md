@@ -1,13 +1,14 @@
 ---
 name: enforce-audit
 description: >-
-  Audit firstmate's always-loaded instruction surface - data/captain.md, AGENTS.md, every
-  .agents/skills/*/SKILL.md, and docs/*.md - and produce a severity-ordered classified
-  inventory: which rules are worth keeping at all, and for the rest, whether each belongs in
-  a regression test, a hook, a CI check, an on-demand skill, or stays as judgment-call
-  instruction text. Use when the captain invokes /enforce-audit, or when a session-start
-  STARTUP_MEMORY_BUDGET diagnostic suggests it because the always-loaded surface is nearing
-  its budget.
+  Audit firstmate's always-loaded instruction surface and durable fleet-knowledge stores -
+  data/captain.md, data/captain-shared.md, data/learnings.md, AGENTS.md, every
+  .agents/skills/*/SKILL.md, docs/*.md, and the firstmate operational decision records - and
+  produce a severity-ordered classified inventory: which rules or decisions are worth keeping
+  at all, and for the rest, whether each belongs in a regression test, a hook, a CI check, an
+  on-demand skill, or stays as judgment-call instruction text. Use when the captain invokes
+  /enforce-audit, or when a session-start STARTUP_MEMORY_BUDGET diagnostic suggests it because
+  the always-loaded surface is nearing its budget.
 user-invocable: true
 metadata:
   internal: true
@@ -35,8 +36,15 @@ and fill `## Firstmate spec` with the framework below.
 Then dispatch and supervise the scout exactly as any other scout: `bin/fm-spawn.sh`, steer through
 its inbox, and treat its report as the Done artifact.
 
-The scout reads `data/captain.md`, `AGENTS.md`, every `.agents/skills/*/SKILL.md`, and `docs/*.md`.
+The scout reads `data/captain.md`, `data/captain-shared.md`, `data/learnings.md`, `AGENTS.md`,
+every `.agents/skills/*/SKILL.md`, `docs/*.md`, and the firstmate operational decision records -
+`data/decided.md`, `data/decisions/`, and the `data/fm-*-decision*` files.
 It edits no instruction file and builds no enforcement; its only deliverable is the report.
+
+**Out of scope for the surface itself:** project-specific decision dumps such as `data/stripe-*`,
+`data/resume-v2-*`, or `data/kanban-*` product decisions.
+Those are project knowledge, not firstmate's own operational surface, and this audit never reads
+or reports on them.
 
 ## Framework the scout brief must specify
 
@@ -52,6 +60,11 @@ Drop, don't relocate:
 - Dead or obsolete rules: the system they governed no longer exists or works the way the rule assumes.
 - Settled lessons that carry no live decision and are better expressed as a regression test than as a
   standing instruction every session pays to read.
+
+For a `data/learnings.md` entry or an operational decision record, Phase 1 asks the same
+worth-keeping question in the record's own terms: is this learning or decision still live, or is
+it dead weight that should be archived because the system it describes has changed, the decision
+was superseded, or nothing still depends on remembering it?
 
 **Phase 2 - for what survives, where does it belong?**
 Organize by a mechanical-vs-judgment spine, buckets nested under it:
@@ -69,6 +82,12 @@ Organize by a mechanical-vs-judgment spine, buckets nested under it:
   surrounding style."
 
 Default to building the check over writing the rule.
+
+For a settled decision or learning record that encodes ongoing behavior - not a one-time
+chronology fact - Phase 2 asks the same placement question in decision terms: should this become
+a codified rule (a check, a hook, a CI gate, or a test that enforces the behavior the decision
+already settled) or a regression test, rather than staying as prose a session must re-read and
+re-apply by judgment every time?
 
 For each candidate, record:
 - rule (one line)
@@ -99,8 +118,8 @@ recommends environment improvements but does not know firstmate's own architectu
 - "AGENTS.md lines are navigation pointers, used sparingly."
 
 This skill does not copy `retro`'s generic file model (`CODING_STANDARDS.md`) or its session-log-driven
-trigger, because firstmate's surface is `AGENTS.md` plus `.agents/skills/*/SKILL.md` plus `docs/*.md`,
-not a generic project's standards file, and this audit runs on-demand against that surface rather than
+trigger, because firstmate's surface above is its own instruction and decision architecture, not a
+generic project's standards file, and this audit runs on-demand against that surface rather than
 against one session's transcript.
 Leave `retro` itself unchanged; do not edit it as part of this work.
 
@@ -121,6 +140,9 @@ State these as out of scope rather than building them:
 - A monthly or otherwise scheduled auto-run; this version is on-demand only.
 - Editing `data/captain.md` content.
 - Any change to the `retro` skill.
+- Project-specific decision dumps (`data/stripe-*`, `data/resume-v2-*`, `data/kanban-*` product
+  decisions, and any other project-knowledge record); those belong to the project they document,
+  not to firstmate's own operational surface.
 
 ## Cadence: on-demand, nudged from the existing startup-memory-budget signal
 
