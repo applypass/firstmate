@@ -3,12 +3,11 @@ name: enforce-audit
 description: >-
   Audit firstmate's always-loaded instruction surface and durable fleet-knowledge stores -
   data/captain.md, data/captain-shared.md, data/learnings.md, AGENTS.md, every
-  .agents/skills/*/SKILL.md, docs/*.md, and the firstmate operational decision records - and
+  .agents/skills/*/SKILL.md, docs/**/*.md, and the firstmate operational decision records - and
   produce a severity-ordered classified inventory: which rules or decisions are worth keeping
   at all, and for the rest, whether each belongs in a regression test, a hook, a CI check, an
   on-demand skill, or stays as judgment-call instruction text. Use when the captain invokes
-  /enforce-audit, or when a session-start STARTUP_MEMORY_BUDGET diagnostic suggests it because
-  the always-loaded surface is nearing its budget.
+  /enforce-audit.
 user-invocable: true
 metadata:
   internal: true
@@ -37,7 +36,7 @@ Then dispatch and supervise the scout exactly as any other scout: `bin/fm-spawn.
 its inbox, and treat its report as the Done artifact.
 
 The scout reads `data/captain.md`, `data/captain-shared.md`, `data/learnings.md`, `AGENTS.md`,
-every `.agents/skills/*/SKILL.md`, `docs/*.md`, and the firstmate operational decision records -
+every `.agents/skills/*/SKILL.md`, `docs/**/*.md`, and the firstmate operational decision records -
 `data/decided.md`, `data/decisions/`, and the `data/fm-*-decision*` files.
 It edits no instruction file and builds no enforcement; its only deliverable is the report.
 
@@ -58,8 +57,7 @@ An already-wired-but-broken gate is itself a finding, not a reason to skip that 
 Drop, don't relocate:
 - No-ops: instructions that change no agent's behavior.
 - Dead or obsolete rules: the system they governed no longer exists or works the way the rule assumes.
-- Settled lessons that carry no live decision and are better expressed as a regression test than as a
-  standing instruction every session pays to read.
+- Settled lessons that carry no live decision.
 
 For a `data/learnings.md` entry or an operational decision record, Phase 1 asks the same
 worth-keeping question in the record's own terms: is this learning or decision still live, or is
@@ -144,10 +142,8 @@ State these as out of scope rather than building them:
   decisions, and any other project-knowledge record); those belong to the project they document,
   not to firstmate's own operational surface.
 
-## Cadence: on-demand, nudged from the existing startup-memory-budget signal
+## Cadence: on-demand only
 
-No cron, daemon, or new polling.
-The nudge reuses the session-start `STARTUP_MEMORY_BUDGET` diagnostic that `bin/fm-bootstrap.sh`
-already emits and that `bootstrap-diagnostics` already routes; when that path fires, it suggests
-running `/enforce-audit` as one line of guidance.
-This is the same budget signal, reused - not a second budget check.
+No cron, daemon, or new polling, and no automatic reminder yet.
+The captain runs `/enforce-audit` when they choose; a reminder tied to always-loaded memory nearing
+its budget is deferred to a follow-up task.
