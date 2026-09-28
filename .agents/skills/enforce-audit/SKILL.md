@@ -7,7 +7,8 @@ description: >-
   produce a severity-ordered classified inventory: which rules or decisions are worth keeping
   at all, and for the rest, whether each belongs in a regression test, a hook, a CI check, an
   on-demand skill, or stays as judgment-call instruction text. Use when the captain invokes
-  /enforce-audit.
+  /enforce-audit, optionally followed by `full` or `full-body` to also audit each skill's full
+  body instead of only its frontmatter.
 user-invocable: true
 metadata:
   internal: true
@@ -35,8 +36,8 @@ Then dispatch and supervise the scout exactly as any other scout: `bin/fm-spawn.
 its inbox, and treat its report as the Done artifact.
 
 The scout reads `data/captain.md`, `data/captain-shared.md`, `data/learnings.md`, `AGENTS.md`,
-every `.agents/skills/*/SKILL.md`, `docs/**/*.md`, and the firstmate operational decision records -
-`data/decided.md`, `data/decisions/`, and the `data/fm-*-decision*` files.
+`.agents/skills/*/SKILL.md` at the depth below, `docs/**/*.md`, and the firstmate operational
+decision records - `data/decided.md`, `data/decisions/`, and the `data/fm-*-decision*` files.
 `data/` is gitignored, so it does not exist in the scout's worktree: every `data/...` path in this
 skill means this home's data dir, the same `$FM_HOME/data` that `bin/fm-brief.sh` uses for the
 report path.
@@ -51,6 +52,34 @@ It edits no instruction file and builds no enforcement; its only deliverable is 
 `data/resume-v2-*`, or `data/kanban-*` product decisions.
 Those are project knowledge, not firstmate's own operational surface, and this audit never reads
 or reports on them.
+
+## Skill-reading depth
+
+`/enforce-audit` takes an optional trailing argument, `full` or `full-body`, the same way
+`/no-mistakes <task>` distinguishes its two modes by whether trailing text follows the command:
+bare `/enforce-audit` means frontmatter-only, `/enforce-audit full` means full-body.
+Pass whichever mode was invoked into the scout brief's `## Firstmate spec` as an explicit
+instruction, because the scout - not this session - does the reading.
+
+- **Default: frontmatter-only.** For every `.agents/skills/*/SKILL.md`, the scout reads only the
+  frontmatter (`name`, `description`, any trigger it states) plus enough of the opening body to
+  confirm the skill's own trigger condition.
+  That is enough to place an `ON_DEMAND` recommendation for the skill as a whole in Phase 2 - the
+  audit is judging whether the skill exists, is discoverable, and is loaded at the right trigger,
+  not auditing what is inside it.
+- **Opt-in: full-body.** Only when the captain passes `full` or `full-body` does the scout read
+  each skill's complete text and run it through the same Phase 1 / Phase 2 framework as
+  `AGENTS.md`, docs, and the decision records.
+
+**Why frontmatter is the default:** skills are already the cheap, on-demand tier this audit exists
+to route things into.
+The always-loaded cost premise that motivates auditing `AGENTS.md`, `data/captain.md`, and
+`data/learnings.md` line by line does not apply to a skill body, because a skill's cost is paid
+only by the sessions that load it, never by every session regardless of relevance.
+A full-body sweep of every skill is a deeper, more expensive pass the captain opts into
+deliberately, not the default shape of a routine audit.
+This depth choice governs skill files only: `data/captain.md`, `AGENTS.md`, `data/learnings.md`,
+`docs/**/*.md`, and the decision records are always read in full regardless of the argument.
 
 ## Framework the scout brief must specify
 
