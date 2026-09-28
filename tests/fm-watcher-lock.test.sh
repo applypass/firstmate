@@ -359,22 +359,27 @@ test_lock_steals_dead_pid_lock() {
 # Start a process that claims each given link lock, then SIGKILL it so every
 # claim is left behind with a dead owner - an acquirer TERMed mid-steal.
 leave_dead_link_locks() {  # <state> <lock>...
-  local state=$1 holder i last
+  local state=$1 holder i ready
   shift
-  last=${!#}
+  # A non-empty pid file does not mean the acquire finished: fm_lock_claim
+  # rewrites it after the link exists, so a kill mid-rewrite can leave it
+  # empty. Wait for the holder to report that every acquire returned.
+  ready="$state.holder-ready"
   FM_STATE_OVERRIDE="$state" bash -c '
     . "$1"
-    shift
+    ready=$2
+    shift 2
     for lock do fm_lock_try_create "$lock" || exit 7; done
+    : > "$ready"
     exec sleep 30
-  ' _ "$LIB" "$@" >/dev/null 2>&1 &
+  ' _ "$LIB" "$ready" "$@" >/dev/null 2>&1 &
   holder=$!
   i=0
-  while [ "$i" -lt 50 ] && [ ! -s "$last/pid" ]; do
+  while [ "$i" -lt 50 ] && [ ! -e "$ready" ]; do
     sleep 0.02
     i=$((i + 1))
   done
-  [ -s "$last/pid" ] || fail "dead link-lock owner did not publish its pid"
+  [ -e "$ready" ] || fail "dead link-lock owner did not finish acquiring"
   kill -KILL "$holder" 2>/dev/null || true
   wait "$holder" 2>/dev/null || true
 }
