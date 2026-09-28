@@ -1,0 +1,17 @@
+Captain, I wrote and filled in the full-body audit scout's instructions in the lab home. I did not start the scout, as you asked.
+
+**Instructions file:**
+`/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.udrq7M/data/enforce-audit-fullbody/brief.md`
+
+- **Your ask:** run the audit in full-body mode. The report ranks rules by severity and sorts each one: drop it, or move it to a regression test, a hook, a CI check, an on-demand skill, or keep it as judgment text. The only output is a report of recommendations.
+- **Skill depth:** the scout reads every skill file in full and runs its rules through the same two phases as `AGENTS.md`, the docs, and the decision records. It also checks whether each skill's trigger loads it at the right time.
+- **Private files:** every file under the lab home's `data/` folder is listed by its full path, since those files are not in the scout's copy of the repo. That covers `captain.md`, `captain-shared.md`, `learnings.md`, `decided.md`, the `decisions/` folder, and the `fm-*-decision*` files (today only `fm-watch-decision.md`).
+- **Unreadable files:** if the scout cannot read a listed file, it must stop and report the problem, not skip the file.
+- **Framework:** the audit follows the skill's steps and bans in full:
+  - it first lists the checks that already enforce rules;
+  - it then decides which rules to keep and where each belongs;
+  - each finding records seven fields, and any change that would affect teammates is raised as a decision for you;
+  - before calling the report done, the scout must hold any open decision for you.
+- **Out of scope:** project-specific decision files (such as `stripe-*`, `resume-v2-*`, `kanban-*`), building any of the checks it recommends, scheduled runs, editing `captain.md`, and changing the `retro` skill.
+
+No unfilled placeholders remain in the file.

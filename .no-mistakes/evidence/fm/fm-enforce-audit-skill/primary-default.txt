@@ -1,0 +1,18 @@
+Captain, I've written and filled in the scout instructions for the default audit. As you asked, I did not start the scout.
+
+**Brief path:** `/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.udrq7M/data/enforce-audit-default/brief.md`
+
+- **Mode:** frontmatter-only. Your arguments held only the lab constraints, not `full`, so this is a default run. The scout reads each skill's frontmatter and just enough of the opening to confirm its trigger. It reads everything else in full.
+- **Files to read:**
+  - The home's data files are given as full paths under the lab home: `captain.md`, `captain-shared.md`, `learnings.md`, `decided.md`, `decisions/`, and the `fm-*-decision*` files (today that is `fm-watch-decision.md`).
+  - `AGENTS.md`, the skill files and `docs/**/*.md` stay as repo paths, so the scout reads them from its own copy.
+  - If a data file is missing or unreadable, the scout must stop and report it rather than skip it.
+- **Framework:** the full method from the skill is in the instructions:
+  - First, list what is already enforced by checks, hooks and CI.
+  - Phase 1 asks whether each rule is worth keeping; Phase 2 decides where the rest belong.
+  - Each rule gets a one-line record covering the fields the skill lists.
+  - Proposals that would affect teammates come back as decisions for you, not settled actions.
+  - The scout edits nothing, builds nothing, and passes the unresolved-decision completion check before it reports done.
+  - The skill's out-of-scope list is included as written.
+- **Check:** the file contains no leftover placeholders. I did not run the launch script, so I have not seen its own checks run on this file.
+exit 0

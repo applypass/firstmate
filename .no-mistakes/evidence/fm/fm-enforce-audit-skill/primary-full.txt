@@ -1,0 +1,23 @@
+Captain, the full-body audit instructions are written and ready. As you asked for this lab test, I did not start the worker.
+
+Brief path:
+```
+/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.udrq7M/data/enforce-audit-full/brief.md
+```
+
+What it contains:
+- **Your ask:** `/enforce-audit full` in your own terms. The deliverable is a report only: no instruction files are edited and no checks are built.
+- **Skill depth:** full-body. The worker is told to read every skill's complete text and run it through Phase 1 and Phase 2, not just the frontmatter.
+- **What it reads:** these lab-home files by absolute path under `.../fm-lab.udrq7M/data/`:
+  - `captain.md`, `captain-shared.md` and `learnings.md`
+  - the operational decision records: `decided.md`, `decisions/`, and every `fm-*-decision*` file, which today is `fm-watch-decision.md`
+  - `AGENTS.md` and `docs/**/*.md`, read from the worker's own copy of the repo
+
+  If it can't read one of the data files, it must stop and report that as a blocker rather than skip it.
+- **What it skips:** decision records for specific projects (`stripe-*`, `resume-v2-*`, `kanban-*` and similar).
+- **The audit steps:** first a list of what already enforces rules (a check that exists but is broken or not wired up counts as a finding). Phase 1 drops rules that are dead or change nothing. Phase 2 places each surviving rule in one of hook, CI, delete-plus-test, on-demand skill, or keep-as-judgment.
+- **What it records for each rule:** the fields the skill lists, from the rule itself through to the risk if the recommendation is wrong.
+- **Decisions for you:** any proposal that would affect teammates is raised as a question, not treated as settled. Before it can report done, the worker must record every real decision the audit turns up as a question held for you.
+
+Both template placeholders are filled in, and the brief has no em dashes.
+exit 0
