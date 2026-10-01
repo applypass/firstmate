@@ -30,6 +30,8 @@
 #   <task>.inbox/.ring-state   watcher re-ring ladder: "<msg>\t<count>\t<epoch>"
 #   <task>.inbox/.escalated    oldest-message name already surfaced as stale,
 #                              so later polls suppress another escalation
+#   <task>.inbox/.silent-seen  handled records already checked for a result line
+#                              (fm_task_inbox_silent_handled)
 #
 # Record format (fm_task_inbox_write / fm_task_inbox_body):
 #   schema=fm-task-inbox.v1
@@ -69,6 +71,8 @@
 # Tunables (env):
 #   FM_TASK_INBOX_GRACE_SECS   default 90; delivery-attempt grace and spacing
 #   FM_TASK_INBOX_RING_MAX     default 3; delivery attempts before escalation
+#   FM_TASK_INBOX_SILENT_LOOKBACK_SECS  default 3600; a handled record older
+#                              than this is history, never reported as silent
 
 _FM_TASK_INBOX_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Both dependencies are canonical lint roots in their own right. Keep them as
@@ -453,4 +457,38 @@ fm_task_inbox_record_escalated() {  # <state-dir> <task-id> <record-path>
     [ -d "$dir" ] || return 0
     return 1
   fi
+}
+
+# Silent-handled detection: a worker that moves a request to handled/ without
+# appending any status line since the request arrived has produced no result the
+# supervisor can see. Prints, one per line, each handled record not yet checked
+# whose status file (<state-dir>/<task>.status) was not appended to at or after
+# the record's at= time, and marks every record it examines as checked so each is
+# reported at most once. A fire-and-forget record expects no result and is only
+# marked. A record older than FM_TASK_INBOX_SILENT_LOOKBACK_SECS is history from
+# before this check and is marked without being reported. The status file's
+# modification time is the append time: every append, stamped or not, moves it.
+fm_task_inbox_silent_handled() {  # <state-dir> <task-id>
+  local state=$1 task=$2 dir seen f name at at_epoch now mtime lookback
+  dir=$(fm_task_inbox_dir "$state" "$task")
+  [ -d "$dir/handled" ] || return 0
+  seen="$dir/.silent-seen"
+  lookback=${FM_TASK_INBOX_SILENT_LOOKBACK_SECS:-3600}
+  case "$lookback" in ''|*[!0-9]*) lookback=3600 ;; esac
+  now=$(date +%s)
+  mtime=$(fm_path_mtime "$state/$task.status") || mtime=0
+  for f in "$dir"/handled/*.msg; do
+    [ -e "$f" ] || continue
+    name=${f##*/}
+    fm_task_inbox_seq_of "$name" >/dev/null || continue
+    grep -qxF "$name" "$seen" 2>/dev/null && continue
+    printf '%s\n' "$name" >> "$seen" 2>/dev/null || return 1
+    fm_task_inbox_is_fire_and_forget "$f" && continue
+    at=$(sed -n 's/^at=//p;/^--$/q' "$f" | head -1)
+    at_epoch=$(fm_utc_iso_to_epoch "$at") || continue
+    [ "$((now - at_epoch))" -le "$lookback" ] || continue
+    [ "$mtime" -lt "$at_epoch" ] || continue
+    printf '%s\n' "$name"
+  done
+  return 0
 }

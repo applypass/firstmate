@@ -30,6 +30,9 @@ Every captain-facing outcome that leaves durable evidence in the mate home is pu
 | Child leaving the home | its final ledger line | `bin/fm-teardown.sh`, which refuses to remove the child while that line is undelivered |
 | Child ended silently | terminal current state with a silent ledger | the existing inactive-outcome scan in `bin/fm-inactive-reconcile.sh` |
 | Answer to a marked request | a correlated line guarded by the pending-reply record | `bin/fm-secondmate-report.sh`, which resolves the parent channel from the mate home; the pending-reply guard repairs a line stranded in the local mate's same-basename status file before recovery or escalation |
+| Supervision branch captain outcome in a mate home | the captain-verdict row in the mate's outcome store | `bin/fm-branch-report.sh`, which also appends it to the parent channel, carrying `corr=` when exactly one marked request is open |
+| Marked request only acknowledged, then the mate goes idle | a `working:` or `paused:` correlated line, which keeps the pending reply open | `bin/fm-pending-reply-lib.sh`, which escalates once as `pending-reply-unreported` when the mate has been idle past the grace window with no declared `paused:` wait |
+| Worker moved a steering request to `handled/` without a status line | the handled record and an unchanged status file | `bin/fm-watch.sh` via `fm_task_inbox_silent_handled` (`bin/fm-task-inbox-lib.sh`), one signal wake to the supervising home |
 | An outcome that exists only in the mate's reasoning | none | the charter and the `AGENTS.md` carve-outs only |
 
 The ledger delivery reads files, plus a local git reachability check on a ship `done:` with no delivery record yet (`bin/fm-dod-lib.sh`): it calls no harness, no forge, and no current-state reader, so it is identical for every harness and runtime backend.
@@ -38,6 +41,7 @@ A duplicate line is harmless and a missed one is not, so the mate may still appe
 For marked replies, the report helper accepts no caller-selected destination and uses the channel resolver for both local and remote homes; its script header owns the exact invocation contract.
 The pending-reply guard may restate only the correlated line from a local mate's `state/<mate-id>.status` onto the parent channel, which repairs the common parent-home versus mate-home mixup without accepting arbitrary mate-home sightings as acknowledgement.
 Other correlated mate-home status lines remain wrong-home evidence, while a remote home's routed `state/parent-replies.status` is already the parent channel and is not classified as wrong-home.
+Only a terminal verb (`done`, `ready`, `needs-decision`, `blocked`, `failed`) resolves a pending reply: a `working:` or `paused:` correlated line is an acknowledgement and leaves the record open.
 A missed-reply escalation includes the complete first sighting path and line number in readable shell-escaped form.
 
 ## What is deliberately not built
@@ -54,7 +58,8 @@ A missed-reply escalation includes the complete first sighting path and line num
 `tests/fm-pr-merge.test.sh` covers the PR-ready line at registration and the merge outcome's upward report.
 `tests/fm-teardown.test.sh` covers teardown delivering a child's final line and refusing when the channel cannot be written.
 `tests/fm-brief.test.sh` pins the charter's channel rule.
-`tests/fm-pending-reply.test.sh` covers helper-selected local routing, remote-channel classification, same-basename restatement before false escalation, readable wrong-home diagnostics, and the rule that arbitrary mate-home sightings never acknowledge a reply.
+`tests/fm-secondmate-result-delivery.test.sh` replays the 2026-10-01 miss in a temp home pair (acknowledgement, result only in the report, captain verdict in the mate home) and covers branch-outcome publication, the silent-handled check, and the escalation that remains with publication disabled.
+`tests/fm-pending-reply.test.sh` covers acknowledgement keeping a reply open until a terminal line, the idle escalation, and helper-selected local routing, remote-channel classification, same-basename restatement before false escalation, readable wrong-home diagnostics, and the rule that arbitrary mate-home sightings never acknowledge a reply.
 
 ## Live verification
 

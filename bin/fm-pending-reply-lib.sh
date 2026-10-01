@@ -37,7 +37,14 @@
 #                           (empty until delivery; delivery never resolves)
 #   phase=                  awaiting_report | delivery_unknown | recovery_sending |
 #                           recovery_sent | recovery_failed | recovery_unknown |
-#                           escalated | resolved
+#                           acknowledged | escalated | resolved
+#                           acknowledged: a correlated working:/paused: line
+#                           arrived; the request is NOT answered. Only a
+#                           terminal line (done, ready, needs-decision,
+#                           blocked, failed) resolves it. While acknowledged the
+#                           mate endpoint is observed; idle for the grace window
+#                           with no declared paused: wait escalates once as
+#                           pending-reply-unreported (no result reached main).
 #                           An escalated record with an empty delivered_epoch is
 #                           a delivery-unknown escalation, not a missed report:
 #                           its owner may still resend the same correlation, and
@@ -53,6 +60,10 @@
 #   recovery_delivery_outcome=
 #   recovery_turn_seen_busy=
 #   recovery_turn_completed_epoch=
+#   acknowledged_epoch=     when the first working:/paused: line was seen
+#   ack_state=              working | paused, from the latest such line
+#   ack_idle_epoch=         when the mate endpoint was first seen idle while
+#                           acknowledged; cleared when it is seen busy
 #   escalated_epoch=
 #   escalation_closed_epoch=
 #                           when the durable status decision opened by that
@@ -376,7 +387,7 @@ fm_pending_reply_mark_delivered() {  # <state-dir> <corr_id> [confirmed-epoch]
   [ -f "$rec" ] || return 1
   phase=$(fm_pending_reply_get "$rec" phase)
   case "$phase" in
-    awaiting_report|delivery_unknown|recovery_sending|recovery_sent|escalated|resolved) ;;
+    awaiting_report|delivery_unknown|recovery_sending|recovery_sent|acknowledged|escalated|resolved) ;;
     *) return 1 ;;
   esac
   delivered=$(fm_pending_reply_get "$rec" delivered_epoch)
@@ -584,9 +595,43 @@ fm_pending_reply_line_resolves() {  # <line> <corr_id>
   local line=$1 corr=$2
   [ -n "$line" ] && [ -n "$corr" ] || return 1
   case "$line" in
-    *pending-reply-missed*) return 1 ;;
+    *pending-reply-missed*|*pending-reply-unreported*) return 1 ;;
   esac
-  fm_pending_reply_text_has_corr "$line" "$corr"
+  fm_pending_reply_text_has_corr "$line" "$corr" || return 1
+  # Only a terminal verb is a result: working: and paused: acknowledge receipt
+  # and keep the request open (fm_pending_reply_line_acknowledges).
+  case "$(status_line_verb "$line")" in
+    done|ready|needs-decision|blocked|failed) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Prints working or paused (and returns 0) when a status line is a correlated
+# non-terminal acknowledgement for <corr_id>; returns 1 otherwise.
+fm_pending_reply_line_acknowledges() {  # <line> <corr_id>
+  local line=$1 corr=$2 verb
+  [ -n "$line" ] && [ -n "$corr" ] || return 1
+  case "$line" in
+    *pending-reply-missed*|*pending-reply-unreported*) return 1 ;;
+  esac
+  fm_pending_reply_text_has_corr "$line" "$corr" || return 1
+  verb=$(status_line_verb "$line")
+  case "$verb" in
+    working|paused) printf '%s' "$verb" ;;
+    *) return 1 ;;
+  esac
+}
+
+# Prints the verb (working|paused) of the LAST correlated acknowledgement line in
+# a status file, or nothing.
+fm_pending_reply_find_ack_state() {  # <status-file> <corr_id>
+  local status_file=$1 corr=$2 line verb found=''
+  [ -f "$status_file" ] || return 0
+  while IFS= read -r line || [ -n "$line" ]; do
+    [ -n "$line" ] || continue
+    verb=$(fm_pending_reply_line_acknowledges "$line" "$corr") && found=$verb
+  done < "$status_file"
+  printf '%s' "$found"
 }
 
 # Scan a status file for a correlated resolve. Prints the matching line or empty.
@@ -690,6 +735,9 @@ _fm_pending_reply_try_resolve_locked() {  # <state-dir> <corr_id> [status-file-o
   fi
   line=$(fm_pending_reply_find_resolve_line "$status_file" "$corr")
   if [ -z "$line" ]; then
+    if [ "$unconfirmed" = 0 ]; then
+      _fm_pending_reply_note_acknowledgement_locked "$rec" "$status_file" "$corr" "$phase" || true
+    fi
     if [ -z "$status_override" ] && [ "$unconfirmed" = 0 ]; then
       fm_pending_reply_set "$rec" parent_status_scan_signature "$signature" || return 1
     fi
@@ -710,6 +758,26 @@ _fm_pending_reply_try_resolve_locked() {  # <state-dir> <corr_id> [status-file-o
   return 0
 }
 
+# Record a correlated working:/paused: line without resolving: the request stays
+# open as phase=acknowledged. Only the original awaiting_report turn moves; a
+# request already in recovery or escalation keeps its own lifecycle.
+_fm_pending_reply_note_acknowledgement_locked() {  # <record-path> <status-file> <corr_id> <phase>
+  local rec=$1 status_file=$2 corr=$3 phase=$4 ack previous
+  case "$phase" in awaiting_report|acknowledged) ;; *) return 1 ;; esac
+  ack=$(fm_pending_reply_find_ack_state "$status_file" "$corr")
+  [ -n "$ack" ] || return 1
+  previous=$(fm_pending_reply_get "$rec" ack_state)
+  if [ "$phase" = awaiting_report ]; then
+    fm_pending_reply_set "$rec" acknowledged_epoch "$(fm_pending_reply_now)" || return 1
+    fm_pending_reply_set "$rec" phase acknowledged || return 1
+  fi
+  if [ "$previous" != "$ack" ]; then
+    fm_pending_reply_set "$rec" ack_state "$ack" || return 1
+    fm_pending_reply_set "$rec" ack_idle_epoch "" || return 1
+  fi
+  return 0
+}
+
 # Observe backend busy/idle evidence for the active turn without reading chat.
 # busy_state must be one of: busy | idle | unknown.
 fm_pending_reply_observe_busy() {  # <state-dir> <corr_id> <busy_state>
@@ -719,11 +787,24 @@ fm_pending_reply_observe_busy() {  # <state-dir> <corr_id> <busy_state>
   [ -f "$rec" ] || return 1
   phase=$(fm_pending_reply_get "$rec" phase)
   case "$phase" in
-    awaiting_report|recovery_sent) ;;
+    awaiting_report|recovery_sent|acknowledged) ;;
     *) return 0 ;;
   esac
   delivered=$(fm_pending_reply_get "$rec" delivered_epoch)
   [ -n "$delivered" ] || return 0
+  if [ "$phase" = acknowledged ]; then
+    # A declared paused: wait is not idleness; a busy turn restarts the clock.
+    case "$busy_state" in
+      busy) fm_pending_reply_set "$rec" ack_idle_epoch "" || return 1 ;;
+      idle)
+        if [ "$(fm_pending_reply_get "$rec" ack_state)" != paused ] \
+          && [ -z "$(fm_pending_reply_get "$rec" ack_idle_epoch)" ]; then
+          fm_pending_reply_set "$rec" ack_idle_epoch "$(fm_pending_reply_now)" || return 1
+        fi
+        ;;
+    esac
+    return 0
+  fi
   if [ "$phase" = awaiting_report ]; then
     field_seen=turn_seen_busy
     field_completed=request_turn_completed_epoch
@@ -770,6 +851,10 @@ fm_pending_reply_fallback_idle_eligible() {  # <record-path>
     recovery_sent)
       start=$(fm_pending_reply_get "$rec" recovery_sent_epoch)
       seen=$(fm_pending_reply_get "$rec" recovery_turn_seen_busy)
+      ;;
+    acknowledged)
+      start=$(fm_pending_reply_get "$rec" acknowledged_epoch)
+      seen=
       ;;
     *) return 1 ;;
   esac
@@ -1120,6 +1205,11 @@ fm_pending_reply_escalation_payload() {  # <record-path> <kind>
     delivery-unknown)
       token=pending-reply-delivery-unknown
       ;;
+    unreported)
+      printf 'pending-reply-unreported: task=%s pending-reply-id=%s request=%s - acknowledged only, worker idle, no result reached main' \
+        "$task_id" "$corr" "$summary"
+      return 0
+      ;;
     recovery-delivery)
       outcome=$(fm_pending_reply_get "$rec" recovery_delivery_outcome)
       case "$outcome" in failed|unknown) ;; *) return 1 ;; esac
@@ -1142,7 +1232,7 @@ fm_pending_reply_escalation_line() {  # <status-file> <record-path> <corr_id>
   while IFS= read -r line || [ -n "$line" ]; do
     [ "$(status_line_verb "$line")" = blocked ] || continue
     _fm_status_untimed "$line" untimed
-    for kind in missed delivery-unknown recovery-delivery; do
+    for kind in missed delivery-unknown unreported recovery-delivery; do
       payload=$(fm_pending_reply_escalation_payload "$rec" "$kind") || continue
       case "$untimed" in
         "blocked [key=$own_key]: $payload"|"blocked: $payload") found=$line; break ;;
@@ -1260,6 +1350,17 @@ _fm_pending_reply_maybe_escalate_locked() {  # <state-dir> <corr_id>
     [ "$phase" = delivery_unknown ] || return 0
   fi
   case "$phase" in
+    acknowledged)
+      completed=$(fm_pending_reply_get "$rec" ack_idle_epoch)
+      [ -n "$completed" ] || return 1
+      grace=$(fm_pending_reply_get "$rec" grace_secs)
+      case "$grace" in ''|*[!0-9]*) grace=$(fm_pending_reply_grace_secs) ;; esac
+      now=$(fm_pending_reply_now)
+      age=$((now - completed))
+      [ "$age" -ge "$grace" ] || return 1
+      fm_pending_reply_missing_report_is_evidence "$state" \
+        "$(fm_pending_reply_get "$rec" task_id)" "$completed" || return 1
+      ;;
     recovery_sent)
       completed=$(fm_pending_reply_get "$rec" recovery_turn_completed_epoch)
       [ -n "$completed" ] || return 1
@@ -1300,6 +1401,7 @@ _fm_pending_reply_maybe_escalate_locked() {  # <state-dir> <corr_id>
   case "$phase" in
     delivery_unknown) kind=delivery-unknown ;;
     recovery_failed|recovery_unknown) kind='recovery-delivery' ;;
+    acknowledged) kind=unreported ;;
     *) kind=missed ;;
   esac
   payload=$(fm_pending_reply_escalation_payload "$rec" "$kind") || return 1
@@ -1478,7 +1580,7 @@ fm_pending_reply_tick_one() {  # <state-dir> <corr_id> <busy_state> [secondmate-
   fi
   phase=$(fm_pending_reply_get "$rec" phase)
   case "$phase" in
-    recovery_sent|recovery_failed|recovery_unknown)
+    recovery_sent|recovery_failed|recovery_unknown|acknowledged)
       fm_pending_reply_maybe_escalate "$state" "$corr" 2>/dev/null || true
       ;;
   esac
@@ -1593,7 +1695,7 @@ fm_pending_reply_tick() {  # <state-dir>
         ;;
     esac
     case "$phase" in
-      awaiting_report|recovery_sent) ;;
+      awaiting_report|recovery_sent|acknowledged) ;;
       *) continue ;;
     esac
     backend=tmux
@@ -1655,4 +1757,23 @@ fm_pending_reply_task_has_open() {  # <state-dir> <task_id>
     return 0
   done
   return 1
+}
+
+# Print the corr id of the single open (delivered, not resolved) pending reply
+# for <task_id>, or nothing when there is none or more than one: a caller that
+# would attach an outcome to a request must not guess between requests.
+fm_pending_reply_sole_open_corr() {  # <state-dir> <task_id>
+  local state=$1 task_id=$2 dir rec found='' count=0
+  dir=$(fm_pending_reply_dir "$state")
+  [ -d "$dir" ] || return 0
+  for rec in "$dir"/*; do
+    [ -f "$rec" ] || continue
+    [ "$(fm_pending_reply_get "$rec" task_id)" = "$task_id" ] || continue
+    [ "$(fm_pending_reply_get "$rec" phase)" != resolved ] || continue
+    [ -n "$(fm_pending_reply_get "$rec" delivered_epoch)" ] || continue
+    found=$(fm_pending_reply_get "$rec" corr_id)
+    count=$((count + 1))
+  done
+  [ "$count" -eq 1 ] && printf '%s' "$found"
+  return 0
 }
