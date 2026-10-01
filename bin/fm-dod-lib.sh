@@ -420,6 +420,11 @@ The configured merge authority approves the ready branch, then firstmate merges 
 EOF
       ;;
     no-mistakes:*)
+      # Validation release gate; bin/fm-validation-gate.sh owns the contract.
+      local gate_dir=${BASH_SOURCE[0]%/*}; [ "$gate_dir" != "${BASH_SOURCE[0]}" ] || gate_dir=.
+      if [ "$forge" = none ] && "$gate_dir/fm-validation-gate.sh" enabled 2>/dev/null; then
+        "$gate_dir/fm-validation-gate.sh" dod "$branch" || return 1
+      else
       cat <<EOF
 # Definition of done
 Delivery contract: mode=no-mistakes
@@ -430,6 +435,7 @@ Firstmate will then instruct you to run /no-mistakes to validate and ship a PR.
 That first \`done:\` is the handoff that starts the pipeline, which owns the push; it is not a request to push from this copy.
 
 EOF
+      fi
       fm_nm_driving_block "$forge"
       cat <<EOF
 

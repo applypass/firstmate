@@ -284,6 +284,9 @@ EOF
 mv "$TMP" "$INSTRUCTIONS"
 TMP=
 [ -f "$INSTRUCTIONS" ] && [ -r "$INSTRUCTIONS" ] || { echo "error: ship instructions were not published as a readable file: $INSTRUCTIONS" >&2; exit 1; }
+# Validation release gate; bin/fm-validation-gate.sh owns the contract.
+"$SCRIPT_DIR/fm-validation-gate.sh" prepare --config "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}" --state "$STATE" --kind ship \
+  --mode "$MODE" --forge "$FORGE" --worktree "$(sed -n 's/^worktree=//p' "$META" | head -n 1)" --id "$ID" >/dev/null || exit 1
 
 # The current worker receives the instructions through fm-send, but a replacement
 # worker is launched from brief.md. Publish the same explicit precedence contract

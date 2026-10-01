@@ -58,6 +58,12 @@ export FM_TEST_SEAM=1
 # under the marker. A case that verifies the refusal sets FM_TASK_ID itself.
 unset FM_TASK_ID
 
+# Run the suite on the validation release gate's upstream default (off), so a
+# fork's tracked defaults/validation-gate never changes another suite's verdict,
+# and drop the gate a gated worker pane exports (bin/fm-validation-gate.sh).
+export FM_TEST_VALIDATION_GATE_DEFAULTS=/nonexistent/validation-gate
+unset FM_VALIDATION_GATE
+
 # Clear the tasks-axi env overrides. An operator shell exports TASKS_AXI_FILE
 # (and may export TASKS_AXI_BACKEND) at its real home's backlog, and tasks-axi
 # resolves that env AHEAD of the .tasks.toml a fixture copies, so a suite that

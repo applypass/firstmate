@@ -338,6 +338,12 @@ The primary-authoritative propagation contract, including removal of a mate's lo
 `config/supervision-host` is local to each home and not inherited, because each home's engine and model are its own choice.
 While the home runs the host, main's lease-checked commands also take the per-task lease lock, so a claim by the host's engine cannot race a mutation main already started (`bin/fm-lease-lib.sh`).
 
+## Validation release gate (config/validation-gate)
+
+The validation release gate holds a no-mistakes ship's full pipeline run until firstmate tells the captain the PR is ready to merge and releases it.
+A local, gitignored `config/validation-gate` holding `on` or `off` wins; otherwise the tracked `defaults/validation-gate` decides, and neither present means off.
+[`bin/fm-validation-gate.sh`](../bin/fm-validation-gate.sh)'s header owns the mechanism, scope, and release command.
+
 ## Backlog backend (.tasks.toml / config/backlog-backend)
 
 The tracked `.tasks.toml` pins the default `tasks-axi` markdown backend to `data/backlog.md`, with `done_keep = 10` and an archive at `data/done-archive.md`.
