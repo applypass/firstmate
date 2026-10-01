@@ -343,6 +343,26 @@ While the home runs the host, main's lease-checked commands also take the per-ta
 The tracked `.tasks.toml` pins the default `tasks-axi` markdown backend to `data/backlog.md`, with `done_keep = 10` and an archive at `data/done-archive.md`.
 A home may instead select another tasks-axi adapter such as Beads through its own `.tasks.toml` or `TASKS_AXI_BACKEND`; firstmate still uses only tasks-axi verbs for routine backlog reads and mutations, and the adapter maps `start` and evidence-bearing `done` transitions to its native statuses and evidence fields.
 
+### Shortcut ticket sync (applypass fork)
+
+[`defaults/shortcut-tickets`](../defaults/shortcut-tickets) is tracked and on by default, so every applypass/firstmate home keeps a Shortcut story for each backlog item; delete it, or set `enabled=off` in `config/shortcut-tickets`, to get upstream behaviour.
+`config/shortcut-tickets` overrides any key per home, and `SHORTCUT_API_TOKEN` in the environment is the only credential.
+[`bin/fm-shortcut-ticket.sh`](../bin/fm-shortcut-ticket.sh) owns the operations and their hooks.
+
+| Event | Story change |
+| --- | --- |
+| `fm-tasks-axi.sh add` | Created in Backlog (Engineering team), with the `sc-NNNN` id and URL appended to the item body. |
+| Dispatch (`fm-spawn.sh`) | Refused when the item has no `sc-NNNN`; otherwise moved to In Progress. |
+| PR registered (`fm-pr-check.sh`) | Moved to In Review, PR linked. |
+| Scout teardown | Moved to In Review, `report.md` uploaded. |
+| Teardown | Final outcome line commented; a forced teardown, a cancelled item, or a parked hold sends the story back to Backlog with the reason. |
+| `fm-captain-hold.sh answer` | The recorded decision is commented. |
+| `fm-shortcut-ticket.sh done <item> --evidence <text>` | Moved to Done. |
+
+Done is never automatic: merge and teardown leave the story In Review until firstmate runs `done` on the captain's word or verified production evidence.
+Every sync call except the dispatch refusal is best-effort: it warns and never blocks the lifecycle step.
+Use `comment` and `attach` for decisions, learnings, and artifacts recorded elsewhere.
+
 ### Captain holds on Beads
 
 Captain-hold row creation is owned by [`bin/fm-captain-hold.sh`](../bin/fm-captain-hold.sh) `hold`: when no work item exists, it creates an ordinary backlog row (`--kind captain` metadata; Beads native type `task`) and then applies the captain hold.

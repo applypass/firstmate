@@ -3439,6 +3439,30 @@ SH
   pass "device re-record publication waits without rewriting its registration"
 }
 
+test_pr_ready_moves_the_shortcut_story_to_review() {
+  local dir url=https://github.com/o/r/pull/9
+  command -v tasks-axi >/dev/null 2>&1 || { echo "skip: tasks-axi not found"; return 0; }
+  dir=$(make_case shortcut-review)
+  write_task_meta "$dir" task-a
+  cp "$ROOT/.tasks.toml" "$dir/home/.tasks.toml"
+  printf '## In flight\n\n## Queued\n\n## Done\n' > "$dir/home/data/backlog.md"
+  mkdir -p "$dir/root/defaults"
+  cp "$ROOT/defaults/shortcut-tickets" "$dir/root/defaults/"
+  ln -s "$REAL_JQ" "$dir/fakebin/jq"
+  # BASE_PATH is restricted, so run the real tasks-axi (a node script) under the full PATH.
+  printf '#!/bin/sh\nPATH=%s exec tasks-axi "$@"\n' "'$PATH'" > "$dir/fakebin/tasks-axi"
+  chmod +x "$dir/fakebin/tasks-axi"
+  fm_fake_shortcut_curl "$dir/fakebin"
+  (cd "$dir/home" && FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$dir/fakebin:$BASE_PATH" \
+    "$ROOT/bin/fm-tasks-axi.sh" add task-a "PR ready sc-5000" --kind ship >/dev/null) || fail "could not add the item"
+  : > "$dir/curl.log"
+  FM_SHORTCUT_TICKETS=on SHORTCUT_API_TOKEN=tok-secret-123 FAKE_CURL_LOG="$dir/curl.log" \
+    run_check_entry "$dir" task-a "$url" >/dev/null 2> "$dir/ready.err" || fail "pr-check failed: $(cat "$dir/ready.err")"
+  assert_grep '"workflow_state_id":500000009' "$dir/curl.log" "PR registration did not move the story to In Review"
+  assert_grep "$url" "$dir/curl.log" "the PR was not linked to the story"
+  pass "registering a ready PR moves the Shortcut story to In Review and links the PR"
+}
+
 test_parser_matrix
 test_gitlab_merge_watch
 test_gerrit_merge_watch
@@ -3484,3 +3508,4 @@ test_bootstrap_leaves_unauthenticated_checks
 test_custom_snapshot_cleanup_on_signal
 test_returned_custom_check_descendants_are_drained
 test_teardown_removes_poll_artifacts
+test_pr_ready_moves_the_shortcut_story_to_review

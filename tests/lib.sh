@@ -26,6 +26,11 @@ if [ -n "${FM_TEST_LIB_SOURCED:-}" ]; then
 fi
 FM_TEST_LIB_SOURCED=1
 
+# The applypass fork's Shortcut ticket gate is on by default; fixtures that
+# dispatch work do not model tickets, so they start with it off. The cases that
+# test the gate set FM_SHORTCUT_TICKETS themselves.
+export FM_SHORTCUT_TICKETS=off
+
 # Pin the fixture umask. Firstmate's state-root and process-event contracts
 # refuse group- or world-writable state directories, and a permissive ambient
 # umask (e.g. 0002) makes every `mkdir state` fixture fail that contract before
@@ -417,6 +422,47 @@ exit 0
 SH
     chmod +x "$fakebin/$tool"
   done
+}
+
+# A fake curl that logs "METHOD URL", the request body, and whether the token
+# reached argv (it must not) or stdin (it must).
+fm_fake_shortcut_curl() {  # <fakebin>
+  mkdir -p "$1"
+  cat > "$1/curl" <<'SH'
+#!/usr/bin/env bash
+out= method=GET data= url=
+form=()
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  case "${args[$i]}" in
+    -o) out=${args[$((i + 1))]} ;;
+    -X) method=${args[$((i + 1))]} ;;
+    --data-binary) data=${args[$((i + 1))]#@} ;;
+    -F) form+=("${args[$((i + 1))]}") ;;
+  esac
+  url=${args[$i]}
+done
+stdin=$(cat)
+{
+  printf '%s %s\n' "$method" "$url"
+  case "$*" in *tok-secret-123*) echo "TOKEN-IN-ARGV" ;; esac
+  case "$stdin" in *tok-secret-123*) echo "TOKEN-ON-STDIN" ;; esac
+  [ -z "$data" ] || { printf 'BODY %s\n' "$(jq -c . "$data")"; }
+  for f in ${form[@]+"${form[@]}"}; do printf 'FORM %s\n' "$f"; done
+} >> "$FAKE_CURL_LOG"
+case "$method $url" in
+  "POST "*/api/v3/stories)
+    if [ "${FAKE_CURL_FAIL:-}" = 1 ]; then printf '{}' > "$out"; printf 500; exit 0; fi
+    printf '{"id":7777,"app_url":"https://app.shortcut.com/applypass/story/7777"}' > "$out"; printf 201 ;;
+  "GET "*/api/v3/stories/*)
+    if [ "${url##*/}" = "${FAKE_CURL_MISSING:-}" ]; then printf '{}' > "$out"; printf 404; exit 0; fi
+    printf '{"id":%s,"workflow_state_id":%s,"external_links":[]}' "${url##*/}" "${FAKE_CURL_STATE:-500000006}" > "$out"; printf 200 ;;
+  "PUT "*/api/v3/stories/*|"POST "*/api/v3/stories/*/comments|"POST "*/api/v3/files)
+    printf '{}' > "$out"; printf 200 ;;
+  *) printf '{}' > "$out"; printf 404 ;;
+esac
+SH
+  chmod +x "$1/curl"
 }
 
 # fm_fake_crash_injector <fakebin>

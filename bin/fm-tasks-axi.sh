@@ -47,6 +47,10 @@
 #     first write would replace the link with a private copy, exactly the fork
 #     this command exists to prevent. Lifecycle transitions refuse the same file.
 # Otherwise the exit status is tasks-axi's own.
+#
+# After a successful `add` (or `create`) with the Shortcut ticket feature on,
+# bin/fm-shortcut-ticket.sh gives the new item a Shortcut story; its failure
+# only warns and never changes the add's exit status.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -137,4 +141,42 @@ else
 fi
 
 cd "$FM_BACKLOG_AXI_ROOT" || fail "cannot enter the backlog root $FM_BACKLOG_AXI_ROOT"
-exec tasks-axi ${ARGS[@]+"${ARGS[@]}"}
+# Fork-only: cancelling (rm) or parking (hold --kind parked) an item sends its
+# story back to Backlog with the reason (best-effort).
+SC_PARK=
+case "${1:-}" in
+  rm) SC_PARK="cancelled: removed from the backlog" ;;
+  hold)
+    case " $* " in *" --kind parked "*)
+      SC_PARK="parked: $(printf '%s\n' "$@" | sed -n '/^--reason$/{n;p;}' | head -1)" ;;
+    esac
+    ;;
+esac
+if [ -n "$SC_PARK" ] && [ -n "${2:-}" ] && [ "$1" = rm ]; then
+  "$SCRIPT_DIR/fm-shortcut-ticket.sh" park "$2" --reason "$SC_PARK" --best-effort >&2 || true
+  SC_PARK=
+fi
+case "${1:-}" in
+  add | create) ;;
+  hold)
+    tasks-axi ${ARGS[@]+"${ARGS[@]}"}
+    RC=$?
+    [ "$RC" -ne 0 ] || [ -z "$SC_PARK" ] || [ -z "${2:-}" ] ||
+      "$SCRIPT_DIR/fm-shortcut-ticket.sh" park "$2" --reason "$SC_PARK" --best-effort >&2 || true
+    exit "$RC"
+    ;;
+  *) exec tasks-axi ${ARGS[@]+"${ARGS[@]}"} ;;
+esac
+
+OUT=$(tasks-axi ${ARGS[@]+"${ARGS[@]}"})
+RC=$?
+printf '%s\n' "$OUT"
+if [ "$RC" -eq 0 ] && "$SCRIPT_DIR/fm-shortcut-ticket.sh" --enabled; then
+  NEW_ID=$(printf '%s\n' "$OUT" | sed -n 's/^  id: *//p' | head -1)
+  [ -n "$NEW_ID" ] || NEW_ID=$(printf '%s\n' "$OUT" | jq -r '.task.id // empty' 2>/dev/null)
+  if [ -n "$NEW_ID" ]; then
+    "$SCRIPT_DIR/fm-shortcut-ticket.sh" "$NEW_ID" >&2 ||
+      printf 'fm-tasks-axi: warning: no Shortcut ticket for %s; retry with bin/fm-shortcut-ticket.sh %s\n' "$NEW_ID" "$NEW_ID" >&2
+  fi
+fi
+exit "$RC"

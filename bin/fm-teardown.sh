@@ -3765,6 +3765,19 @@ retire_busy_state "$STATE" "$ID" "$BUSY_GEN" || exit 1
 # Opt-in fleet activity ledger (docs/fleet-ledger.md), before the status log is
 # retired so its last lines are captured; off costs one file test.
 [ ! -e "$CONFIG/fleet-ledger" ] || FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE FM_CONFIG_OVERRIDE=$CONFIG "$SCRIPT_DIR/fm-fleet-ledger.sh" cleaned_up "$ID" || true
+# Fork-only: record the outcome on the Shortcut story (best-effort); a scout also goes
+# In Review with its report uploaded. A ship stays where the PR left it.
+if [ "$KIND" != secondmate ]; then
+  SC_ENV=(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" FM_CONFIG_OVERRIDE="$CONFIG")
+  if [ "$KIND" = scout ] && [ "$FORCE" != "--force" ] && [ -f "$DATA/$ID/report.md" ]; then
+    env "${SC_ENV[@]}" "$SCRIPT_DIR/fm-shortcut-ticket.sh" review "$ID" --report "$DATA/$ID/report.md" --best-effort || true
+  fi
+  if [ "$FORCE" = "--force" ]; then
+    env "${SC_ENV[@]}" "$SCRIPT_DIR/fm-shortcut-ticket.sh" park "$ID" --reason "torn down without landing (forced cleanup)" --best-effort || true
+  else
+    env "${SC_ENV[@]}" "$SCRIPT_DIR/fm-shortcut-ticket.sh" outcome "$ID" --best-effort || true
+  fi
+fi
 status_retire_presentation_task "$STATE" "$ID" || exit 1
 fm_wake_queue_prune_task "$STATE" "$ID" "$T" 2>/dev/null || true
 rm -f "$STATE/$ID.turn-ended" "$STATE/$ID.progress" \

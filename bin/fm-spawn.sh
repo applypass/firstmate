@@ -3477,6 +3477,15 @@ if fm_backlog_transition_applies "$CONFIG" "$DATA" "$KIND"; then
     echo "error: task $ID's backlog item could not be read before dispatch ($FM_BACKLOG_ROW_ERROR)" >&2
     exit 1
   fi
+  # Fork-only: every ship or scout needs a Shortcut ticket (bin/fm-shortcut-ticket.sh).
+  case "$KIND" in
+    ship | scout)
+      FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA FM_CONFIG_OVERRIDE=$CONFIG "$SCRIPT_DIR/fm-shortcut-ticket.sh" --check "$ID" >&2 || {
+        echo "error: spawn refused - task $ID has no Shortcut ticket" >&2
+        exit 1
+      }
+      ;;
+  esac
   spawn_preflight_actor=$(fm_lease_actor) || exit "$FM_LEASE_REFUSE_EXIT"
   if [ "$spawn_preflight_actor" = branch ] && fm_lease_away_relocated; then
     if [ "$BACKLOG_ROW_STATE" != "queued no no" ]; then
@@ -5495,4 +5504,6 @@ SPAWN_ACCOUNT=
 [ -z "$WORKER_ACCOUNT_PROVIDER" ] || SPAWN_ACCOUNT="$SPAWN_ACCOUNT account_provider=$WORKER_ACCOUNT_PROVIDER"
 # Opt-in fleet activity ledger (docs/fleet-ledger.md); off costs one file test.
 [ ! -e "$CONFIG/fleet-ledger" ] || [ "$RELAUNCH" -eq 1 ] || FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE FM_CONFIG_OVERRIDE=$CONFIG "$SCRIPT_DIR/fm-fleet-ledger.sh" dispatched "$ID" "$KIND" "${PROJ_ABS##*/}" "$HARNESS" "$MODEL" || true
+# Fork-only: the story moves to In Progress once the worker is dispatched (best-effort).
+[ "$BACKLOG_TRANSITION" = 1 ] && [ "$KIND" != secondmate ] && FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA FM_CONFIG_OVERRIDE=$CONFIG "$SCRIPT_DIR/fm-shortcut-ticket.sh" state "$ID" progress --best-effort || true
 echo "spawned $ID harness=$HARNESS kind=$KIND$SPAWN_DELIVERY window=$META_WINDOW worktree=$WT$SPAWN_ACCOUNT"

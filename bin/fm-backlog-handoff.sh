@@ -73,6 +73,9 @@
 # or undeletable stale marker is reported and ignored by later resumes and
 # handoffs, so wake-state cleanup neither suppresses a new wake nor fails a
 # completed remote handoff.
+# Fork-only: before moving, each item is given a Shortcut ticket when it has
+# none (bin/fm-shortcut-ticket.sh, warn-only). The move carries the item body,
+# so the secondmate's copy keeps the sc id and links instead of re-creating it.
 # Usage: fm-backlog-handoff.sh <secondmate-id> <item-key>...
 #        fm-backlog-handoff.sh --resume-pending
 set -eu
@@ -139,6 +142,14 @@ else
   esac
   shift
 fi
+
+ensure_shortcut_tickets() {  # <item-key>...
+  local key
+  for key in "$@"; do
+    "$SCRIPT_DIR/fm-shortcut-ticket.sh" "$key" >&2 ||
+      echo "warning: $key has no Shortcut ticket; retry with bin/fm-shortcut-ticket.sh $key" >&2
+  done
+}
 
 secondmate_home() {
   local id=$1 home
@@ -822,6 +833,7 @@ remote_handoff() { # <secondmate-id> <keys...>
       return 1
     }
   fi
+  ensure_shortcut_tickets "${to_move[@]+"${to_move[@]}"}"
   seed_backlog_scaffold "$outbox"
   if [ "${#to_move[@]}" -gt 0 ]; then
     if ! mv_out=$(tasks-axi mv "${to_move[@]}" --file "$MAIN_BACKLOG" --to "$outbox" 2>&1); then
@@ -1031,6 +1043,8 @@ if ! fm_tasks_axi_compatible; then
   echo "error: a compatible tasks-axi with atomic multi-ID mv support is required to move backlog items; run bin/fm-bootstrap.sh for the required version" >&2
   exit 1
 fi
+
+ensure_shortcut_tickets "${TO_MOVE[@]}"
 
 WAKE_PENDING_MARKER="$STATE/.backlog-handoff-$ID.wake-pending"
 if [ -e "$WAKE_PENDING_MARKER" ] || [ -L "$WAKE_PENDING_MARKER" ]; then

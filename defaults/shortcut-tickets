@@ -1,0 +1,15 @@
+# Shortcut ticket sync settings (applypass/firstmate fork-only).
+# bin/fm-shortcut-ticket.sh owns the keys; a home overrides any of them,
+# key by key, in config/shortcut-tickets (same key=value format).
+# Delete this file, or set enabled=off, to get upstream behaviour (no tickets).
+enabled=on
+# Engineering team (API group_id); its workflow is Standard (500000005).
+team_id=649562cb-7f18-471f-835f-7ed28a5abf0a
+# Workflow states: stories start in Backlog, move to In Progress at dispatch
+# and In Review at code complete. Done is set only by `fm-shortcut-ticket.sh done`.
+state_backlog=500000006
+state_progress=500000008
+state_review=500000009
+state_done=500000010
+owner_id=68930514-b854-4a8e-95ec-fa3eee30e3a2
+story_type=feature
