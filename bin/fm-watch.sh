@@ -533,7 +533,15 @@ inbox_steer_escalate_unavailable() {  # <window> <task> <record>
 # too: their pane-staleness exemption is about quiet panes being healthy,
 # while an unacknowledged instruction past the ladder is a stuck steer.
 inbox_steer_check() {  # <window> <task>
-  local w=$1 task=$2 action verb rec count tail40 reason ring_rc backend agent_state
+  local w=$1 task=$2 action verb rec count tail40 reason ring_rc backend agent_state silent_name
+  # A request moved to handled/ with no status line since it arrived left its
+  # supervisor no result to read: surface it once (fm_task_inbox_silent_handled).
+  while IFS= read -r silent_name; do
+    [ -n "$silent_name" ] || continue
+    reason="signal: $task.status (request $silent_name was moved to handled/ but no status line was appended since it arrived; the worker's result may not have reached its supervisor - read the worker's report and ask it for a done or needs-decision line)"
+    fm_wake_append signal "$task.status" "$reason" || exit 1
+    wake "$reason"
+  done < <(fm_task_inbox_silent_handled "$STATE" "$task")
   action=$(fm_task_inbox_due_action "$STATE" "$task") || return 0
   verb=${action%% *}
   [ "$verb" != quiet ] || return 0

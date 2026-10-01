@@ -31,7 +31,7 @@
 #      once delivered, and its delivery-unknown decision still closes on resolve
 #  17. Recovery and escalation grace are measured from the relevant turn's
 #      completion, never from delivery or send time, and each takes one fresh,
-#      uncached status read - accepting any verb - immediately before firing
+#      uncached status read - accepting any terminal verb - immediately before firing
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -132,6 +132,107 @@ latest_record_body() {  # <home> <task>
 }
 
 # --- tests ------------------------------------------------------------------
+
+# --- acknowledgement is not a result ----------------------------------------
+
+test_ack_line_keeps_the_reply_open() {
+  local home state corr status rec
+  home=$(setup_parent ack-open)
+  state="$home/state"
+  status="$state/hibit.status"
+  export FM_PENDING_REPLY_NOW=40000
+  corr=$(fm_pending_reply_create "$home" "$state" hibit "follow-up result")
+  rec=$(fm_pending_reply_path "$state" "$corr")
+  fm_pending_reply_mark_delivered "$state" "$corr"
+  printf 'working [corr=%s]: relayed\n' "$corr" > "$status"
+  if fm_pending_reply_try_resolve "$state" "$corr"; then
+    fail "a working: acknowledgement must not resolve the pending reply"
+  fi
+  [ "$(phase_of "$state" "$corr")" = acknowledged ] \
+    || fail "phase should be acknowledged, got $(phase_of "$state" "$corr")"
+  printf 'paused [corr=%s]: waiting on a build\n' "$corr" >> "$status"
+  fm_pending_reply_try_resolve "$state" "$corr" && fail "paused: must not resolve"
+  printf 'done [corr=%s]: result ready (via-helper)\n' "$corr" >> "$status"
+  fm_pending_reply_try_resolve "$state" "$corr" || fail "a done: line must resolve an acknowledged reply"
+  [ "$(phase_of "$state" "$corr")" = resolved ] || fail "phase should be resolved"
+  [ "$(fm_pending_reply_get "$rec" resolved_via)" = helper ] || fail "resolved_via should be helper"
+  pass "acknowledgement keeps the pending reply open until a terminal line"
+}
+
+test_ack_then_idle_escalates_once_and_terminal_closes_it() {
+  local home state corr status rec
+  home=$(setup_parent ack-idle)
+  state="$home/state"
+  status="$state/hibit.status"
+  export FM_PENDING_REPLY_GRACE_SECS=120
+  export FM_PENDING_REPLY_NOW=41000
+  corr=$(fm_pending_reply_create "$home" "$state" hibit "classify follow-up")
+  rec=$(fm_pending_reply_path "$state" "$corr")
+  fm_pending_reply_mark_delivered "$state" "$corr"
+  printf 'working [corr=%s]: relayed\n' "$corr" > "$status"
+  fm_pending_reply_tick_one "$state" "$corr" busy ""
+  [ "$(phase_of "$state" "$corr")" = acknowledged ] || fail "setup: phase should be acknowledged"
+  fm_pending_reply_tick_one "$state" "$corr" idle ""
+  export FM_PENDING_REPLY_NOW=41060
+  fm_pending_reply_tick_one "$state" "$corr" idle ""
+  [ "$(phase_of "$state" "$corr")" = acknowledged ] || fail "must not escalate inside the grace window"
+  # A busy observation restarts the idle clock.
+  fm_pending_reply_tick_one "$state" "$corr" busy ""
+  export FM_PENDING_REPLY_NOW=41150
+  fm_pending_reply_tick_one "$state" "$corr" idle ""
+  export FM_PENDING_REPLY_NOW=41200
+  fm_pending_reply_tick_one "$state" "$corr" idle ""
+  [ "$(phase_of "$state" "$corr")" = acknowledged ] || fail "busy must reset the idle clock"
+  export FM_PENDING_REPLY_NOW=41300
+  fm_pending_reply_tick_one "$state" "$corr" idle ""
+  [ "$(phase_of "$state" "$corr")" = escalated ] \
+    || fail "an idle acknowledged request must escalate, got $(phase_of "$state" "$corr")"
+  grep -q "pending-reply-unreported: task=hibit pending-reply-id=$corr request=classify follow-up" "$status" \
+    || fail "escalation must name the task, request, and id"
+  grep -q "no result reached main" "$status" || fail "escalation must say no result reached main"
+  fm_pending_reply_tick_one "$state" "$corr" idle ""
+  [ "$(grep -c "blocked \[key=pending-reply-$corr\]" "$status")" = 1 ] || fail "must escalate once"
+  printf 'done [corr=%s]: the result\n' "$corr" >> "$status"
+  fm_pending_reply_tick_one "$state" "$corr" idle ""
+  [ "$(phase_of "$state" "$corr")" = resolved ] || fail "a terminal line must still resolve after escalation"
+  grep -q "^resolved \[key=pending-reply-$corr\]" "$status" || fail "the escalation decision must close"
+  export FM_PENDING_REPLY_GRACE_SECS=0
+  pass "idle acknowledged request escalates once; a later result resolves and closes it"
+}
+
+test_ack_paused_declared_wait_does_not_escalate() {
+  local home state corr status
+  home=$(setup_parent ack-paused)
+  state="$home/state"
+  status="$state/hibit.status"
+  export FM_PENDING_REPLY_GRACE_SECS=120
+  export FM_PENDING_REPLY_NOW=42000
+  corr=$(fm_pending_reply_create "$home" "$state" hibit "long build")
+  fm_pending_reply_mark_delivered "$state" "$corr"
+  printf 'paused [corr=%s]: waiting on the build monitor\n' "$corr" > "$status"
+  fm_pending_reply_tick_one "$state" "$corr" idle ""
+  export FM_PENDING_REPLY_NOW=42900
+  fm_pending_reply_tick_one "$state" "$corr" idle ""
+  [ "$(phase_of "$state" "$corr")" = acknowledged ] || fail "a declared paused: wait must not escalate"
+  ! grep -q "pending-reply-unreported" "$status" || fail "no escalation expected while paused"
+  export FM_PENDING_REPLY_GRACE_SECS=0
+  pass "a declared paused wait never escalates"
+}
+
+test_resolved_records_keep_upgrade_behaviour() {
+  local home state corr status
+  home=$(setup_parent ack-upgrade)
+  state="$home/state"
+  status="$state/hibit.status"
+  export FM_PENDING_REPLY_NOW=43000
+  corr=$(fm_pending_reply_create "$home" "$state" hibit "already resolved by an ack")
+  fm_pending_reply_mark_delivered "$state" "$corr"
+  fm_pending_reply_set "$(fm_pending_reply_path "$state" "$corr")" phase resolved
+  printf 'working [corr=%s]: relayed\n' "$corr" > "$status"
+  fm_pending_reply_tick_one "$state" "$corr" idle ""
+  [ "$(phase_of "$state" "$corr")" = resolved ] || fail "records resolved before the change stay resolved"
+  pass "records already resolved stay resolved"
+}
 
 test_normal_correlated_reply_resolves_once() {
   local home state corr status rec
@@ -270,12 +371,12 @@ test_recovery_fresh_status_read_resolves_before_firing() {
     fail "setup: nothing should resolve yet"
   fi
 
-  # The correlated reply lands, carrying a non-terminal verb, in a write the
+  # The correlated reply lands, carrying a terminal verb, in a write the
   # cached signature cannot see (for example a same-size rewrite inside the
   # stat timestamp granularity): the cache now matches the file that holds it,
   # so only a read that bypasses the cache can find the reply.
   rec=$(fm_pending_reply_path "$state" "$corr")
-  printf 'working [corr=%s]: still wrapping up\n' "$corr" >> "$status"
+  printf 'done [corr=%s]: wrapped up\n' "$corr" >> "$status"
   fm_pending_reply_set "$rec" parent_status_scan_signature "$(fm_pending_reply_file_signature "$status")"
   if fm_pending_reply_try_resolve "$state" "$corr"; then
     fail "setup: the cached signature should hide the reply from a cached read"
@@ -301,7 +402,7 @@ test_recovery_fresh_status_read_resolves_before_firing() {
   export FM_PENDING_REPLY_NOW=31120
   fm_pending_reply_send_recovery "$state" "$corr" || fail "setup: recovery send failed"
   fm_pending_reply_mark_turn_completed "$state" "$corr" recovery
-  printf 'working [corr=%s]: still wrapping up\n' "$corr" >> "$status"
+  printf 'done [corr=%s]: wrapped up\n' "$corr" >> "$status"
   fm_pending_reply_set "$rec" parent_status_scan_signature "$(fm_pending_reply_file_signature "$status")"
   export FM_PENDING_REPLY_NOW=31240
   fm_pending_reply_maybe_escalate "$state" "$corr" 2>/dev/null \
@@ -314,7 +415,7 @@ test_recovery_fresh_status_read_resolves_before_firing() {
 
   unset FM_PENDING_REPLY_SEND_HOOK
   export FM_PENDING_REPLY_GRACE_SECS=0
-  pass "one fresh status read immediately before firing catches a just-landed reply, any verb"
+  pass "one fresh status read immediately before firing catches a just-landed terminal reply"
 }
 
 test_partial_resolve_write_blocks_firing() {
@@ -340,7 +441,7 @@ test_partial_resolve_write_blocks_firing() {
     corr=$(fm_pending_reply_create "$home" "$state" "hibit" "partial resolve before recovery")
     fm_pending_reply_mark_delivered "$state" "$corr"
     fm_pending_reply_mark_turn_completed "$state" "$corr" request
-    printf 'working [corr=%s]: still wrapping up\n' "$corr" >> "$status"
+    printf 'done [corr=%s]: wrapped up\n' "$corr" >> "$status"
     if FAIL_RESOLVED_EPOCH=1 FM_PENDING_REPLY_SEND_HOOK=recovery_hook fm_pending_reply_send_recovery "$state" "$corr" 2>/dev/null; then
       fail "recovery must not fire after a partial resolve"
     fi
@@ -354,7 +455,7 @@ test_partial_resolve_write_blocks_firing() {
     FM_PENDING_REPLY_SEND_HOOK=true fm_pending_reply_send_recovery "$state" "$corr" \
       || fail "setup: recovery send failed"
     fm_pending_reply_mark_turn_completed "$state" "$corr" recovery
-    printf 'working [corr=%s]: still wrapping up\n' "$corr" >> "$status"
+    printf 'done [corr=%s]: wrapped up\n' "$corr" >> "$status"
     FAIL_RESOLVED_EPOCH=1 fm_pending_reply_maybe_escalate "$state" "$corr" 2>/dev/null || true
     [ "$(phase_of "$state" "$corr")" = resolved ] \
       || fail "partial resolve should block escalation, got $(phase_of "$state" "$corr")"
@@ -1969,5 +2070,9 @@ test_mechanical_helper_writes_parent_channel
 test_remote_parent_replies_is_not_wrong_home
 test_local_parent_replies_is_wrong_home_evidence
 test_escalated_undelivered_correlation_stays_retryable
+test_ack_line_keeps_the_reply_open
+test_ack_then_idle_escalates_once_and_terminal_closes_it
+test_ack_paused_declared_wait_does_not_escalate
+test_resolved_records_keep_upgrade_behaviour
 
 printf 'ok - all pending-reply tests passed\n'

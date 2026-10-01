@@ -39,7 +39,11 @@
 # append, so every visible row is in the brief, queued, or both: the relay does
 # not depend on the host surviving its turn or on its owner delivering the
 # host's own handback. Silent outcomes remain in the store but are not queued
-# or relayed as notes. An attended turn queues nothing: its captain rows reach
+# or relayed as notes. In a seeded secondmate home a captain outcome is also
+# published onto the parent channel here, by the script, so it reaches MAIN
+# without the mate remembering to run bin/fm-secondmate-report.sh (the line
+# carries corr= when the mate has exactly one open marked request;
+# docs/secondmate-parent-channel.md). An attended turn queues nothing: its captain rows reach
 # MAIN through the host's branch-outcome exit and the drain's BRANCH OUTCOMES
 # section (bin/fm-wake-drain.sh), and its routine rows stay in the store.
 set -u
@@ -52,6 +56,10 @@ TURN_FILE="$STATE/.supervision-host-turn"
 RECEIPTS="$STATE/.supervision-host-receipts"
 # shellcheck source=bin/fm-afk-contract.sh
 . "$SCRIPT_DIR/fm-afk-contract.sh"
+# shellcheck source=bin/fm-parent-channel-lib.sh
+. "$SCRIPT_DIR/fm-parent-channel-lib.sh"
+# shellcheck source=bin/fm-pending-reply-lib.sh
+. "$SCRIPT_DIR/fm-pending-reply-lib.sh"
 
 usage() {
   sed -n '/^# Usage:/,/^# --wake/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
@@ -127,6 +135,31 @@ printf '%s\t%s\t%s\t%s\n' "$TURN" "$SEQ" "$VERDICT" "$TASK" >> "$RECEIPTS" || {
   echo "recorded seq $SEQ, but the host receipt could not be written; the host will hand this wake to MAIN" >&2
   exit 1
 }
+# A captain outcome recorded in a secondmate home is a fact the parent must see.
+# A main home resolves to rc 1 and is left unchanged; a failed publish is
+# surfaced, never silently dropped.
+if [ "$VERDICT" = captain ]; then
+  PUBLISH_RC=0
+  fm_parent_channel_destination "$FM_HOME" "$STATE" >/dev/null || PUBLISH_RC=$?
+  if [ "$PUBLISH_RC" -eq 0 ]; then
+    CORR=
+    # The destination call above ran in a subshell, so read the binding again.
+    if fm_secondmate_parent_record_parse "$FM_HOME/.fm-secondmate-parent" \
+      && [ "$FM_SECONDMATE_PARENT_ROUTE" = local ] && [ -n "$FM_SECONDMATE_PARENT_HOME" ]; then
+      CORR=$(fm_pending_reply_sole_open_corr "$FM_SECONDMATE_PARENT_HOME/state" "$(fm_parent_channel_home_id "$FM_HOME")")
+    fi
+    if [ -n "$CORR" ]; then
+      PARENT_LINE="done [$(fm_pending_reply_corr_token "$CORR")]: $(fm_parent_channel_clean_note "$SUMMARY") (branch outcome $SEQ)"
+    else
+      PARENT_LINE="done: $(fm_parent_channel_clean_note "$SUMMARY") (branch outcome $SEQ)"
+    fi
+    fm_parent_channel_report "$FM_HOME" "$STATE" "$PARENT_LINE" || PUBLISH_RC=$?
+  fi
+  case "$PUBLISH_RC" in
+    0|1) ;;
+    *) printf 'actionable: seq %s [captain] was recorded here but did not reach the parent channel (rc=%s)\n' "$SEQ" "$PUBLISH_RC" >&2 ;;
+  esac
+fi
 if [ "$SILENT" = true ]; then
   printf 'recorded seq %s [routine]; silent outcome remains in the outcome store\n' "$SEQ"
   exit 0
