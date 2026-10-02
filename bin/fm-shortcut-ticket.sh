@@ -24,8 +24,9 @@
 # bin/fm-captain-hold.sh answer (and keyed answers) comments the recorded decision;
 # a landed ship goes to In Review at teardown even without a PR;
 # bin/fm-teardown.sh comments the outcome (a scout also goes to In Review with
-# its report.md uploaded; a forced teardown, a cancelled (rm) or parked (hold)
-# item moves the story back to Backlog with the reason). Merge and teardown never move a story to Done: firstmate
+# its report.md uploaded; a forced teardown moves the story back to Backlog);
+# bin/fm-tasks-axi.sh rm or hold --kind parked moves it back to Backlog with
+# the reason. Merge and teardown never move a story to Done: firstmate
 # runs `done` on the captain's word or verified production evidence.
 #
 # Create: POST /api/v3/stories with name = item title, description = item body

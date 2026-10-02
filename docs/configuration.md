@@ -356,7 +356,8 @@ A home may instead select another tasks-axi adapter such as Beads through its ow
 | PR registered (`fm-pr-check.sh`) | Moved to In Review, PR linked. |
 | Scout teardown | Moved to In Review, `report.md` uploaded. |
 | Ship teardown | Moved to In Review if the PR has not already done so (a local-only or no-PR landing). |
-| Teardown | Final outcome line commented; a forced teardown, a cancelled item, or a parked hold sends the story back to Backlog with the reason. |
+| Teardown | Final outcome line commented; a forced teardown sends the story back to Backlog with the reason instead. |
+| `fm-tasks-axi.sh rm` or `hold --kind parked` | Sent back to Backlog with the reason (cancelled or parked). |
 | `fm-captain-hold.sh answer` or `answers` | The recorded decision (close or release) is commented. |
 | `fm-shortcut-ticket.sh done <item> --evidence <text>` | Moved to Done. |
 
