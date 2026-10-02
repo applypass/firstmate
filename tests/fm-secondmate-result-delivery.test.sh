@@ -7,9 +7,10 @@
 # verdict in the mate home.
 #
 #   1. fm-branch-report.sh in a seeded mate home also publishes a captain
-#      verdict onto the parent channel, once only, as an uncorrelated
-#      needs-decision that never closes a pending reply. Routine verdicts and a
-#      main home publish nothing.
+#      verdict onto the parent channel, once only, keyed per outcome and with
+#      the verb its --kind names (decision, blocker, result), uncorrelated so it
+#      never closes a pending reply. A captain verdict with no kind is refused;
+#      routine verdicts and a main home publish nothing.
 #   2. A handled steering record with no status line since it arrived is
 #      reported once, and only after the worker's turn ends or the age bound
 #      passes - never on the move alone; records handled in an inbox from
@@ -26,6 +27,8 @@ set -u
 . "$ROOT/bin/fm-pending-reply-lib.sh"
 # shellcheck source=bin/fm-task-inbox-lib.sh
 . "$ROOT/bin/fm-task-inbox-lib.sh"
+# shellcheck source=bin/fm-classify-lib.sh
+. "$ROOT/bin/fm-classify-lib.sh"
 
 TMP_ROOT=$(fm_test_tmproot fm-secondmate-result-delivery)
 export FM_PENDING_REPLY_GRACE_SECS=120
@@ -44,20 +47,22 @@ parent_home=$PARENT
 EOT
 }
 
-branch_report() {  # <home> <task> <verdict> <summary>
+branch_report() {  # <home> <task> <verdict> <summary> [kind args]
   local home=$1 task=$2 verdict=$3 summary=$4
+  shift 4
   printf 'turn=t1\nrows=1\ntasks=\nunscoped=1\nwake=heartbeat\nposture=attended\n' > "$home/state/.supervision-host-turn"
   env FM_HOME="$home" FM_SUPERVISION_ACTOR=branch FM_BRANCH_REPORT_TURN=t1 \
-    "$ROOT/bin/fm-branch-report.sh" --task "$task" --verdict "$verdict" --summary "$summary" 2>&1
+    "$ROOT/bin/fm-branch-report.sh" --task "$task" --verdict "$verdict" "$@" --summary "$summary" 2>&1
 }
 
 phase_in() {  # <state> <corr>
   fm_pending_reply_get "$(fm_pending_reply_path "$1" "$2")" phase
 }
 
-test_captain_verdict_reaches_the_parent_channel_uncorrelated() {
-  local corr status
-  make_pair publish classify
+# Each kind publishes its own verb, keyed per outcome, uncorrelated, and wakes main.
+check_kind() {  # <name> <kind> <verb>
+  local corr status line
+  make_pair "kind-$1" classify
   status="$PARENT/state/classify.status"
   export FM_PENDING_REPLY_NOW=1000
   corr=$(fm_pending_reply_create "$PARENT" "$PARENT/state" classify "follow-up")
@@ -65,18 +70,45 @@ test_captain_verdict_reaches_the_parent_channel_uncorrelated() {
   branch_report "$MATE" fleet routine "nothing new" >/dev/null
   [ ! -s "$status" ] || fail "a routine verdict must publish nothing"
   # Even a summary that quotes the request's corr publishes no corr= token.
-  branch_report "$MATE" fleet captain "follow-up finished for corr=$corr: 3 rows fixed" >/dev/null
-  grep -q "^needs-decision \[at=[0-9]*\]: captain outcome for fleet: follow-up finished" "$status" \
-    || fail "the outcome must reach the parent channel as needs-decision (got: $(cat "$status" 2>/dev/null))"
-  [ "$(grep -c "follow-up finished" "$status")" = 1 ] || fail "one captain outcome must publish exactly one line"
+  branch_report "$MATE" fleet captain "follow-up for corr=$corr: 3 rows fixed" --kind "$2" >/dev/null
+  [ "$(grep -c "follow-up for" "$status")" = 1 ] || fail "one captain outcome must publish exactly one line"
+  line=$(grep "follow-up for" "$status")
+  printf '%s\n' "$line" | grep -q "^$3 \[key=branch-outcome-[0-9]*\] \[at=[0-9]*\]: captain outcome for fleet: follow-up for" \
+    || fail "--kind $2 must publish a keyed $3 line (got: $line)"
   ! grep -q "corr=" "$status" || fail "a script-published outcome must carry no corr= (got: $(cat "$status"))"
+  status_is_captain_relevant "$line" || fail "a keyed $3 outcome must wake main"
   if fm_pending_reply_try_resolve "$PARENT/state" "$corr"; then
     fail "a script-published outcome must not resolve the pending reply"
   fi
   # Closing the request stays with the mate's own correlated report.
   FM_HOME="$MATE" "$ROOT/bin/fm-secondmate-report.sh" "done" "$corr" "3 rows fixed" >/dev/null
   fm_pending_reply_try_resolve "$PARENT/state" "$corr" || fail "the mate's correlated report must resolve it"
-  pass "a captain verdict in a mate home reaches the parent channel uncorrelated and resolves nothing"
+  pass "a captain $2 in a mate home reaches the parent channel as a keyed $3 and resolves nothing"
+}
+
+test_decision_publishes_needs_decision() { check_kind decision decision needs-decision; }
+test_blocker_publishes_blocked() { check_kind blocker blocker blocked; }
+test_result_publishes_done() { check_kind result result "done"; }
+
+test_two_outcomes_keep_distinct_keys() {
+  local status keys
+  make_pair keys classify
+  status="$PARENT/state/classify.status"
+  branch_report "$MATE" fleet captain "first decision" --kind decision >/dev/null
+  branch_report "$MATE" fleet captain "second decision" --kind decision >/dev/null
+  keys=$(grep -o 'key=branch-outcome-[0-9]*' "$status" | sort -u | wc -l | tr -d ' ')
+  [ "$keys" = 2 ] || fail "each outcome must carry its own key (got: $(cat "$status"))"
+  pass "two captain outcomes publish under distinct keys"
+}
+
+test_captain_without_kind_is_refused() {
+  local out rc
+  make_pair nokind classify
+  out=$(branch_report "$MATE" fleet captain "no kind given"); rc=$?
+  [ "$rc" = 2 ] || fail "a captain verdict with no kind must exit 2, got $rc ($out)"
+  [ ! -e "$MATE/state/branch-outcomes.jsonl" ] || fail "a refused outcome must record nothing"
+  [ ! -e "$PARENT/state/classify.status" ] || fail "a refused outcome must publish nothing"
+  pass "a captain verdict with no kind is refused and records nothing"
 }
 
 test_unrelated_captain_outcome_never_closes_a_pending_reply() {
@@ -86,7 +118,7 @@ test_unrelated_captain_outcome_never_closes_a_pending_reply() {
   export FM_PENDING_REPLY_NOW=2000
   corr=$(fm_pending_reply_create "$PARENT" "$PARENT/state" classify "follow-up")
   fm_pending_reply_mark_delivered "$PARENT/state" "$corr"
-  branch_report "$MATE" other captain "worker other needs a login" >/dev/null
+  branch_report "$MATE" other captain "worker other needs a login" --kind blocker >/dev/null
   grep -q "worker other needs a login" "$status" || fail "main must see the outcome"
   if fm_pending_reply_try_resolve "$PARENT/state" "$corr"; then
     fail "an unrelated captain outcome must not close the pending reply"
@@ -99,7 +131,7 @@ test_unrelated_captain_outcome_never_closes_a_pending_reply() {
 test_main_home_publishes_nothing() {
   local home="$TMP_ROOT/main-home"
   mkdir -p "$home/state"
-  branch_report "$home" fleet captain "main outcome" | grep -q "recorded seq" || fail "main home must still record"
+  branch_report "$home" fleet captain "main outcome" --kind result | grep -q "recorded seq" || fail "main home must still record"
   [ -z "$(ls "$home/state"/*.status 2>/dev/null)" ] || fail "a main home must publish no status line"
   pass "a main home is unchanged"
 }
@@ -169,7 +201,7 @@ replay() {  # <publish|skip> -> sets PARENT, MATE, CORR
   # The worker finishes 15 minutes later: result only in report.md and chat.
   export FM_PENDING_REPLY_NOW=5900
   if [ "$mode" = publish ]; then
-    branch_report "$MATE" worker captain "classify follow-up complete; see report.md" >/dev/null
+    branch_report "$MATE" worker captain "classify follow-up complete; see report.md" --kind result >/dev/null
   fi
   fm_pending_reply_tick_one "$PARENT/state" "$CORR" idle ""
   export FM_PENDING_REPLY_NOW=6800
@@ -178,7 +210,7 @@ replay() {  # <publish|skip> -> sets PARENT, MATE, CORR
 
 test_replay_result_reaches_main() {
   replay publish
-  grep -q "^needs-decision .*classify follow-up complete" "$PARENT/state/classify.status" \
+  grep -q "^done \[key=branch-outcome-[0-9]*\] .*classify follow-up complete" "$PARENT/state/classify.status" \
     || fail "main's channel must receive the result"
   [ "$(phase_of_replay)" = escalated ] \
     || fail "the published outcome must not close the request; the age bound still fires, got $(phase_of_replay)"
@@ -200,7 +232,11 @@ phase_of_replay() {
   fm_pending_reply_get "$(fm_pending_reply_path "$PARENT/state" "$CORR")" phase
 }
 
-test_captain_verdict_reaches_the_parent_channel_uncorrelated
+test_decision_publishes_needs_decision
+test_blocker_publishes_blocked
+test_result_publishes_done
+test_two_outcomes_keep_distinct_keys
+test_captain_without_kind_is_refused
 test_unrelated_captain_outcome_never_closes_a_pending_reply
 test_main_home_publishes_nothing
 test_silent_handled_waits_for_the_turn_end
