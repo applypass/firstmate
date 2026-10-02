@@ -540,7 +540,7 @@ inbox_steer_check() {  # <window> <task>
   while IFS= read -r silent_name; do
     [ -n "$silent_name" ] || continue
     reason="signal: $task.status (request $silent_name was moved to handled/ but no status line was appended since it arrived; the worker's result may not have reached its supervisor - read the worker's report and ask it for a done or needs-decision line)"
-    fm_wake_append signal "$task.status" "$reason" || exit 1
+    fm_wake_append signal "$task.inbox/handled/$silent_name" "$reason" || exit 1
     [ -n "$silent_reason" ] || silent_reason=$reason
   done < <(fm_task_inbox_silent_handled "$STATE" "$task")
   [ -z "$silent_reason" ] || wake "$silent_reason"

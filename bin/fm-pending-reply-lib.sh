@@ -1748,19 +1748,3 @@ fm_pending_reply_task_has_open() {  # <state-dir> <task_id>
   done
   return 1
 }
-
-# Print, one per line, the corr id of every open (delivered, not resolved)
-# pending reply for <task_id>.
-fm_pending_reply_open_corrs() {  # <state-dir> <task_id>
-  local state=$1 task_id=$2 dir rec
-  dir=$(fm_pending_reply_dir "$state")
-  [ -d "$dir" ] || return 0
-  for rec in "$dir"/*; do
-    [ -f "$rec" ] || continue
-    [ "$(fm_pending_reply_get "$rec" task_id)" = "$task_id" ] || continue
-    [ "$(fm_pending_reply_get "$rec" phase)" != resolved ] || continue
-    [ -n "$(fm_pending_reply_get "$rec" delivered_epoch)" ] || continue
-    fm_pending_reply_get "$rec" corr_id
-  done
-  return 0
-}
