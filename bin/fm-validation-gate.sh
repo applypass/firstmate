@@ -29,8 +29,11 @@
 #
 # SWITCH. config/validation-gate (`on` or `off`) wins; otherwise the tracked
 # defaults/validation-gate beside bin/ decides; neither present means off, which
-# is upstream behaviour. The switch is read when a task is spawned or promoted,
-# so turning it off does not release tasks already held - release those.
+# is upstream behaviour. The switch is read once, when a task is spawned or
+# promoted, and the caller records the decision as `validation_gate=on` in
+# state/<id>.meta; a relaunch reads that record and never the switch, so a task
+# keeps the contract its brief carries. Turning the switch off therefore does not
+# release tasks already held - release those.
 # Under FM_TEST_SEAM=1, FM_TEST_VALIDATION_GATE_DEFAULTS names the defaults file
 # instead, so the suite runs on the upstream default.
 #
@@ -46,20 +49,19 @@
 #       Exit 0 when the switch resolves on, 1 when off.
 #   fm-validation-gate.sh prepare --config <dir> --state <dir> --kind <kind>
 #       --mode <mode> --forge <forge> --worktree <path> --id <task-id> [--relaunch 0|1]
-#       Called by fm-spawn and fm-promote. With the switch on: for a held scope,
+#       Called by fm-spawn and fm-promote. With the switch on (on a relaunch,
+#       with `validation_gate=on` in the task record): for a held scope,
 #       install the companion into the worktree's no-mistakes gate and write
 #       `held` (a relaunch keeps an existing file); for a ship or scout, print
-#       the gate file path the pane exports. Prints nothing when off. Exits
+#       the gate file path the pane exports, which the caller records as
+#       `validation_gate=on`. Prints nothing when off. Exits
 #       nonzero, and the caller stops, when the gate cannot be installed: no
 #       no-mistakes remote, a gate whose pre-receive runs no companion, or a
 #       companion that is not firstmate's.
-#   fm-validation-gate.sh release <task-id> [<sha>]
+#   fm-validation-gate.sh release <task-id>
 #       Firstmate runs this when it tells the captain the PR is ready to merge.
-#       Records `released <sha>`, defaulting to the task worktree's HEAD; only
-#       that exact head may then start a run, so a later change needs a new
-#       release.
-#   fm-validation-gate.sh status <task-id>
-#       Print the task's verdict, or `ungated`.
+#       Records `released <sha>` for the task worktree's HEAD; only that exact
+#       head may then start a run, so a later change needs a new release.
 #   fm-validation-gate.sh dod <branch>
 #       Print the opening of the gated no-mistakes Definition of done;
 #       bin/fm-dod-lib.sh renders the rest.
@@ -181,14 +183,18 @@ cmd_prepare() {
     esac
   done
   [ -n "$config" ] && [ -n "$state" ] && [ -n "$kind" ] && [ -n "$id" ] || usage
-  gate_enabled "$config"
-  status=$?
-  [ "$status" = 0 ] || { [ "$status" = 1 ] && return 0; exit 1; }
   case "$kind" in
   ship | scout) ;;
   *) return 0 ;;
   esac
   state=$(cd "$state" && pwd -P) || die "state directory $state is not accessible"
+  if [ "$relaunch" = 1 ]; then
+    grep -qx 'validation_gate=on' "$state/$id.meta" 2>/dev/null || return 0
+  else
+    gate_enabled "$config"
+    status=$?
+    [ "$status" = 0 ] || { [ "$status" = 1 ] && return 0; exit 1; }
+  fi
   file="$state/$id.validation-gate"
   if [ "$kind" = ship ] && [ "$mode" = no-mistakes ] && [ "$forge" = none ]; then
     [ -n "$wt" ] || usage
@@ -201,29 +207,18 @@ cmd_prepare() {
 }
 
 cmd_release() {
-  local id=${1:-} sha=${2:-HEAD} state meta file wt full
-  [ -n "$id" ] && [ "$#" -le 2 ] || usage
+  local id=${1:-} state meta file wt full
+  [ -n "$id" ] && [ "$#" -eq 1 ] || usage
   state=$(state_dir)
   file="$state/$id.validation-gate"
   [ -e "$file" ] || die "task $id is not gated (no $file)"
   meta="$state/$id.meta"
   wt=$(sed -n 's/^worktree=//p' "$meta" 2>/dev/null | head -n 1)
   [ -n "$wt" ] && [ -d "$wt" ] || die "task $id has no readable worktree in $meta"
-  full=$(git -C "$wt" rev-parse --verify --quiet "$sha^{commit}") ||
-    die "$sha is not a commit in $wt"
+  full=$(git -C "$wt" rev-parse --verify --quiet 'HEAD^{commit}') ||
+    die "$wt has no HEAD commit"
   write_atomic "$file" "released $full" || die "could not write $file"
   echo "released $id at $full; tell the worker to run /no-mistakes on that head"
-}
-
-cmd_status() {
-  local id=${1:-} file
-  [ -n "$id" ] && [ "$#" -eq 1 ] || usage
-  file="$(state_dir)/$id.validation-gate"
-  if [ -e "$file" ]; then
-    head -n 1 "$file"
-  else
-    echo ungated
-  fi
 }
 
 cmd_dod() {
@@ -250,7 +245,6 @@ case "$CMD" in
 enabled) cmd_enabled "$@" ;;
 prepare) cmd_prepare "$@" ;;
 release) cmd_release "$@" ;;
-status) cmd_status "$@" ;;
 dod) cmd_dod "$@" ;;
 -h | --help | '') usage ;;
 *) usage ;;

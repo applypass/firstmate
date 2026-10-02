@@ -97,7 +97,7 @@ started_count() {
 
 write_task_meta() {  # <id> [kind]
   fm_write_meta "$STATE_DIR/$1.meta" "worktree=$WT_DIR" "kind=${2:-ship}" \
-    "mode=no-mistakes" "branch=fm/$1"
+    "mode=no-mistakes" "branch=fm/$1" "validation_gate=on"
 }
 
 prepare_ship() {  # <id> [extra prepare args...]
@@ -107,7 +107,7 @@ prepare_ship() {  # <id> [extra prepare args...]
     --kind ship --mode no-mistakes --forge none --worktree "$WT_DIR" --id "$id" "$@"
 }
 
-release_task() {  # <id> [sha]
+release_task() {  # <id>
   FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$STATE_DIR" "$GATE" release "$@"
 }
 
@@ -148,23 +148,6 @@ test_released_head_is_accepted_and_only_that_head() {
   [ "$status" -ne 0 ] || fail "a head other than the released one should be refused: $out"
   assert_equals 1 "$(started_count)" "a later head must not start a second run without a new release"
   pass "release admits exactly the released head; a later head needs a new release"
-}
-
-test_release_of_explicit_sha() {
-  local first out
-  make_world explicit
-  write_task_meta explicit
-  prepare_ship explicit >/dev/null || fail "prepare should succeed"
-  commit_in "$WT_DIR" 'feat: first'
-  first=$(git -C "$WT_DIR" rev-parse HEAD)
-  commit_in "$WT_DIR" 'feat: second'
-  out=$(release_task explicit "$first") || fail "release of an explicit sha should succeed: $out"
-  assert_equals "released $first" "$(cat "$STATE_DIR/explicit.validation-gate")" \
-    "release should record the named sha in full"
-  out=$(release_task explicit deadbeef 2>&1) && fail "release of an unknown sha should fail: $out"
-  assert_equals "released $first" "$(cat "$STATE_DIR/explicit.validation-gate")" \
-    "a refused release must not change the record"
-  pass "release records a named commit and refuses one the worktree does not hold"
 }
 
 test_release_refuses_an_ungated_task() {
@@ -260,7 +243,7 @@ test_prepare_refuses_foreign_companion_and_missing_support() {
 }
 
 test_prepare_is_idempotent_and_relaunch_keeps_a_release() {
-  local head out
+  local head
   make_world relaunch
   write_task_meta relaunch
   prepare_ship relaunch >/dev/null || fail "first prepare should succeed"
@@ -274,8 +257,6 @@ test_prepare_is_idempotent_and_relaunch_keeps_a_release() {
   prepare_ship relaunch >/dev/null || fail "a fresh prepare should succeed"
   assert_equals held "$(cat "$STATE_DIR/relaunch.validation-gate")" \
     "a fresh spawn of the id must hold it again"
-  out=$(FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$STATE_DIR" "$GATE" status relaunch)
-  assert_equals held "$out" "status should print the current verdict"
   pass "prepare is idempotent, a relaunch keeps a release, and a fresh spawn holds again"
 }
 
@@ -349,6 +330,7 @@ test_spawn_installs_the_gate() {
   assert_equals held "$(cat "$STATE_DIR/spawn-on.validation-gate")" "spawn should hold the task"
   assert_grep "FM_VALIDATION_GATE=" "$LAUNCH_LOG" "the launch should carry the task's gate path"
   assert_grep "spawn-on.validation-gate" "$LAUNCH_LOG" "the launch should point at this task's gate file"
+  assert_grep 'validation_gate=on' "$STATE_DIR/spawn-on.meta" "the task record should carry the gate decision"
   pass "a no-mistakes ship spawn installs the companion, holds the task, and exports its gate"
 }
 
@@ -362,7 +344,57 @@ test_spawn_with_switch_absent_installs_nothing() {
   assert_absent "$GATE_DIR/hooks/pre-receive.no-mistakes-user" "switch absent must install nothing"
   assert_absent "$STATE_DIR/spawn-off.validation-gate" "switch absent must hold nothing"
   assert_no_grep "FM_VALIDATION_GATE" "$LAUNCH_LOG" "switch absent must leave the launch unchanged"
+  assert_no_grep 'validation_gate=' "$STATE_DIR/spawn-off.meta" "switch absent must record no gate decision"
   pass "with the switch file absent, spawn behaves as upstream"
+}
+
+# run_world_relaunch <id>: drive the real fm-spawn --relaunch against the fake
+# pane, which reports a bare shell so the endpoint reads agent-free.
+run_world_relaunch() {
+  local id=$1 fakebin LAUNCH_LOG
+  fakebin=$(fm_test_make_spawn_fakebin "$TMP_ROOT/$id-relaunch-fake")
+  mv "$fakebin/tmux" "$fakebin/tmux-spawn"
+  cat >"$fakebin/tmux" <<'SH'
+#!/usr/bin/env bash
+case "$*" in *pane_current_command*) echo zsh; exit 0 ;; esac
+exec "${0%/*}/tmux-spawn" "$@"
+SH
+  chmod +x "$fakebin/tmux"
+  LAUNCH_LOG=$(launch_log "$id")
+  : >"$LAUNCH_LOG"
+  FM_FAKE_DUPLICATE_WINDOW="fm-$id" FM_FAKE_LAUNCH_LOG="$LAUNCH_LOG" \
+    fm_test_run_spawn "$HOME_DIR" "$WT_DIR" "$fakebin" "$id" --relaunch
+}
+
+test_relaunch_keeps_the_spawn_decision() {
+  local out status
+  make_world relaunch-plain
+  out=$(with_gate_off run_world_spawn relaunch-plain --mode no-mistakes --yolo off)
+  status=$?
+  expect_code 0 "$status" "an ungated spawn should succeed: $out"
+  out=$(with_gate_on run_world_relaunch relaunch-plain)
+  status=$?
+  expect_code 0 "$status" "a relaunch after the switch turns on should succeed: $out"
+  LAUNCH_LOG=$(launch_log relaunch-plain)
+  assert_grep 'codex' "$LAUNCH_LOG" "the relaunch should deliver a replacement launch"
+  assert_no_grep "FM_VALIDATION_GATE" "$LAUNCH_LOG" "a task spawned ungated must relaunch ungated"
+  assert_absent "$STATE_DIR/relaunch-plain.validation-gate" "a task spawned ungated must not be held on relaunch"
+  assert_absent "$GATE_DIR/hooks/pre-receive.no-mistakes-user" "a task spawned ungated installs nothing on relaunch"
+  assert_no_grep 'validation_gate=' "$STATE_DIR/relaunch-plain.meta" "the relaunch must not record a gate decision"
+
+  make_world relaunch-gated
+  out=$(with_gate_on run_world_spawn relaunch-gated --mode no-mistakes --yolo off)
+  status=$?
+  expect_code 0 "$status" "a gated spawn should succeed: $out"
+  out=$(with_gate_off run_world_relaunch relaunch-gated)
+  status=$?
+  expect_code 0 "$status" "a relaunch after the switch turns off should succeed: $out"
+  LAUNCH_LOG=$(launch_log relaunch-gated)
+  assert_grep "relaunch-gated.validation-gate" "$LAUNCH_LOG" "a task spawned gated must relaunch gated"
+  assert_equals held "$(cat "$STATE_DIR/relaunch-gated.validation-gate")" "a gated task stays held across relaunch"
+  assert_equals 1 "$(grep -c '^validation_gate=on$' "$STATE_DIR/relaunch-gated.meta")" \
+    "the relaunch must keep exactly one gate decision in the task record"
+  pass "a relaunch follows the gate decision recorded at spawn, not the current switch"
 }
 
 test_spawn_refuses_when_the_gate_cannot_be_installed() {
@@ -419,6 +451,7 @@ EOF
   status=$?
   expect_code 0 "$status" "promotion to a gated no-mistakes ship should succeed: $out"
   assert_equals held "$(cat "$STATE_DIR/$id.validation-gate")" "promotion should hold the new ship"
+  assert_grep 'validation_gate=on' "$STATE_DIR/$id.meta" "promotion should record the gate decision"
   assert_present "$GATE_DIR/hooks/pre-receive.no-mistakes-user" "promotion should install the companion"
   assert_grep 'ready for final validation' "$HOME_DIR/data/$id/ship-instructions.md" \
     "the promoted worker should receive the gated Definition of done"
@@ -427,7 +460,6 @@ EOF
 
 test_pre_release_push_is_refused
 test_released_head_is_accepted_and_only_that_head
-test_release_of_explicit_sha
 test_release_refuses_an_ungated_task
 test_origin_push_is_always_accepted
 test_no_verify_and_hookspath_overrides_still_refused
@@ -439,6 +471,7 @@ test_prepare_scope
 test_switch_resolution
 test_spawn_installs_the_gate
 test_spawn_with_switch_absent_installs_nothing
+test_relaunch_keeps_the_spawn_decision
 test_spawn_refuses_when_the_gate_cannot_be_installed
 test_brief_renders_the_gated_definition_of_done
 test_promote_holds_a_promoted_ship

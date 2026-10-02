@@ -13,7 +13,8 @@ Run `bin/fm-pr-check.sh <id> <PR url>` with the URL copied from that ready signa
 `bin/fm-dod-lib.sh` owns the named-head gate on that ready signal: a ship `done:` whose named head exists only in the worker's disposable copy is not ready (`bin/fm-crew-state.sh` reports blocked, `bin/fm-pr-check.sh` refuses to register, and a secondmate does not publish that done upstream).
 That blocked reading is the gate working, not a stuck worker, so steer the worker on the commit the refusal names rather than waiting.
 A direct-PR worker pushes that commit to its PR branch, and a local-only worker commits it on its ship branch.
-A no-mistakes worker re-validates it with /no-mistakes so the pipeline stays the one publisher; it never pushes from its copy.
+A no-mistakes worker re-validates it with /no-mistakes so the pipeline stays the one publisher; it never pushes from its copy unless the validation release gate below holds the task.
+A gated no-mistakes worker pushes to origin from its copy while the PR iterates, and the released /no-mistakes run stays the one publisher of the final head.
 In no-mistakes mode the earlier `done [at=<epoch>]: {summary}` is the pipeline handoff and is not gated.
 Under the validation release gate (`bin/fm-validation-gate.sh`), a no-mistakes ship first reports `done [at=<epoch>]: PR <url> ready for final validation` without running the pipeline; tell the captain the PR is ready to merge, run `bin/fm-validation-gate.sh release <id>`, and steer the worker to run /no-mistakes on that head.
 Hold the merge until that released run reports checks green, and release again if the head changes.
