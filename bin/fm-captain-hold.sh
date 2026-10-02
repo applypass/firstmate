@@ -1923,9 +1923,14 @@ command_open() {  # <task-id> [--identity] [--distinguish-absent]
   exit 2
 }
 
+# Fork-only: comment the recorded decision on the held item's Shortcut story (best-effort).
+shortcut_comment_answer() {  # <task-id>
+  FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA "$SCRIPT_DIR/fm-shortcut-ticket.sh" comment "$1" "Captain decision: $DECISION_TEXT" --best-effort || true
+}
+
 case "${1:-}" in
   hold) shift; command_hold "$@" ;;
-  answer) shift; command_answer "$@" ;;
+  answer) shift; command_answer "$@"; shortcut_comment_answer "$@" ;;
   answers) shift; command_answers "$@" ;;
   reconcile-requests) shift; command_reconcile_requests "$@" ;;
   bind) shift; command_bind "$@" ;;

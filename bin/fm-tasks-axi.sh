@@ -47,6 +47,10 @@
 #     first write would replace the link with a private copy, exactly the fork
 #     this command exists to prevent. Lifecycle transitions refuse the same file.
 # Otherwise the exit status is tasks-axi's own.
+#
+# After a successful `add` (or `create`) with the Shortcut ticket feature on,
+# bin/fm-shortcut-ticket.sh gives the new item a Shortcut story; its failure
+# only warns and never changes the add's exit status.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -137,4 +141,53 @@ else
 fi
 
 cd "$FM_BACKLOG_AXI_ROOT" || fail "cannot enter the backlog root $FM_BACKLOG_AXI_ROOT"
-exec tasks-axi ${ARGS[@]+"${ARGS[@]}"}
+# Fork-only: cancelling (rm) or parking (hold --kind parked) an item sends its
+# story back to Backlog with the reason (best-effort), once tasks-axi succeeds.
+# rm resolves the story first because the item is gone afterwards.
+SC_ITEM='' SC_KIND='' SC_REASON='' sc_prev=''
+for arg in "${@:2}"; do
+  case "$sc_prev" in
+    --kind) SC_KIND=$arg; sc_prev=; continue ;;
+    --reason) SC_REASON=$arg; sc_prev=; continue ;;
+    --until) sc_prev=; continue ;;
+  esac
+  case "$arg" in
+    --kind | --reason | --until) sc_prev=$arg ;;
+    --kind=*) SC_KIND=${arg#*=} ;;
+    --reason=*) SC_REASON=${arg#*=} ;;
+    -*) ;;
+    *) [ -n "$SC_ITEM" ] || SC_ITEM=$arg ;;
+  esac
+done
+SC_PARK=''
+case "${1:-}" in
+  rm | delete)
+    [ -z "$SC_ITEM" ] || SC_ITEM=$("$SCRIPT_DIR/fm-shortcut-ticket.sh" --linked "$SC_ITEM" --best-effort 2>/dev/null)
+    SC_PARK="cancelled: removed from the backlog"
+    ;;
+  hold) [ "$SC_KIND" != parked ] || SC_PARK="parked: $SC_REASON" ;;
+esac
+case "${1:-}" in
+  add | create) ;;
+  rm | delete | hold)
+    tasks-axi ${ARGS[@]+"${ARGS[@]}"}
+    RC=$?
+    [ "$RC" -ne 0 ] || [ -z "$SC_PARK" ] || [ -z "$SC_ITEM" ] ||
+      "$SCRIPT_DIR/fm-shortcut-ticket.sh" park "$SC_ITEM" --reason "$SC_PARK" --best-effort >&2 || true
+    exit "$RC"
+    ;;
+  *) exec tasks-axi ${ARGS[@]+"${ARGS[@]}"} ;;
+esac
+
+OUT=$(tasks-axi ${ARGS[@]+"${ARGS[@]}"})
+RC=$?
+printf '%s\n' "$OUT"
+if [ "$RC" -eq 0 ] && "$SCRIPT_DIR/fm-shortcut-ticket.sh" --enabled; then
+  NEW_ID=$(printf '%s\n' "$OUT" | sed -n 's/^  id: *//p' | head -1)
+  [ -n "$NEW_ID" ] || NEW_ID=$(printf '%s\n' "$OUT" | jq -r '.task.id // empty' 2>/dev/null)
+  if [ -n "$NEW_ID" ]; then
+    "$SCRIPT_DIR/fm-shortcut-ticket.sh" "$NEW_ID" >&2 ||
+      printf 'fm-tasks-axi: warning: no Shortcut ticket for %s; retry with bin/fm-shortcut-ticket.sh %s\n' "$NEW_ID" "$NEW_ID" >&2
+  fi
+fi
+exit "$RC"

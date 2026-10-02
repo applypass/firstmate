@@ -1271,6 +1271,105 @@ test_dispatch_refuses_an_id_this_home_has_no_item_for() {
   pass "dispatch refuses, before creating anything, when the home has no item for the id"
 }
 
+test_dispatch_requires_a_shortcut_ticket_when_the_feature_is_on() {
+  local case_dir id out rc=0
+  id=atomic-shortcut-b2
+  case_dir=$(make_home dispatch-shortcut "$id")
+  tasks-axi add "$id" "item without a ticket" --kind ship --file "$(backlog_of "$case_dir")" >/dev/null
+
+  out=$(FM_SHORTCUT_TICKETS=on run_ship_spawn "$case_dir" "$id") || rc=$?
+  [ "$rc" -ne 0 ] || fail "spawn dispatched an item with no Shortcut ticket"
+  assert_contains "$out" "bin/fm-shortcut-ticket.sh $id" "the refusal did not name the retry command"
+  assert_absent "$(home_of "$case_dir")/state/$id.meta" "refused dispatch still left a record behind"
+
+  tasks-axi update "$id" --title "item with a ticket sc-4242" --file "$(backlog_of "$case_dir")" >/dev/null
+  out=$(FM_SHORTCUT_TICKETS=on run_ship_spawn "$case_dir" "$id") || fail "spawn refused a ticketed item: $out"
+  assert_present "$(home_of "$case_dir")/state/$id.meta" "ticketed dispatch published no record"
+  pass "dispatch refuses an unticketed item and passes once the sc id is recorded"
+}
+
+test_dispatch_ignores_shortcut_tickets_when_the_feature_is_off() {
+  local case_dir id out
+  id=atomic-shortcut-b3
+  case_dir=$(make_home dispatch-shortcut-off "$id")
+  add_item "$case_dir" "$id"
+
+  out=$(FM_SHORTCUT_TICKETS=off run_ship_spawn "$case_dir" "$id") || fail "feature off refused dispatch: $out"
+  assert_present "$(home_of "$case_dir")/state/$id.meta" "dispatch with the feature off published no record"
+  pass "dispatch needs no Shortcut ticket when the feature is off"
+}
+
+# Shortcut story sync hooks (applypass fork). Each case ticketed the item by
+# naming sc-5000 and stubs curl; none reaches the real API.
+shortcut_env() {  # <case-dir> <command...>
+  local case_dir=$1
+  shift
+  mkdir -p "$case_dir/fakebin"
+  fm_fake_shortcut_curl "$case_dir/fakebin"
+  FM_SHORTCUT_TICKETS=on SHORTCUT_API_TOKEN=tok-secret-123 FAKE_CURL_LOG="$case_dir/curl.log" "$@"
+}
+
+test_dispatch_moves_the_story_to_in_progress() {
+  local case_dir id out
+  id=atomic-shortcut-b4
+  case_dir=$(make_home dispatch-shortcut-progress "$id")
+  tasks-axi add "$id" "ticketed sc-5000" --kind ship --file "$(backlog_of "$case_dir")" >/dev/null
+  : > "$case_dir/curl.log"
+  out=$(shortcut_env "$case_dir" run_ship_spawn "$case_dir" "$id") || fail "spawn failed: $out"
+  assert_grep 'PUT https://api.app.shortcut.com/api/v3/stories/5000' "$case_dir/curl.log" "dispatch did not update the story"
+  assert_grep '"workflow_state_id":500000008' "$case_dir/curl.log" "dispatch did not move the story to In Progress"
+  pass "dispatch moves the Shortcut story to In Progress"
+}
+
+test_landed_teardown_moves_the_story_to_review_and_comments_the_outcome() {
+  local case_dir id out
+  id=atomic-shortcut-b5
+  case_dir=$(make_home teardown-shortcut "$id")
+  tasks-axi add "$id" "ticketed sc-5000" --kind ship --file "$(backlog_of "$case_dir")" >/dev/null
+  start_item "$case_dir" "$id"
+  write_task_meta "$case_dir" "$id" ship local-only "spawn_gen=spawn-shortcut-close"
+  printf 'done [at=1]: landed the widget\n' > "$(home_of "$case_dir")/state/$id.status"
+  : > "$case_dir/curl.log"
+  out=$(shortcut_env "$case_dir" run_teardown "$case_dir" "$id") || fail "teardown failed: $out"
+  assert_grep 'Final outcome: done [at=1]: landed the widget' "$case_dir/curl.log" "teardown did not post the outcome"
+  assert_grep '"workflow_state_id":500000009' "$case_dir/curl.log" "a landed ship without a PR did not reach In Review"
+  assert_no_grep '"workflow_state_id":500000010' "$case_dir/curl.log" "teardown moved the story to Done"
+  assert_no_grep '"workflow_state_id":500000006' "$case_dir/curl.log" "a landed teardown parked the story"
+  pass "a landed ship teardown moves the story to In Review, comments the outcome, and never moves it to Done"
+}
+
+test_forced_teardown_parks_the_story() {
+  local case_dir id out
+  id=atomic-shortcut-b6
+  case_dir=$(make_home teardown-shortcut-force "$id")
+  tasks-axi add "$id" "ticketed sc-5000" --kind ship --file "$(backlog_of "$case_dir")" >/dev/null
+  start_item "$case_dir" "$id"
+  write_task_meta "$case_dir" "$id" ship local-only "spawn_gen=spawn-shortcut-force"
+  : > "$case_dir/curl.log"
+  out=$(shortcut_env "$case_dir" run_teardown "$case_dir" "$id" --force) || fail "forced teardown failed: $out"
+  assert_grep '"workflow_state_id":500000006' "$case_dir/curl.log" "a forced teardown did not return the story to Backlog"
+  assert_grep 'torn down without landing' "$case_dir/curl.log" "the park reason was not commented"
+  pass "a teardown without landing sends the story back to Backlog"
+}
+
+test_scout_teardown_moves_the_story_to_review_with_its_report() {
+  local case_dir id out
+  id=atomic-shortcut-b7
+  case_dir=$(make_home teardown-shortcut-scout "$id")
+  tasks-axi add "$id" "ticketed sc-5000" --kind scout --file "$(backlog_of "$case_dir")" >/dev/null
+  start_item "$case_dir" "$id"
+  write_task_meta "$case_dir" "$id" scout '' "spawn_gen=spawn-shortcut-scout"
+  mkdir -p "$(home_of "$case_dir")/data/$id"
+  printf 'findings\n' > "$(home_of "$case_dir")/data/$id/report.md"
+  FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$(home_of "$case_dir")" PATH="$case_dir/fakebin:$PATH" \
+    "$ROOT/bin/fm-captain-hold.sh" complete "$id" --none >/dev/null || fail "could not record the captain-call inventory"
+  : > "$case_dir/curl.log"
+  out=$(shortcut_env "$case_dir" run_teardown "$case_dir" "$id") || fail "scout teardown failed: $out"
+  assert_grep '"workflow_state_id":500000009' "$case_dir/curl.log" "the scout story did not move to In Review"
+  assert_grep 'POST https://api.app.shortcut.com/api/v3/files' "$case_dir/curl.log" "the scout report was not uploaded"
+  pass "a scout teardown moves the story to In Review and uploads the report"
+}
+
 test_dispatch_reports_a_backlog_read_failure() {
   local case_dir id out rc=0
   id=atomic-dispatch-read-failure-b3
@@ -3018,6 +3117,12 @@ test_automatic_backend_refuses_incompatible_tasks_axi_before_mutation
 test_dispatch_refuses_an_unresolvable_data_directory
 test_completion_refuses_an_unresolvable_data_directory
 test_dispatch_refuses_an_id_this_home_has_no_item_for
+test_dispatch_requires_a_shortcut_ticket_when_the_feature_is_on
+test_dispatch_ignores_shortcut_tickets_when_the_feature_is_off
+test_dispatch_moves_the_story_to_in_progress
+test_landed_teardown_moves_the_story_to_review_and_comments_the_outcome
+test_forced_teardown_parks_the_story
+test_scout_teardown_moves_the_story_to_review_with_its_report
 test_dispatch_reports_a_backlog_read_failure
 test_dispatch_refuses_a_closed_item
 test_dispatch_refuses_to_commit_without_a_published_record

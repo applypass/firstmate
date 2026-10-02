@@ -532,6 +532,7 @@ cmd_up() {
   printf 'claude\n' > "$LAB/config/crew-harness"
   printf 'claude sonnet low\n' > "$LAB/config/secondmate-harness"
   printf 'auto\n' > "$LAB/config/claude-permission-mode"
+  printf 'enabled=off\n' > "$LAB/config/shortcut-tickets"
   case "$host_line" in
     none) ;;
     off) : > "$LAB/config/supervision-host-off" ;;
