@@ -30,6 +30,9 @@ Every captain-facing outcome that leaves durable evidence in the mate home is pu
 | Child leaving the home | its final ledger line | `bin/fm-teardown.sh`, which refuses to remove the child while that line is undelivered |
 | Child ended silently | terminal current state with a silent ledger | the existing inactive-outcome scan in `bin/fm-inactive-reconcile.sh` |
 | Answer to a marked request | a correlated line guarded by the pending-reply record | `bin/fm-secondmate-report.sh`, which resolves the parent channel from the mate home; the pending-reply guard repairs a line stranded in the local mate's same-basename status file before recovery or escalation |
+| Supervision branch captain outcome in a mate home | the captain-verdict row in the mate's outcome store | `bin/fm-branch-report.sh`, which also appends it to the parent channel by its required `--kind`: `needs-decision` for a decision, `blocked` for a blocker, `done` for a result, keyed `branch-outcome-<seq>` so it never replaces another open decision; the line never carries `corr=`, so it never closes a pending reply, and closing a marked request stays with the mate's own correlated report, with the acknowledged age-bound escalation as the backstop |
+| Marked request only acknowledged, then no result | a `working:` or `paused:` correlated line, which keeps the pending reply open | `bin/fm-pending-reply-lib.sh`, which escalates once as `pending-reply-unreported` when no new correlated line arrives within `FM_PENDING_REPLY_ACK_SECS`; an idle mate pane is healthy while its worker runs, so it is not the signal |
+| Worker moved a steering request to `handled/`, then ended its turn without a status line | the handled record, its `turn-ended` marker, and a status file unchanged since the request arrived | `bin/fm-watch.sh` via `fm_task_inbox_silent_handled` (`bin/fm-task-inbox-lib.sh`), one `<task>.silent-handled.<NNN>` signal wake row per record, which the branch dispatcher resolves to the task and the drain keeps apart from status wakes, to the supervising home; the move alone never counts, and a record left past `FM_TASK_INBOX_SILENT_AGE_SECS` counts without a turn end |
 | An outcome that exists only in the mate's reasoning | none | the charter and the `AGENTS.md` carve-outs only |
 
 The ledger delivery reads files, plus a local git reachability check on a ship `done:` with no delivery record yet (`bin/fm-dod-lib.sh`): it calls no harness, no forge, and no current-state reader, so it is identical for every harness and runtime backend.
@@ -38,6 +41,7 @@ A duplicate line is harmless and a missed one is not, so the mate may still appe
 For marked replies, the report helper accepts no caller-selected destination and uses the channel resolver for both local and remote homes; its script header owns the exact invocation contract.
 The pending-reply guard may restate only the correlated line from a local mate's `state/<mate-id>.status` onto the parent channel, which repairs the common parent-home versus mate-home mixup without accepting arbitrary mate-home sightings as acknowledgement.
 Other correlated mate-home status lines remain wrong-home evidence, while a remote home's routed `state/parent-replies.status` is already the parent channel and is not classified as wrong-home.
+Only a terminal verb (`done`, `ready`, `needs-decision`, `blocked`, `failed`) resolves a pending reply: a `working:` or `paused:` correlated line is an acknowledgement and leaves the record open.
 A missed-reply escalation includes the complete first sighting path and line number in readable shell-escaped form.
 
 ## What is deliberately not built
@@ -54,7 +58,8 @@ A missed-reply escalation includes the complete first sighting path and line num
 `tests/fm-pr-merge.test.sh` covers the PR-ready line at registration and the merge outcome's upward report.
 `tests/fm-teardown.test.sh` covers teardown delivering a child's final line and refusing when the channel cannot be written.
 `tests/fm-brief.test.sh` pins the charter's channel rule.
-`tests/fm-pending-reply.test.sh` covers helper-selected local routing, remote-channel classification, same-basename restatement before false escalation, readable wrong-home diagnostics, and the rule that arbitrary mate-home sightings never acknowledge a reply.
+`tests/fm-secondmate-result-delivery.test.sh` replays the 2026-10-01 miss in a temp home pair (acknowledgement, result only in the report, captain verdict in the mate home) and covers uncorrelated, keyed branch-outcome publication for each kind and the refusal of a captain verdict with no kind, the silent-handled check and its turn-end timing, and the age-bound escalation that remains with publication disabled while the mate pane sits idle.
+`tests/fm-pending-reply.test.sh` covers acknowledgement keeping a reply open until a terminal line, the acknowledged age-bound escalation, and helper-selected local routing, remote-channel classification, same-basename restatement before false escalation, readable wrong-home diagnostics, and the rule that arbitrary mate-home sightings never acknowledge a reply.
 
 ## Live verification
 

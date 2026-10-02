@@ -30,6 +30,8 @@
 #   <task>.inbox/.ring-state   watcher re-ring ladder: "<msg>\t<count>\t<epoch>"
 #   <task>.inbox/.escalated    oldest-message name already surfaced as stale,
 #                              so later polls suppress another escalation
+#   <task>.inbox/.silent-seen  handled records already checked for a result line
+#                              (fm_task_inbox_silent_handled)
 #
 # Record format (fm_task_inbox_write / fm_task_inbox_body):
 #   schema=fm-task-inbox.v1
@@ -69,6 +71,9 @@
 # Tunables (env):
 #   FM_TASK_INBOX_GRACE_SECS   default 90; delivery-attempt grace and spacing
 #   FM_TASK_INBOX_RING_MAX     default 3; delivery attempts before escalation
+#   FM_TASK_INBOX_SILENT_AGE_SECS  default 3600; how long after its move a
+#                              handled record with no status line is reported
+#                              as silent even if no turn end was seen
 
 _FM_TASK_INBOX_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Both dependencies are canonical lint roots in their own right. Keep them as
@@ -160,12 +165,22 @@ _fm_task_inbox_write_record_locked() {  # <inbox-dir> <text> [delivery-mode]
   printf '%s' "$rec"
 }
 
+# Create the inbox. A new inbox starts with an empty silent-handled mark list,
+# so only an inbox from before that check has its handled records seeded as
+# history (fm_task_inbox_silent_handled).
+_fm_task_inbox_ensure_dir() {  # <inbox-dir>
+  if mkdir "$1" 2>/dev/null; then
+    : > "$1/.silent-seen" || return 1
+  fi
+  mkdir -p "$1/handled"
+}
+
 # Durably enqueue one steer: temp-write, then atomic rename into the next
 # sequence slot. Prints the record path. Fails without a partial record.
 fm_task_inbox_write() {  # <state-dir> <task-id> <text> [delivery-mode]
   local state=$1 task=$2 text=$3 delivery_mode=${4:-} dir lock rec status=0
   dir=$(fm_task_inbox_dir "$state" "$task")
-  mkdir -p "$dir/handled" || return 1
+  _fm_task_inbox_ensure_dir "$dir" || return 1
   lock="$dir/.seq.lock"
   fm_task_inbox_lock_acquire "$lock" || return 1
   rec=$(_fm_task_inbox_write_record_locked "$dir" "$text" "$delivery_mode") || status=1
@@ -188,7 +203,7 @@ fm_task_inbox_write() {  # <state-dir> <task-id> <text> [delivery-mode]
 fm_task_inbox_write_idempotent() {  # <state-dir> <task-id> <text> [delivery-mode]
   local state=$1 task=$2 text=$3 delivery_mode=${4:-} dir lock want have f rec='' status=0
   dir=$(fm_task_inbox_dir "$state" "$task")
-  mkdir -p "$dir/handled" || return 1
+  _fm_task_inbox_ensure_dir "$dir" || return 1
   lock="$dir/.seq.lock"
   fm_task_inbox_lock_acquire "$lock" || return 1
   if want=$(mktemp "$dir/.dedup.XXXXXX") && have=$(mktemp "$dir/.dedup.XXXXXX"); then
@@ -452,5 +467,64 @@ fm_task_inbox_record_escalated() {  # <state-dir> <task-id> <record-path>
   if ! { printf '%s\n' "${3##*/}" > "$dir/.escalated"; } 2>/dev/null; then
     [ -d "$dir" ] || return 0
     return 1
+  fi
+}
+
+# Silent-handled detection: a worker that moves a request to handled/ and then
+# ends its turn, or leaves it there FM_TASK_INBOX_SILENT_AGE_SECS, without
+# appending any status line since the request arrived has produced no result the
+# supervisor can see. The move alone never counts: it is the acknowledgement and
+# the work usually follows it. Prints, one per line, each such handled record not
+# yet checked and marks it checked, so each is reported at most once. A record
+# answered by a status line since its at= time, or a fire-and-forget record, is
+# marked without being printed; a record still being worked on stays unmarked
+# and is checked again on the next call. An inbox created before this check has
+# no mark list: the first call marks its handled records as history. The move
+# time is the record's change time (the rename sets it), the turn end is the
+# mtime of <state-dir>/<task>.turn-ended, and the status file's mtime is its last
+# append: every append, stamped or not, moves it.
+fm_task_inbox_silent_handled() {  # <state-dir> <task-id>
+  local state=$1 task=$2 dir seen f name at at_epoch moved now mtime turn age_bound
+  dir=$(fm_task_inbox_dir "$state" "$task")
+  [ -d "$dir/handled" ] || return 0
+  seen="$dir/.silent-seen"
+  if [ ! -e "$seen" ]; then
+    : > "$seen" || return 1
+    for f in "$dir"/handled/*.msg; do
+      [ -e "$f" ] || continue
+      printf '%s\n' "${f##*/}" >> "$seen" || return 1
+    done
+    return 0
+  fi
+  age_bound=${FM_TASK_INBOX_SILENT_AGE_SECS:-3600}
+  case "$age_bound" in ''|*[!0-9]*) age_bound=3600 ;; esac
+  now=$(date +%s)
+  mtime=$(fm_path_mtime "$state/$task.status") || mtime=0
+  turn=$(fm_path_mtime "$state/$task.turn-ended") || turn=0
+  for f in "$dir"/handled/*.msg; do
+    [ -e "$f" ] || continue
+    name=${f##*/}
+    fm_task_inbox_seq_of "$name" >/dev/null || continue
+    grep -qxF "$name" "$seen" 2>/dev/null && continue
+    if ! fm_task_inbox_is_fire_and_forget "$f"; then
+      at=$(sed -n 's/^at=//p;/^--$/q' "$f" | head -1)
+      if at_epoch=$(fm_utc_iso_to_epoch "$at") && [ "$mtime" -lt "$at_epoch" ]; then
+        moved=$(_fm_task_inbox_ctime "$f") || moved=$now
+        [ "$turn" -ge "$moved" ] || [ "$((now - moved))" -ge "$age_bound" ] || continue
+        printf '%s\n' "$name" >> "$seen" || return 1
+        printf '%s\n' "$name"
+        continue
+      fi
+    fi
+    printf '%s\n' "$name" >> "$seen" || return 1
+  done
+  return 0
+}
+
+_fm_task_inbox_ctime() {  # <path>
+  if [ "$_FM_UNAME" = Darwin ]; then
+    /usr/bin/stat -f %c "$1" 2>/dev/null
+  else
+    stat -c %Z "$1" 2>/dev/null
   fi
 }

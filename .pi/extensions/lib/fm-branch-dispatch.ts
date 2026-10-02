@@ -369,6 +369,8 @@ function spanIsDecisionOwned(
   return false;
 }
 
+const SILENT_HANDLED_KEY = /\.silent-handled\.[0-9]+$/;
+
 export function scopeForUnreadWake(state: string, heartbeat: boolean, afk = false, attendedHost = false): UnreadWakeScope {
   let queue = "";
   try {
@@ -462,7 +464,7 @@ export function scopeForUnreadWake(state: string, heartbeat: boolean, afk = fals
         needsDecisionKeys.push(key);
         if (!afk) continue;
       }
-      task = key.replace(/\.(?:status|turn-ended)$/, "");
+      task = key.replace(SILENT_HANDLED_KEY, ".status").replace(/\.(?:status|turn-ended)$/, "");
       project = metadata.get(task) ?? "";
     } else if (kind === "stale") {
       task = taskByKey.get(key) ?? taskByKey.get(key.replace(/^fm-/, "")) ?? "";
@@ -616,8 +618,10 @@ export function branchOfferForWake(state: string, message: string, afk: boolean,
     : /^stale:/.test(message)
       ? [message.slice("stale:".length).trim().split(/\s+/, 1)[0]].filter(Boolean)
       : [];
-  const taskIdentity = (key: string): string =>
-    scope.taskByWakeKey[key] ?? scope.taskByWakeKey[key.replace(/^fm-/, "")] ?? key;
+  const taskIdentity = (key: string): string => {
+    const wakeKey = key.replace(SILENT_HANDLED_KEY, ".status");
+    return scope.taskByWakeKey[wakeKey] ?? scope.taskByWakeKey[wakeKey.replace(/^fm-/, "")] ?? key;
+  };
   const needsDecisionTasks = new Set(scope.needsDecisionKeys.map(taskIdentity));
   const isNeedsDecisionTrigger = triggerKeys.some((key) => needsDecisionTasks.has(taskIdentity(key)));
   const attendedEligible = !isCheckTrigger && !isNeedsDecisionTrigger && (

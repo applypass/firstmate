@@ -16,10 +16,12 @@
 #
 # Usage:
 #   fm-branch-report.sh --task <id|fleet> --verdict routine|captain \
-#       --summary <text> [--silent true|false] [--wake <text>]
+#       [--kind decision|blocker|result] --summary <text> \
+#       [--silent true|false] [--wake <text>]
 #
-# The verdict criteria are owned by bin/fm-branch-prompt.sh ("Verdict: routine
-# or captain"); --silent true is legal only for a routine outcome.
+# The verdict and kind criteria are owned by bin/fm-branch-prompt.sh ("Verdict:
+# routine or captain"); --kind is required for a captain outcome and refused
+# for a routine one, and --silent true is legal only for a routine outcome.
 # --wake defaults to the wake reason the host recorded for the turn.
 #
 # Only the branch actor of a live host turn may report: FM_SUPERVISION_ACTOR
@@ -39,7 +41,13 @@
 # append, so every visible row is in the brief, queued, or both: the relay does
 # not depend on the host surviving its turn or on its owner delivering the
 # host's own handback. Silent outcomes remain in the store but are not queued
-# or relayed as notes. An attended turn queues nothing: its captain rows reach
+# or relayed as notes. In a seeded secondmate home a captain outcome is also
+# published onto the parent channel here, by the script, so it reaches MAIN
+# without the mate remembering to run bin/fm-secondmate-report.sh. The line's
+# verb follows --kind (needs-decision, blocked, or done), it is keyed
+# branch-outcome-<seq> so it never replaces another open decision, and it never
+# carries corr=, so it never resolves a pending reply; closing a marked request
+# stays with the mate's own correlated report (docs/secondmate-parent-channel.md). An attended turn queues nothing: its captain rows reach
 # MAIN through the host's branch-outcome exit and the drain's BRANCH OUTCOMES
 # section (bin/fm-wake-drain.sh), and its routine rows stay in the store.
 set -u
@@ -52,6 +60,8 @@ TURN_FILE="$STATE/.supervision-host-turn"
 RECEIPTS="$STATE/.supervision-host-receipts"
 # shellcheck source=bin/fm-afk-contract.sh
 . "$SCRIPT_DIR/fm-afk-contract.sh"
+# shellcheck source=bin/fm-parent-channel-lib.sh
+. "$SCRIPT_DIR/fm-parent-channel-lib.sh"
 
 usage() {
   sed -n '/^# Usage:/,/^# --wake/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
@@ -63,11 +73,12 @@ refuse() {
   exit 3
 }
 
-TASK='' VERDICT='' SUMMARY='' SILENT=false WAKE='' WAKE_SET=0
+TASK='' VERDICT='' KIND='' SUMMARY='' SILENT=false WAKE='' WAKE_SET=0
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --task) TASK=${2:-}; shift 2 || usage ;;
     --verdict) VERDICT=${2:-}; shift 2 || usage ;;
+    --kind) KIND=${2:-}; shift 2 || usage ;;
     --summary) SUMMARY=${2:-}; shift 2 || usage ;;
     --silent) SILENT=${2:-}; shift 2 || usage ;;
     --wake) WAKE=${2:-}; WAKE_SET=1; shift 2 || usage ;;
@@ -84,6 +95,20 @@ if [ -z "$TASK" ] || [ -z "$SUMMARY" ] || [ -z "$VERDICT" ]; then
   echo "invalid report: --task, --verdict (routine|captain), and --summary are required" >&2
   exit 2
 fi
+case "$VERDICT:$KIND" in
+  captain:decision) PARENT_VERB=needs-decision ;;
+  captain:blocker) PARENT_VERB=blocked ;;
+  captain:result) PARENT_VERB='done' ;;
+  routine:) ;;
+  captain:*)
+    echo "invalid report: a captain verdict requires --kind decision, blocker, or result" >&2
+    exit 2
+    ;;
+  *)
+    echo "invalid report: --kind applies only to a captain verdict" >&2
+    exit 2
+    ;;
+esac
 if [ "$SILENT" = true ] && [ "$VERDICT" != routine ]; then
   echo "invalid report: --silent true requires the routine verdict" >&2
   exit 2
@@ -127,6 +152,19 @@ printf '%s\t%s\t%s\t%s\n' "$TURN" "$SEQ" "$VERDICT" "$TASK" >> "$RECEIPTS" || {
   echo "recorded seq $SEQ, but the host receipt could not be written; the host will hand this wake to MAIN" >&2
   exit 1
 }
+# A captain outcome recorded in a secondmate home is a fact the parent must see.
+# A main home resolves to rc 1 and is left unchanged; a failed publish is
+# surfaced, never silently dropped.
+if [ "$VERDICT" = captain ]; then
+  PUBLISH_RC=0
+  PARENT_NOTE=$(fm_parent_channel_clean_note "$SUMMARY")
+  fm_parent_channel_report "$FM_HOME" "$STATE" \
+    "$PARENT_VERB [key=branch-outcome-$SEQ]: captain outcome for $TASK: ${PARENT_NOTE//corr=/corr }" || PUBLISH_RC=$?
+  case "$PUBLISH_RC" in
+    0|1) ;;
+    *) printf 'actionable: seq %s [captain] was recorded here but did not reach the parent channel (rc=%s)\n' "$SEQ" "$PUBLISH_RC" >&2 ;;
+  esac
+fi
 if [ "$SILENT" = true ]; then
   printf 'recorded seq %s [routine]; silent outcome remains in the outcome store\n' "$SEQ"
   exit 0

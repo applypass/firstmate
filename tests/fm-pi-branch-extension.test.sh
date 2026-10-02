@@ -2424,12 +2424,14 @@ writeFileSync(`${home}/state/.wake-queue`, [
   "1\t1\tsignal\tbranch-driver.status\tsignal: done",
   "2\t2\tstale\tdefault:wX:p1\tstale: default:wX:p1 (idle 378s)",
   "3\t3\tcheck\tmerge-poll\tcheck: merged",
+  "4\t4\tsignal\tbranch-driver.silent-handled.027\tsignal: branch-driver.silent-handled.027 (request 027.msg was moved to handled/)",
 ].join("\n") + "\n");
 const scope = lib.scopeForUnreadWake(`${home}/state`, false);
+if (scope.corrupted) throw new Error(`a silent-handled row read as corrupted: ${JSON.stringify(scope)}`);
 if (JSON.stringify([...scope.eligibleTasks].sort()) !== JSON.stringify(["branch-driver", "other-task"])) {
   throw new Error(`eligible rows resolved to the wrong tasks: ${JSON.stringify(scope)}`);
 }
-if (JSON.stringify(scope.eligibleSeqs) !== JSON.stringify(["1", "2"])) {
+if (JSON.stringify(scope.eligibleSeqs) !== JSON.stringify(["1", "2", "4"])) {
   throw new Error(`the main-owned check row leaked into the branch claim: ${JSON.stringify(scope)}`);
 }
 process.exit(0);
@@ -4867,6 +4869,27 @@ stage("mate", hold, "done: sample-c PR merged\n");
 if (!branchOfferForWake(state, `signal: ${state}/mate.status`, false, true).eligible) {
   throw new Error("the attended-host offer kept a routine second-mate close on main behind an unrelated hold");
 }
+
+// A silent-handled trigger names its task like a status key, so a task with an
+// unread decision row keeps that trigger on main even beside eligible rows.
+stage("mate", "working: history\n", "done: sample-e PR merged\n");
+writeFileSync(`${state}/crew.status`, "done: crew merged\n");
+writeFileSync(`${state}/.wake-queue`, [
+  "1\t1\tsignal\tmate.status\tneeds-decision: mate.status",
+  "1\t2\tsignal\tmate.silent-handled.027\tsignal: mate.silent-handled.027 (request 027.msg was moved to handled/)",
+  "1\t3\tsignal\tcrew.status\tsignal: crew.status",
+].join("\n"));
+const silentScope = scopeForUnreadWake(state, false);
+if (silentScope.corrupted || JSON.stringify(silentScope.eligibleSeqs) !== JSON.stringify(["2", "3"])) {
+  throw new Error(`a silent-handled row was misclassified: ${JSON.stringify(silentScope)}`);
+}
+if (branchOfferForWake(state, "signal: mate.silent-handled.027 (request 027.msg was moved to handled/)", false).eligible) {
+  throw new Error("a silent-handled trigger for a task with an unread decision slipped past main");
+}
+if (!branchOfferForWake(state, "signal: crew.status", false).eligible) {
+  throw new Error("an unrelated routine trigger was kept on main by the silent-handled row");
+}
+rmSync(`${state}/crew.status`);
 
 // Without a readable cursor the whole log is the span, so routing falls back
 // toward main rather than guessing.

@@ -37,7 +37,15 @@
 #                           (empty until delivery; delivery never resolves)
 #   phase=                  awaiting_report | delivery_unknown | recovery_sending |
 #                           recovery_sent | recovery_failed | recovery_unknown |
-#                           escalated | resolved
+#                           acknowledged | escalated | resolved
+#                           acknowledged: a correlated working:/paused: line
+#                           arrived; the request is NOT answered. Only a
+#                           terminal line (done, ready, needs-decision,
+#                           blocked, failed) resolves it. An idle secondmate
+#                           pane is healthy while its worker runs, so the pane
+#                           is not observed: a request with no new correlated
+#                           line for FM_PENDING_REPLY_ACK_SECS escalates once as
+#                           pending-reply-unreported (no result reached main).
 #                           An escalated record with an empty delivered_epoch is
 #                           a delivery-unknown escalation, not a missed report:
 #                           its owner may still resend the same correlation, and
@@ -53,6 +61,8 @@
 #   recovery_delivery_outcome=
 #   recovery_turn_seen_busy=
 #   recovery_turn_completed_epoch=
+#   ack_lines=              count of correlated working:/paused: lines seen
+#   ack_line_epoch=         when the latest of those lines was first seen
 #   escalated_epoch=
 #   escalation_closed_epoch=
 #                           when the durable status decision opened by that
@@ -106,6 +116,9 @@
 #                                 completion for the recovery repost, and from
 #                                 the recovery turn's completion for the
 #                                 missed-report escalation - never from delivery
+#   FM_PENDING_REPLY_ACK_SECS     default 1800; how long an acknowledged request
+#                                 may go without a new correlated line before
+#                                 the pending-reply-unreported escalation
 #   FM_PENDING_REPLY_DIR_OVERRIDE override the pending-replies directory (tests)
 #   FM_PENDING_REPLY_SEND_HOOK    optional command template for recovery delivery
 #                                 (tests); receives task_id and full message as args
@@ -132,6 +145,7 @@ _FM_PENDING_REPLY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/n
 FM_PENDING_REPLY_SCHEMA='fm-pending-reply.v1'
 FM_PENDING_REPLY_CORR_RE='corr=[A-Fa-f0-9]{16}'
 FM_PENDING_REPLY_GRACE_DEFAULT=120
+FM_PENDING_REPLY_ACK_DEFAULT=1800
 
 fm_pending_reply_now() {
   if [ -n "${FM_PENDING_REPLY_NOW:-}" ]; then
@@ -147,6 +161,14 @@ fm_pending_reply_grace_secs() {
     ''|*[!0-9]*) g=$FM_PENDING_REPLY_GRACE_DEFAULT ;;
   esac
   printf '%s' "$g"
+}
+
+fm_pending_reply_ack_secs() {
+  local a=${FM_PENDING_REPLY_ACK_SECS:-$FM_PENDING_REPLY_ACK_DEFAULT}
+  case "$a" in
+    ''|*[!0-9]*) a=$FM_PENDING_REPLY_ACK_DEFAULT ;;
+  esac
+  printf '%s' "$a"
 }
 
 # Directory holding durable pending-reply records for <state-dir>.
@@ -376,7 +398,7 @@ fm_pending_reply_mark_delivered() {  # <state-dir> <corr_id> [confirmed-epoch]
   [ -f "$rec" ] || return 1
   phase=$(fm_pending_reply_get "$rec" phase)
   case "$phase" in
-    awaiting_report|delivery_unknown|recovery_sending|recovery_sent|escalated|resolved) ;;
+    awaiting_report|delivery_unknown|recovery_sending|recovery_sent|acknowledged|escalated|resolved) ;;
     *) return 1 ;;
   esac
   delivered=$(fm_pending_reply_get "$rec" delivered_epoch)
@@ -584,9 +606,42 @@ fm_pending_reply_line_resolves() {  # <line> <corr_id>
   local line=$1 corr=$2
   [ -n "$line" ] && [ -n "$corr" ] || return 1
   case "$line" in
-    *pending-reply-missed*) return 1 ;;
+    *pending-reply-missed*|*pending-reply-unreported*) return 1 ;;
   esac
-  fm_pending_reply_text_has_corr "$line" "$corr"
+  fm_pending_reply_text_has_corr "$line" "$corr" || return 1
+  # Only a terminal verb is a result: working: and paused: acknowledge receipt
+  # and keep the request open (fm_pending_reply_line_acknowledges).
+  case "$(status_line_verb "$line")" in
+    done|ready|needs-decision|blocked|failed) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# 0 when a status line is a correlated non-terminal acknowledgement for
+# <corr_id>: a working: or paused: line.
+fm_pending_reply_line_acknowledges() {  # <line> <corr_id>
+  local line=$1 corr=$2
+  [ -n "$line" ] && [ -n "$corr" ] || return 1
+  case "$line" in
+    *pending-reply-missed*|*pending-reply-unreported*) return 1 ;;
+  esac
+  fm_pending_reply_text_has_corr "$line" "$corr" || return 1
+  case "$(status_line_verb "$line")" in
+    working|paused) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Prints how many correlated acknowledgement lines a status file holds.
+fm_pending_reply_count_ack_lines() {  # <status-file> <corr_id>
+  local status_file=$1 corr=$2 line count=0
+  if [ -f "$status_file" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      [ -n "$line" ] || continue
+      fm_pending_reply_line_acknowledges "$line" "$corr" && count=$((count + 1))
+    done < "$status_file"
+  fi
+  printf '%s' "$count"
 }
 
 # Scan a status file for a correlated resolve. Prints the matching line or empty.
@@ -690,6 +745,9 @@ _fm_pending_reply_try_resolve_locked() {  # <state-dir> <corr_id> [status-file-o
   fi
   line=$(fm_pending_reply_find_resolve_line "$status_file" "$corr")
   if [ -z "$line" ]; then
+    if [ "$unconfirmed" = 0 ]; then
+      _fm_pending_reply_note_acknowledgement_locked "$rec" "$status_file" "$corr" "$phase" || true
+    fi
     if [ -z "$status_override" ] && [ "$unconfirmed" = 0 ]; then
       fm_pending_reply_set "$rec" parent_status_scan_signature "$signature" || return 1
     fi
@@ -707,6 +765,24 @@ _fm_pending_reply_try_resolve_locked() {  # <state-dir> <corr_id> [status-file-o
   # The record is resolved either way; a failed close stays retryable from the
   # watcher tick rather than turning a settled request back into a failure.
   _fm_pending_reply_close_escalation_locked "$state" "$corr" || true
+  return 0
+}
+
+# Record a correlated working:/paused: line without resolving: the request stays
+# open as phase=acknowledged, and each new such line restarts its age bound.
+# Only the original awaiting_report turn moves; a request already in recovery or
+# escalation keeps its own lifecycle.
+_fm_pending_reply_note_acknowledgement_locked() {  # <record-path> <status-file> <corr_id> <phase>
+  local rec=$1 status_file=$2 corr=$3 phase=$4 count
+  case "$phase" in awaiting_report|acknowledged) ;; *) return 1 ;; esac
+  count=$(fm_pending_reply_count_ack_lines "$status_file" "$corr")
+  [ "$count" -gt 0 ] || return 1
+  [ "$count" != "$(fm_pending_reply_get "$rec" ack_lines)" ] || return 0
+  fm_pending_reply_set "$rec" ack_lines "$count" || return 1
+  fm_pending_reply_set "$rec" ack_line_epoch "$(fm_pending_reply_now)" || return 1
+  if [ "$phase" = awaiting_report ]; then
+    fm_pending_reply_set "$rec" phase acknowledged || return 1
+  fi
   return 0
 }
 
@@ -1120,6 +1196,11 @@ fm_pending_reply_escalation_payload() {  # <record-path> <kind>
     delivery-unknown)
       token=pending-reply-delivery-unknown
       ;;
+    unreported)
+      printf 'pending-reply-unreported: task=%s pending-reply-id=%s request=%s - acknowledged only, no result reached main' \
+        "$task_id" "$corr" "$summary"
+      return 0
+      ;;
     recovery-delivery)
       outcome=$(fm_pending_reply_get "$rec" recovery_delivery_outcome)
       case "$outcome" in failed|unknown) ;; *) return 1 ;; esac
@@ -1142,7 +1223,7 @@ fm_pending_reply_escalation_line() {  # <status-file> <record-path> <corr_id>
   while IFS= read -r line || [ -n "$line" ]; do
     [ "$(status_line_verb "$line")" = blocked ] || continue
     _fm_status_untimed "$line" untimed
-    for kind in missed delivery-unknown recovery-delivery; do
+    for kind in missed delivery-unknown unreported recovery-delivery; do
       payload=$(fm_pending_reply_escalation_payload "$rec" "$kind") || continue
       case "$untimed" in
         "blocked [key=$own_key]: $payload"|"blocked: $payload") found=$line; break ;;
@@ -1260,6 +1341,15 @@ _fm_pending_reply_maybe_escalate_locked() {  # <state-dir> <corr_id>
     [ "$phase" = delivery_unknown ] || return 0
   fi
   case "$phase" in
+    acknowledged)
+      completed=$(fm_pending_reply_get "$rec" ack_line_epoch)
+      case "$completed" in ''|*[!0-9]*) return 1 ;; esac
+      now=$(fm_pending_reply_now)
+      age=$((now - completed))
+      [ "$age" -ge "$(fm_pending_reply_ack_secs)" ] || return 1
+      fm_pending_reply_missing_report_is_evidence "$state" \
+        "$(fm_pending_reply_get "$rec" task_id)" "$completed" || return 1
+      ;;
     recovery_sent)
       completed=$(fm_pending_reply_get "$rec" recovery_turn_completed_epoch)
       [ -n "$completed" ] || return 1
@@ -1300,6 +1390,7 @@ _fm_pending_reply_maybe_escalate_locked() {  # <state-dir> <corr_id>
   case "$phase" in
     delivery_unknown) kind=delivery-unknown ;;
     recovery_failed|recovery_unknown) kind='recovery-delivery' ;;
+    acknowledged) kind=unreported ;;
     *) kind=missed ;;
   esac
   payload=$(fm_pending_reply_escalation_payload "$rec" "$kind") || return 1
@@ -1478,7 +1569,7 @@ fm_pending_reply_tick_one() {  # <state-dir> <corr_id> <busy_state> [secondmate-
   fi
   phase=$(fm_pending_reply_get "$rec" phase)
   case "$phase" in
-    recovery_sent|recovery_failed|recovery_unknown)
+    recovery_sent|recovery_failed|recovery_unknown|acknowledged)
       fm_pending_reply_maybe_escalate "$state" "$corr" 2>/dev/null || true
       ;;
   esac
@@ -1593,7 +1684,7 @@ fm_pending_reply_tick() {  # <state-dir>
         ;;
     esac
     case "$phase" in
-      awaiting_report|recovery_sent) ;;
+      awaiting_report|recovery_sent|acknowledged) ;;
       *) continue ;;
     esac
     backend=tmux
@@ -1611,7 +1702,8 @@ fm_pending_reply_tick() {  # <state-dir>
         target="remote:$task_id"
         sm_home=
       fi
-      if [ -n "$target" ]; then
+      # An acknowledged request escalates on age alone, never on the pane.
+      if [ -n "$target" ] && [ "$phase" != acknowledged ]; then
         label="fm-$task_id"
         observation=
         found=0

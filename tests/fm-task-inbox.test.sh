@@ -667,6 +667,33 @@ test_watcher_quiet_on_healthy_inbox() {
   pass "watcher: a healthy or empty inbox stays completely silent"
 }
 
+test_watcher_queues_every_silent_handled_record() {
+  local dir state out log pid rec1 rec2 rows drained
+  dir=$(setup_watch_case silent-many)
+  state="$dir/state"; out="$dir/watch.out"; log="$dir/send.log"; : > "$log"
+  rec1=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "first request")
+  rec2=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "second request")
+  mv "$rec1" "$rec2" "$state/t1.inbox/handled/"
+  watch_bg "$state" "$dir/fakebin" "$out" \
+    FM_SEND_LOG="$log" FM_FAKE_TMUX_CAPTURE="$(idle_capture "$dir")" \
+    FM_TASK_INBOX_SILENT_AGE_SECS=0
+  pid=$!
+  wait_watcher_gone "$pid" || { kill "$pid" 2>/dev/null; fail "two silent records should wake the watcher"; }
+  rows=$(grep -cF 'was moved to handled/ with no status line' "$state/.wake-queue" || true)
+  [ "$rows" = 2 ] || fail "every silent record must queue its own wake row, got $rows:"$'\n'"$(cat "$state/.wake-queue" 2>/dev/null)"
+  # An ordinary status wake for the same task must not replace either row.
+  FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_wake_append signal t1.status "signal: t1.status"' _ "$ROOT/bin/fm-wake-lib.sh" \
+    || fail "could not queue the ordinary status wake"
+  drained=$(FM_STATE_OVERRIDE="$state" "$ROOT/bin/fm-wake-drain.sh" 2>/dev/null || true)
+  printf '%s\n' "$drained" | grep -qF "request ${rec1##*/} was moved" \
+    || fail "the drain must present the first record:"$'\n'"$drained"
+  printf '%s\n' "$drained" | grep -qF "request ${rec2##*/} was moved" \
+    || fail "the drain must present the second record:"$'\n'"$drained"
+  printf '%s\n' "$drained" | grep -qE "signal: t1\.status($|[^ ])" \
+    || fail "the drain must present the ordinary status wake too:"$'\n'"$drained"
+  pass "watcher: every silent handled record keeps its own wake row beside the task's status wake"
+}
+
 test_watcher_ack_silences_unwritable_ladder() {
   local dir state out log pid rec rings i=0
   dir=$(setup_watch_case ack-unwritable-ladder)
@@ -814,6 +841,7 @@ test_ring_ladder_policy
 test_watcher_rerings_idle_pane_quietly
 test_watcher_waits_on_busy_pane
 test_watcher_quiet_on_healthy_inbox
+test_watcher_queues_every_silent_handled_record
 test_watcher_ack_silences_unwritable_ladder
 test_watcher_surfaces_unwritable_ladder
 test_watcher_escalates_once_after_budget
