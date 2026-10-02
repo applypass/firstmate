@@ -1,0 +1,93 @@
+Switch: config/validation-gate absent; tracked defaults/validation-gate = on
+
+$ fm-validation-gate.sh enabled   (fork default, no config)
+exit=0
+
+$ fm-brief.sh demo proj --mode no-mistakes   (real brief, default switch)
+exit=0
+# Definition of done
+Delivery contract: mode=no-mistakes
+Validation gate: on
+Ship branch: fm/demo
+The full no-mistakes validation runs once, on the final version, after firstmate releases it; until then a gate on the pipeline refuses to start it.
+While the PR iterates, commit on your branch and run the tests related to the change - the unit and integration tests for the changed code and the code it affects - plus lint and type checks, not the whole repository suite.
+Then push your branch to origin and open or update a pull request with `gh-axi` that is ready for review, not a draft.
+When you believe it is complete, append `done [at=<epoch>]: PR {url} ready for final validation` to the status file and stop.
+Do NOT run /no-mistakes before firstmate releases it; the gate refuses that push.
+Firstmate then releases that exact head, which sends you the instruction to run /no-mistakes on it.
+If you change the branch after that, report it; firstmate releases the new head.
+
+$ prepare --kind ship --mode no-mistakes --forge none --brief brief.md
+/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.9weFox/home/state/demo.validation-gate
+exit=0
+state/demo.validation-gate: held
+-rwxr-xr-x@ /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.9weFox/gate.git/hooks/pre-receive.no-mistakes-user
+
+$ worker pushes branch to origin while PR iterates
+ * [new branch]      HEAD -> fm/demo
+exit=0
+
+$ worker runs no-mistakes-style push to the gate (--no-verify) before release
+remote: firstmate validation gate: the full no-mistakes validation for task demo has not been released for refs/heads/fm/demo (871a2ae9d53c1dd32ee59ff522004a5b932f21d2).        
+remote: While the PR iterates: commit, run the tests related to the change plus lint and type checks, push to origin, and report the PR ready.        
+remote: Firstmate releases this run when you report the PR ready for final validation: fm-validation-gate.sh release demo        
+To /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.9weFox/gate.git
+ ! [remote rejected] HEAD -> fm/demo (pre-receive hook declined)
+error: failed to push some refs to '/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.9weFox/gate.git'
+exit=1
+
+$ bypass attempt: -c core.hooksPath=/dev/null + GIT_CONFIG_* + --no-verify
+remote: firstmate validation gate: the full no-mistakes validation for task demo has not been released for refs/heads/fm/demo (871a2ae9d53c1dd32ee59ff522004a5b932f21d2).        
+ ! [remote rejected] HEAD -> fm/demo (pre-receive hook declined)
+exit=1
+pipeline.log: (none - no pipeline started)
+
+$ worker reports ready; supervision tries a captain verdict before release
+error: demo reported ready for final validation; release it before reporting a captain outcome.
+Run bin/fm-validation-gate.sh release demo (it starts the worker's run), then report verdict captain: the PR is ready to merge to dev and final validation is running.
+exit=1
+
+$ fm-validation-gate.sh release demo   (no tmux on this host, so fm-send's steer cannot reach a pane)
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.9weFox/home
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the requested message WILL still be sent.
+●  watcher supervision needs Stop-owned automatic recovery; inspect the hook registration and startup status before ending the turn.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+fm-send: doorbell did not reach lab:fm-demo; the steer is durably recorded at /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.9weFox/home/state/demo.inbox/001.msg and the watcher will re-ring
+released demo at 871a2ae9d53c1dd32ee59ff522004a5b932f21d2 and told the worker to run /no-mistakes on that head
+exit=0
+state/demo.validation-gate: released 871a2ae9d53c1dd32ee59ff522004a5b932f21d2|steered 871a2ae9d53c1dd32ee59ff522004a5b932f21d2|
+
+$ captain verdict after release
+1
+exit=0
+
+$ worker runs /no-mistakes push of the released head
+ * [new branch]      HEAD -> fm/demo
+exit=0
+
+$ worker pushes a NEW head after release without a new release
+remote: firstmate validation gate: the full no-mistakes validation for task demo has not been released for refs/heads/fm/demo (bbddb5f1cf6edffe73e321b6d7c4816463fb5537).        
+ ! [remote rejected] HEAD -> fm/demo (pre-receive hook declined)
+exit=1
+
+$ non-fleet push (no FM_VALIDATION_GATE) is upstream behaviour
+ * [new branch]      HEAD -> other
+exit=0
+
+pipeline.log:
+pipeline started refs/heads/fm/demo 871a2ae9d53c1dd32ee59ff522004a5b932f21d2
+pipeline started refs/heads/other bbddb5f1cf6edffe73e321b6d7c4816463fb5537
+
+$ ungated home: config/validation-gate=off -> brief ungated, prepare prints nothing
+enabled exit=1
+0
+prepare exit=0 output=''
+ls: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.9weFox/home/state/plain.validation-gate: No such file or directory
+
+$ invalid switch value
+error: fm-validation-gate: switch value 'On' is neither on nor off
+exit=1
