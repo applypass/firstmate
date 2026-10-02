@@ -1,0 +1,9 @@
+# template file facts at b0e2e18
+100644 blob bc00ba2a3aa60d36f3a764f9abf358a769bb7659	.github/pull_request_template.md
+bytes: 374
+utf8: ok; NUL: False ; ctrl chars: False ; reserved no-mistakes marker: False
+H1 headings in order: ['# Problem', '# Fix', '# Proof']
+# upstream-reconcile footprint (7c562a4..b0e2e18)
+ .github/pull_request_template.md | 11 +++++++++++
+ .no-mistakes.yaml                |  4 ++++
+ 2 files changed, 15 insertions(+)
