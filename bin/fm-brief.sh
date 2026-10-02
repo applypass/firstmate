@@ -419,6 +419,7 @@ Optional helper: \`bin/fm-secondmate-report.sh <verb> <corr_id> <note>\` appends
 A plain \`echo\` that includes the same \`corr=<id>\` on this parent channel is equally valid; do not depend on the helper being present.
 For a terse result, a status line is the whole answer.
 For a detailed answer (an investigation, a plan, an audit), write it to a doc under your home's \`data/\` and append a status line that points to that doc - the scout-report pattern - so the main firstmate is woken and can read it.
+Before you start any investigation or work you run yourself rather than hand to a worker, give it its own Shortcut story: add a backlog item with \`bin/fm-tasks-axi.sh add\` in this home (it creates the story), or run \`bin/fm-shortcut-ticket.sh <item>\`, and confirm \`bin/fm-shortcut-ticket.sh --check <item>\` passes.
 Before treating an investigation or visual review as complete, load \`captain-hold-lifecycle\` from this home's \`.agents/skills/\` and pass its shared completion gate.
 A message with NO marker is the captain typing directly into your pane: treat it as authoritative captain intervention and stay conversational exactly as you would for any captain message; do not force it onto the status path.
 A request arriving through the instruction inbox below follows the same marker and reply rules.

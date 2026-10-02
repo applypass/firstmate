@@ -3454,7 +3454,7 @@ test_pr_ready_moves_the_shortcut_story_to_review() {
   chmod +x "$dir/fakebin/tasks-axi"
   fm_fake_shortcut_curl "$dir/fakebin"
   (cd "$dir/home" && FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$ROOT" PATH="$dir/fakebin:$BASE_PATH" \
-    "$ROOT/bin/fm-tasks-axi.sh" add task-a "PR ready sc-5000" --kind ship >/dev/null) || fail "could not add the item"
+    "$ROOT/bin/fm-tasks-axi.sh" add task-a "PR ready" --body "Shortcut: sc-5000" --kind ship >/dev/null) || fail "could not add the item"
   : > "$dir/curl.log"
   FM_SHORTCUT_TICKETS=on SHORTCUT_API_TOKEN=tok-secret-123 FAKE_CURL_LOG="$dir/curl.log" \
     run_check_entry "$dir" task-a "$url" >/dev/null 2> "$dir/ready.err" || fail "pr-check failed: $(cat "$dir/ready.err")"

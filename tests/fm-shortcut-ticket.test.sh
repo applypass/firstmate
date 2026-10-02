@@ -29,6 +29,7 @@ make_case() {  # <name> [on|off|nodefaults]
   fi
   [ "$mode" != off ] || printf 'enabled=off\n' > "$dir/home/config/shortcut-tickets"
   fm_fake_shortcut_curl "$dir/fakebin"
+  fm_fake_op "$dir/fakebin"
   : > "$dir/curl.log"
   printf '%s\n' "$dir"
 }
@@ -39,6 +40,13 @@ run_tasks() {  # <case-dir> <wrapper args...>
   (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
     SHORTCUT_API_TOKEN="${TOKEN_OVERRIDE-$TOKEN}" FAKE_CURL_LOG="$dir/curl.log" \
     PATH="$dir/fakebin:$PATH" "$ROOT/bin/fm-tasks-axi.sh" "$@" 2>&1)
+}
+
+check_item() {  # <case-dir> <id>
+  local dir=$1
+  (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
+    SHORTCUT_API_TOKEN="${TOKEN_OVERRIDE-$TOKEN}" FAKE_CURL_LOG="$dir/curl.log" \
+    PATH="$dir/fakebin:$PATH" "$ROOT/bin/fm-shortcut-ticket.sh" --check "$2" 2>&1)
 }
 
 show() {  # <case-dir> <id>
@@ -79,13 +87,56 @@ test_add_creates_story_and_records_id() {
 test_add_naming_existing_story_links_it() {
   local dir out
   dir=$(make_case link)
-  out=$(run_tasks "$dir" add st-2 "Follow up sc-4242 widget" --kind ship) || fail "add failed: $out"
-  assert_grep "GET https://api.app.shortcut.com/api/v3/stories/4242" "$dir/curl.log" "the named story was not verified"
-  assert_no_grep "POST" "$dir/curl.log" "a duplicate story was created"
   out=$(run_tasks "$dir" add st-3 "Other work" --kind ship --body "Shortcut: sc-4343 https://app.shortcut.com/applypass/story/4343") || fail "add failed: $out"
   assert_grep "GET https://api.app.shortcut.com/api/v3/stories/4343" "$dir/curl.log" "the body-named story was not verified"
   assert_no_grep "POST" "$dir/curl.log" "a duplicate story was created for a body-named id"
-  pass "an add naming an existing sc id links that story instead of creating one"
+  pass "an add whose body names its own sc id verifies that story instead of creating one"
+}
+
+test_title_id_is_a_parent_never_reused() {
+  local dir out
+  dir=$(make_case umbrella)
+  out=$(run_tasks "$dir" add st-2 "Launch fix sc-4242 widget" --kind ship) || fail "add failed: $out"
+  assert_grep "POST https://api.app.shortcut.com/api/v3/stories" "$dir/curl.log" "an umbrella title id stopped the item getting its own story"
+  assert_grep "POST https://api.app.shortcut.com/api/v3/story-links" "$dir/curl.log" "the child story was not linked to the umbrella"
+  assert_grep '"object_id":4242' "$dir/curl.log" "the link does not point at the umbrella story"
+  assert_grep '"subject_id":7777' "$dir/curl.log" "the link does not start at the new story"
+  assert_contains "$(show "$dir" st-2)" "Shortcut: sc-7777" "the item's own story was not recorded"
+  : > "$dir/curl.log"
+  out=$(ticket "$dir" state st-2 progress) || fail "state failed: $out"
+  assert_grep "PUT https://api.app.shortcut.com/api/v3/stories/7777" "$dir/curl.log" "the state move missed the item's own story"
+  assert_no_grep "4242" "$dir/curl.log" "a state move touched the umbrella story"
+  pass "a title sc id is a parent: the item gets its own linked story and state moves never touch the parent"
+}
+
+test_check_needs_an_own_verified_story() {
+  local dir out
+  dir=$(make_case check-own)
+  FAKE_CURL_FAIL=1 run_tasks "$dir" add ck-2 "Umbrella sc-4242" --kind ship >/dev/null
+  out=$(check_item "$dir" ck-2) && fail "--check passed on a title-only id"
+  assert_contains "$out" "no Shortcut story of its own" "the refusal did not explain the title id is only a parent"
+  run_tasks "$dir" add ck-3 "Own story" --kind ship --body "Shortcut: sc-4343" >/dev/null
+  check_item "$dir" ck-3 >/dev/null || fail "--check refused a verified body line"
+  assert_grep "GET https://api.app.shortcut.com/api/v3/stories/4343" "$dir/curl.log" "--check did not confirm the story exists"
+  run_tasks "$dir" add ck-4 "Ghost story" --kind ship --body "Shortcut: sc-9999" >/dev/null
+  out=$(FAKE_CURL_MISSING=9999 check_item "$dir" ck-4) && fail "--check passed a story that does not exist"
+  assert_contains "$out" "sc-9999" "the unreadable story was not named"
+  pass "--check passes only on a body-line story that exists"
+}
+
+test_missing_token_refuses_the_check_and_op_supplies_it() {
+  local dir out
+  dir=$(make_case token)
+  run_tasks "$dir" add tk-1 "Own story" --kind ship --body "Shortcut: sc-4343" >/dev/null
+  out=$(TOKEN_OVERRIDE='' check_item "$dir" tk-1) && fail "--check passed with no token and no op"
+  assert_contains "$out" "op read op://dev-agent/Shortcut API key/password" "the refusal did not name the failed 1Password read"
+  : > "$dir/curl.log"
+  out=$(TOKEN_OVERRIDE='' FAKE_OP_TOKEN=tok-secret-123 FAKE_OP_LOG="$dir/op.log" check_item "$dir" tk-1) || fail "op did not supply the token: $out"
+  assert_grep "op read op://dev-agent/Shortcut API key/password" "$dir/op.log" "the token was not read from token_ref"
+  assert_grep "TOKEN-ON-STDIN" "$dir/curl.log" "the op token did not reach curl on stdin"
+  assert_no_grep "TOKEN-IN-ARGV" "$dir/curl.log" "the op token leaked into curl's argv"
+  assert_not_contains "$out" "tok-secret-123" "the token was printed"
+  pass "a missing token refuses the check; op read supplies it on stdin when configured"
 }
 
 test_body_reference_is_not_the_linked_story() {
@@ -95,7 +146,7 @@ test_body_reference_is_not_the_linked_story() {
     || fail "add failed: $out"
   assert_grep "POST https://api.app.shortcut.com/api/v3/stories" "$dir/curl.log" "a body reference stopped the item getting its own story"
   assert_no_grep "stories/6092" "$dir/curl.log" "the referenced story was touched on add"
-  assert_no_grep "owner_ids" "$dir/curl.log" "the shipped defaults assigned the story to an owner"
+  assert_grep "68930514-b854-4a8e-95ec-fa3eee30e3a2" "$dir/curl.log" "the shipped default owner was not assigned"
   assert_contains "$(show "$dir" st-11)" "Follow-up to sc-6092" "the reference was lost from the body"
   : > "$dir/curl.log"
   out=$(ticket "$dir" state st-11 progress) || fail "state failed: $out"
@@ -108,15 +159,14 @@ test_body_reference_is_not_the_linked_story() {
   assert_no_grep "6092" "$dir/curl.log" "a referenced story was moved, commented on, or uploaded to"
   dir=$(make_case body-ref-unticketed)
   FAKE_CURL_FAIL=1 run_tasks "$dir" add st-12 "Only a reference" --kind ship --body "Follow-up to sc-6092" >/dev/null
-  (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
-    "$ROOT/bin/fm-shortcut-ticket.sh" --check st-12 >/dev/null 2>&1) && fail "--check took a body reference as the ticket"
+  check_item "$dir" st-12 >/dev/null && fail "--check took a body reference as the ticket"
   pass "a body reference such as 'Follow-up to sc-6092' is never the linked story"
 }
 
 test_named_story_that_does_not_exist_warns() {
   local dir out
   dir=$(make_case link-missing)
-  out=$(FAKE_CURL_MISSING=9999 run_tasks "$dir" add st-4 "Bad ref sc-9999" --kind ship) \
+  out=$(FAKE_CURL_MISSING=9999 run_tasks "$dir" add st-4 "Bad ref" --body "Shortcut: sc-9999" --kind ship) \
     || fail "a bad reference failed the add: $out"
   assert_contains "$out" "sc-9999" "the unreadable story was not reported"
   assert_contains "$out" "bin/fm-shortcut-ticket.sh st-4" "the retry command was not named"
@@ -129,8 +179,7 @@ test_non_work_kinds_are_skipped() {
   out=$(run_tasks "$dir" add mate-1 "A secondmate" --kind secondmate) || fail "add failed: $out"
   out=$(run_tasks "$dir" add hold-1 "Captain call" --kind captain) || fail "add failed: $out"
   [ ! -s "$dir/curl.log" ] || fail "non-work kinds reached Shortcut: $(cat "$dir/curl.log")"
-  (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" FAKE_CURL_LOG="$dir/curl.log" \
-    "$ROOT/bin/fm-shortcut-ticket.sh" --check hold-1) || fail "--check refused an exempt kind"
+  check_item "$dir" hold-1 >/dev/null || fail "--check refused an exempt kind"
   pass "secondmate and captain-decision items get no story and pass the check"
 }
 
@@ -141,8 +190,7 @@ test_api_failure_keeps_add_and_check_refuses() {
     || fail "an API failure failed the add: $out"
   assert_contains "$out" "bin/fm-shortcut-ticket.sh st-5" "the warning did not name the retry command"
   assert_contains "$(show "$dir" st-5)" "Will not ticket" "the item was not added"
-  check=$(cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
-    "$ROOT/bin/fm-shortcut-ticket.sh" --check st-5 2>&1) && fail "--check passed an unticketed item"
+  check=$(check_item "$dir" st-5) && fail "--check passed an unticketed item"
   assert_contains "$check" "bin/fm-shortcut-ticket.sh st-5" "the refusal did not name the retry"
   out=$(TOKEN_OVERRIDE='' run_tasks "$dir" add st-7 "No token" --kind ship) \
     || fail "a missing token failed the add: $out"
@@ -157,8 +205,7 @@ test_retry_then_check_passes() {
   out=$(cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" SHORTCUT_API_TOKEN="$TOKEN" \
     FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" "$ROOT/bin/fm-shortcut-ticket.sh" st-8 2>&1) \
     || fail "retry failed: $out"
-  (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
-    "$ROOT/bin/fm-shortcut-ticket.sh" --check st-8) || fail "--check refused after the id was recorded"
+  check_item "$dir" st-8 >/dev/null || fail "--check refused after the id was recorded"
   pass "retrying records the id and the check then passes"
 }
 
@@ -167,8 +214,7 @@ test_feature_off_makes_no_calls() {
   dir=$(make_case off off)
   out=$(run_tasks "$dir" add st-9 "Quiet" --kind ship) || fail "add failed: $out"
   [ ! -s "$dir/curl.log" ] || fail "a disabled feature called Shortcut"
-  (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
-    "$ROOT/bin/fm-shortcut-ticket.sh" --check st-9) || fail "--check refused with the feature off"
+  check_item "$dir" st-9 >/dev/null || fail "--check refused with the feature off"
   dir=$(make_case off-nodefaults nodefaults)
   out=$(run_tasks "$dir" add st-10 "Upstream" --kind ship) || fail "add failed: $out"
   [ ! -s "$dir/curl.log" ] || fail "an absent settings file called Shortcut"
@@ -179,7 +225,7 @@ test_feature_off_makes_no_calls() {
 make_ticketed() {  # <name> [item-id]
   local dir id=${2:-lc-1}
   dir=$(make_case "$1")
-  run_tasks "$dir" add "$id" "Lifecycle sc-5000" --kind ship >/dev/null || fail "setup add failed"
+  run_tasks "$dir" add "$id" "Lifecycle" --body "Shortcut: sc-5000" --kind ship >/dev/null || fail "setup add failed"
   : > "$dir/curl.log"
   printf '%s\n' "$dir"
 }
@@ -295,7 +341,7 @@ test_captain_answer_comments_the_decision() {
   [ ! -s "$dir/curl.log" ] || fail "holding a task touched Shortcut"
   out=$(hold answer lc-3 --decision-file "$dir/decision.txt") || fail "answer failed: $out"
   assert_grep 'Captain decision: Use option B.' "$dir/curl.log" "the recorded decision was not commented on the story"
-  run_tasks "$dir" add lc-4 "Keyed sc-5001" --kind ship >/dev/null || fail "setup add failed"
+  run_tasks "$dir" add lc-4 "Keyed" --body "Shortcut: sc-5001" --kind ship >/dev/null || fail "setup add failed"
   out=$(hold hold lc-4 --reason "captain go needed") || fail "hold failed: $out"
   : > "$dir/curl.log"
   out=$(printf 'lc-4\tgo\t\trelease\n' | hold answers --source "keyed fixture") || fail "keyed answers failed: $out"
@@ -338,7 +384,7 @@ test_handoff_carries_the_sc_id() {
   printf '## Queued\n\n## Done\n' > "$sub/data/backlog.md"
   # One item already ticketed, one not: the second is ticketed during handoff.
   (cd "$dir/code" && FM_SHORTCUT_TICKETS=off FM_HOME="$home" FM_ROOT_OVERRIDE="$dir/code" \
-    "$ROOT/bin/fm-tasks-axi.sh" add h-1 "Has ticket sc-5151" --kind ship >/dev/null &&
+    "$ROOT/bin/fm-tasks-axi.sh" add h-1 "Has ticket" --body "Shortcut: sc-5151" --kind ship >/dev/null &&
     FM_SHORTCUT_TICKETS=off FM_HOME="$home" FM_ROOT_OVERRIDE="$dir/code" \
     "$ROOT/bin/fm-tasks-axi.sh" add h-2 "Needs ticket" --kind ship >/dev/null) || fail "setup add failed"
   local fakebin
@@ -357,6 +403,9 @@ test_handoff_carries_the_sc_id() {
 test_shipped_defaults_are_on_and_absent_means_off
 test_add_creates_story_and_records_id
 test_add_naming_existing_story_links_it
+test_title_id_is_a_parent_never_reused
+test_check_needs_an_own_verified_story
+test_missing_token_refuses_the_check_and_op_supplies_it
 test_body_reference_is_not_the_linked_story
 test_named_story_that_does_not_exist_warns
 test_non_work_kinds_are_skipped

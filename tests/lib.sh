@@ -463,12 +463,27 @@ case "$method $url" in
   "GET "*/api/v3/stories/*)
     if [ "${url##*/}" = "${FAKE_CURL_MISSING:-}" ]; then printf '{}' > "$out"; printf 404; exit 0; fi
     printf '{"id":%s,"workflow_state_id":%s,"external_links":[]}' "${url##*/}" "${FAKE_CURL_STATE:-500000006}" > "$out"; printf 200 ;;
-  "PUT "*/api/v3/stories/*|"POST "*/api/v3/stories/*/comments|"POST "*/api/v3/files)
+  "PUT "*/api/v3/stories/*|"POST "*/api/v3/stories/*/comments|"POST "*/api/v3/files|"POST "*/api/v3/story-links)
     printf '{}' > "$out"; printf 200 ;;
   *) printf '{}' > "$out"; printf 404 ;;
 esac
 SH
   chmod +x "$1/curl"
+}
+
+# fm_fake_op <fakebin>
+# Drops an `op` shim: `op read <ref>` prints $FAKE_OP_TOKEN and logs the ref to
+# $FAKE_OP_LOG, or fails when FAKE_OP_TOKEN is unset. No test reaches 1Password.
+fm_fake_op() {  # <fakebin>
+  mkdir -p "$1"
+  cat > "$1/op" <<'SH'
+#!/usr/bin/env bash
+[ "${1:-}" = read ] || exit 2
+[ -z "${FAKE_OP_LOG:-}" ] || printf 'op read %s\n' "${2:-}" >> "$FAKE_OP_LOG"
+[ -n "${FAKE_OP_TOKEN:-}" ] || { echo "op: not signed in" >&2; exit 1; }
+printf '%s\n' "$FAKE_OP_TOKEN"
+SH
+  chmod +x "$1/op"
 }
 
 # fm_fake_crash_injector <fakebin>
