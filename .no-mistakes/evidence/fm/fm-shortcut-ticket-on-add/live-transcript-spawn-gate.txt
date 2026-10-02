@@ -1,0 +1,94 @@
+### Add with no SHORTCUT_API_TOKEN: add kept, warning printed
+$ bin/fm-tasks-axi.sh add no-ticket Unticketed work --kind ship
+ok: added no-ticket (ship) -> Queued
+task:
+  id: no-ticket
+  title: Unticketed work
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: ship
+  repo: "-"
+  priority: "-"
+  created: 2026-10-02
+  closed: "-"
+  deps: none
+  links: none
+  body: ""
+help[2]:
+  - Run `tasks-axi start no-ticket` to move it to in flight
+  - Run `tasks-axi block no-ticket --by <other>` to record a dependency
+fm-shortcut-ticket: SHORTCUT_API_TOKEN is not set; export it and run: bin/fm-shortcut-ticket.sh no-ticket
+fm-tasks-axi: warning: no Shortcut ticket for no-ticket; retry with bin/fm-shortcut-ticket.sh no-ticket
+[exit 0]
+### Check gate
+$ bin/fm-shortcut-ticket.sh --check no-ticket
+fm-shortcut-ticket: backlog item no-ticket has no Shortcut ticket (sc-NNNN); create one with: bin/fm-shortcut-ticket.sh no-ticket
+[exit 1]
+$ bin/fm-shortcut-ticket.sh --check login-loop
+[exit 0]
+### Spawn of the unticketed ship
+$ bin/fm-spawn.sh no-ticket
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE
+error: ship spawns require --mode <no-mistakes|direct-PR|local-only>; resolve it at intake from the captain's instruction and the project's registered posture in data/projects.md
+[exit 1]
+### Stub requests (expect none)
+### Spawn of the unticketed ship with a mode
+$ bin/fm-spawn.sh no-ticket --mode local-only
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE
+error: ship spawns require --yolo <on|off>; it is this task's merge authority, not a project lookup
+[exit 1]
+$ bin/fm-spawn.sh no-ticket --mode local-only --yolo off
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE
+bin/fm-spawn.sh: line 1846: POS[1]: unbound variable
+[exit 1]
+### Control: same spawn with the feature off passes the ticket gate (fails later for unrelated setup)
+$ env FM_SHORTCUT_TICKETS=off bin/fm-spawn.sh no-ticket --mode local-only --yolo off
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE
+bin/fm-spawn.sh: line 1846: POS[1]: unbound variable
+[exit 1]
+### Spawn of the unticketed ship (project registered as a dir)
+$ bin/fm-spawn.sh no-ticket /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE/projects/demo --mode local-only --yolo off
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE
+error: task no-ticket has no brief at inaccessible data path /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE/data/no-ticket/brief.md
+[exit 1]
+### Control: feature off
+$ env FM_SHORTCUT_TICKETS=off bin/fm-spawn.sh no-ticket /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE/projects/demo --mode local-only --yolo off
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE
+error: task no-ticket has no brief at inaccessible data path /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE/data/no-ticket/brief.md
+[exit 1]
+### Spawn of the unticketed ship (with brief)
+$ bin/fm-spawn.sh no-ticket /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE/projects/demo --mode local-only --yolo off
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE
+notice: no-ticket ships mode=local-only while the standing posture for demo is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+fm-shortcut-ticket: backlog item no-ticket has no Shortcut ticket (sc-NNNN); create one with: bin/fm-shortcut-ticket.sh no-ticket
+error: spawn refused - task no-ticket has no Shortcut ticket
+[exit 1]
+### Control: feature off
+$ env FM_SHORTCUT_TICKETS=off bin/fm-spawn.sh no-ticket /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE/projects/demo --mode local-only --yolo off
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE
+notice: no-ticket ships mode=local-only while the standing posture for demo is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M3X7T7AHN5VGM0P0BP3WPW1M/bin/backends/tmux.sh: line 77: tmux: command not found
+/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M3X7T7AHN5VGM0P0BP3WPW1M/bin/backends/tmux.sh: line 99: tmux: command not found
+/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M3X7T7AHN5VGM0P0BP3WPW1M/bin/backends/tmux.sh: line 103: tmux: command not found
+[exit 1]
+### Retry ticket creation with the token, then spawn passes the ticket gate (stops later: tmux absent on this host)
+$ bin/fm-shortcut-ticket.sh no-ticket
+fm-shortcut-ticket: no-ticket -> sc-9004 https://app.shortcut.com/applypass/story/9004
+[exit 0]
+$ bin/fm-shortcut-ticket.sh --check no-ticket
+[exit 0]
+$ bin/fm-spawn.sh no-ticket /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE/projects/demo --mode local-only --yolo off
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.ov3CFE
+notice: no-ticket ships mode=local-only while the standing posture for demo is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M3X7T7AHN5VGM0P0BP3WPW1M/bin/backends/tmux.sh: line 77: tmux: command not found
+/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M3X7T7AHN5VGM0P0BP3WPW1M/bin/backends/tmux.sh: line 99: tmux: command not found
+/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M3X7T7AHN5VGM0P0BP3WPW1M/bin/backends/tmux.sh: line 103: tmux: command not found
+[exit 1]
+### Stub requests
+POST /api/v3/stories token=ok
+  body: '{\n  "name": "Unticketed work",\n  "description": "- Problem: Unticketed work\\n- Fix: tracked by firstmate backlog item no-ticket",\n  "story_type": "feature",\n  "group_id": "649562cb-7f18-471f-835f-7ed28a5abf0a",\n  "workflow_state_id": 500000006,\n  "owner_ids": [\n    "68930514-b854-4a8e-95ec-fa3eee30e'

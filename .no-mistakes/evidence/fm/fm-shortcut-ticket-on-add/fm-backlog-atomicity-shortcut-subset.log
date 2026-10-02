@@ -1,0 +1,6 @@
+ok - dispatch refuses an unticketed item and passes once the sc id is recorded
+ok - dispatch needs no Shortcut ticket when the feature is off
+ok - dispatch moves the Shortcut story to In Progress
+ok - a landed ship teardown moves the story to In Review, comments the outcome, and never moves it to Done
+ok - a teardown without landing sends the story back to Backlog
+ok - a scout teardown moves the story to In Review and uploads the report

@@ -1,0 +1,29 @@
+### Home sets enabled=off: add makes no story, check passes
+$ bin/fm-tasks-axi.sh add opt-out-item Upstream behaviour --kind ship
+ok: added opt-out-item (ship) -> Queued
+task:
+  id: opt-out-item
+  title: Upstream behaviour
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: ship
+  repo: "-"
+  priority: "-"
+  created: 2026-10-02
+  closed: "-"
+  deps: none
+  links: none
+  body: ""
+help[2]:
+  - Run `tasks-axi start opt-out-item` to move it to in flight
+  - Run `tasks-axi block opt-out-item --by <other>` to record a dependency
+[exit 0]
+$ bin/fm-shortcut-ticket.sh --check opt-out-item
+[exit 0]
+### Stub requests (expect none):
+(end)
