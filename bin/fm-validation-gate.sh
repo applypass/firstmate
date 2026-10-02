@@ -284,7 +284,7 @@ start_steer() {  # <sha>
 }
 
 # Refuse a captain verdict for a ready-for-validation report the gate still
-# holds: releasing it is firstmate's action, not a captain outcome.
+# holds: firstmate releases it before reporting a captain outcome.
 cmd_outcome_check() {
   local id=${1:-} verdict=${2:-} state last
   [ -n "$id" ] && [ -n "$verdict" ] && [ "$#" -eq 2 ] || usage
@@ -296,7 +296,7 @@ cmd_outcome_check() {
   done*'ready for final validation'*) ;;
   *) return 0 ;;
   esac
-  echo "error: $id reported ready for final validation; that is firstmate's to release, not a captain outcome." >&2
+  echo "error: $id reported ready for final validation; release it before reporting a captain outcome." >&2
   echo "Run bin/fm-validation-gate.sh release $id (it starts the worker's run), then report verdict captain: the PR is ready to merge to dev and final validation is running." >&2
   return 1
 }
@@ -307,8 +307,7 @@ cmd_supervision_rule() {
 
 # Validation release gate
 
-A ship's `done [at=<epoch>]: PR <url> ready for final validation` report is firstmate's action, never a captain outcome, in both postures and whatever the verdict rules above say about work ready for review.
-Handle it in the same turn: claim the task's lease and run `bin/fm-validation-gate.sh release <task>`, which lifts the gate on the worker's current head and sends the worker the instruction to start /no-mistakes.
+When a ship reports `done [at=<epoch>]: PR <url> ready for final validation`, firstmate releases it in the same turn, in both postures: claim the task's lease and run `bin/fm-validation-gate.sh release <task>`, which lifts the gate on the worker's current head and sends the worker the instruction to start /no-mistakes.
 Then report verdict captain with the PR's URL: the PR is ready to merge to dev, and its final validation is now running without waiting for the captain's merge word.
 The worker's later `done: PR <url> checks green` is a follow-up that clears the merge.
 The report surface refuses a captain verdict for a ready report the gate still holds, so release first; if release itself fails, report verdict captain with its exact error.
