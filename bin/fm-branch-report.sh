@@ -98,7 +98,7 @@ fi
 case "$VERDICT:$KIND" in
   captain:decision) PARENT_VERB=needs-decision ;;
   captain:blocker) PARENT_VERB=blocked ;;
-  captain:result) PARENT_VERB=done ;;
+  captain:result) PARENT_VERB='done' ;;
   routine:) ;;
   captain:*)
     echo "invalid report: a captain verdict requires --kind decision, blocker, or result" >&2
