@@ -5,8 +5,9 @@
 # While a PR iterates, the worker commits, runs the tests related to the change
 # plus lint and type checks, and pushes to origin. The costly full validation -
 # the no-mistakes pipeline - starts only after firstmate has decided the work is
-# done and has told the captain the PR is ready to merge; firstmate then runs
-# `release`, and the run proceeds without waiting for the captain's merge word.
+# done. When the worker reports the PR ready for final validation, firstmate
+# runs `release` in that same turn, in both postures; release also tells the
+# worker to start the run, which proceeds without the captain's merge word.
 #
 # MECHANISM. no-mistakes starts a run when its per-repo bare gate
 # (~/.no-mistakes/repos/<id>.git) receives a push, and `no-mistakes axi run`
@@ -16,8 +17,8 @@
 # bin/fm-validation-gate-pre-receive.sh there, unchanged, as that companion.
 # Task identity rides the pane: fm-spawn exports FM_VALIDATION_GATE pointing at
 # state/<id>.validation-gate, and every push the worker's tools make inherits
-# it. That file reads `held` or `released <sha>`; the companion's header owns
-# the per-push verdict. git strips GIT_CONFIG_* and -c core.hooksPath from a
+# it. That file's first line reads `held` or `released <sha>`; the companion's
+# header owns the per-push verdict. git strips GIT_CONFIG_* and -c core.hooksPath from a
 # local receive-pack, so neither those nor --no-verify skip the companion.
 # The pipeline's own pushes go to origin, and it moves the gate's mirror ref
 # with update-ref, so a released run is never gated against itself.
@@ -68,9 +69,22 @@
 #       no-mistakes remote, a gate whose pre-receive runs no companion, or a
 #       companion that is not firstmate's.
 #   fm-validation-gate.sh release <task-id>
-#       Firstmate runs this when it tells the captain the PR is ready to merge.
-#       Records `released <sha>` for the task worktree's HEAD; only that exact
-#       head may then start a run, so a later change needs a new release.
+#       Firstmate runs this in the turn a gated ship reports
+#       `ready for final validation`, in both postures. Records
+#       `released <sha>` for the task worktree's HEAD - only that exact head
+#       may then start a run, so a later change needs a new release - then
+#       steers the worker through fm-send to start /no-mistakes, and records
+#       `steered <sha>` as line 2 so a repeat sends nothing. A failed send
+#       leaves the release and exits nonzero; rerunning retries the steer.
+#       A release that cannot find the worktree HEAD keeps `held` and notes
+#       `release failed: <reason>` as line 2, so the escalation stays open.
+#   fm-validation-gate.sh outcome-check <task-id> <verdict>
+#       bin/fm-branch-outcome.sh calls this before storing an outcome. Exits 1
+#       for verdict captain while the gate file reads only `held` and the
+#       task's last status line is its ready-for-validation report.
+#   fm-validation-gate.sh supervision-rule
+#       Print the fixed rule bin/fm-branch-prompt.sh adds to the supervision
+#       branch's prompt.
 #   fm-validation-gate.sh dod <branch>
 #       Print the opening of the gated no-mistakes Definition of done;
 #       bin/fm-dod-lib.sh renders the rest.
@@ -225,19 +239,71 @@ cmd_prepare() {
   printf '%s\n' "$file"
 }
 
+# Keep the task held and note why, so outcome-check stops refusing a captain
+# verdict for a release that could not happen.
+release_failed() {  # <gate-file> <reason>
+  if [ "$(head -n 1 "$1" 2>/dev/null)" = held ]; then
+    write_atomic "$1" "held"$'\n'"release failed: $2" || true
+  fi
+  die "$2"
+}
+
 cmd_release() {
-  local id=${1:-} state meta file wt full
+  local id=${1:-} state meta file wt full verdict='' steered=''
   [ -n "$id" ] && [ "$#" -eq 1 ] || usage
   state=$(state_dir)
   file="$state/$id.validation-gate"
   [ -e "$file" ] || die "task $id is not gated (no $file)"
   meta="$state/$id.meta"
   wt=$(sed -n 's/^worktree=//p' "$meta" 2>/dev/null | head -n 1)
-  [ -n "$wt" ] && [ -d "$wt" ] || die "task $id has no readable worktree in $meta"
+  [ -n "$wt" ] && [ -d "$wt" ] || release_failed "$file" "task $id has no readable worktree in $meta"
   full=$(git -C "$wt" rev-parse --verify --quiet 'HEAD^{commit}') ||
-    die "$wt has no HEAD commit"
+    release_failed "$file" "$wt has no HEAD commit"
+  { read -r verdict; read -r steered; } <"$file" || true
+  if [ "$verdict" = "released $full" ] && [ "$steered" = "steered $full" ]; then
+    echo "$id is already released at $full and the worker was told to start"
+    return 0
+  fi
   write_atomic "$file" "released $full" || die "could not write $file"
-  echo "released $id at $full; tell the worker to run /no-mistakes on that head"
+  FM_HOME=$(home_dir) "$SCRIPT_DIR/fm-send.sh" "$id" "$(start_steer "$full")" >/dev/null ||
+    die "released $id at $full, but the start instruction could not be sent; rerun release to retry"
+  write_atomic "$file" "released $full"$'\n'"steered $full" || die "could not write $file"
+  echo "released $id at $full and told the worker to run /no-mistakes on that head"
+}
+
+start_steer() {  # <sha>
+  printf '%s' "Firstmate released the final validation of $1. Run /no-mistakes now on that exact head, as your Definition of done says, and drive it through to CI green."
+}
+
+# Refuse a captain verdict for a ready-for-validation report the gate still
+# holds: releasing it is firstmate's action, not a captain outcome.
+cmd_outcome_check() {
+  local id=${1:-} verdict=${2:-} state last
+  [ -n "$id" ] && [ -n "$verdict" ] && [ "$#" -eq 2 ] || usage
+  [ "$verdict" = captain ] || return 0
+  state=$(state_dir)
+  [ "$(cat "$state/$id.validation-gate" 2>/dev/null)" = held ] || return 0
+  last=$(awk 'NF { line = $0 } END { print line }' "$state/$id.status" 2>/dev/null)
+  case "$last" in
+  done*'ready for final validation'*) ;;
+  *) return 0 ;;
+  esac
+  echo "error: $id reported ready for final validation; that is firstmate's to release, not a captain outcome." >&2
+  echo "Run bin/fm-validation-gate.sh release $id (it starts the worker's run), then report verdict routine." >&2
+  return 1
+}
+
+cmd_supervision_rule() {
+  [ "$#" -eq 0 ] || usage
+  cat <<'EOF'
+
+# Validation release gate
+
+A ship's `done [at=<epoch>]: PR <url> ready for final validation` report is firstmate's action, never a captain outcome, in both postures and whatever the verdict rules above say about work ready for review.
+Handle it in the same turn: claim the task's lease and run `bin/fm-validation-gate.sh release <task>`, which lifts the gate on the worker's current head and sends the worker the instruction to start /no-mistakes.
+Report that release with verdict routine and the PR's URL; the worker's later `done: PR <url> checks green` is the work ready for review.
+The report surface refuses a captain verdict for a ready report the gate still holds; if release itself fails, report verdict captain with its exact error.
+EOF
 }
 
 cmd_dod() {
@@ -253,7 +319,7 @@ While the PR iterates, commit on your branch and run the tests related to the ch
 Then push your branch to origin and open or update a pull request with \`gh-axi\` that is ready for review, not a draft.
 When you believe it is complete, append \`done [at=<epoch>]: PR {url} ready for final validation\` to the status file and stop.
 Do NOT run /no-mistakes before firstmate releases it; the gate refuses that push.
-Firstmate releases the final validation when it tells the captain the PR is ready to merge, then instructs you to run /no-mistakes on that exact head.
+Firstmate then releases that exact head, which sends you the instruction to run /no-mistakes on it.
 If you change the branch after that, report it; firstmate releases the new head.
 
 EOF
@@ -266,6 +332,8 @@ enabled) cmd_enabled "$@" ;;
 prepare) cmd_prepare "$@" ;;
 release) cmd_release "$@" ;;
 dod) cmd_dod "$@" ;;
+outcome-check) cmd_outcome_check "$@" ;;
+supervision-rule) cmd_supervision_rule "$@" ;;
 -h | --help | '') usage ;;
 *) usage ;;
 esac

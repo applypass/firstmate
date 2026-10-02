@@ -151,3 +151,4 @@ cat <<'PROMPT'
 
 PROMPT
 cat "$FM_TRACKED_ROOT/.agents/skills/ask-user-authority/SKILL.md"
+"$SCRIPT_DIR/fm-validation-gate.sh" supervision-rule

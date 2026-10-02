@@ -97,7 +97,8 @@ started_count() {
 
 write_task_meta() {  # <id> [kind]
   fm_write_meta "$STATE_DIR/$1.meta" "worktree=$WT_DIR" "kind=${2:-ship}" \
-    "mode=no-mistakes" "branch=fm/$1" "validation_gate=on"
+    "mode=no-mistakes" "branch=fm/$1" "validation_gate=on" \
+    "window=sess:fm-$1" "harness=claude"
 }
 
 # A ship brief carrying the gated Definition of done, as fm-brief.sh renders it.
@@ -111,8 +112,24 @@ prepare_ship() {  # <id> [extra prepare args...]
     --mode no-mistakes --forge none --worktree "$WT_DIR" --id "$id" --brief "$GATED_BRIEF" "$@"
 }
 
+# Release runs the real fm-send, so the worker's pane is a stub tmux that
+# logs what is typed into it; the steer itself lands in the task's inbox.
+SEND_BIN=$(make_stubs "$TMP_ROOT/send-world")
+
 release_task() {  # <id>
-  FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$STATE_DIR" "$GATE" release "$@"
+  PATH="$SEND_BIN:$PATH" FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$STATE_DIR" \
+    FM_SEND_LOG="$TMP_ROOT/send.log" FM_SEND_SETTLE=0 "$GATE" release "$@"
+}
+
+gate_verdict() { head -n 1 "$STATE_DIR/$1.validation-gate"; }
+
+steer_count() {  # <id>
+  find "$STATE_DIR/$1.inbox" -maxdepth 1 -name '*.msg' 2>/dev/null | wc -l | tr -d ' '
+}
+
+outcome() {  # <id> <verdict> <summary>
+  FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$STATE_DIR" "$ROOT/bin/fm-branch-outcome.sh" append \
+    --task "$1" --verdict "$2" --summary "$3" 2>&1
 }
 
 test_pre_release_push_is_refused() {
@@ -139,7 +156,7 @@ test_released_head_is_accepted_and_only_that_head() {
   head=$(git -C "$WT_DIR" rev-parse HEAD)
   out=$(release_task released) || fail "release should succeed: $out"
   assert_contains "$out" "$head" "release should name the released head"
-  assert_equals "released $head" "$(cat "$STATE_DIR/released.validation-gate")" \
+  assert_equals "released $head" "$(gate_verdict released)" \
     "release should record the worktree HEAD"
   out=$(push_gate "$WT_DIR" released)
   status=$?
@@ -256,7 +273,7 @@ test_prepare_is_idempotent_and_relaunch_keeps_a_release() {
   head=$(git -C "$WT_DIR" rev-parse HEAD)
   release_task relaunch >/dev/null || fail "release should succeed"
   prepare_ship relaunch --recorded 1 >/dev/null || fail "a relaunch prepare should succeed"
-  assert_equals "released $head" "$(cat "$STATE_DIR/relaunch.validation-gate")" \
+  assert_equals "released $head" "$(gate_verdict relaunch)" \
     "a relaunch must keep an existing release"
   prepare_ship relaunch >/dev/null || fail "a fresh prepare should succeed"
   assert_equals held "$(cat "$STATE_DIR/relaunch.validation-gate")" \
@@ -534,6 +551,65 @@ test_promote_follows_the_scout_spawn_decision() {
   pass "promotion follows the gate decision recorded at the scout spawn, not the current switch"
 }
 
+test_release_steers_the_worker_exactly_once() {
+  local out head body
+  make_world steer
+  write_task_meta steer
+  prepare_ship steer >/dev/null || fail "prepare should succeed"
+  commit_in "$WT_DIR" 'feat: final version'
+  head=$(git -C "$WT_DIR" rev-parse HEAD)
+  out=$(release_task steer 2>&1) || fail "release should succeed: $out"
+  assert_equals 1 "$(steer_count steer)" "release should send the worker one start instruction"
+  body=$(cat "$STATE_DIR/steer.inbox/"*.msg)
+  assert_contains "$body" "/no-mistakes" "the instruction should tell the worker to start the run"
+  assert_contains "$body" "$head" "the instruction should name the released head"
+  out=$(release_task steer 2>&1) || fail "a repeated release should succeed: $out"
+  assert_equals 1 "$(steer_count steer)" "a repeated release of the same head must not steer again"
+  commit_in "$WT_DIR" 'feat: one more change'
+  out=$(release_task steer 2>&1) || fail "release of a new head should succeed: $out"
+  assert_equals 2 "$(steer_count steer)" "a new head gets its own start instruction"
+  pass "release lifts the gate and sends the start instruction once per released head"
+}
+
+test_away_ready_report_is_released_not_escalated() {
+  local out
+  make_world away
+  write_task_meta away
+  prepare_ship away >/dev/null || fail "prepare should succeed"
+  commit_in "$WT_DIR" 'feat: final version'
+  printf 'the captain is away\n' >"$STATE_DIR/.afk-contract"
+  printf 'done [at=%s]: PR https://example.invalid/pr/1 ready for final validation\n' \
+    "$(date +%s)" >>"$STATE_DIR/away.status"
+  out=$(outcome away captain "PR 1 is ready for review") &&
+    fail "a captain verdict for a held ready report should be refused: $out"
+  assert_contains "$out" "fm-validation-gate.sh release away" "the refusal should name the release command"
+  assert_absent "$STATE_DIR/branch-outcomes.jsonl" "a refused verdict must record no outcome"
+  out=$(release_task away 2>&1) || fail "the supervision path's release should succeed: $out"
+  assert_equals 1 "$(steer_count away)" "the release should steer the worker to start the run"
+  out=$(outcome away routine "released the final validation of PR 1") ||
+    fail "a routine outcome after release should be recorded: $out"
+  assert_grep '"verdict":"routine"' "$STATE_DIR/branch-outcomes.jsonl" "the release should be a routine outcome"
+  assert_no_grep '"verdict":"captain"' "$STATE_DIR/branch-outcomes.jsonl" \
+    "the ready report must not wait for the captain"
+  pass "an away ready-for-validation report is released by supervision, not filed for the captain"
+}
+
+test_failed_release_can_still_escalate() {
+  local out
+  make_world release-fails
+  write_task_meta release-fails
+  prepare_ship release-fails >/dev/null || fail "prepare should succeed"
+  printf 'done [at=%s]: PR https://example.invalid/pr/2 ready for final validation\n' \
+    "$(date +%s)" >>"$STATE_DIR/release-fails.status"
+  fm_write_meta "$STATE_DIR/release-fails.meta" "worktree=$TMP_ROOT/gone" "kind=ship" \
+    "validation_gate=on" "window=sess:fm-release-fails" "harness=claude"
+  out=$(release_task release-fails 2>&1) && fail "release without a worktree should fail: $out"
+  assert_equals held "$(gate_verdict release-fails)" "a failed release must keep the task held"
+  out=$(outcome release-fails captain "release of PR 2 failed: worktree missing") ||
+    fail "a failed release must leave the captain escalation open: $out"
+  pass "a release that fails leaves the escalation to the captain open"
+}
+
 test_pre_release_push_is_refused
 test_released_head_is_accepted_and_only_that_head
 test_release_refuses_an_ungated_task
@@ -552,5 +628,8 @@ test_relaunch_keeps_the_spawn_decision
 test_spawn_refuses_when_the_gate_cannot_be_installed
 test_brief_renders_the_gated_definition_of_done
 test_promote_follows_the_scout_spawn_decision
+test_release_steers_the_worker_exactly_once
+test_away_ready_report_is_released_not_escalated
+test_failed_release_can_still_escalate
 
 echo "# all fm-validation-gate tests passed"
