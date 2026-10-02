@@ -668,7 +668,7 @@ test_watcher_quiet_on_healthy_inbox() {
 }
 
 test_watcher_queues_every_silent_handled_record() {
-  local dir state out log pid rec1 rec2 rows
+  local dir state out log pid rec1 rec2 rows drained
   dir=$(setup_watch_case silent-many)
   state="$dir/state"; out="$dir/watch.out"; log="$dir/send.log"; : > "$log"
   rec1=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "first request")
@@ -681,9 +681,12 @@ test_watcher_queues_every_silent_handled_record() {
   wait_watcher_gone "$pid" || { kill "$pid" 2>/dev/null; fail "two silent records should wake the watcher"; }
   rows=$(grep -cF 'was moved to handled/ but no status line was appended' "$state/.wake-queue" || true)
   [ "$rows" = 2 ] || fail "every silent record must queue its own wake row, got $rows:"$'\n'"$(cat "$state/.wake-queue" 2>/dev/null)"
-  grep -qF "request ${rec1##*/} " "$state/.wake-queue" || fail "the first record must be named"
-  grep -qF "request ${rec2##*/} " "$state/.wake-queue" || fail "the second record must be named"
-  pass "watcher: every silent handled record queues a wake row before the one wake exits"
+  drained=$(FM_STATE_OVERRIDE="$state" "$ROOT/bin/fm-wake-drain.sh" 2>/dev/null || true)
+  printf '%s\n' "$drained" | grep -qF "request ${rec1##*/} " \
+    || fail "the drain must present the first record:"$'\n'"$drained"
+  printf '%s\n' "$drained" | grep -qF "request ${rec2##*/} " \
+    || fail "the drain must present the second record:"$'\n'"$drained"
+  pass "watcher: every silent handled record queues its own wake row and the drain presents each"
 }
 
 test_watcher_ack_silences_unwritable_ladder() {

@@ -7,18 +7,17 @@
 # verdict in the mate home.
 #
 #   1. fm-branch-report.sh in a seeded mate home also publishes a captain
-#      verdict onto the parent channel, once only; it carries corr= only when it
-#      is the reply (the summary names the corr, or the outcome's task was handed
-#      a request carrying it), so an unrelated outcome never closes a pending
-#      reply. Routine verdicts and a main home publish nothing.
+#      verdict onto the parent channel, once only, as an uncorrelated
+#      needs-decision that never closes a pending reply. Routine verdicts and a
+#      main home publish nothing.
 #   2. A handled steering record with no status line since it arrived is
 #      reported once, and only after the worker's turn ends or the age bound
 #      passes - never on the move alone; records handled in an inbox from
 #      before this check are history.
-#   3. End to end: with publication on, main's channel receives the result and
-#      the pending reply resolves; with it disabled, the acknowledged request
-#      escalates to main on the age bound while the mate pane sits idle, and
-#      not before.
+#   3. End to end: with publication on, main's channel receives the result;
+#      either way the acknowledged request stays open and escalates to main on
+#      the age bound while the mate pane sits idle, and not before, until the
+#      mate's own correlated report closes it.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -56,7 +55,7 @@ phase_in() {  # <state> <corr>
   fm_pending_reply_get "$(fm_pending_reply_path "$1" "$2")" phase
 }
 
-test_captain_verdict_naming_the_corr_reaches_the_parent_channel() {
+test_captain_verdict_reaches_the_parent_channel_uncorrelated() {
   local corr status
   make_pair publish classify
   status="$PARENT/state/classify.status"
@@ -65,15 +64,19 @@ test_captain_verdict_naming_the_corr_reaches_the_parent_channel() {
   fm_pending_reply_mark_delivered "$PARENT/state" "$corr"
   branch_report "$MATE" fleet routine "nothing new" >/dev/null
   [ ! -s "$status" ] || fail "a routine verdict must publish nothing"
+  # Even a summary that quotes the request's corr publishes no corr= token.
   branch_report "$MATE" fleet captain "follow-up finished for corr=$corr: 3 rows fixed" >/dev/null
-  grep -q "^done \[corr=$corr\] \[at=[0-9]*\]: follow-up finished" "$status" \
-    || fail "the reply must reach the parent channel with corr (got: $(cat "$status" 2>/dev/null))"
+  grep -q "^needs-decision \[at=[0-9]*\]: captain outcome for fleet: follow-up finished" "$status" \
+    || fail "the outcome must reach the parent channel as needs-decision (got: $(cat "$status" 2>/dev/null))"
   [ "$(grep -c "follow-up finished" "$status")" = 1 ] || fail "one captain outcome must publish exactly one line"
-  fm_pending_reply_try_resolve "$PARENT/state" "$corr" || fail "the published reply must resolve the pending reply"
-  # The mate's own later report is harmless: the record is already resolved.
-  FM_HOME="$MATE" "$ROOT/bin/fm-secondmate-report.sh" done "$corr" "same result" >/dev/null
-  fm_pending_reply_try_resolve "$PARENT/state" "$corr" || fail "a later helper line must stay harmless"
-  pass "a captain verdict that names the corr is published on the parent channel and closes the reply"
+  ! grep -q "corr=" "$status" || fail "a script-published outcome must carry no corr= (got: $(cat "$status"))"
+  if fm_pending_reply_try_resolve "$PARENT/state" "$corr"; then
+    fail "a script-published outcome must not resolve the pending reply"
+  fi
+  # Closing the request stays with the mate's own correlated report.
+  FM_HOME="$MATE" "$ROOT/bin/fm-secondmate-report.sh" "done" "$corr" "3 rows fixed" >/dev/null
+  fm_pending_reply_try_resolve "$PARENT/state" "$corr" || fail "the mate's correlated report must resolve it"
+  pass "a captain verdict in a mate home reaches the parent channel uncorrelated and resolves nothing"
 }
 
 test_unrelated_captain_outcome_never_closes_a_pending_reply() {
@@ -83,17 +86,14 @@ test_unrelated_captain_outcome_never_closes_a_pending_reply() {
   export FM_PENDING_REPLY_NOW=2000
   corr=$(fm_pending_reply_create "$PARENT" "$PARENT/state" classify "follow-up")
   fm_pending_reply_mark_delivered "$PARENT/state" "$corr"
-  # Another worker in the mate's fleet, never handed main's request.
-  fm_task_inbox_write "$MATE/state" other "rotate the logs" >/dev/null
   branch_report "$MATE" other captain "worker other needs a login" >/dev/null
-  grep -q "worker other needs a login" "$status" || fail "the outcome must still be published"
-  ! grep -q "corr=" "$status" || fail "an unrelated outcome must carry no corr (got: $(cat "$status"))"
+  grep -q "worker other needs a login" "$status" || fail "main must see the outcome"
   if fm_pending_reply_try_resolve "$PARENT/state" "$corr"; then
     fail "an unrelated captain outcome must not close the pending reply"
   fi
   [ "$(phase_in "$PARENT/state" "$corr")" = awaiting_report ] \
     || fail "the reply must stay open, got $(phase_in "$PARENT/state" "$corr")"
-  pass "a captain outcome unrelated to the open request is published without corr and leaves it open"
+  pass "an unrelated captain outcome reaches main and leaves the open request open"
 }
 
 test_main_home_publishes_nothing() {
@@ -160,7 +160,6 @@ replay() {  # <publish|skip> -> sets PARENT, MATE, CORR
   CORR=$(fm_pending_reply_create "$PARENT" "$PARENT/state" classify "classify follow-up")
   fm_pending_reply_mark_delivered "$PARENT/state" "$CORR"
   # The mate relays the request to its worker and acknowledges, as at 20:28.
-  fm_task_inbox_write "$MATE/state" worker "follow-up for $(fm_pending_reply_corr_token "$CORR")" >/dev/null
   FM_HOME="$MATE" "$ROOT/bin/fm-secondmate-report.sh" working "$CORR" "relayed" >/dev/null
   fm_pending_reply_tick_one "$PARENT/state" "$CORR" idle ""
   export FM_PENDING_REPLY_NOW=5300
@@ -179,11 +178,14 @@ replay() {  # <publish|skip> -> sets PARENT, MATE, CORR
 
 test_replay_result_reaches_main() {
   replay publish
-  grep -q "corr=$CORR.*classify follow-up complete" "$PARENT/state/classify.status" \
-    || fail "main's channel must receive the result with corr"
-  [ "$(phase_of_replay)" = resolved ] || fail "the pending reply must resolve, got $(phase_of_replay)"
-  ! grep -q "pending-reply-unreported" "$PARENT/state/classify.status" || fail "no escalation once the result arrived"
-  pass "replay: the result reaches main and closes the pending reply"
+  grep -q "^needs-decision .*classify follow-up complete" "$PARENT/state/classify.status" \
+    || fail "main's channel must receive the result"
+  [ "$(phase_of_replay)" = escalated ] \
+    || fail "the published outcome must not close the request; the age bound still fires, got $(phase_of_replay)"
+  FM_HOME="$MATE" "$ROOT/bin/fm-secondmate-report.sh" "done" "$CORR" "classify follow-up complete" >/dev/null
+  fm_pending_reply_tick_one "$PARENT/state" "$CORR" idle ""
+  [ "$(phase_of_replay)" = resolved ] || fail "the mate's correlated report must resolve it, got $(phase_of_replay)"
+  pass "replay: the result reaches main, and only the mate's correlated report closes the request"
 }
 
 test_replay_without_publication_escalates() {
@@ -198,7 +200,7 @@ phase_of_replay() {
   fm_pending_reply_get "$(fm_pending_reply_path "$PARENT/state" "$CORR")" phase
 }
 
-test_captain_verdict_naming_the_corr_reaches_the_parent_channel
+test_captain_verdict_reaches_the_parent_channel_uncorrelated
 test_unrelated_captain_outcome_never_closes_a_pending_reply
 test_main_home_publishes_nothing
 test_silent_handled_waits_for_the_turn_end
