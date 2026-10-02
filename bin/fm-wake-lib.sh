@@ -2191,6 +2191,7 @@ fm_wake_queue_prune_task() {  # <state> <task-id> [target]
     NF >= 5 {
       if ($3 == "stale" && target != "" && $4 == target) next
       if ($3 == "signal" && ($4 == task || $4 == task ".status" || $4 == task ".turn-ended" || $4 == state "/" task ".status" || $4 == state "/" task ".turn-ended")) next
+      if ($3 == "signal" && substr($4, 1, length(task) + 16) == task ".silent-handled." && substr($4, length(task) + 17) ~ /^[0-9]+$/) next
       if ($3 == "check" && $4 == state "/" task ".check.sh") next
     }
     { print }
