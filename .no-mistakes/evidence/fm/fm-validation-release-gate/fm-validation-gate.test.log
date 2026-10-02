@@ -1,0 +1,19 @@
+ok - a push to the no-mistakes gate before release is refused and starts no run
+ok - release admits exactly the released head; a later head needs a new release
+ok - release refuses a task the gate never held
+ok - pushes to origin are never gated
+ok - --no-verify and core.hooksPath overrides cannot skip the gate
+ok - a push with no task gate variable keeps upstream behaviour
+ok - a held task may still delete a gate ref, which starts no run
+ok - prepare refuses a foreign companion, a gate without companion support, and a missing gate
+ok - prepare is idempotent, a relaunch keeps a release, and a fresh spawn holds again
+ok - only no-mistakes ships without a forge binding are held; a scout follows the home switch and a ship its brief
+ok - the switch resolves config first, then the tracked default, and absent means off
+ok - a no-mistakes ship spawn installs the companion, holds the task, and exports its gate
+ok - with the switch file absent, spawn behaves as upstream
+ok - a ship spawn follows the gate decision its brief carries, not the switch at spawn
+ok - a relaunch follows the gate decision recorded at spawn, not the current switch
+ok - spawn stops rather than launching a gated ship it cannot gate
+ok - the brief renders the gated Definition of done only when the switch is on
+ok - promotion follows the gate decision recorded at the scout spawn, not the current switch
+# all fm-validation-gate tests passed

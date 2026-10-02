@@ -1,0 +1,60 @@
+### 1. Default switch: config/validation-gate absent, tracked defaults/validation-gate = on
+enabled -> on (exit 0)
+
+### 2. fm-brief.sh renders the gated Definition of done for a no-mistakes ship
+# Definition of done
+Delivery contract: mode=no-mistakes
+Validation gate: on
+Ship branch: fm/demo
+The full no-mistakes validation runs once, on the final version, after firstmate releases it; until then a gate on the pipeline refuses to start it.
+While the PR iterates, commit on your branch and run the tests related to the change - the unit and integration tests for the changed code and the code it affects - plus lint and type checks, not the whole repository suite.
+Then push your branch to origin and open or update a pull request with `gh-axi` that is ready for review, not a draft.
+When you believe it is complete, append `done [at=<epoch>]: PR {url} ready for final validation` to the status file and stop.
+Do NOT run /no-mistakes before firstmate releases it; the gate refuses that push.
+Firstmate releases the final validation when it tells the captain the PR is ready to merge, then instructs you to run /no-mistakes on that exact head.
+If you change the branch after that, report it; firstmate releases the new head.
+
+### 3. prepare (fm-spawn hook-in) installs the companion and holds the task
+exported FM_VALIDATION_GATE=/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.fDW9S5/state/demo.validation-gate
+gate file: held
+-rwxr-xr-x@ /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-gate-world.HzWrLv/gate.git/hooks/pre-receive.no-mistakes-user
+
+### 4. Worker iterates: commit and push to origin (allowed)
+ * [new branch]      HEAD -> fm/demo
+exit=0
+
+### 5. Worker runs no-mistakes early: push to gate with --no-verify (refused)
+remote: firstmate validation gate: the full no-mistakes validation for task demo has not been released for refs/heads/fm/demo (18d364943ebd52b55a1e4f7f0e1006cf10fbc296).        
+remote: While the PR iterates: commit, run the tests related to the change plus lint and type checks, push to origin, and report the PR ready.        
+remote: Firstmate releases this run when it tells the captain the PR is ready to merge: fm-validation-gate.sh release demo        
+To /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-gate-world.HzWrLv/gate.git
+ ! [remote rejected] HEAD -> fm/demo (pre-receive hook declined)
+error: failed to push some refs to '/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-gate-world.HzWrLv/gate.git'
+exit=1
+
+### 6. Adversarial: -c core.hooksPath=/dev/null and GIT_CONFIG overrides (still refused)
+remote: firstmate validation gate: the full no-mistakes validation for task demo has not been released for refs/heads/fm/demo (18d364943ebd52b55a1e4f7f0e1006cf10fbc296).        
+ ! [remote rejected] HEAD -> fm/demo (pre-receive hook declined)
+
+### 7. Firstmate tells captain PR is ready to merge, then releases
+released demo at 18d364943ebd52b55a1e4f7f0e1006cf10fbc296; tell the worker to run /no-mistakes on that head
+gate file: released 18d364943ebd52b55a1e4f7f0e1006cf10fbc296
+
+### 8. Released head pushes to gate: pipeline starts
+remote: PIPELINE STARTED refs/heads/fm/demo 18d364943ebd52b55a1e4f7f0e1006cf10fbc296        
+ * [new branch]      HEAD -> fm/demo
+
+### 9. Adversarial: a new commit after release is refused until released again
+remote: firstmate validation gate: the full no-mistakes validation for task demo has not been released for refs/heads/fm/demo (14c0636a65615036d722892a1caa72a42868a17d).        
+ ! [remote rejected] HEAD -> fm/demo (pre-receive hook declined)
+
+### 10. Non-fleet push (no FM_VALIDATION_GATE) keeps upstream behaviour
+remote: PIPELINE STARTED refs/heads/other 14c0636a65615036d722892a1caa72a42868a17d        
+ * [new branch]      HEAD -> other
+
+### 11. Switch off via config/validation-gate: new brief is ungated
+enabled -> off (exit 1)
+Firstmate will then instruct you to run /no-mistakes to validate and ship a PR.
+
+### 12. Recorded decision wins over switch: task demo still gated (enabled --task demo)
+demo -> on (record wins)
