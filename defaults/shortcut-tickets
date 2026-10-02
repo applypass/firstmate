@@ -12,7 +12,3 @@ state_progress=500000008
 state_review=500000009
 state_done=500000010
 story_type=feature
-# Member the created stories are assigned to.
-owner_id=68930514-b854-4a8e-95ec-fa3eee30e3a2
-# Token source when SHORTCUT_API_TOKEN is unset: read at call time with `op read`.
-token_ref=op://dev-agent/Shortcut API key/password

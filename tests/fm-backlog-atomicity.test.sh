@@ -1276,6 +1276,7 @@ test_dispatch_requires_a_shortcut_ticket_when_the_feature_is_on() {
   id=atomic-shortcut-b2
   case_dir=$(make_home dispatch-shortcut "$id")
   tasks-axi add "$id" "item without a ticket" --kind ship --file "$(backlog_of "$case_dir")" >/dev/null
+  shortcut_home_settings "$case_dir"
 
   mkdir -p "$case_dir/fakebin"
   fm_fake_shortcut_curl "$case_dir/fakebin"
@@ -1297,11 +1298,16 @@ test_dispatch_requires_a_shortcut_ticket_when_the_feature_is_on() {
   assert_contains "$out" "op read" "the missing-token refusal did not name the failed 1Password read"
   assert_absent "$(home_of "$case_dir")/state/$id.meta" "token-less dispatch left a record behind"
 
-  tasks-axi update "$id" --body "Shortcut: sc-4242" --file "$(backlog_of "$case_dir")" >/dev/null
+  out=$(shortcut_env "$case_dir" run_ship_spawn "$case_dir" "$id") && rc=0 || rc=$?
+  [ "$rc" -ne 0 ] || fail "spawn dispatched an item whose body line names an unowned umbrella story"
+  assert_contains "$out" "marker" "the refusal did not say the story is not the item's own"
+  assert_absent "$(home_of "$case_dir")/state/$id.meta" "unowned-story dispatch left a record behind"
+
+  own_story "$case_dir" 4242 "$id"
   out=$(shortcut_env "$case_dir" run_ship_spawn "$case_dir" "$id") || fail "spawn refused a ticketed item: $out"
   assert_present "$(home_of "$case_dir")/state/$id.meta" "ticketed dispatch published no record"
   assert_grep "GET https://api.app.shortcut.com/api/v3/stories/4242" "$case_dir/curl.log" "the spawn gate did not verify the story exists"
-  pass "dispatch refuses an unticketed or umbrella-only item and passes once its own story is verified"
+  pass "dispatch refuses an unticketed, umbrella-only, or unowned-story item and passes once its own marked story is verified"
 }
 
 test_dispatch_ignores_shortcut_tickets_when_the_feature_is_off() {
@@ -1325,10 +1331,22 @@ shortcut_env() {  # <case-dir> <command...>
   FM_SHORTCUT_TICKETS=on SHORTCUT_API_TOKEN=tok-secret-123 FAKE_CURL_LOG="$case_dir/curl.log" "$@"
 }
 
+# The per-home Shortcut settings, and a fake story <num> marked as <id>'s own.
+shortcut_home_settings() {  # <case-dir>
+  printf 'owner_id=11111111-2222-4333-8444-555555555555\ntoken_ref=op://home-vault/Shortcut/password\n' \
+    > "$(home_of "$1")/config/shortcut-tickets"
+}
+own_story() {  # <case-dir> <num> <id>
+  mkdir -p "$1/fake-stories"
+  printf 'firstmate-item: %s/%s\n' "$(basename "$(home_of "$1")")" "$3" > "$1/fake-stories/$2.desc"
+}
+
 test_dispatch_moves_the_story_to_in_progress() {
   local case_dir id out
   id=atomic-shortcut-b4
   case_dir=$(make_home dispatch-shortcut-progress "$id")
+  shortcut_home_settings "$case_dir"
+  own_story "$case_dir" 5000 "$id"
   tasks-axi add "$id" "ticketed" --body "Shortcut: sc-5000" --kind ship --file "$(backlog_of "$case_dir")" >/dev/null
   : > "$case_dir/curl.log"
   out=$(shortcut_env "$case_dir" run_ship_spawn "$case_dir" "$id") || fail "spawn failed: $out"

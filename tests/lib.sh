@@ -431,7 +431,9 @@ SH
 }
 
 # A fake curl that logs "METHOD URL", the request body, and whether the token
-# reached argv (it must not) or stdin (it must).
+# reached argv (it must not) or stdin (it must). Story descriptions a POST or PUT
+# sends are kept in $FAKE_CURL_STORE/<id>.desc (default: fake-stories beside
+# $FAKE_CURL_LOG), and a GET returns them; a test seeds a story there.
 fm_fake_shortcut_curl() {  # <fakebin>
   mkdir -p "$1"
   cat > "$1/curl" <<'SH'
@@ -449,21 +451,35 @@ for ((i = 0; i < ${#args[@]}; i++)); do
   url=${args[$i]}
 done
 stdin=$(cat)
+store=${FAKE_CURL_STORE:-$(dirname "$FAKE_CURL_LOG")/fake-stories}
+mkdir -p "$store"
+keep_desc() {  # <id>
+  [ -n "$data" ] && jq -e 'has("description")' "$data" >/dev/null 2>&1 || return 0
+  jq -r '.description' "$data" > "$store/$1.desc"
+}
 {
   printf '%s %s\n' "$method" "$url"
   case "$*" in *tok-secret-123*) echo "TOKEN-IN-ARGV" ;; esac
   case "$stdin" in *tok-secret-123*) echo "TOKEN-ON-STDIN" ;; esac
+  [ "${SHORTCUT_API_TOKEN:-}" != tok-secret-123 ] || echo "TOKEN-IN-CHILD-ENV"
   [ -z "$data" ] || { printf 'BODY %s\n' "$(jq -c . "$data")"; }
   for f in ${form[@]+"${form[@]}"}; do printf 'FORM %s\n' "$f"; done
 } >> "$FAKE_CURL_LOG"
 case "$method $url" in
   "POST "*/api/v3/stories)
     if [ "${FAKE_CURL_FAIL:-}" = 1 ]; then printf '{}' > "$out"; printf 500; exit 0; fi
+    keep_desc 7777
     printf '{"id":7777,"app_url":"https://app.shortcut.com/applypass/story/7777"}' > "$out"; printf 201 ;;
   "GET "*/api/v3/stories/*)
     if [ "${url##*/}" = "${FAKE_CURL_MISSING:-}" ]; then printf '{}' > "$out"; printf 404; exit 0; fi
-    printf '{"id":%s,"workflow_state_id":%s,"external_links":[]}' "${url##*/}" "${FAKE_CURL_STATE:-500000006}" > "$out"; printf 200 ;;
-  "PUT "*/api/v3/stories/*|"POST "*/api/v3/stories/*/comments|"POST "*/api/v3/files|"POST "*/api/v3/story-links)
+    desc=$(cat "$store/${url##*/}.desc" 2>/dev/null || true)
+    jq -n --argjson id "${url##*/}" --argjson s "${FAKE_CURL_STATE:-500000006}" --arg d "$desc" \
+      '{id: $id, workflow_state_id: $s, description: $d, external_links: [], app_url: ("https://app.shortcut.com/applypass/story/" + ($id | tostring))}' > "$out"
+    printf 200 ;;
+  "PUT "*/api/v3/stories/*)
+    keep_desc "${url##*/}"
+    printf '{}' > "$out"; printf 200 ;;
+  "POST "*/api/v3/stories/*/comments|"POST "*/api/v3/files|"POST "*/api/v3/story-links)
     printf '{}' > "$out"; printf 200 ;;
   *) printf '{}' > "$out"; printf 404 ;;
 esac
@@ -473,13 +489,15 @@ SH
 
 # fm_fake_op <fakebin>
 # Drops an `op` shim: `op read <ref>` prints $FAKE_OP_TOKEN and logs the ref to
-# $FAKE_OP_LOG, or fails when FAKE_OP_TOKEN is unset. No test reaches 1Password.
+# $FAKE_OP_LOG, or fails when FAKE_OP_TOKEN is unset; FAKE_OP_HANG=1 makes it
+# wait for an answer that never comes. No test reaches 1Password.
 fm_fake_op() {  # <fakebin>
   mkdir -p "$1"
   cat > "$1/op" <<'SH'
 #!/usr/bin/env bash
 [ "${1:-}" = read ] || exit 2
 [ -z "${FAKE_OP_LOG:-}" ] || printf 'op read %s\n' "${2:-}" >> "$FAKE_OP_LOG"
+[ "${FAKE_OP_HANG:-}" != 1 ] || sleep 30
 [ -n "${FAKE_OP_TOKEN:-}" ] || { echo "op: not signed in" >&2; exit 1; }
 printf '%s\n' "$FAKE_OP_TOKEN"
 SH

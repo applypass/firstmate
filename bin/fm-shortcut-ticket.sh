@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # fm-shortcut-ticket.sh - keep a backlog item's Shortcut story in sync (applypass fork).
 #
-# Usage: fm-shortcut-ticket.sh <item-id>                     create (or link) the story, in Backlog
+# Usage: fm-shortcut-ticket.sh <item-id>                     create the story, in Backlog
+#        fm-shortcut-ticket.sh link <item> sc-NNNN           make an existing, unowned story the item's own
 #        fm-shortcut-ticket.sh state <item> progress|review  move the story
 #        fm-shortcut-ticket.sh review <item> [--pr <url>] [--report <file>]
 #                                                            In Review, plus PR link and report upload
@@ -30,10 +31,16 @@
 # runs `done` on the captain's word or verified production evidence.
 #
 # Create: POST /api/v3/stories with name = item title, description = item body
-# (or a Problem/Fix stub when empty), team/state/owner from the settings. The
-# `Shortcut: sc-NNNN <url>` line is appended to the item body through tasks-axi.
-# The item's own story is the one a body line `Shortcut: sc-NNNN` names; that
-# story is verified (GET) and nothing is created. An `sc-NNNN` in the title is
+# (or a Problem/Fix stub when empty) plus the ownership marker line
+# `firstmate-item: <home-name>/<item-id>` (home-name = basename of FM_HOME),
+# team/state/owner from the settings. The `Shortcut: sc-NNNN <url>` line is
+# appended to the item body through tasks-axi.
+# The item's own story is the one a body line `Shortcut: sc-NNNN` names, and it
+# counts only while its description carries a marker for this item id and no
+# other: --check and create GET it and refuse otherwise (an umbrella or a story
+# another item owns). `link` is the only way to adopt an existing story: it
+# refuses one that carries another item's marker, else writes this item's marker
+# and records the body line. An `sc-NNNN` in the title is
 # a parent (umbrella) reference: create makes the item its own story and links
 # it to the parent with a "relates to" story link, never reusing the parent.
 # Any other `sc-NNNN` in the body is only a reference: it is never moved,
@@ -44,13 +51,18 @@
 # config/shortcut-tickets in the home (later wins); an absent defaults file means
 # off. FM_SHORTCUT_TICKETS=on|off overrides `enabled`. Keys: enabled, team_id,
 # state_backlog, state_progress, state_review, state_done, owner_id, story_type,
-# token_ref, api_base. A home overrides owner_id (the member the stories it
-# creates are assigned to) in its own config/shortcut-tickets.
+# token_ref, op_timeout, api_base. owner_id (the member the home's stories are
+# assigned to) and token_ref are per-home: the shipped defaults set neither, and
+# --check and create refuse with the line to add to config/shortcut-tickets
+# when owner_id is missing, or token_ref is missing while SHORTCUT_API_TOKEN is
+# unset.
 #
 # The API token comes from SHORTCUT_API_TOKEN, else from `op read <token_ref>`
-# at call time. It is held in memory only, reaches curl on stdin, never the
-# command line, and is never printed or stored. A missing `op` or a failed read
-# is a concrete refusal (a best-effort caller only warns).
+# bounded to op_timeout seconds (default 10), then exported so child processes
+# reuse it. It is held in memory only, reaches curl on stdin, never the command
+# line, and is never printed or stored. A missing `op`, a failed read, or a read
+# that does not answer in time is a concrete refusal (a best-effort caller only
+# warns).
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -59,6 +71,8 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 TASKS="$SCRIPT_DIR/fm-tasks-axi.sh"
+# shellcheck source=bin/fm-timeout-lib.sh disable=SC1091
+. "$SCRIPT_DIR/fm-timeout-lib.sh"
 BEST_EFFORT=0
 
 usage() {
@@ -115,7 +129,7 @@ OP=create
 case "${1:-}" in
   --check) OP=check; shift ;;
   --linked) OP=linked; shift ;;
-  state | review | comment | attach | outcome | park | done) OP=$1; shift ;;
+  link | state | review | comment | attach | outcome | park | done) OP=$1; shift ;;
 esac
 ID=${1:-}
 [ -n "$ID" ] || die "usage: fm-shortcut-ticket.sh [<op>] <item-id> ... (see --help)"
@@ -125,7 +139,7 @@ enabled || exit 0
 
 KIND='' TITLE='' BODY='' SC='' PARENT=''
 case "$OP" in
-  create | check | linked) ;;
+  create | check | linked | link) ;;
   *) case "${ID#sc-}" in "$ID" | '' | *[!0-9]*) ;; *) SC=$ID ;; esac ;;
 esac
 
@@ -153,11 +167,25 @@ if [ "$OP" = linked ]; then
   exit 0
 fi
 
+require_home_settings() {
+  [ -n "$(setting owner_id)" ] ||
+    die "no owner_id is configured for this home; add this line to $CONFIG/shortcut-tickets: owner_id=<Shortcut member UUID>"
+  [ -n "${SHORTCUT_API_TOKEN:-}" ] || [ -n "$(setting token_ref)" ] ||
+    die "SHORTCUT_API_TOKEN is not set and no token_ref is configured; add this line to $CONFIG/shortcut-tickets: token_ref=op://<vault>/<item>/<field>"
+}
+
 if [ "$OP" = check ]; then
   case "$KIND" in secondmate | captain) exit 0 ;; esac
+  require_home_settings
   [ -n "$SC" ] || die "backlog item $ID has no Shortcut story of its own (a title sc-NNNN is only a parent reference); create one with: bin/fm-shortcut-ticket.sh $ID"
 elif [ "$OP" = create ]; then
   case "$KIND" in secondmate | captain) exit 0 ;; esac
+  require_home_settings
+elif [ "$OP" = link ]; then
+  TARGET=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')
+  case "${TARGET#sc-}" in "$TARGET" | '' | *[!0-9]*) die "usage: link <item> sc-NNNN" ;; esac
+  [ -z "$SC" ] || [ "$SC" = "$TARGET" ] || die "backlog item $ID already names $SC as its own story"
+  SC=$TARGET
 elif [ -z "$SC" ]; then
   [ "$BEST_EFFORT" = 1 ] && exit 0
   die "backlog item $ID names no Shortcut ticket (sc-NNNN)"
@@ -167,10 +195,13 @@ command -v jq >/dev/null 2>&1 || die "jq is required"
 command -v curl >/dev/null 2>&1 || die "curl is required"
 if [ -z "${SHORTCUT_API_TOKEN:-}" ]; then
   TOKEN_REF=$(setting token_ref)
-  [ -n "$TOKEN_REF" ] || die "SHORTCUT_API_TOKEN is not set and no token_ref is configured; export the token and run: bin/fm-shortcut-ticket.sh $ID"
+  [ -n "$TOKEN_REF" ] || die "SHORTCUT_API_TOKEN is not set and no token_ref is configured; add this line to $CONFIG/shortcut-tickets: token_ref=op://<vault>/<item>/<field>"
   command -v op >/dev/null 2>&1 || die "SHORTCUT_API_TOKEN is not set and the 1Password CLI (op) is not installed to read $TOKEN_REF; run: bin/fm-shortcut-ticket.sh $ID"
-  SHORTCUT_API_TOKEN=$(op read "$TOKEN_REF" 2>/dev/null) || SHORTCUT_API_TOKEN=''
-  [ -n "$SHORTCUT_API_TOKEN" ] || die "SHORTCUT_API_TOKEN is not set and 'op read $TOKEN_REF' failed (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh $ID"
+  OP_TIMEOUT=$(setting op_timeout 10)
+  case "$OP_TIMEOUT" in '' | 0* | *[!0-9]*) die "op_timeout must be a positive number of seconds (got '$OP_TIMEOUT')" ;; esac
+  SHORTCUT_API_TOKEN=$(fm_run_timed "$OP_TIMEOUT" op read "$TOKEN_REF" 2>/dev/null) || SHORTCUT_API_TOKEN=''
+  [ -n "$SHORTCUT_API_TOKEN" ] || die "SHORTCUT_API_TOKEN is not set and 'op read $TOKEN_REF' failed or did not answer within ${OP_TIMEOUT}s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh $ID"
+  export SHORTCUT_API_TOKEN
 fi
 
 API=$(setting api_base "${SHORTCUT_API_BASE:-https://api.app.shortcut.com}")
@@ -191,6 +222,31 @@ http_json() {  # <method> <path> <json-file>
 ok() { case "$HTTP_CODE" in 200 | 201 | 204) return 0 ;; *) return 1 ;; esac; }
 
 sc_num() { printf '%s' "${SC#sc-}"; }
+
+MARKER="firstmate-item: $(basename "$FM_HOME")/$ID"
+story_owners() {  # item ids the markers in the fetched story name, one per line
+  jq -r '.description // ""' "$WORK/resp" |
+    sed -n 's|^firstmate-item: [^/]*/\([^[:space:]]*\)[[:space:]]*$|\1|p' | sort -u
+}
+require_own_story() {  # GETs $SC and refuses unless its markers name only this item
+  local owners
+  http GET "/api/v3/stories/$(sc_num)"
+  ok || die "$SC named by $ID is not a readable Shortcut story (HTTP $HTTP_CODE); create one with: bin/fm-shortcut-ticket.sh $ID"
+  owners=$(story_owners)
+  [ "$owners" = "$ID" ] && return 0
+  [ -n "$owners" ] &&
+    die "$SC named by $ID belongs to another item ($(printf '%s' "$owners" | tr '\n' ' ')); remove the Shortcut line and create its own with: bin/fm-shortcut-ticket.sh $ID"
+  die "$SC named by $ID carries no '$MARKER' marker (an umbrella or unowned story); adopt it with: bin/fm-shortcut-ticket.sh link $ID $SC, or remove the Shortcut line and create its own with: bin/fm-shortcut-ticket.sh $ID"
+}
+
+record_body_line() {  # <num> <url>
+  {
+    [ -z "$BODY" ] || printf '%s\n' "$BODY"
+    printf 'Shortcut: sc-%s %s\n' "$1" "$2"
+  } >"$WORK/body.md"
+  "$TASKS" update "$ID" --body-file "$WORK/body.md" >/dev/null 2>"$WORK/err" ||
+    die "sc-$1 is $ID's story but could not be recorded on it: $(head -1 "$WORK/err")"
+}
 
 put_state() {  # <state-key>
   local state
@@ -231,8 +287,25 @@ link_pr() {  # <url>
 }
 
 if [ "$OP" = check ]; then
+  require_own_story
+  exit 0
+fi
+
+if [ "$OP" = link ]; then
   http GET "/api/v3/stories/$(sc_num)"
-  ok || die "$SC named by $ID is not a readable Shortcut story (HTTP $HTTP_CODE); create one with: bin/fm-shortcut-ticket.sh $ID"
+  ok || die "$SC is not a readable Shortcut story (HTTP $HTTP_CODE)"
+  OWNERS=$(story_owners)
+  URL=$(jq -r '.app_url // empty' "$WORK/resp")
+  if [ -z "$OWNERS" ]; then
+    jq --arg m "$MARKER" '{description: (if (.description // "") == "" then $m else .description + "\n\n" + $m end)}' \
+      "$WORK/resp" >"$WORK/desc.json"
+    http_json PUT "/api/v3/stories/$(sc_num)" "$WORK/desc.json"
+    ok || die "could not mark $SC as $ID's own story (HTTP $HTTP_CODE)"
+  elif [ "$OWNERS" != "$ID" ]; then
+    die "$SC already belongs to another item ($(printf '%s' "$OWNERS" | tr '\n' ' ')); give $ID its own story with: bin/fm-shortcut-ticket.sh $ID"
+  fi
+  printf '%s\n' "$BODY" | grep -Eiq '^[[:space:]]*Shortcut:[[:space:]]*sc-[0-9]+' || record_body_line "$(sc_num)" "$URL"
+  printf 'fm-shortcut-ticket: %s -> %s %s\n' "$ID" "$SC" "$URL"
   exit 0
 fi
 
@@ -301,13 +374,13 @@ esac
 
 # create
 if [ -n "$SC" ]; then
-  http GET "/api/v3/stories/$(sc_num)"
-  ok || die "$SC named by $ID is not a readable Shortcut story (HTTP $HTTP_CODE)"
+  require_own_story
   exit 0
 fi
 
 DESC=$BODY
 [ -n "$DESC" ] || DESC=$(printf -- '- Problem: %s\n- Fix: tracked by firstmate backlog item %s' "$TITLE" "$ID")
+DESC=$(printf '%s\n\n%s' "$DESC" "$MARKER")
 jq -n --arg name "$TITLE" --arg desc "$DESC" \
   --arg team "$(setting team_id)" --arg state "$(setting state_backlog)" \
   --arg owner "$(setting owner_id)" --arg type "$(setting story_type feature)" '
@@ -323,12 +396,7 @@ NUM=$(jq -r '.id // empty' "$WORK/resp" 2>/dev/null)
 URL=$(jq -r '.app_url // empty' "$WORK/resp" 2>/dev/null)
 case "$NUM" in '' | *[!0-9]*) die "Shortcut returned no story id for $ID" ;; esac
 
-{
-  [ -z "$BODY" ] || printf '%s\n' "$BODY"
-  printf 'Shortcut: sc-%s %s\n' "$NUM" "$URL"
-} >"$WORK/body.md"
-"$TASKS" update "$ID" --body-file "$WORK/body.md" >/dev/null 2>"$WORK/err" ||
-  die "created sc-$NUM but could not record it on $ID: $(head -1 "$WORK/err")"
+record_body_line "$NUM" "$URL"
 if [ -n "$PARENT" ]; then
   jq -n --argjson s "$NUM" --argjson o "${PARENT#sc-}" '{subject_id: $s, object_id: $o, verb: "relates to"}' >"$WORK/link.json"
   http_json POST /api/v3/story-links "$WORK/link.json"

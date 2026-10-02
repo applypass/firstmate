@@ -16,13 +16,18 @@
 # state/parent-replies.status. Call it from the secondmate home with FM_HOME
 # set to that home.
 #
+# Fork-only (applypass): while Shortcut ticket sync is on, a done or ready
+# report (including --doc) needs --item <id> naming the backlog item of the
+# investigation, and refuses to publish unless
+# `bin/fm-shortcut-ticket.sh --check <id>` passes in this home.
+#
 # Usage:
-#   fm-secondmate-report.sh <verb> <corr_id> <note...>
-#   fm-secondmate-report.sh --doc <verb> <corr_id> <doc-path> <note...>
+#   fm-secondmate-report.sh [--item <id>] <verb> <corr_id> <note...>
+#   fm-secondmate-report.sh [--item <id>] --doc <verb> <corr_id> <doc-path> <note...>
 #
 # Examples:
 #   fm-secondmate-report.sh done abcdef0123456789 "audit clean"
-#   fm-secondmate-report.sh --doc done abcdef0123456789 data/x/report.md "see report"
+#   fm-secondmate-report.sh --item audit-1 --doc done abcdef0123456789 data/x/report.md "see report"
 set -eu
 
 CALLER_FM_HOME=${FM_HOME:-}
@@ -35,17 +40,21 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 usage() {
   cat <<'EOF' >&2
 Usage:
-  fm-secondmate-report.sh <verb> <corr_id> <note...>
-  fm-secondmate-report.sh --doc <verb> <corr_id> <doc-path> <note...>
+  fm-secondmate-report.sh [--item <id>] <verb> <corr_id> <note...>
+  fm-secondmate-report.sh [--item <id>] --doc <verb> <corr_id> <doc-path> <note...>
 EOF
   exit 2
 }
 
 DOC_MODE=0
-if [ "${1:-}" = "--doc" ]; then
-  DOC_MODE=1
-  shift
-fi
+ITEM=
+while :; do
+  case "${1:-}" in
+    --doc) DOC_MODE=1; shift ;;
+    --item) [ -n "${2:-}" ] || usage; ITEM=$2; shift 2 ;;
+    *) break ;;
+  esac
+done
 
 [ $# -ge 2 ] || usage
 VERB=$1
@@ -84,6 +93,20 @@ if [ "$DEST_RC" -ne 0 ] || [ -z "$DESTINATION" ]; then
   echo "error: cannot resolve the parent channel from this home (not a seeded secondmate?)" >&2
   exit 1
 fi
+case "$VERB" in
+  done | ready)
+    if FM_HOME="$HOME_DIR" "$SCRIPT_DIR/fm-shortcut-ticket.sh" --enabled; then
+      if [ -z "$ITEM" ]; then
+        echo "error: a $VERB report needs --item <id> naming the investigation's backlog item, whose own Shortcut story must pass bin/fm-shortcut-ticket.sh --check <id>" >&2
+        exit 1
+      fi
+      if ! FM_HOME="$HOME_DIR" "$SCRIPT_DIR/fm-shortcut-ticket.sh" --check "$ITEM"; then
+        echo "error: refusing to publish $VERB for $ITEM: it has no verified Shortcut story of its own (reason above)" >&2
+        exit 1
+      fi
+    fi
+    ;;
+esac
 mkdir -p "$(dirname "$DESTINATION")" 2>/dev/null || true
 if [ ! -d "$(dirname "$DESTINATION")" ]; then
   echo "error: cannot create parent directory for status file '$DESTINATION'" >&2
