@@ -41,9 +41,10 @@
 # host's own handback. Silent outcomes remain in the store but are not queued
 # or relayed as notes. In a seeded secondmate home a captain outcome is also
 # published onto the parent channel here, by the script, so it reaches MAIN
-# without the mate remembering to run bin/fm-secondmate-report.sh (the line
-# carries corr= when the mate has exactly one open marked request;
-# docs/secondmate-parent-channel.md). An attended turn queues nothing: its captain rows reach
+# without the mate remembering to run bin/fm-secondmate-report.sh. The line
+# carries corr= only when it is the reply to that marked request: the summary
+# names the corr, or the outcome's task was handed a request carrying it
+# (docs/secondmate-parent-channel.md). An attended turn queues nothing: its captain rows reach
 # MAIN through the host's branch-outcome exit and the drain's BRANCH OUTCOMES
 # section (bin/fm-wake-drain.sh), and its routine rows stay in the store.
 set -u
@@ -146,7 +147,14 @@ if [ "$VERDICT" = captain ]; then
     # The destination call above ran in a subshell, so read the binding again.
     if fm_secondmate_parent_record_parse "$FM_HOME/.fm-secondmate-parent" \
       && [ "$FM_SECONDMATE_PARENT_ROUTE" = local ] && [ -n "$FM_SECONDMATE_PARENT_HOME" ]; then
-      CORR=$(fm_pending_reply_sole_open_corr "$FM_SECONDMATE_PARENT_HOME/state" "$(fm_parent_channel_home_id "$FM_HOME")")
+      while IFS= read -r OPEN_CORR; do
+        [ -n "$OPEN_CORR" ] || continue
+        if fm_pending_reply_text_has_corr "$SUMMARY" "$OPEN_CORR" \
+          || grep -rqsF -- "$(fm_pending_reply_corr_token "$OPEN_CORR")" "$STATE/$TASK.inbox"; then
+          CORR=$OPEN_CORR
+          break
+        fi
+      done < <(fm_pending_reply_open_corrs "$FM_SECONDMATE_PARENT_HOME/state" "$(fm_parent_channel_home_id "$FM_HOME")")
     fi
     if [ -n "$CORR" ]; then
       PARENT_LINE="done [$(fm_pending_reply_corr_token "$CORR")]: $(fm_parent_channel_clean_note "$SUMMARY") (branch outcome $SEQ)"
