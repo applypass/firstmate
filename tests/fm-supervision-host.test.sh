@@ -96,11 +96,12 @@ case "$mode" in
     [ "$mode" != go-away ] || "$FM_REPO/bin/fm-afk-contract.sh" enter --words 'gone mid-turn' >> "$FM_HOME/engine-return.log" 2>&1
     "$FM_REPO/bin/fm-lease.sh" claim "$task" >> "$FM_HOME/engine-lease.log" 2>&1
     if [ "$mode" = captain ]; then
-      "$FM_REPO/bin/fm-branch-report.sh" --task "$task" --verdict captain \
+      "$FM_REPO/bin/fm-branch-report.sh" --task "$task" --verdict captain --kind decision \
         --summary "stub escalated: $(printf '%s\n' "$drain" | grep -v '^WAKE_' | tr '\n' ' ' | cut -c1-400)" \
         >> "$FM_HOME/engine-report.log" 2>&1
     else
       report_args=(--task "$task" --verdict "$verdict" --summary "stub handled $task")
+      [ "$verdict" != captain ] || report_args+=(--kind result)
       case "$mode" in
         return-silent|return-fail-silent)
           report_args=(--task "$task" --verdict routine --summary 'still working; nothing new has happened; no action was taken' --silent true)
@@ -300,18 +301,26 @@ test_report_surface_enforces_actor_turn_and_scope() {
   out=$(FM_HOME="$home" FM_SUPERVISION_ACTOR=branch FM_BRANCH_REPORT_TURN=t0 "$REPORT" --task alpha --verdict routine --summary ok 2>&1); rc=$?
   expect_code 3 "$rc" "a report for an ended turn must be refused"
 
-  out=$(FM_HOME="$home" FM_SUPERVISION_ACTOR=branch FM_BRANCH_REPORT_TURN=t1 "$REPORT" --task beta --verdict captain --summary 'from memory' 2>&1); rc=$?
+  out=$(FM_HOME="$home" FM_SUPERVISION_ACTOR=branch FM_BRANCH_REPORT_TURN=t1 "$REPORT" --task beta --verdict captain --kind decision --summary 'from memory' 2>&1); rc=$?
   expect_code 3 "$rc" "a report for a task the wake did not name must be refused"
   assert_contains "$out" "names alpha, not beta" "scope refusal must name the wake's task"
   out=$(FM_HOME="$home" FM_SUPERVISION_ACTOR=branch FM_BRANCH_REPORT_TURN=t1 "$REPORT" --task fleet --verdict routine --summary quiet 2>&1); rc=$?
   expect_code 3 "$rc" "a fleet report on a task-scoped wake must be refused"
   [ ! -e "$state/branch-outcomes.jsonl" ] || fail "a refused report touched the outcome store"
 
-  out=$(FM_HOME="$home" FM_SUPERVISION_ACTOR=branch FM_BRANCH_REPORT_TURN=t1 "$REPORT" --task alpha --verdict captain --summary 'PR ready' --silent true 2>&1); rc=$?
+  out=$(FM_HOME="$home" FM_SUPERVISION_ACTOR=branch FM_BRANCH_REPORT_TURN=t1 "$REPORT" --task alpha --verdict captain --kind result --summary 'PR ready' --silent true 2>&1); rc=$?
   expect_code 2 "$rc" "a captain outcome with --silent true must be refused"
   [ ! -e "$state/branch-outcomes.jsonl" ] || fail "a refused silent captain outcome changed the durable store"
-
   out=$(FM_HOME="$home" FM_SUPERVISION_ACTOR=branch FM_BRANCH_REPORT_TURN=t1 "$REPORT" --task alpha --verdict captain --summary 'PR ready' 2>&1); rc=$?
+  expect_code 2 "$rc" "a captain outcome without --kind must be refused"
+  assert_contains "$out" "requires --kind decision, blocker, or result" "the refusal must name the kinds"
+  out=$(FM_HOME="$home" FM_SUPERVISION_ACTOR=branch FM_BRANCH_REPORT_TURN=t1 "$REPORT" --task alpha --verdict captain --kind maybe --summary 'PR ready' 2>&1); rc=$?
+  expect_code 2 "$rc" "an unknown kind must be refused"
+  out=$(FM_HOME="$home" FM_SUPERVISION_ACTOR=branch FM_BRANCH_REPORT_TURN=t1 "$REPORT" --task alpha --verdict routine --kind result --summary ok 2>&1); rc=$?
+  expect_code 2 "$rc" "a routine outcome with --kind must be refused"
+  [ ! -e "$state/branch-outcomes.jsonl" ] || fail "a refused kind changed the durable store"
+
+  out=$(FM_HOME="$home" FM_SUPERVISION_ACTOR=branch FM_BRANCH_REPORT_TURN=t1 "$REPORT" --task alpha --verdict captain --kind result --summary 'PR ready' 2>&1); rc=$?
   expect_code 0 "$rc" "an in-scope report must be recorded"
   assert_contains "$out" "recorded seq 1 [captain]" "the report must name its store sequence"
   assert_grep '"task":"alpha"' "$state/branch-outcomes.jsonl" "the outcome store did not receive the report"
@@ -352,7 +361,7 @@ test_report_after_the_return_is_queued_for_main() {
   ! grep -qs 'supervision-host-return' "$state/.wake-queue" || fail "a report during the away window must not be queued for main"
 
   FM_HOME="$home" "$CONTRACT" archive >/dev/null 2>&1 || fail "fixture: could not archive the away posture"
-  out=$(FM_HOME="$home" FM_SUPERVISION_ACTOR=branch FM_BRANCH_REPORT_TURN=t1 "$REPORT" --task alpha --verdict captain --summary 'PR ready for review' 2>&1); rc=$?
+  out=$(FM_HOME="$home" FM_SUPERVISION_ACTOR=branch FM_BRANCH_REPORT_TURN=t1 "$REPORT" --task alpha --verdict captain --kind result --summary 'PR ready for review' 2>&1); rc=$?
   expect_code 0 "$rc" "a report after the return must be recorded"
   assert_contains "$out" "recorded seq 2 [captain]; the captain has returned, so it is queued for MAIN to relay" \
     "a report after the return must say it is queued for main"
