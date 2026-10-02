@@ -1,0 +1,54 @@
+## S10 second mate done with no --item is refused
+$ bin/fm-secondmate-report.sh done abcdef0123456789 public-files cleanup investigated
+error: a done report needs --item <id> naming the investigation's backlog item, whose own Shortcut story must pass bin/fm-shortcut-ticket.sh --check <id>
+[exit 1]
+
+## S11 investigation item riding the umbrella is refused for done --doc and ready
+$ bin/fm-secondmate-report.sh --item inv-1 --doc done abcdef0123456789 data/inv-1/report.md see report
+fm-shortcut-ticket: sc-6104 named by inv-1 carries no 'firstmate-item: fm-lab.cRxPB4/inv-1' marker. If sc-6104 was created for this item (before ownership markers), mark it: bin/fm-shortcut-ticket.sh link inv-1 sc-6104. If it is a shared or umbrella story, remove the Shortcut line and create the item's own story: bin/fm-shortcut-ticket.sh inv-1
+error: refusing to publish done for inv-1: it has no verified Shortcut story of its own (reason above)
+[exit 1]
+
+$ bin/fm-secondmate-report.sh --item inv-1 ready abcdef0123456789 ready
+fm-shortcut-ticket: sc-6104 named by inv-1 carries no 'firstmate-item: fm-lab.cRxPB4/inv-1' marker. If sc-6104 was created for this item (before ownership markers), mark it: bin/fm-shortcut-ticket.sh link inv-1 sc-6104. If it is a shared or umbrella story, remove the Shortcut line and create the item's own story: bin/fm-shortcut-ticket.sh inv-1
+error: refusing to publish ready for inv-1: it has no verified Shortcut story of its own (reason above)
+[exit 1]
+
+## S12 non-result line still publishes without an item
+$ bin/fm-secondmate-report.sh working abcdef0123456789 still digging
+[exit 0]
+
+## S13 investigation with its own story publishes
+$ bin/fm-tasks-axi.sh add inv-2 Public files cleanup investigation (own story) --kind scout
+ok: added inv-2 (scout) -> Queued
+task:
+  id: inv-2
+  title: Public files cleanup investigation (own story)
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: scout
+  repo: "-"
+  priority: "-"
+  created: 2026-10-02
+  closed: "-"
+  deps: none
+  links: none
+  body: ""
+help[2]:
+  - Run `tasks-axi start inv-2` to move it to in flight
+  - Run `tasks-axi block inv-2 --by <other>` to record a dependency
+fm-shortcut-ticket: inv-2 -> sc-9003 https://app.shortcut.com/applypass/story/9003
+[exit 0]
+
+$ bin/fm-secondmate-report.sh --item inv-2 --doc done abcdef0123456789 data/inv-2/report.md see report
+[exit 0]
+
+## parent channel contents (what main firstmate sees):
+--- /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi/state/mate.status
+working [corr=abcdef0123456789] [at=1790960074]: still digging (via-helper)
+done [corr=abcdef0123456789] [at=1790960079]: see report (data/inv-2/report.md via-helper)

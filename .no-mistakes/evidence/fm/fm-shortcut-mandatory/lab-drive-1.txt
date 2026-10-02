@@ -1,0 +1,194 @@
+## S1 gap(1): item ticketed only by a title sc-NNNN (umbrella) is refused by --check
+$ bin/fm-tasks-axi.sh add lf-legacy sc-6104 launch fix: CSP header --kind ship
+ok: added lf-legacy (ship) -> Queued
+task:
+  id: lf-legacy
+  title: "sc-6104 launch fix: CSP header"
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: ship
+  repo: "-"
+  priority: "-"
+  created: 2026-10-02
+  closed: "-"
+  deps: none
+  links: none
+  body: ""
+help[2]:
+  - Run `tasks-axi start lf-legacy` to move it to in flight
+  - Run `tasks-axi block lf-legacy --by <other>` to record a dependency
+fm-shortcut-ticket: lf-legacy -> sc-9000 https://app.shortcut.com/applypass/story/9000
+[exit 0]
+
+(simulate a pre-change item: drop the auto-created body line)
+$ bin/fm-shortcut-ticket.sh --check lf-legacy
+[exit 0]
+
+## S2 create from title umbrella: own story, marker, relates-to link to parent
+$ bin/fm-tasks-axi.sh add lf-1 sc-6104 launch fix: robots.txt --kind ship
+ok: added lf-1 (ship) -> Queued
+task:
+  id: lf-1
+  title: "sc-6104 launch fix: robots.txt"
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: ship
+  repo: "-"
+  priority: "-"
+  created: 2026-10-02
+  closed: "-"
+  deps: none
+  links: none
+  body: ""
+help[2]:
+  - Run `tasks-axi start lf-1` to move it to in flight
+  - Run `tasks-axi block lf-1 --by <other>` to record a dependency
+fm-shortcut-ticket: lf-1 -> sc-9001 https://app.shortcut.com/applypass/story/9001
+[exit 0]
+
+$ bin/fm-tasks-axi.sh show lf-1 --full
+task:
+  id: lf-1
+  title: "sc-6104 launch fix: robots.txt"
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: ship
+  repo: "-"
+  priority: "-"
+  created: 2026-10-02
+  closed: "-"
+  deps: none
+  links: none
+  body: "Shortcut: sc-9001 https://app.shortcut.com/applypass/story/9001"
+[exit 0]
+
+$ bin/fm-shortcut-ticket.sh --check lf-1
+[exit 0]
+
+## S3 body line naming the umbrella is refused, both paths offered
+$ bin/fm-tasks-axi.sh add lf-2 launch fix: sitemap --kind ship --body Shortcut: sc-6104
+ok: added lf-2 (ship) -> Queued
+task:
+  id: lf-2
+  title: "launch fix: sitemap"
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: ship
+  repo: "-"
+  priority: "-"
+  created: 2026-10-02
+  closed: "-"
+  deps: none
+  links: none
+  body: "Shortcut: sc-6104"
+help[2]:
+  - Run `tasks-axi start lf-2` to move it to in flight
+  - Run `tasks-axi block lf-2 --by <other>` to record a dependency
+fm-shortcut-ticket: sc-6104 named by lf-2 carries no 'firstmate-item: fm-lab.xVZVhi/lf-2' marker. If sc-6104 was created for this item (before ownership markers), mark it: bin/fm-shortcut-ticket.sh link lf-2 sc-6104. If it is a shared or umbrella story, remove the Shortcut line and create the item's own story: bin/fm-shortcut-ticket.sh lf-2
+fm-tasks-axi: warning: no Shortcut ticket for lf-2; retry with bin/fm-shortcut-ticket.sh lf-2
+[exit 0]
+
+$ bin/fm-shortcut-ticket.sh --check lf-2
+fm-shortcut-ticket: sc-6104 named by lf-2 carries no 'firstmate-item: fm-lab.xVZVhi/lf-2' marker. If sc-6104 was created for this item (before ownership markers), mark it: bin/fm-shortcut-ticket.sh link lf-2 sc-6104. If it is a shared or umbrella story, remove the Shortcut line and create the item's own story: bin/fm-shortcut-ticket.sh lf-2
+[exit 1]
+
+## S4 link refuses the title umbrella
+$ bin/fm-shortcut-ticket.sh link lf-legacy sc-6104
+fm-shortcut-ticket: backlog item lf-legacy already names sc-9000 as its own story
+[exit 1]
+
+## S5 two items sharing one story: second is refused
+$ bin/fm-tasks-axi.sh add lf-3 launch fix: favicons --kind ship --body Shortcut: sc-9001
+ok: added lf-3 (ship) -> Queued
+task:
+  id: lf-3
+  title: "launch fix: favicons"
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: ship
+  repo: "-"
+  priority: "-"
+  created: 2026-10-02
+  closed: "-"
+  deps: none
+  links: none
+  body: "Shortcut: sc-9001"
+help[2]:
+  - Run `tasks-axi start lf-3` to move it to in flight
+  - Run `tasks-axi block lf-3 --by <other>` to record a dependency
+fm-shortcut-ticket: sc-9001 named by lf-3 belongs to another item (lf-1); remove the Shortcut line and create its own with: bin/fm-shortcut-ticket.sh lf-3
+fm-tasks-axi: warning: no Shortcut ticket for lf-3; retry with bin/fm-shortcut-ticket.sh lf-3
+[exit 0]
+
+$ bin/fm-shortcut-ticket.sh --check lf-3
+fm-shortcut-ticket: sc-9001 named by lf-3 belongs to another item (lf-1); remove the Shortcut line and create its own with: bin/fm-shortcut-ticket.sh lf-3
+[exit 1]
+
+$ bin/fm-shortcut-ticket.sh link lf-3 sc-9001
+fm-shortcut-ticket: sc-9001 already belongs to another item (lf-1); give lf-3 its own story with: bin/fm-shortcut-ticket.sh lf-3
+[exit 1]
+
+## S6 legacy own story (no marker) migrates with link, then passes
+$ bin/fm-tasks-axi.sh add x-1 Old item --kind ship --body Shortcut: sc-6200 https://app.shortcut.com/applypass/story/6200
+ok: added x-1 (ship) -> Queued
+task:
+  id: x-1
+  title: Old item
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: ship
+  repo: "-"
+  priority: "-"
+  created: 2026-10-02
+  closed: "-"
+  deps: none
+  links: none
+  body: "Shortcut: sc-6200 https://app.shortcut.com/applypass/story/6200"
+help[2]:
+  - Run `tasks-axi start x-1` to move it to in flight
+  - Run `tasks-axi block x-1 --by <other>` to record a dependency
+fm-shortcut-ticket: sc-6200 named by x-1 carries no 'firstmate-item: fm-lab.xVZVhi/x-1' marker. If sc-6200 was created for this item (before ownership markers), mark it: bin/fm-shortcut-ticket.sh link x-1 sc-6200. If it is a shared or umbrella story, remove the Shortcut line and create the item's own story: bin/fm-shortcut-ticket.sh x-1
+fm-tasks-axi: warning: no Shortcut ticket for x-1; retry with bin/fm-shortcut-ticket.sh x-1
+[exit 0]
+
+$ bin/fm-shortcut-ticket.sh --check x-1
+fm-shortcut-ticket: sc-6200 named by x-1 carries no 'firstmate-item: fm-lab.xVZVhi/x-1' marker. If sc-6200 was created for this item (before ownership markers), mark it: bin/fm-shortcut-ticket.sh link x-1 sc-6200. If it is a shared or umbrella story, remove the Shortcut line and create the item's own story: bin/fm-shortcut-ticket.sh x-1
+[exit 1]
+
+$ bin/fm-shortcut-ticket.sh link x-1 sc-6200
+fm-shortcut-ticket: x-1 -> sc-6200 https://app.shortcut.com/applypass/story/6200
+[exit 0]
+
+$ bin/fm-shortcut-ticket.sh --check x-1
+[exit 0]
+

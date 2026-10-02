@@ -1,0 +1,6 @@
+## S16 dispatch: no SHORTCUT_API_TOKEN, no token_ref -> refused
+$ fm-spawn.sh lf-1 $LAB/projects/demo --scout   (SHORTCUT_API_TOKEN unset)
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi
+fm-shortcut-ticket: SHORTCUT_API_TOKEN is not set and no token_ref is configured; add this line to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi/config/shortcut-tickets: token_ref=op://<vault>/<item>/<field>
+error: spawn refused - task lf-1 has no verified Shortcut story of its own (see the reason above)
+[exit 1]

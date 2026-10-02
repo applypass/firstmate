@@ -1,0 +1,28 @@
+## S14 dispatch: ship whose body names the umbrella sc-6104 is refused
+$ fm-spawn.sh lf-2 /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi/projects/demo --mode local-only --yolo off
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi
+notice: lf-2 ships mode=local-only while the standing posture for demo is no-mistakes - less rigor than the captain's standing posture; proceed only on a current explicit captain instruction or an intake judgment you can state
+fm-shortcut-ticket: sc-6104 named by lf-2 carries no 'firstmate-item: fm-lab.xVZVhi/lf-2' marker. If sc-6104 was created for this item (before ownership markers), mark it: bin/fm-shortcut-ticket.sh link lf-2 sc-6104. If it is a shared or umbrella story, remove the Shortcut line and create the item's own story: bin/fm-shortcut-ticket.sh lf-2
+error: spawn refused - task lf-2 has no verified Shortcut story of its own (see the reason above)
+[exit 1]
+
+## S15 dispatch: scout whose body names another item's story (sc-9001, owned by lf-1) is refused
+$ fm-spawn.sh lf-3 /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi/projects/demo --scout
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi
+fm-shortcut-ticket: sc-9001 named by lf-3 belongs to another item (lf-1); remove the Shortcut line and create its own with: bin/fm-shortcut-ticket.sh lf-3
+error: spawn refused - task lf-3 has no verified Shortcut story of its own (see the reason above)
+[exit 1]
+
+## S16 dispatch: no SHORTCUT_API_TOKEN, no token_ref -> refused
+$ fm-spawn.sh SHORTCUT_API_TOKEN bin/fm-spawn.sh lf-1 /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi/projects/demo --scout
+env: -u: No such file or directory
+[exit 127]
+
+## S17 dispatch: own verified story passes the Shortcut gate (spawn then proceeds to the next step)
+$ fm-spawn.sh lf-1 /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi/projects/demo --scout
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi
+/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M3YNJZGYV6E41SAFE63AV0W5/bin/backends/tmux.sh: line 77: tmux: command not found
+/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M3YNJZGYV6E41SAFE63AV0W5/bin/backends/tmux.sh: line 99: tmux: command not found
+/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M3YNJZGYV6E41SAFE63AV0W5/bin/backends/tmux.sh: line 103: tmux: command not found
+[exit 1]
+

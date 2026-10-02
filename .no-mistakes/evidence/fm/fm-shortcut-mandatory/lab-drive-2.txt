@@ -1,0 +1,24 @@
+## S1/S4 pre-change item titled only with umbrella sc-6104 (added with sync off, as items were before)
+(added lf-old with FM_SHORTCUT_TICKETS=off; body empty)
+$ bin/fm-shortcut-ticket.sh --linked lf-old
+[exit 0]
+
+$ bin/fm-shortcut-ticket.sh --check lf-old
+fm-shortcut-ticket: backlog item lf-old has no Shortcut story of its own (a title sc-NNNN is only a parent reference); create one with: bin/fm-shortcut-ticket.sh lf-old
+[exit 1]
+
+$ bin/fm-shortcut-ticket.sh link lf-old sc-6104
+fm-shortcut-ticket: sc-6104 is the parent (umbrella) story in lf-old's title, never its own; create its own with: bin/fm-shortcut-ticket.sh lf-old
+[exit 1]
+
+$ bin/fm-shortcut-ticket.sh state lf-old progress --best-effort
+[exit 0]
+
+(fix path the refusal names)
+$ bin/fm-shortcut-ticket.sh lf-old
+fm-shortcut-ticket: lf-old -> sc-9002 https://app.shortcut.com/applypass/story/9002
+[exit 0]
+
+$ bin/fm-shortcut-ticket.sh --check lf-old
+[exit 0]
+

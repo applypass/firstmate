@@ -1,0 +1,34 @@
+## S7 owner_id missing -> --check and create refuse with the exact config line
+$ env SHORTCUT_API_TOKEN=lab-fake-token bin/fm-shortcut-ticket.sh --check lf-1
+fm-shortcut-ticket: no owner_id is configured for this home; add this line to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi/config/shortcut-tickets: owner_id=<Shortcut member UUID>
+[exit 1, 1s]
+
+$ env SHORTCUT_API_TOKEN=lab-fake-token bin/fm-shortcut-ticket.sh lf-2
+fm-shortcut-ticket: no owner_id is configured for this home; add this line to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi/config/shortcut-tickets: owner_id=<Shortcut member UUID>
+[exit 1, 1s]
+
+## S8 no SHORTCUT_API_TOKEN and no token_ref -> refuse with the exact config line
+$ env -u SHORTCUT_API_TOKEN bin/fm-shortcut-ticket.sh --check lf-1
+fm-shortcut-ticket: SHORTCUT_API_TOKEN is not set and no token_ref is configured; add this line to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi/config/shortcut-tickets: token_ref=op://<vault>/<item>/<field>
+[exit 1, 0s]
+
+## S9 token_ref set, op read hangs -> bounded by op_timeout (set 3s here; default 10)
+$ env -u SHORTCUT_API_TOKEN PATH=/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi/fakeop:/Users/uayyagari/.local/bin:/Users/uayyagari/.asdf/shims:/Users/uayyagari/.local/share/zinit/polaris/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Users/uayyagari/.local/bin:/Users/uayyagari/go/bin:/Users/uayyagari/.cargo/bin:/Users/uayyagari/bin:/usr/local/sbin bin/fm-shortcut-ticket.sh --check lf-1
+fm-shortcut-ticket: SHORTCUT_API_TOKEN is not set and 'op read op://lab-vault/Shortcut API key/password' failed or did not answer within 3s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh lf-1
+[exit 1, 5s]
+
+## S9b best-effort lifecycle hook with hung op only warns, exits 0
+$ env -u SHORTCUT_API_TOKEN PATH=/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi/fakeop:/Users/uayyagari/.local/bin:/Users/uayyagari/.asdf/shims:/Users/uayyagari/.local/share/zinit/polaris/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Users/uayyagari/.local/bin:/Users/uayyagari/go/bin:/Users/uayyagari/.cargo/bin:/Users/uayyagari/bin:/usr/local/sbin bin/fm-shortcut-ticket.sh state lf-1 progress --best-effort
+fm-shortcut-ticket: warning: SHORTCUT_API_TOKEN is not set and 'op read op://lab-vault/Shortcut API key/password' failed or did not answer within 3s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh lf-1
+[exit 0, 5s]
+
+## S9c default op_timeout is 10s
+$ env -u SHORTCUT_API_TOKEN PATH=/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.xVZVhi/fakeop:/Users/uayyagari/.local/bin:/Users/uayyagari/.asdf/shims:/Users/uayyagari/.local/share/zinit/polaris/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Users/uayyagari/.local/bin:/Users/uayyagari/go/bin:/Users/uayyagari/.cargo/bin:/Users/uayyagari/bin:/usr/local/sbin bin/fm-shortcut-ticket.sh --check lf-1
+fm-shortcut-ticket: SHORTCUT_API_TOKEN is not set and 'op read op://lab-vault/Shortcut API key/password' failed or did not answer within 10s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh lf-1
+[exit 1, 14s]
+
+op shim calls:
+op read op://lab-vault/Shortcut API key/password
+op read op://lab-vault/Shortcut API key/password
+op read op://lab-vault/Shortcut API key/password
+lingering op shims: 0
