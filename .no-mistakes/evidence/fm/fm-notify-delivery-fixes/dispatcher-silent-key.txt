@@ -1,0 +1,6 @@
+queue row: signal t1.silent-handled.027
+scopeForUnreadWake -> {"corrupted":false,"eligibleSeqs":["1"],"eligibleTasks":["t1"]}
+(node:75390) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M3XTW066FCRADBFXD68WBD4S/.pi/extensions/lib/fm-branch-dispatch.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/uayyagari/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)

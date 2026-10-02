@@ -1,0 +1,23 @@
+## 1. mate acks with working: (the 2026-10-01 'relayed' ack)
+$ FM_HOME=mate bin/fm-secondmate-report.sh working $CORR relayed
+  -> main pending-reply phase: acknowledged
+## 2. inside age bound (t+300s), mate pane idle
+  -> main pending-reply phase: acknowledged
+## 3. branch records captain verdict in mate home, without --kind
+$ bin/fm-branch-report.sh --task worker --verdict captain --summary ...
+invalid report: a captain verdict requires --kind decision, blocker, or result
+  exit=2
+## 4. same with --kind result
+$ bin/fm-branch-report.sh --task worker --verdict captain --kind result --summary "classify follow-up complete; see report.md (corr=7284a0ff24f985bd)"
+recorded seq 1 [captain]; MAIN processes it from its next drain
+  exit=0
+  main channel parent/state/classify.status:
+    working [corr=7284a0ff24f985bd] [at=1790930499]: relayed (via-helper)
+    done [key=branch-outcome-1] [at=1790930528]: captain outcome for worker: classify follow-up complete; see report.md (corr 7284a0ff24f985bd)
+  -> main pending-reply phase: acknowledged
+## 5. past ack age bound (t+1800s)
+  -> main pending-reply phase: escalated
+  main channel tail:
+    blocked [key=pending-reply-7284a0ff24f985bd] [at=1790930541]: pending-reply-unreported: task=classify pending-reply-id=7284a0ff24f985bd request=classify follow-up - acknowledged only, no result reached main
+## 6. mate posts terminal correlated line
+  -> main pending-reply phase: resolved
