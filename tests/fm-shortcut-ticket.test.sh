@@ -59,6 +59,7 @@ test_shipped_defaults_are_on_and_absent_means_off() {
 test_add_creates_story_and_records_id() {
   local dir out
   dir=$(make_case create)
+  printf 'owner_id=68930514-b854-4a8e-95ec-fa3eee30e3a2\n' > "$dir/home/config/shortcut-tickets"
   out=$(run_tasks "$dir" add st-1 "Fix the widget" --kind ship --body "- Problem: broken
 - Fix: repair") || fail "add failed: $out"
   assert_contains "$(show "$dir" st-1)" "sc-7777 https://app.shortcut.com/applypass/story/7777" \
@@ -94,6 +95,7 @@ test_body_reference_is_not_the_linked_story() {
     || fail "add failed: $out"
   assert_grep "POST https://api.app.shortcut.com/api/v3/stories" "$dir/curl.log" "a body reference stopped the item getting its own story"
   assert_no_grep "stories/6092" "$dir/curl.log" "the referenced story was touched on add"
+  assert_no_grep "owner_ids" "$dir/curl.log" "the shipped defaults assigned the story to an owner"
   assert_contains "$(show "$dir" st-11)" "Follow-up to sc-6092" "the reference was lost from the body"
   : > "$dir/curl.log"
   out=$(ticket "$dir" state st-11 progress) || fail "state failed: $out"

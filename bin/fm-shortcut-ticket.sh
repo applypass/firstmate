@@ -42,7 +42,8 @@
 # config/shortcut-tickets in the home (later wins); an absent defaults file means
 # off. FM_SHORTCUT_TICKETS=on|off overrides `enabled`. Keys: enabled, team_id,
 # state_backlog, state_progress, state_review, state_done, owner_id, story_type,
-# api_base.
+# api_base. owner_id has no shipped default: a home sets it in its own
+# config/shortcut-tickets to assign the stories it creates to that member.
 #
 # The API token comes from SHORTCUT_API_TOKEN only. It reaches curl on stdin,
 # never the command line, and is never printed or stored.

@@ -11,5 +11,4 @@ state_backlog=500000006
 state_progress=500000008
 state_review=500000009
 state_done=500000010
-owner_id=68930514-b854-4a8e-95ec-fa3eee30e3a2
 story_type=feature

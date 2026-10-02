@@ -347,6 +347,7 @@ A home may instead select another tasks-axi adapter such as Beads through its ow
 
 [`defaults/shortcut-tickets`](../defaults/shortcut-tickets) is tracked and on by default, so every applypass/firstmate home keeps a Shortcut story for each backlog item; delete it, or set `enabled=off` in `config/shortcut-tickets`, to get upstream behaviour.
 `config/shortcut-tickets` overrides any key per home, and `SHORTCUT_API_TOKEN` in the environment is the only credential.
+The shipped defaults set no owner, so new stories are unassigned; a home sets `owner_id=<Shortcut member UUID>` in its own `config/shortcut-tickets` to assign its stories to that member.
 [`bin/fm-shortcut-ticket.sh`](../bin/fm-shortcut-ticket.sh) owns the operations and their hooks.
 
 | Event | Story change |
