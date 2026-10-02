@@ -1,0 +1,12 @@
+ok - a captain decision in a mate home reaches the parent channel as a keyed needs-decision and resolves nothing
+ok - a captain blocker in a mate home reaches the parent channel as a keyed blocked and resolves nothing
+ok - a captain result in a mate home reaches the parent channel as a keyed done and resolves nothing
+ok - two captain outcomes publish under distinct keys
+ok - a captain verdict with no kind is refused and records nothing
+ok - an unrelated captain outcome reaches main and leaves the open request open
+ok - a main home is unchanged
+ok - a handled request with no status line is reported once, after the worker's turn ends
+ok - a handled request with no status line is reported once the age bound passes
+ok - replay: the result reaches main, and only the mate's correlated report closes the request
+ok - replay: with publication disabled the acknowledged request escalates to main on the age bound
+ok - all secondmate result delivery tests passed

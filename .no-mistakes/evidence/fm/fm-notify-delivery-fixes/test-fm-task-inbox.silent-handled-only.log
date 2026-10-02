@@ -1,0 +1,2 @@
+ok - watcher: a healthy or empty inbox stays completely silent
+ok - watcher: every silent handled record keeps its own wake row beside the task's status wake

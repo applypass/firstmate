@@ -1,0 +1,41 @@
+=== S1: main sends marked request; mate acknowledges with working: relayed ===
+corr=93f7e88e2378416b phase=awaiting_report
+parent channel:
+  working [corr=93f7e88e2378416b] [at=1790919594]: relayed (via-helper)
+after tick at t+0 (mate pane idle): phase=acknowledged   <- must NOT be resolved
+after tick at t+1000s: phase=acknowledged   <- still open, below 1800s ack bound
+
+=== S2: captain verdict without --kind is refused ===
+invalid report: a captain verdict requires --kind decision, blocker, or result
+  [rc=2]
+  outcome store: nothing recorded
+
+=== S3: captain verdict --kind result in mate home publishes to MAIN's channel ===
+recorded seq 1 [captain]; MAIN processes it from its next drain
+  [rc=0]
+parent channel:
+  working [corr=93f7e88e2378416b] [at=1790919594]: relayed (via-helper)
+  done [key=branch-outcome-1] [at=1790919604]: captain outcome for worker: classify follow-up complete for corr 93f7e88e2378416b; see report.md
+phase after publish tick: acknowledged  <- uncorrelated publish must not close it
+--- decision and blocker kinds ---
+recorded seq 2 [captain]; MAIN processes it from its next drain
+  [rc=0]
+recorded seq 3 [captain]; MAIN processes it from its next drain
+  [rc=0]
+recorded seq 4 [routine]; it waits in the outcome store for MAIN
+  [rc=0]
+parent channel:
+  working [corr=93f7e88e2378416b] [at=1790919594]: relayed (via-helper)
+  done [key=branch-outcome-1] [at=1790919604]: captain outcome for worker: classify follow-up complete for corr 93f7e88e2378416b; see report.md
+  needs-decision [key=branch-outcome-2] [at=1790919607]: captain outcome for worker: pick schema A or B
+  blocked [key=branch-outcome-3] [at=1790919608]: captain outcome for other: worker other needs a login
+
+=== S4: acknowledged-only request escalates on the age bound ===
+after tick at t+1900s: phase=escalated
+  blocked [key=pending-reply-93f7e88e2378416b] [at=1790919612]: pending-reply-unreported: task=classify pending-reply-id=93f7e88e2378416b request=classify follow-up - acknowledged only, no result reached main
+--- mate's correlated done closes it ---
+phase=resolved
+
+=== S5: main home records a captain outcome and publishes nothing ===
+recorded seq 1 [captain]; MAIN processes it from its next drain
+  parent status lines before=       7 after=       7; other .status files: 1

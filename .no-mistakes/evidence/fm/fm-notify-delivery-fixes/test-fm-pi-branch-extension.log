@@ -1,0 +1,15 @@
+ok - fm_branch_outcomes and fm_branch_processed call headers match stock on Pi before and from 0.99
+skip: installed @earendil-works/pi-coding-agent package not found
+skip: installed @earendil-works/pi-coding-agent package not found
+ok - branch owns accepted wakes with a stable prefix and deterministic verdict-driven delivery
+ok - a captain outcome reaches main's model as one typed, sequence-keyed processing request while routine notes stay plain
+not ok - requested and unsolicited healthy outcomes must follow their distinct public delivery paths: <anonymous_script>:217
+  throw new Error(`timed out waiting for ${label}`);
+        ^
+
+Error: timed out waiting for unsolicited result acknowledgement
+    at settle (eval at <anonymous> (file:///Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M3X7R21EWBSCXWT2E3S9ZCM2/[eval1]:2:7), <anonymous>:217:9)
+    at async file:///Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M3X7R21EWBSCXWT2E3S9ZCM2/[eval1]:113:1
+
+Node.js v24.14.0: expected exit 0, got 1
+exit=1

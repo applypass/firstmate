@@ -1,0 +1,2 @@
+ok - fm_wake_queue_prune_task: prunes wakes for target task without touching other tasks
+ok - prune runner done

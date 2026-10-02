@@ -1,0 +1,13 @@
+NOTE: tmux is not on PATH on this host, so fm-watch.sh lists no live windows and never reaches inbox_steer_check. This live attempt therefore produced no wake; see test-fm-task-inbox.silent-handled-only.log (real fm-watch.sh with the suite's fake tmux).
+
+requests: 001.msg 002.msg
+--- watcher pass 0 (requests still pending, worker working) ---
+silent-handled wakes: 0
+worker moved both to handled/, appended NO status line
+--- watcher pass 1 (move only, turn not ended) ---
+silent-handled wakes: 0
+worker turn ended
+--- watcher pass 2 ---
+[watcher exit=124]
+--- ordinary status wake for t1 queued before the supervisor drains ---
+--- supervisor drain ---

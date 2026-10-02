@@ -1,0 +1,7 @@
+A scope (status row + silent-handled row for live task t1): {"status":"safe","eligible":true,"projects":["/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.d8I8kA/projects/p"],"eligibleSeqs":["1","2"],"eligibleTasks":["t1"],"corrupted":false,"needsDecisionKeys":[],"checkSeqs":[],"heartbeatSeqs":[],"taskByWakeKey":{"t1":"t1","t1.status":"t1","t1.turn-ended":"t1","t1-window":"t1"}}
+A offer for silent-handled trigger: {"scope":{"status":"safe","eligible":true,"projects":["/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.d8I8kA/projects/p"],"eligibleSeqs":["1","2"],"eligibleTasks":["t1"],"corrupted":false,"needsDecisionKeys":[],"checkSeqs":[],"heartbeatSeqs":[],"taskByWakeKey":{"t1":"t1","t1.status":"t1","t1.turn-ended":"t1","t1-window":"t1"}},"heartbeat":false,"eligible":true,"awayOnly":false}
+B control: silent-handled row for a task with no meta: {"status":"unsafe","eligible":false,"projects":[],"eligibleSeqs":[],"eligibleTasks":[],"corrupted":true,"needsDecisionKeys":[],"checkSeqs":[],"heartbeatSeqs":[],"taskByWakeKey":{}}
+(node:35396) [MODULE_TYPELESS_PACKAGE_JSON] Warning: Module type of file:///Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M3X7R21EWBSCXWT2E3S9ZCM2/.pi/extensions/lib/fm-branch-dispatch.ts is not specified and it doesn't parse as CommonJS.
+Reparsing as ES module because module syntax was detected. This incurs a performance overhead.
+To eliminate this warning, add "type": "module" to /Users/uayyagari/package.json.
+(Use `node --trace-warnings ...` to show where the warning was created)
