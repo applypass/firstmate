@@ -115,8 +115,8 @@ jobs:
       - name: Install the Pi package for the Pi extension tests
         run: |
           set -eu
-          # sc-6098: pin Pi; 1.0.0 (2026-10-01) fails tests/fm-calm-pi-extension.test.sh in CI.
-          npm install -g @earendil-works/pi-coding-agent@0.99.2
+          # sc-6098: pin Pi to 0.99.1, the last version proven green; 1.0.0 (2026-10-01) fails tests/fm-calm-pi-extension.test.sh in CI.
+          npm install -g @earendil-works/pi-coding-agent@0.99.1
           npm ls -g --depth 0 @earendil-works/pi-coding-agent
       - name: Run portable parallel shard 1
         run: |
@@ -220,8 +220,8 @@ jobs:
       - name: Install the Pi package for the Pi extension tests
         run: |
           set -eu
-          # sc-6098: pin Pi; 1.0.0 (2026-10-01) fails tests/fm-calm-pi-extension.test.sh in CI.
-          npm install -g @earendil-works/pi-coding-agent@0.99.2
+          # sc-6098: pin Pi to 0.99.1, the last version proven green; 1.0.0 (2026-10-01) fails tests/fm-calm-pi-extension.test.sh in CI.
+          npm install -g @earendil-works/pi-coding-agent@0.99.1
           npm ls -g --depth 0 @earendil-works/pi-coding-agent
       - name: Run portable serial shard ${{ matrix.shard }}
         env:
