@@ -284,6 +284,9 @@ EOF
 mv "$TMP" "$INSTRUCTIONS"
 TMP=
 [ -f "$INSTRUCTIONS" ] && [ -r "$INSTRUCTIONS" ] || { echo "error: ship instructions were not published as a readable file: $INSTRUCTIONS" >&2; exit 1; }
+# Validation release gate; bin/fm-validation-gate.sh owns the contract.
+VALIDATION_GATE_FILE=$("$SCRIPT_DIR/fm-validation-gate.sh" prepare --config "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}" --state "$STATE" \
+  --kind ship --mode "$MODE" --forge "$FORGE" --worktree "$(sed -n 's/^worktree=//p' "$META" | head -n 1)" --id "$ID" --recorded 1) || exit 1
 
 # The current worker receives the instructions through fm-send, but a replacement
 # worker is launched from brief.md. Publish the same explicit precedence contract
@@ -313,12 +316,13 @@ fi
 BRIEF_REPLACEMENT=
 
 TMP="$STATE/.$ID.meta.promote.${BASHPID:-$$}"
-grep -v -e '^kind=' -e '^mode=' -e '^yolo=' -e '^branch=' "$META" > "$TMP"
+grep -v -e '^kind=' -e '^mode=' -e '^yolo=' -e '^branch=' -e '^validation_gate=' "$META" > "$TMP"
 {
   echo "kind=ship"
   echo "mode=$MODE"
   echo "yolo=$YOLO"
   echo "branch=$BRANCH"
+  [ -z "$VALIDATION_GATE_FILE" ] || echo "validation_gate=on"
 } >> "$TMP"
 if ! fm_backlog_atomic_transition publish "$TMP" "$META" "task record" "$STATE"; then
   rm -f -- "$TMP"

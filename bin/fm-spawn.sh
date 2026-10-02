@@ -4838,6 +4838,10 @@ elif [ "$KIND" = scout ]; then
   MODE=
   YOLO=
 fi
+# Validation release gate; bin/fm-validation-gate.sh owns the contract.
+VALIDATION_GATE_FILE=$("$FM_ROOT/bin/fm-validation-gate.sh" prepare --config "$CONFIG" --state "$STATE_REAL" \
+  --kind "$KIND" --mode "$MODE" --forge "${STANDING_FORGE:-none}" --worktree "$WT" --id "$ID" \
+  --brief "$BRIEF" --recorded "$RELAUNCH") || exit 1
 
 # Resolve the optional default-off W3C trace context (bin/fm-trace-context-lib.sh,
 # docs/configuration.md): the one carrier both recorded in meta and injected into
@@ -4940,6 +4944,7 @@ preserve_relaunch_meta() {
     echo "home=$PROJ_ABS"
     echo "projects=$SECONDMATE_PROJECTS"
   fi
+  [ "$RELAUNCH" -eq 1 ] || [ -z "$VALIDATION_GATE_FILE" ] || echo "validation_gate=on"
   if [ "$RELAUNCH" -eq 1 ]; then
     preserve_relaunch_meta
   fi
@@ -5179,6 +5184,7 @@ fi
 if [ "$KEEP_AI_TRAILERS" = 0 ]; then
   LAUNCH="export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=$(shell_quote "$GIT_HOOKS_DIR"); $LAUNCH"
 fi
+[ -z "$VALIDATION_GATE_FILE" ] || LAUNCH="export FM_VALIDATION_GATE=$(shell_quote "$VALIDATION_GATE_FILE"); $LAUNCH"
 # Every agent this fleet launches - crewmate, scout, and secondmate, on a fresh
 # spawn and on a relaunch alike - runs with the compact-adviser kill switch on.
 # This is an export statement rather than a forwarded ambient name or a

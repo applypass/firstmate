@@ -13,8 +13,14 @@ Run `bin/fm-pr-check.sh <id> <PR url>` with the URL copied from that ready signa
 `bin/fm-dod-lib.sh` owns the named-head gate on that ready signal: a ship `done:` whose named head exists only in the worker's disposable copy is not ready (`bin/fm-crew-state.sh` reports blocked, `bin/fm-pr-check.sh` refuses to register, and a secondmate does not publish that done upstream).
 That blocked reading is the gate working, not a stuck worker, so steer the worker on the commit the refusal names rather than waiting.
 A direct-PR worker pushes that commit to its PR branch, and a local-only worker commits it on its ship branch.
-A no-mistakes worker re-validates it with /no-mistakes so the pipeline stays the one publisher; it never pushes from its copy.
+A no-mistakes worker re-validates it with /no-mistakes so the pipeline stays the one publisher; it never pushes from its copy unless the validation release gate below holds the task.
+A gated no-mistakes worker pushes to origin from its copy while the PR iterates, and the released /no-mistakes run stays the one publisher of the final head.
 In no-mistakes mode the earlier `done [at=<epoch>]: {summary}` is the pipeline handoff and is not gated.
+Under the validation release gate (`bin/fm-validation-gate.sh`), a no-mistakes ship first reports `done [at=<epoch>]: PR <url> ready for final validation` without running the pipeline.
+That report is firstmate's to release, in both postures: in the turn that handles it, run `bin/fm-validation-gate.sh release <id>`, which also steers the worker to start /no-mistakes on that head.
+In that same turn, tell the captain the PR is ready to merge to dev, with its URL, and that final validation is now running; it does not wait for the captain's merge word.
+The later `checks green` report is a follow-up that clears the merge.
+Hold the merge until that released run reports checks green, and release again if the head changes.
 Tell the captain the PR's full `https://...` URL copied from the worker's ready line, the resolved checks-green crew-state line, or the task's `pr=` metadata, a concise outcome summary, and the no-mistakes risk level when applicable.
 A captain instruction to merge is explicit authority; `yolo` is the only standing routine merge authority.
 For any custom `state/<id>.check.sh` you write yourself, keep it an ordinary single-link mode-`0700` file, print one line only when firstmate should wake, print nothing otherwise, finish before `FM_CHECK_TIMEOUT`, then bind its current bytes with `bin/fm-check-register.sh <id>` before the watcher may execute it.

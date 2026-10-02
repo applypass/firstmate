@@ -522,6 +522,9 @@ case "$CMD" in
       echo "error: silent outcomes must have the routine verdict" >&2
       exit 2
     fi
+    # Validation release gate; bin/fm-validation-gate.sh owns the rule.
+    [ ! -x "$SCRIPT_DIR/fm-validation-gate.sh" ] ||
+      FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-validation-gate.sh" outcome-check "$TASK" "$VERDICT" || exit 1
     fm_lock_acquire_wait "$LOCK"
     if ! LAST_SEQ=$(last_seq); then
       fm_lock_release "$LOCK"
