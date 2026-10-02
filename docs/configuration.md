@@ -355,13 +355,13 @@ A home may instead select another tasks-axi adapter such as Beads through its ow
 `config/shortcut-tickets` overrides any key per home.
 Two keys are per-home and have no shipped default: `owner_id=<Shortcut member UUID>`, the member the home's stories are assigned to, and `token_ref=op://<vault>/<item>/<field>`, the 1Password reference the token is read from.
 The dispatch check and story creation refuse with the exact line to add to `config/shortcut-tickets` when `owner_id` is missing, or when `token_ref` is missing and `SHORTCUT_API_TOKEN` is unset.
-The credential is `SHORTCUT_API_TOKEN` in the environment, else `op read <token_ref>`, bounded to `op_timeout` seconds (default 10) so an unanswered 1Password prompt fails fast; a read token is exported to child processes, held in memory only, and never written anywhere.
+The credential is `SHORTCUT_API_TOKEN` in the environment, else `op read <token_ref>`, bounded to `op_timeout` seconds (default 10) so an unanswered 1Password prompt fails fast; each call reads it at most once, holds it in memory only, passes it to curl on stdin, and never writes it anywhere or exports it to child processes.
 [`bin/fm-shortcut-ticket.sh`](../bin/fm-shortcut-ticket.sh) owns the operations and their hooks.
 
 | Event | Story change |
 | --- | --- |
 | `fm-tasks-axi.sh add` | Created in Backlog (Engineering team) with the item's ownership marker in its description, and a `Shortcut: sc-NNNN <url>` line appended to the item body. |
-| `fm-shortcut-ticket.sh link <item> sc-NNNN` | An existing story becomes the item's own: refused when it carries another item's marker, else this item's marker is added and the body line recorded. |
+| `fm-shortcut-ticket.sh link <item> sc-NNNN` | An existing story becomes the item's own: refused when it is the parent (umbrella) story in the item's title or carries another item's marker, else this item's marker is added and the body line recorded. |
 | Dispatch (`fm-spawn.sh`) | Refused unless the item's body names its own story and a GET shows that story's marker for this item (including a missing setting, token, or failed `op read`); otherwise moved to In Progress. |
 | Second mate `done` or `ready` (`fm-secondmate-report.sh`, including `--doc`) | Refused unless `--item <id>` names the investigation's backlog item and `fm-shortcut-ticket.sh --check <id>` passes. |
 | PR registered (`fm-pr-check.sh`) | Moved to In Review, PR linked. |
@@ -373,7 +373,7 @@ The credential is `SHORTCUT_API_TOKEN` in the environment, else `op read <token_
 | `fm-shortcut-ticket.sh done <item> --evidence <text>` | Moved to Done. |
 
 The item's own story is the one a body line `Shortcut: sc-NNNN` names, and only while its description carries the line `firstmate-item: <home-name>/<item-id>` (home-name is the basename of the home that created it) for this item id and no other.
-A body line naming an umbrella or another item's story therefore fails the check; adopt an unowned story with `link`, or remove the line and create the item's own story.
+A body line naming an umbrella or another item's story therefore fails the check; remove the line and create the item's own story with `fm-shortcut-ticket.sh <item>`.
 An `sc-NNNN` in the title is a parent (umbrella) reference: the item gets its own story, linked to the parent with a "relates to" story link, and state moves never touch the parent.
 Any other `sc-NNNN` in the body, such as "Follow-up to sc-6092", is only a reference: the sync never moves it, comments on it, or uploads to it, and the item gets its own story.
 

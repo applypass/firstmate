@@ -101,7 +101,8 @@ test_existing_story_is_adopted_only_by_link() {
   out=$(run_tasks "$dir" add st-3 "Other work" --kind ship --body "Shortcut: sc-4343 https://app.shortcut.com/applypass/story/4343") || fail "add failed: $out"
   assert_grep "GET https://api.app.shortcut.com/api/v3/stories/4343" "$dir/curl.log" "the body-named story was not read"
   assert_no_grep "POST" "$dir/curl.log" "a duplicate story was created for a body-named id"
-  assert_contains "$out" "bin/fm-shortcut-ticket.sh link st-3 sc-4343" "the add did not name the explicit link"
+  assert_contains "$out" "create its own with: bin/fm-shortcut-ticket.sh st-3" "the add did not name the create command"
+  assert_not_contains "$out" "link st-3" "the refusal offered to link an unowned story"
   check_item "$dir" st-3 >/dev/null && fail "--check passed an unowned body-named story"
   out=$(ticket "$dir" link st-3 sc-4343) || fail "link failed: $out"
   assert_grep 'firstmate-item: home/st-3' "$dir/fake-stories/4343.desc" "link did not write the marker"
@@ -131,7 +132,12 @@ test_umbrella_or_shared_body_line_is_refused() {
   out=$(ticket "$dir" link sh-3 sc-5555) && fail "link adopted another item's story"
   assert_contains "$out" "already belongs to another item" "the link refusal did not say why"
   assert_no_grep 'sh-3' "$dir/fake-stories/5555.desc" "a refused link still marked the story"
-  pass "a body line naming an umbrella or another item's story fails the check, and link refuses it"
+  FAKE_CURL_FAIL=1 run_tasks "$dir" add sh-4 "Launch fix sc-6104 widget" --kind ship >/dev/null
+  out=$(ticket "$dir" link sh-4 sc-6104) && fail "link adopted the title umbrella"
+  assert_contains "$out" "parent (umbrella) story" "the umbrella link refusal did not say why"
+  assert_contains "$out" "bin/fm-shortcut-ticket.sh sh-4" "the umbrella link refusal did not name the create command"
+  assert_no_grep 'sh-4' "$dir/fake-stories/6104.desc" "a refused umbrella link still marked the story"
+  pass "a body line naming an umbrella or another item's story fails the check, and link refuses it and the title umbrella"
 }
 
 test_title_id_is_a_parent_never_reused() {
@@ -216,7 +222,7 @@ test_missing_token_refuses_the_check_and_op_supplies_it() {
   assert_grep "op read $TOKEN_REF" "$dir/op.log" "the token was not read from token_ref"
   assert_grep "TOKEN-ON-STDIN" "$dir/curl.log" "the op token did not reach curl on stdin"
   assert_no_grep "TOKEN-IN-ARGV" "$dir/curl.log" "the op token leaked into curl's argv"
-  assert_grep "TOKEN-IN-CHILD-ENV" "$dir/curl.log" "the op token was not exported to child processes"
+  assert_no_grep "TOKEN-IN-CHILD-ENV" "$dir/curl.log" "the op token leaked into a child's environment"
   assert_not_contains "$out" "tok-secret-123" "the token was printed"
   pass "a missing token refuses the check; op read supplies it on stdin when configured"
 }

@@ -58,9 +58,9 @@
 # unset.
 #
 # The API token comes from SHORTCUT_API_TOKEN, else from `op read <token_ref>`
-# bounded to op_timeout seconds (default 10), then exported so child processes
-# reuse it. It is held in memory only, reaches curl on stdin, never the command
-# line, and is never printed or stored. A missing `op`, a failed read, or a read
+# bounded to op_timeout seconds (default 10), read once per call. It is held in
+# memory only, reaches curl on stdin, never the command line or a child's
+# environment, and is never printed or stored. A missing `op`, a failed read, or a read
 # that does not answer in time is a concrete refusal (a best-effort caller only
 # warns).
 set -u
@@ -185,6 +185,7 @@ elif [ "$OP" = link ]; then
   TARGET=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')
   case "${TARGET#sc-}" in "$TARGET" | '' | *[!0-9]*) die "usage: link <item> sc-NNNN" ;; esac
   [ -z "$SC" ] || [ "$SC" = "$TARGET" ] || die "backlog item $ID already names $SC as its own story"
+  [ "$TARGET" != "$PARENT" ] || die "$TARGET is the parent (umbrella) story in $ID's title, never its own; create its own with: bin/fm-shortcut-ticket.sh $ID"
   SC=$TARGET
 elif [ -z "$SC" ]; then
   [ "$BEST_EFFORT" = 1 ] && exit 0
@@ -193,15 +194,15 @@ fi
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
 command -v curl >/dev/null 2>&1 || die "curl is required"
-if [ -z "${SHORTCUT_API_TOKEN:-}" ]; then
+TOKEN=${SHORTCUT_API_TOKEN:-}
+if [ -z "$TOKEN" ]; then
   TOKEN_REF=$(setting token_ref)
   [ -n "$TOKEN_REF" ] || die "SHORTCUT_API_TOKEN is not set and no token_ref is configured; add this line to $CONFIG/shortcut-tickets: token_ref=op://<vault>/<item>/<field>"
   command -v op >/dev/null 2>&1 || die "SHORTCUT_API_TOKEN is not set and the 1Password CLI (op) is not installed to read $TOKEN_REF; run: bin/fm-shortcut-ticket.sh $ID"
   OP_TIMEOUT=$(setting op_timeout 10)
   case "$OP_TIMEOUT" in '' | 0* | *[!0-9]*) die "op_timeout must be a positive number of seconds (got '$OP_TIMEOUT')" ;; esac
-  SHORTCUT_API_TOKEN=$(fm_run_timed "$OP_TIMEOUT" op read "$TOKEN_REF" 2>/dev/null) || SHORTCUT_API_TOKEN=''
-  [ -n "$SHORTCUT_API_TOKEN" ] || die "SHORTCUT_API_TOKEN is not set and 'op read $TOKEN_REF' failed or did not answer within ${OP_TIMEOUT}s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh $ID"
-  export SHORTCUT_API_TOKEN
+  TOKEN=$(fm_run_timed "$OP_TIMEOUT" op read "$TOKEN_REF" 2>/dev/null) || TOKEN=''
+  [ -n "$TOKEN" ] || die "SHORTCUT_API_TOKEN is not set and 'op read $TOKEN_REF' failed or did not answer within ${OP_TIMEOUT}s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh $ID"
 fi
 
 API=$(setting api_base "${SHORTCUT_API_BASE:-https://api.app.shortcut.com}")
@@ -212,7 +213,7 @@ HTTP_CODE=
 http() {  # <method> <path> [curl args...]; response body lands in $WORK/resp
   local method=$1 path=$2
   shift 2
-  HTTP_CODE=$(printf 'header = "Shortcut-Token: %s"\n' "$SHORTCUT_API_TOKEN" |
+  HTTP_CODE=$(printf 'header = "Shortcut-Token: %s"\n' "$TOKEN" |
     curl -sS --max-time 30 -K - -o "$WORK/resp" -w '%{http_code}' -X "$method" "$@" "$API$path" 2>"$WORK/err") ||
     HTTP_CODE=000
 }
@@ -236,7 +237,7 @@ require_own_story() {  # GETs $SC and refuses unless its markers name only this 
   [ "$owners" = "$ID" ] && return 0
   [ -n "$owners" ] &&
     die "$SC named by $ID belongs to another item ($(printf '%s' "$owners" | tr '\n' ' ')); remove the Shortcut line and create its own with: bin/fm-shortcut-ticket.sh $ID"
-  die "$SC named by $ID carries no '$MARKER' marker (an umbrella or unowned story); adopt it with: bin/fm-shortcut-ticket.sh link $ID $SC, or remove the Shortcut line and create its own with: bin/fm-shortcut-ticket.sh $ID"
+  die "$SC named by $ID carries no '$MARKER' marker (an umbrella or unowned story); remove the Shortcut line and create its own with: bin/fm-shortcut-ticket.sh $ID"
 }
 
 record_body_line() {  # <num> <url>
