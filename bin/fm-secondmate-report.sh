@@ -6,6 +6,8 @@
 # that easy, but correctness must not depend on using it: a plain echo of a
 # status line that includes the same corr token is equally valid
 # (bin/fm-pending-reply-lib.sh).
+# Only a done, ready, needs-decision, blocked, or failed <verb> closes the
+# request; working or paused only acknowledges it and keeps it open.
 #
 # The write destination is mechanical: this helper never takes a status path.
 # It resolves the parent channel through fm_parent_channel_destination
