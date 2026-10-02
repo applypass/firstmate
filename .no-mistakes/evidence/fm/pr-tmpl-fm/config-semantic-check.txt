@@ -1,0 +1,3 @@
+pr.template = .github/pull_request_template.md exists= True
+headings: ['# Problem', '# Fix', '# Proof']
+top-level keys: ['disable_project_settings', 'document', 'commands', 'test', 'pr']

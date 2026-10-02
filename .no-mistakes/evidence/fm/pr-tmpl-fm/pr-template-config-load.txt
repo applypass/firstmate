@@ -1,7 +1,10 @@
-# no-mistakes no-mistakes version v1.79.0 (fc540ac) 2026-09-19T09:34:44Z - repo config load check via 'no-mistakes ci-workflow' in a throwaway clone of b0e2e18
-$ pr.template: .github/pull_request_template.md
+# no-mistakes no-mistakes version v1.79.0 (fc540ac) 2026-09-19T09:34:44Z config load via 'no-mistakes ci-workflow' in throwaway clone of a296428
+$ pr.template:   template: .github/pull_request_template.md
 ci-workflow: commands.test not configured in .no-mistakes.yaml
+exit=0
 $ pr.template: ../escape.md
 ci-workflow: parse repo config: pr.template must not traverse directories or name .git
 $ pr.template: .git/config
 ci-workflow: parse repo config: pr.template must not traverse directories or name .git
+$ pr.template: .github/missing.md
+ci-workflow: commands.test not configured in .no-mistakes.yaml
