@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# fm-secondmate-report.sh - optional helper to append a correlated parent report.
+# fm-secondmate-report.sh - helper to append a correlated parent report.
 #
 # A secondmate answering a marked from-firstmate request must report on the
 # parent status channel with the request's corr=<id> token. This helper makes
-# that easy, but correctness must not depend on using it: a plain echo of a
-# status line that includes the same corr token is equally valid
-# (bin/fm-pending-reply-lib.sh).
+# that easy; a plain echo of a status line that includes the same corr token
+# is also valid (bin/fm-pending-reply-lib.sh), except for the fork-only
+# done/ready case below.
 # Only a done, ready, needs-decision, blocked, or failed <verb> closes the
 # request; working or paused only acknowledges it and keeps it open.
 #
