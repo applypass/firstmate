@@ -1,0 +1,49 @@
+== S1: add creates a story (Engineering team, Backlog, no owner by default)
+$ bin/fm-tasks-axi.sh add lab-widget Add widget export --kind ship --body - Problem: no export
+- Fix: add it
+ok: added lab-widget (ship) -> Queued
+task:
+  id: lab-widget
+  title: Add widget export
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: ship
+  repo: "-"
+  priority: "-"
+  created: 2026-10-02
+  closed: "-"
+  deps: none
+  links: none
+  body: "- Problem: no export\\n- Fix: add it"
+help[2]:
+  - Run `tasks-axi start lab-widget` to move it to in flight
+  - Run `tasks-axi block lab-widget --by <other>` to record a dependency
+fm-shortcut-ticket: lab-widget -> sc-9001 https://app.shortcut.com/applypass/story/9001
+[exit 0]
+$ bin/fm-tasks-axi.sh show lab-widget --full
+task:
+  id: lab-widget
+  title: Add widget export
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: ship
+  repo: "-"
+  priority: "-"
+  created: 2026-10-02
+  closed: "-"
+  deps: none
+  links: none
+  body: "- Problem: no export\\n- Fix: add it\nShortcut: sc-9001 https://app.shortcut.com/applypass/story/9001"
+[exit 0]
+$ bin/fm-shortcut-ticket.sh --check lab-widget
+[exit 0]

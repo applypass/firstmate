@@ -1,0 +1,81 @@
+== S2: per-home owner_id override assigns the story
+$ bin/fm-tasks-axi.sh add lab-owned Owned item --kind ship
+ok: added lab-owned (ship) -> Queued
+task:
+fm-shortcut-ticket: lab-owned -> sc-9002 https://app.shortcut.com/applypass/story/9002
+[exit 0]
+--- mock API log after: S2
+POST /api/v3/stories token=ok {
+  "name": "Owned item",
+  "description": "- Problem: Owned item\n- Fix: tracked by firstmate backlog item lab-owned",
+  "story_type": "feature",
+  "group_id": "649562cb-7f18-471f-835f-7ed28a5abf0a",
+  "workflow_state_id": 500000006,
+  "owner_ids": [
+    "00000000-lab-owner"
+  ]
+}
+
+== S3: a body reference 'Follow-up to sc-6092' gets its own story; sc-6092 is never touched
+$ bin/fm-tasks-axi.sh add lab-followup Fix the edge case --kind ship --body Follow-up to sc-6092
+ok: added lab-followup (ship) -> Queued
+task:
+fm-shortcut-ticket: lab-followup -> sc-9003 https://app.shortcut.com/applypass/story/9003
+[exit 0]
+$ bin/fm-shortcut-ticket.sh --linked lab-followup
+sc-9003
+[exit 0]
+$ bin/fm-shortcut-ticket.sh state lab-followup progress
+[exit 0]
+--- mock API log after: S3
+POST /api/v3/stories token=ok {
+  "name": "Fix the edge case",
+  "description": "Follow-up to sc-6092",
+  "story_type": "feature",
+  "group_id": "649562cb-7f18-471f-835f-7ed28a5abf0a",
+  "workflow_state_id": 500000006
+}
+
+GET /api/v3/stories/9003 token=ok 
+PUT /api/v3/stories/9003 token=ok {
+  "workflow_state_id": 500000008
+}
+
+== S4: title naming an existing story links it, no create
+$ bin/fm-tasks-axi.sh add lab-titled Continue sc-6092 work --kind ship
+ok: added lab-titled (ship) -> Queued
+task:
+[exit 0]
+$ bin/fm-shortcut-ticket.sh --linked lab-titled
+sc-6092
+[exit 0]
+--- mock API log after: S4
+GET /api/v3/stories/6092 token=ok 
+== S5 (adversarial): add without a token warns, keeps the item, and --check refuses
+$ (no SHORTCUT_API_TOKEN) bin/fm-tasks-axi.sh add lab-noticket ...
+ok: added lab-noticket (ship) -> Queued
+fm-shortcut-ticket: SHORTCUT_API_TOKEN is not set; export it and run: bin/fm-shortcut-ticket.sh lab-noticket
+fm-tasks-axi: warning: no Shortcut ticket for lab-noticket; retry with bin/fm-shortcut-ticket.sh lab-noticket
+[exit ]
+$ bin/fm-shortcut-ticket.sh --check lab-noticket
+fm-shortcut-ticket: backlog item lab-noticket has no Shortcut ticket (sc-NNNN); create one with: bin/fm-shortcut-ticket.sh lab-noticket
+[exit 1]
+$ bin/fm-spawn.sh lab-noticket (dispatch attempt)
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.tmztP9
+error: ship spawns require --mode <no-mistakes|direct-PR|local-only>; resolve it at intake from the captain's instruction and the project's registered posture in data/projects.md
+[exit ]
+$ retry: bin/fm-shortcut-ticket.sh lab-noticket
+$ bin/fm-shortcut-ticket.sh lab-noticket
+fm-shortcut-ticket: lab-noticket -> sc-9004 https://app.shortcut.com/applypass/story/9004
+[exit 0]
+$ bin/fm-shortcut-ticket.sh --check lab-noticket
+[exit 0]
+--- mock API log after: S5
+POST /api/v3/stories token=ok {
+  "name": "No token item",
+  "description": "- Problem: No token item\n- Fix: tracked by firstmate backlog item lab-noticket",
+  "story_type": "feature",
+  "group_id": "649562cb-7f18-471f-835f-7ed28a5abf0a",
+  "workflow_state_id": 500000006
+}
+

@@ -1,0 +1,96 @@
+== S6: in-progress, code complete -> In Review with PR link, decisions/artifacts
+$ bin/fm-shortcut-ticket.sh state lab-widget progress
+[exit 0]
+$ bin/fm-shortcut-ticket.sh review lab-widget --pr https://github.com/applypass/firstmate/pull/999
+[exit 0]
+$ bin/fm-shortcut-ticket.sh comment lab-widget Decision: export as CSV
+[exit 0]
+$ bin/fm-shortcut-ticket.sh attach lab-widget /tmp/fm-lab-report.md
+[exit 0]
+--- mock API log after: S6
+GET /api/v3/stories/9001 token=ok 
+PUT /api/v3/stories/9001 token=ok {
+  "workflow_state_id": 500000008
+}
+
+GET /api/v3/stories/9001 token=ok 
+PUT /api/v3/stories/9001 token=ok {
+  "workflow_state_id": 500000009
+}
+
+GET /api/v3/stories/9001 token=ok 
+PUT /api/v3/stories/9001 token=ok {
+  "external_links": [
+    "https://github.com/applypass/firstmate/pull/999"
+  ]
+}
+
+POST /api/v3/stories/9001/comments token=ok {
+  "text": "Decision: export as CSV"
+}
+
+POST /api/v3/files token=ok <multipart file upload 339 bytes>
+== S7 (adversarial): Done is never automatic - state done refused, done needs evidence
+$ bin/fm-shortcut-ticket.sh state lab-widget done
+fm-shortcut-ticket: state takes progress or review; Done only via: done <item> --evidence <text>
+[exit 1]
+$ bin/fm-shortcut-ticket.sh done lab-widget
+fm-shortcut-ticket: usage: done <item> --evidence <text> (the captain's word or verified production evidence)
+[exit 1]
+$ bin/fm-shortcut-ticket.sh done lab-widget --evidence captain confirmed working in prod
+[exit 0]
+--- mock API log after: S7
+PUT /api/v3/stories/9001 token=ok {
+  "workflow_state_id": 500000010
+}
+
+POST /api/v3/stories/9001/comments token=ok {
+  "text": "Done: captain confirmed working in prod"
+}
+
+== S8: dropping work midway sends the story back to Backlog
+$ bin/fm-tasks-axi.sh hold lab-owned --kind parked --reason not doing this now
+ok: hold lab-owned -> held (parked)
+task:
+[exit 0]
+$ bin/fm-tasks-axi.sh rm lab-noticket
+ok: removed lab-noticket
+[exit 0]
+--- mock API log after: S8
+GET /api/v3/stories/9002 token=ok 
+PUT /api/v3/stories/9002 token=ok {
+  "workflow_state_id": 500000006
+}
+
+POST /api/v3/stories/9002/comments token=ok {
+  "text": "Back to Backlog (work not continuing): parked: not doing this now"
+}
+
+GET /api/v3/stories/9004 token=ok 
+PUT /api/v3/stories/9004 token=ok {
+  "workflow_state_id": 500000006
+}
+
+POST /api/v3/stories/9004/comments token=ok {
+  "text": "Back to Backlog (work not continuing): cancelled: removed from the backlog"
+}
+
+== S9 (adversarial): a refused rm parks nothing; a Follow-up body ref is never moved
+$ bin/fm-tasks-axi.sh rm lab-does-not-exist
+error: "Task \"lab-does-not-exist\" not found in this backlog"
+code: NOT_FOUND
+[exit 1]
+$ bin/fm-tasks-axi.sh hold lab-followup --kind parked --reason deprioritised
+ok: hold lab-followup -> held (parked)
+task:
+[exit 0]
+--- mock API log after: S9
+GET /api/v3/stories/9003 token=ok 
+PUT /api/v3/stories/9003 token=ok {
+  "workflow_state_id": 500000006
+}
+
+POST /api/v3/stories/9003/comments token=ok {
+  "text": "Back to Backlog (work not continuing): parked: deprioritised"
+}
+
