@@ -462,7 +462,7 @@ export function scopeForUnreadWake(state: string, heartbeat: boolean, afk = fals
         needsDecisionKeys.push(key);
         if (!afk) continue;
       }
-      task = key.replace(/\.(?:status|turn-ended)$/, "");
+      task = key.replace(/\.(?:status|turn-ended|silent-handled\.[0-9]+)$/, "");
       project = metadata.get(task) ?? "";
     } else if (kind === "stale") {
       task = taskByKey.get(key) ?? taskByKey.get(key.replace(/^fm-/, "")) ?? "";
