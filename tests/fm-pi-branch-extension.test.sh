@@ -2424,12 +2424,14 @@ writeFileSync(`${home}/state/.wake-queue`, [
   "1\t1\tsignal\tbranch-driver.status\tsignal: done",
   "2\t2\tstale\tdefault:wX:p1\tstale: default:wX:p1 (idle 378s)",
   "3\t3\tcheck\tmerge-poll\tcheck: merged",
+  "4\t4\tsignal\tbranch-driver.silent-handled.027\tsignal: branch-driver.silent-handled.027 (request 027.msg was moved to handled/)",
 ].join("\n") + "\n");
 const scope = lib.scopeForUnreadWake(`${home}/state`, false);
+if (scope.corrupted) throw new Error(`a silent-handled row read as corrupted: ${JSON.stringify(scope)}`);
 if (JSON.stringify([...scope.eligibleTasks].sort()) !== JSON.stringify(["branch-driver", "other-task"])) {
   throw new Error(`eligible rows resolved to the wrong tasks: ${JSON.stringify(scope)}`);
 }
-if (JSON.stringify(scope.eligibleSeqs) !== JSON.stringify(["1", "2"])) {
+if (JSON.stringify(scope.eligibleSeqs) !== JSON.stringify(["1", "2", "4"])) {
   throw new Error(`the main-owned check row leaked into the branch claim: ${JSON.stringify(scope)}`);
 }
 process.exit(0);

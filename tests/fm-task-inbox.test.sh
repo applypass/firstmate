@@ -679,14 +679,19 @@ test_watcher_queues_every_silent_handled_record() {
     FM_TASK_INBOX_SILENT_AGE_SECS=0
   pid=$!
   wait_watcher_gone "$pid" || { kill "$pid" 2>/dev/null; fail "two silent records should wake the watcher"; }
-  rows=$(grep -cF 'requests moved to handled/ with no status line' "$state/.wake-queue" || true)
-  [ "$rows" = 1 ] || fail "the silent records must queue one wake row, got $rows:"$'\n'"$(cat "$state/.wake-queue" 2>/dev/null)"
-  grep -F 'requests moved to handled/' "$state/.wake-queue" | grep -qF 't1.status' \
-    || fail "the row must use the task's status signal key:"$'\n'"$(cat "$state/.wake-queue")"
+  rows=$(grep -cF 'was moved to handled/ with no status line' "$state/.wake-queue" || true)
+  [ "$rows" = 2 ] || fail "every silent record must queue its own wake row, got $rows:"$'\n'"$(cat "$state/.wake-queue" 2>/dev/null)"
+  # An ordinary status wake for the same task must not replace either row.
+  FM_STATE_OVERRIDE="$state" bash -c '. "$1"; fm_wake_append signal t1.status "signal: t1.status"' _ "$ROOT/bin/fm-wake-lib.sh" \
+    || fail "could not queue the ordinary status wake"
   drained=$(FM_STATE_OVERRIDE="$state" "$ROOT/bin/fm-wake-drain.sh" 2>/dev/null || true)
-  printf '%s\n' "$drained" | grep -qF "arrived: ${rec1##*/} ${rec2##*/};" \
-    || fail "the drain must present both records:"$'\n'"$drained"
-  pass "watcher: silent handled records queue one task status wake that names each record"
+  printf '%s\n' "$drained" | grep -qF "request ${rec1##*/} was moved" \
+    || fail "the drain must present the first record:"$'\n'"$drained"
+  printf '%s\n' "$drained" | grep -qF "request ${rec2##*/} was moved" \
+    || fail "the drain must present the second record:"$'\n'"$drained"
+  printf '%s\n' "$drained" | grep -qE "signal: t1\.status($|[^ ])" \
+    || fail "the drain must present the ordinary status wake too:"$'\n'"$drained"
+  pass "watcher: every silent handled record keeps its own wake row beside the task's status wake"
 }
 
 test_watcher_ack_silences_unwritable_ladder() {
