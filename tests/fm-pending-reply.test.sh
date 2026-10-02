@@ -159,34 +159,35 @@ test_ack_line_keeps_the_reply_open() {
   pass "acknowledgement keeps the pending reply open until a terminal line"
 }
 
-test_ack_then_idle_escalates_once_and_terminal_closes_it() {
-  local home state corr status rec
-  home=$(setup_parent ack-idle)
+test_ack_escalates_on_age_not_on_an_idle_mate_pane() {
+  local home state corr status
+  home=$(setup_parent ack-age)
   state="$home/state"
   status="$state/hibit.status"
   export FM_PENDING_REPLY_GRACE_SECS=120
+  export FM_PENDING_REPLY_ACK_SECS=900
   export FM_PENDING_REPLY_NOW=41000
   corr=$(fm_pending_reply_create "$home" "$state" hibit "classify follow-up")
-  rec=$(fm_pending_reply_path "$state" "$corr")
   fm_pending_reply_mark_delivered "$state" "$corr"
   printf 'working [corr=%s]: relayed\n' "$corr" > "$status"
-  fm_pending_reply_tick_one "$state" "$corr" busy ""
+  fm_pending_reply_tick_one "$state" "$corr" idle ""
   [ "$(phase_of "$state" "$corr")" = acknowledged ] || fail "setup: phase should be acknowledged"
+  # The mate pane sits idle while its worker runs: that is healthy, not a miss.
+  export FM_PENDING_REPLY_NOW=41600
   fm_pending_reply_tick_one "$state" "$corr" idle ""
-  export FM_PENDING_REPLY_NOW=41060
+  [ "$(phase_of "$state" "$corr")" = acknowledged ] \
+    || fail "an idle mate pane inside the bound must not escalate, got $(phase_of "$state" "$corr")"
+  # A new correlated line restarts the bound.
+  printf 'paused [corr=%s]: waiting on the worker\n' "$corr" >> "$status"
+  export FM_PENDING_REPLY_NOW=41700
   fm_pending_reply_tick_one "$state" "$corr" idle ""
-  [ "$(phase_of "$state" "$corr")" = acknowledged ] || fail "must not escalate inside the grace window"
-  # A busy observation restarts the idle clock.
+  export FM_PENDING_REPLY_NOW=42500
+  fm_pending_reply_tick_one "$state" "$corr" idle ""
+  [ "$(phase_of "$state" "$corr")" = acknowledged ] || fail "a new correlated line must restart the bound"
+  export FM_PENDING_REPLY_NOW=42600
   fm_pending_reply_tick_one "$state" "$corr" busy ""
-  export FM_PENDING_REPLY_NOW=41150
-  fm_pending_reply_tick_one "$state" "$corr" idle ""
-  export FM_PENDING_REPLY_NOW=41200
-  fm_pending_reply_tick_one "$state" "$corr" idle ""
-  [ "$(phase_of "$state" "$corr")" = acknowledged ] || fail "busy must reset the idle clock"
-  export FM_PENDING_REPLY_NOW=41300
-  fm_pending_reply_tick_one "$state" "$corr" idle ""
   [ "$(phase_of "$state" "$corr")" = escalated ] \
-    || fail "an idle acknowledged request must escalate, got $(phase_of "$state" "$corr")"
+    || fail "an acknowledged request past the bound must escalate, got $(phase_of "$state" "$corr")"
   grep -q "pending-reply-unreported: task=hibit pending-reply-id=$corr request=classify follow-up" "$status" \
     || fail "escalation must name the task, request, and id"
   grep -q "no result reached main" "$status" || fail "escalation must say no result reached main"
@@ -196,27 +197,9 @@ test_ack_then_idle_escalates_once_and_terminal_closes_it() {
   fm_pending_reply_tick_one "$state" "$corr" idle ""
   [ "$(phase_of "$state" "$corr")" = resolved ] || fail "a terminal line must still resolve after escalation"
   grep -q "^resolved \[key=pending-reply-$corr\]" "$status" || fail "the escalation decision must close"
+  unset FM_PENDING_REPLY_ACK_SECS
   export FM_PENDING_REPLY_GRACE_SECS=0
-  pass "idle acknowledged request escalates once; a later result resolves and closes it"
-}
-
-test_ack_paused_declared_wait_does_not_escalate() {
-  local home state corr status
-  home=$(setup_parent ack-paused)
-  state="$home/state"
-  status="$state/hibit.status"
-  export FM_PENDING_REPLY_GRACE_SECS=120
-  export FM_PENDING_REPLY_NOW=42000
-  corr=$(fm_pending_reply_create "$home" "$state" hibit "long build")
-  fm_pending_reply_mark_delivered "$state" "$corr"
-  printf 'paused [corr=%s]: waiting on the build monitor\n' "$corr" > "$status"
-  fm_pending_reply_tick_one "$state" "$corr" idle ""
-  export FM_PENDING_REPLY_NOW=42900
-  fm_pending_reply_tick_one "$state" "$corr" idle ""
-  [ "$(phase_of "$state" "$corr")" = acknowledged ] || fail "a declared paused: wait must not escalate"
-  ! grep -q "pending-reply-unreported" "$status" || fail "no escalation expected while paused"
-  export FM_PENDING_REPLY_GRACE_SECS=0
-  pass "a declared paused wait never escalates"
+  pass "an acknowledged request escalates once on age since its last correlated line, never on an idle mate pane"
 }
 
 test_resolved_records_keep_upgrade_behaviour() {
@@ -2071,8 +2054,7 @@ test_remote_parent_replies_is_not_wrong_home
 test_local_parent_replies_is_wrong_home_evidence
 test_escalated_undelivered_correlation_stays_retryable
 test_ack_line_keeps_the_reply_open
-test_ack_then_idle_escalates_once_and_terminal_closes_it
-test_ack_paused_declared_wait_does_not_escalate
+test_ack_escalates_on_age_not_on_an_idle_mate_pane
 test_resolved_records_keep_upgrade_behaviour
 
 printf 'ok - all pending-reply tests passed\n'
