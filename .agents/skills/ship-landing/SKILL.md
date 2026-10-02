@@ -17,7 +17,9 @@ A no-mistakes worker re-validates it with /no-mistakes so the pipeline stays the
 A gated no-mistakes worker pushes to origin from its copy while the PR iterates, and the released /no-mistakes run stays the one publisher of the final head.
 In no-mistakes mode the earlier `done [at=<epoch>]: {summary}` is the pipeline handoff and is not gated.
 Under the validation release gate (`bin/fm-validation-gate.sh`), a no-mistakes ship first reports `done [at=<epoch>]: PR <url> ready for final validation` without running the pipeline.
-That report is firstmate's action, not a captain outcome, in both postures: in the turn that handles it, run `bin/fm-validation-gate.sh release <id>`, which also steers the worker to start /no-mistakes on that head; the later `checks green` report is the one the captain hears.
+That report is firstmate's to release, in both postures: in the turn that handles it, run `bin/fm-validation-gate.sh release <id>`, which also steers the worker to start /no-mistakes on that head.
+In that same turn, tell the captain the PR is ready to merge to dev, with its URL, and that final validation is now running; it does not wait for the captain's merge word.
+The later `checks green` report is a follow-up that clears the merge.
 Hold the merge until that released run reports checks green, and release again if the head changes.
 Tell the captain the PR's full `https://...` URL copied from the worker's ready line, the resolved checks-green crew-state line, or the task's `pr=` metadata, a concise outcome summary, and the no-mistakes risk level when applicable.
 A captain instruction to merge is explicit authority; `yolo` is the only standing routine merge authority.

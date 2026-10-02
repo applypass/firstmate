@@ -255,12 +255,31 @@ test_prepare_refuses_foreign_companion_and_missing_support() {
   printf '#!/bin/sh\nexit 0\n' >"$GATE_DIR/hooks/pre-receive"
   out=$(prepare_ship nosupport 2>&1) && fail "prepare on a gate that runs no companion should fail: $out"
   assert_contains "$out" "does not run" "the refusal should say the gate runs no companion"
+  pass "prepare refuses a foreign companion and a gate without companion support"
+}
 
+test_uninitialized_project_defers_the_gate_until_release() {
+  local out status head
   make_world noremote
+  write_task_meta noremote
   git -C "$PROJ_DIR" remote remove no-mistakes
-  out=$(prepare_ship noremote 2>&1) && fail "prepare with no no-mistakes remote should fail: $out"
-  assert_contains "$out" "no-mistakes init" "the refusal should name the missing initialization"
-  pass "prepare refuses a foreign companion, a gate without companion support, and a missing gate"
+  out=$(prepare_ship noremote 2>&1) || fail "prepare in a project without no-mistakes init should succeed: $out"
+  assert_equals "$STATE_DIR/noremote.validation-gate" "$out" "the pane still carries its gate"
+  assert_equals held "$(gate_verdict noremote)" "the task is still held"
+  assert_absent "$GATE_DIR/hooks/pre-receive.no-mistakes-user" "with no gate yet, nothing is installed"
+  git -C "$PROJ_DIR" remote add no-mistakes "$GATE_DIR"
+  commit_in "$WT_DIR" 'feat: final version'
+  head=$(git -C "$WT_DIR" rev-parse HEAD)
+  out=$(release_task noremote 2>&1) || fail "release after no-mistakes init should succeed: $out"
+  assert_present "$GATE_DIR/hooks/pre-receive.no-mistakes-user" "release should arm the deferred gate"
+  out=$(push_gate "$WT_DIR" noremote)
+  status=$?
+  expect_code 0 "$status" "the released head should be admitted: $out"
+  commit_in "$WT_DIR" 'feat: one more change'
+  out=$(push_gate "$WT_DIR" noremote)
+  status=$?
+  [ "$status" -ne 0 ] || fail "a head other than $head should be refused once the gate is armed: $out"
+  pass "a project without no-mistakes init still spawns held, and release arms the gate"
 }
 
 test_prepare_is_idempotent_and_relaunch_keeps_a_release() {
@@ -476,16 +495,28 @@ test_relaunch_keeps_the_spawn_decision() {
   pass "a relaunch follows the gate decision recorded at spawn, not the current switch"
 }
 
-test_spawn_refuses_when_the_gate_cannot_be_installed() {
+test_spawn_in_an_uninitialized_project_still_launches() {
   local out status
-  make_world spawn-refuse
+  make_world spawn-noinit
   git -C "$PROJ_DIR" remote remove no-mistakes
-  with_gate_on scaffold_ship_brief spawn-refuse
-  out=$(with_gate_on run_world_spawn spawn-refuse --mode no-mistakes --yolo off)
+  with_gate_on scaffold_ship_brief spawn-noinit
+  out=$(with_gate_on run_world_spawn spawn-noinit --mode no-mistakes --yolo off)
   status=$?
-  [ "$status" -ne 0 ] || fail "a gated spawn with no gate to install into should be refused: $out"
-  assert_contains "$out" "no-mistakes init" "the refusal should say what is missing"
-  pass "spawn stops rather than launching a gated ship it cannot gate"
+  expect_code 0 "$status" "a gated spawn in a project without no-mistakes init should launch: $out"
+  assert_equals held "$(cat "$STATE_DIR/spawn-noinit.validation-gate")" "the ship is still held"
+  assert_grep 'validation_gate=on' "$STATE_DIR/spawn-noinit.meta" "spawn records the gate decision"
+  assert_grep "spawn-noinit.validation-gate" "$(launch_log spawn-noinit)" "the pane carries its gate"
+  pass "spawn launches a gated ship in a project without no-mistakes init"
+}
+
+test_brief_refuses_an_invalid_switch() {
+  local home="$TMP_ROOT/brief-bad-home" out
+  mkdir -p "$home/data" "$home/config"
+  printf 'On\n' >"$home/config/validation-gate"
+  out=$(FM_HOME="$home" "$BRIEF" brief-bad some-proj --mode no-mistakes 2>&1) &&
+    fail "a brief under an invalid switch value should fail: $out"
+  assert_contains "$out" "neither on nor off" "the brief should surface the switch error"
+  pass "the brief refuses an invalid switch value instead of rendering ungated"
 }
 
 test_brief_renders_the_gated_definition_of_done() {
@@ -571,7 +602,7 @@ test_release_steers_the_worker_exactly_once() {
   pass "release lifts the gate and sends the start instruction once per released head"
 }
 
-test_away_ready_report_is_released_not_escalated() {
+test_away_ready_report_is_released_then_told_to_captain() {
   local out
   make_world away
   write_task_meta away
@@ -586,12 +617,11 @@ test_away_ready_report_is_released_not_escalated() {
   assert_absent "$STATE_DIR/branch-outcomes.jsonl" "a refused verdict must record no outcome"
   out=$(release_task away 2>&1) || fail "the supervision path's release should succeed: $out"
   assert_equals 1 "$(steer_count away)" "the release should steer the worker to start the run"
-  out=$(outcome away routine "released the final validation of PR 1") ||
-    fail "a routine outcome after release should be recorded: $out"
-  assert_grep '"verdict":"routine"' "$STATE_DIR/branch-outcomes.jsonl" "the release should be a routine outcome"
-  assert_no_grep '"verdict":"captain"' "$STATE_DIR/branch-outcomes.jsonl" \
-    "the ready report must not wait for the captain"
-  pass "an away ready-for-validation report is released by supervision, not filed for the captain"
+  out=$(outcome away captain "PR https://example.invalid/pr/1 is ready to merge to dev; final validation is running") ||
+    fail "a captain outcome after release should be recorded: $out"
+  assert_grep '"verdict":"captain"' "$STATE_DIR/branch-outcomes.jsonl" \
+    "the captain should hear the PR is ready in the release turn"
+  pass "an away ready-for-validation report is released first, then told to the captain"
 }
 
 test_failed_release_can_still_escalate() {
@@ -618,6 +648,7 @@ test_no_verify_and_hookspath_overrides_still_refused
 test_push_without_the_pane_variable_is_upstream_behaviour
 test_ref_deletion_is_allowed
 test_prepare_refuses_foreign_companion_and_missing_support
+test_uninitialized_project_defers_the_gate_until_release
 test_prepare_is_idempotent_and_relaunch_keeps_a_release
 test_prepare_scope
 test_switch_resolution
@@ -625,11 +656,12 @@ test_spawn_installs_the_gate
 test_spawn_with_switch_absent_installs_nothing
 test_spawn_follows_the_brief_decision
 test_relaunch_keeps_the_spawn_decision
-test_spawn_refuses_when_the_gate_cannot_be_installed
+test_spawn_in_an_uninitialized_project_still_launches
 test_brief_renders_the_gated_definition_of_done
+test_brief_refuses_an_invalid_switch
 test_promote_follows_the_scout_spawn_decision
 test_release_steers_the_worker_exactly_once
-test_away_ready_report_is_released_not_escalated
+test_away_ready_report_is_released_then_told_to_captain
 test_failed_release_can_still_escalate
 
 echo "# all fm-validation-gate tests passed"

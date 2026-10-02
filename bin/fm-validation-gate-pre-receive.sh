@@ -42,7 +42,7 @@ while read -r old new ref; do
     {
       printf 'firstmate validation gate: the full no-mistakes validation for task %s has not been released for %s (%s).\n' "$task" "$ref" "$new"
       printf 'While the PR iterates: commit, run the tests related to the change plus lint and type checks, push to origin, and report the PR ready.\n'
-      printf 'Firstmate releases this run when it tells the captain the PR is ready to merge: fm-validation-gate.sh release %s\n' "$task"
+      printf 'Firstmate releases this run when you report the PR ready for final validation: fm-validation-gate.sh release %s\n' "$task"
     } >&2
   fi
   status=1

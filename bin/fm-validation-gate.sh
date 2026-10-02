@@ -6,8 +6,10 @@
 # plus lint and type checks, and pushes to origin. The costly full validation -
 # the no-mistakes pipeline - starts only after firstmate has decided the work is
 # done. When the worker reports the PR ready for final validation, firstmate
-# runs `release` in that same turn, in both postures; release also tells the
-# worker to start the run, which proceeds without the captain's merge word.
+# runs `release` in that same turn, in both postures, and tells the captain the
+# PR is ready to merge to dev and that final validation is now running; release
+# also tells the worker to start the run, which proceeds without the captain's
+# merge word.
 #
 # MECHANISM. no-mistakes starts a run when its per-repo bare gate
 # (~/.no-mistakes/repos/<id>.git) receives a push, and `no-mistakes axi run`
@@ -48,7 +50,11 @@
 # the worktree that the worker contract already forbids; the gate stops the
 # default path, not a worker set on evading it. A run on a head already in the
 # gate (`axi run` reattach, `no-mistakes rerun`) asks the daemon directly, which
-# is safe because only an admitted head can be in the gate.
+# is safe because only an admitted head can be in the gate. A project with no
+# no-mistakes remote yet has no gate to arm: the task is still held and the
+# worker told to wait, and the next `prepare` or `release` arms the gate once the
+# worker's `no-mistakes init` creates it, so until then only the instruction
+# holds the run.
 #
 # Usage:
 #   fm-validation-gate.sh enabled [--config <dir>] [--task <task-id>]
@@ -64,13 +70,14 @@
 #       a held scope, install the companion into the worktree's no-mistakes gate
 #       and write `held` (--recorded 1 keeps an existing file); print the gate
 #       file path the pane exports, which the caller records as
-#       `validation_gate=on`. Prints nothing when off. Exits
-#       nonzero, and the caller stops, when the gate cannot be installed: no
-#       no-mistakes remote, a gate whose pre-receive runs no companion, or a
-#       companion that is not firstmate's.
+#       `validation_gate=on`. Prints nothing when off. A worktree with no
+#       no-mistakes remote yet defers the install. Exits nonzero, and the
+#       caller stops, when the gate cannot be installed: a gate whose
+#       pre-receive runs no companion, or a companion that is not firstmate's.
 #   fm-validation-gate.sh release <task-id>
 #       Firstmate runs this in the turn a gated ship reports
-#       `ready for final validation`, in both postures. Records
+#       `ready for final validation`, in both postures. Arms a deferred gate,
+#       then records
 #       `released <sha>` for the task worktree's HEAD - only that exact head
 #       may then start a run, so a later change needs a new release - then
 #       steers the worker through fm-send to start /no-mistakes, and records
@@ -148,17 +155,17 @@ write_atomic() {  # <file> <content>
   return 1
 }
 
-# Resolve the worktree's no-mistakes gate and install the companion there.
+# Resolve the worktree's no-mistakes gate and install the companion there; a
+# worktree with no no-mistakes remote yet has no gate, so the install waits.
 install_companion() {  # <worktree>
   local wt=$1 url gate pre companion tmp
-  url=$(git -C "$wt" remote get-url no-mistakes 2>/dev/null) ||
-    die "$wt has no no-mistakes remote; run no-mistakes init in the project first so the gate exists"
+  url=$(git -C "$wt" remote get-url no-mistakes 2>/dev/null) || return 0
   gate=${url#file://}
   case "$gate" in
   /*) ;;
   *) die "no-mistakes remote '$url' is not a local gate path" ;;
   esac
-  [ -d "$gate/hooks" ] || die "no-mistakes gate $gate has no hooks directory; run no-mistakes init in the project first"
+  [ -d "$gate/hooks" ] || die "no-mistakes gate $gate has no hooks directory"
   pre="$gate/hooks/pre-receive"
   grep -qF "$COMPANION_NAME" "$pre" 2>/dev/null ||
     die "no-mistakes gate $gate does not run a $COMPANION_NAME companion; update no-mistakes"
@@ -259,6 +266,7 @@ cmd_release() {
   [ -n "$wt" ] && [ -d "$wt" ] || release_failed "$file" "task $id has no readable worktree in $meta"
   full=$(git -C "$wt" rev-parse --verify --quiet 'HEAD^{commit}') ||
     release_failed "$file" "$wt has no HEAD commit"
+  (install_companion "$wt") || release_failed "$file" "could not arm the no-mistakes gate for $id"
   { read -r verdict; read -r steered; } <"$file" || true
   if [ "$verdict" = "released $full" ] && [ "$steered" = "steered $full" ]; then
     echo "$id is already released at $full and the worker was told to start"
@@ -289,7 +297,7 @@ cmd_outcome_check() {
   *) return 0 ;;
   esac
   echo "error: $id reported ready for final validation; that is firstmate's to release, not a captain outcome." >&2
-  echo "Run bin/fm-validation-gate.sh release $id (it starts the worker's run), then report verdict routine." >&2
+  echo "Run bin/fm-validation-gate.sh release $id (it starts the worker's run), then report verdict captain: the PR is ready to merge to dev and final validation is running." >&2
   return 1
 }
 
@@ -301,8 +309,9 @@ cmd_supervision_rule() {
 
 A ship's `done [at=<epoch>]: PR <url> ready for final validation` report is firstmate's action, never a captain outcome, in both postures and whatever the verdict rules above say about work ready for review.
 Handle it in the same turn: claim the task's lease and run `bin/fm-validation-gate.sh release <task>`, which lifts the gate on the worker's current head and sends the worker the instruction to start /no-mistakes.
-Report that release with verdict routine and the PR's URL; the worker's later `done: PR <url> checks green` is the work ready for review.
-The report surface refuses a captain verdict for a ready report the gate still holds; if release itself fails, report verdict captain with its exact error.
+Then report verdict captain with the PR's URL: the PR is ready to merge to dev, and its final validation is now running without waiting for the captain's merge word.
+The worker's later `done: PR <url> checks green` is a follow-up that clears the merge.
+The report surface refuses a captain verdict for a ready report the gate still holds, so release first; if release itself fails, report verdict captain with its exact error.
 EOF
 }
 
