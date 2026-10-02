@@ -100,11 +100,15 @@ write_task_meta() {  # <id> [kind]
     "mode=no-mistakes" "branch=fm/$1" "validation_gate=on"
 }
 
+# A ship brief carrying the gated Definition of done, as fm-brief.sh renders it.
+GATED_BRIEF="$TMP_ROOT/gated-brief.md"
+"$GATE" dod fm/gated >"$GATED_BRIEF"
+
 prepare_ship() {  # <id> [extra prepare args...]
   local id=$1
   shift
-  with_gate_on "$GATE" prepare --config "$HOME_DIR/config" --state "$STATE_DIR" \
-    --kind ship --mode no-mistakes --forge none --worktree "$WT_DIR" --id "$id" "$@"
+  "$GATE" prepare --config "$HOME_DIR/config" --state "$STATE_DIR" --kind ship \
+    --mode no-mistakes --forge none --worktree "$WT_DIR" --id "$id" --brief "$GATED_BRIEF" "$@"
 }
 
 release_task() {  # <id>
@@ -251,7 +255,7 @@ test_prepare_is_idempotent_and_relaunch_keeps_a_release() {
   commit_in "$WT_DIR" 'feat: final'
   head=$(git -C "$WT_DIR" rev-parse HEAD)
   release_task relaunch >/dev/null || fail "release should succeed"
-  prepare_ship relaunch --relaunch 1 >/dev/null || fail "a relaunch prepare should succeed"
+  prepare_ship relaunch --recorded 1 >/dev/null || fail "a relaunch prepare should succeed"
   assert_equals "released $head" "$(cat "$STATE_DIR/relaunch.validation-gate")" \
     "a relaunch must keep an existing release"
   prepare_ship relaunch >/dev/null || fail "a fresh prepare should succeed"
@@ -272,7 +276,7 @@ test_prepare_scope() {
   for args in "--kind ship --mode direct-PR --forge none" "--kind ship --mode no-mistakes --forge gerrit"; do
     # shellcheck disable=SC2086  # deliberate word splitting of the flag set
     out=$(with_gate_on "$GATE" prepare --config "$HOME_DIR/config" --state "$STATE_DIR" \
-      $args --worktree "$WT_DIR" --id scope-other) || fail "prepare ($args) should succeed"
+      $args --worktree "$WT_DIR" --id scope-other --brief "$GATED_BRIEF") || fail "prepare ($args) should succeed"
     assert_absent "$STATE_DIR/scope-other.validation-gate" "($args) must not be held"
   done
   out=$(with_gate_on "$GATE" prepare --config "$HOME_DIR/config" --state "$STATE_DIR" \
@@ -280,11 +284,16 @@ test_prepare_scope() {
     || fail "a secondmate prepare should succeed"
   assert_equals "" "$out" "a secondmate pane carries no gate"
   printf 'off\n' >"$HOME_DIR/config/validation-gate"
-  out=$(prepare_ship scope-off) || fail "prepare with the home switched off should succeed"
-  assert_equals "" "$out" "a home that switches the gate off carries no gate"
-  assert_absent "$STATE_DIR/scope-off.validation-gate" "a home switched off holds nothing"
-  assert_absent "$GATE_DIR/hooks/pre-receive.no-mistakes-user" "a home switched off installs nothing"
-  pass "only no-mistakes ships without a forge binding are held; the home switch wins"
+  out=$(with_gate_on "$GATE" prepare --config "$HOME_DIR/config" --state "$STATE_DIR" \
+    --kind scout --mode '' --forge none --worktree "$WT_DIR" --id scope-off) \
+    || fail "a scout prepare with the home switched off should succeed"
+  assert_equals "" "$out" "a scout in a home that switches the gate off carries no gate"
+  out=$(prepare_ship scope-plain --brief "$HOME_DIR/config/validation-gate") \
+    || fail "a ship prepare on an ungated brief should succeed"
+  assert_equals "" "$out" "a ship whose brief is ungated carries no gate"
+  assert_absent "$STATE_DIR/scope-plain.validation-gate" "a ship whose brief is ungated holds nothing"
+  assert_absent "$GATE_DIR/hooks/pre-receive.no-mistakes-user" "an ungated decision installs nothing"
+  pass "only no-mistakes ships without a forge binding are held; a scout follows the home switch and a ship its brief"
 }
 
 test_switch_resolution() {
@@ -308,11 +317,36 @@ test_switch_resolution() {
 # derived from the id rather than returned.
 launch_log() { printf '%s' "$TMP_ROOT/$1-launch.log"; }
 
+# scaffold_ship_brief <id>: the real no-mistakes ship brief from fm-brief.sh,
+# which decides the gated or ungated Definition of done from the switch.
+scaffold_ship_brief() {
+  local id=$1 brief
+  FM_HOME="$HOME_DIR" "$BRIEF" "$id" "${PROJ_DIR##*/}" --mode no-mistakes >/dev/null 2>&1 \
+    || fail "the $id brief should scaffold"
+  brief="$HOME_DIR/data/$id/brief.md"
+  sed -e "s/{TASK}/Ship $id./" -e "s/{FIRSTMATE_SPEC}/Exercise the gate./" "$brief" >"$brief.tmp" &&
+    mv "$brief.tmp" "$brief"
+}
+
+write_scout_brief() {  # <id>
+  mkdir -p "$HOME_DIR/data/$1"
+  cat >"$HOME_DIR/data/$1/brief.md" <<'EOF'
+# Task
+## Captain's intent
+Investigate the gate.
+
+## Firstmate spec
+Scout it.
+
+# Setup
+This is a SCOUT task: the deliverable is a written report, not a PR.
+EOF
+}
+
 run_world_spawn() {  # <id> [args...]
   local id=$1 fakebin LAUNCH_LOG
   shift
   fakebin=$(fm_test_make_spawn_fakebin "$TMP_ROOT/$id-fake")
-  fm_test_spawn_brief "$HOME_DIR" "$id"
   LAUNCH_LOG=$(launch_log "$id")
   : >"$LAUNCH_LOG"
   FM_FAKE_LAUNCH_LOG="$LAUNCH_LOG" FM_FAKE_PANE_LOG="$TMP_ROOT/$id-pane.log" \
@@ -322,6 +356,7 @@ run_world_spawn() {  # <id> [args...]
 test_spawn_installs_the_gate() {
   local out status
   make_world spawn-on
+  with_gate_on scaffold_ship_brief spawn-on
   out=$(with_gate_on run_world_spawn spawn-on --mode no-mistakes --yolo off)
   status=$?
   expect_code 0 "$status" "a gated no-mistakes ship spawn should succeed: $out"
@@ -337,6 +372,7 @@ test_spawn_installs_the_gate() {
 test_spawn_with_switch_absent_installs_nothing() {
   local out status
   make_world spawn-off
+  with_gate_off scaffold_ship_brief spawn-off
   out=$(with_gate_off run_world_spawn spawn-off --mode no-mistakes --yolo off)
   status=$?
   expect_code 0 "$status" "an ungated no-mistakes ship spawn should succeed: $out"
@@ -346,6 +382,30 @@ test_spawn_with_switch_absent_installs_nothing() {
   assert_no_grep "FM_VALIDATION_GATE" "$LAUNCH_LOG" "switch absent must leave the launch unchanged"
   assert_no_grep 'validation_gate=' "$STATE_DIR/spawn-off.meta" "switch absent must record no gate decision"
   pass "with the switch file absent, spawn behaves as upstream"
+}
+
+test_spawn_follows_the_brief_decision() {
+  local out status
+  make_world brief-gated-switch-off
+  with_gate_on scaffold_ship_brief brief-gated-switch-off
+  out=$(with_gate_off run_world_spawn brief-gated-switch-off --mode no-mistakes --yolo off)
+  status=$?
+  expect_code 0 "$status" "a spawn of a gated brief after the switch turns off should succeed: $out"
+  assert_equals held "$(cat "$STATE_DIR/brief-gated-switch-off.validation-gate")" \
+    "a brief rendered gated must spawn held"
+  assert_grep 'brief-gated-switch-off.validation-gate' "$(launch_log brief-gated-switch-off)" \
+    "a brief rendered gated must export its gate"
+
+  make_world brief-plain-switch-on
+  with_gate_off scaffold_ship_brief brief-plain-switch-on
+  out=$(with_gate_on run_world_spawn brief-plain-switch-on --mode no-mistakes --yolo off)
+  status=$?
+  expect_code 0 "$status" "a spawn of an ungated brief after the switch turns on should succeed: $out"
+  assert_absent "$STATE_DIR/brief-plain-switch-on.validation-gate" "a brief rendered ungated must not spawn held"
+  assert_absent "$GATE_DIR/hooks/pre-receive.no-mistakes-user" "a brief rendered ungated installs nothing"
+  assert_no_grep "FM_VALIDATION_GATE" "$(launch_log brief-plain-switch-on)" "a brief rendered ungated exports no gate"
+  assert_no_grep 'validation_gate=' "$STATE_DIR/brief-plain-switch-on.meta" "a brief rendered ungated records no gate"
+  pass "a ship spawn follows the gate decision its brief carries, not the switch at spawn"
 }
 
 # run_world_relaunch <id>: drive the real fm-spawn --relaunch against the fake
@@ -369,6 +429,7 @@ SH
 test_relaunch_keeps_the_spawn_decision() {
   local out status
   make_world relaunch-plain
+  with_gate_off scaffold_ship_brief relaunch-plain
   out=$(with_gate_off run_world_spawn relaunch-plain --mode no-mistakes --yolo off)
   status=$?
   expect_code 0 "$status" "an ungated spawn should succeed: $out"
@@ -383,6 +444,7 @@ test_relaunch_keeps_the_spawn_decision() {
   assert_no_grep 'validation_gate=' "$STATE_DIR/relaunch-plain.meta" "the relaunch must not record a gate decision"
 
   make_world relaunch-gated
+  with_gate_on scaffold_ship_brief relaunch-gated
   out=$(with_gate_on run_world_spawn relaunch-gated --mode no-mistakes --yolo off)
   status=$?
   expect_code 0 "$status" "a gated spawn should succeed: $out"
@@ -401,6 +463,7 @@ test_spawn_refuses_when_the_gate_cannot_be_installed() {
   local out status
   make_world spawn-refuse
   git -C "$PROJ_DIR" remote remove no-mistakes
+  with_gate_on scaffold_ship_brief spawn-refuse
   out=$(with_gate_on run_world_spawn spawn-refuse --mode no-mistakes --yolo off)
   status=$?
   [ "$status" -ne 0 ] || fail "a gated spawn with no gate to install into should be refused: $out"
@@ -429,33 +492,46 @@ test_brief_renders_the_gated_definition_of_done() {
   pass "the brief renders the gated Definition of done only when the switch is on"
 }
 
-test_promote_holds_a_promoted_ship() {
-  local id=promote-gated out status
-  make_world promote
-  fm_write_meta "$STATE_DIR/$id.meta" "window=fm-$id" "kind=scout" "worktree=$WT_DIR"
-  mkdir -p "$HOME_DIR/data/$id"
-  cat >"$HOME_DIR/data/$id/brief.md" <<'EOF'
-# Task
-## Captain's intent
-Investigate the gate.
-
-## Firstmate spec
-Scout it.
-
-# Setup
-This is a SCOUT task: the deliverable is a written report, not a PR.
-EOF
-  out=$(with_gate_on env FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$HOME_DIR/state" \
+promote_world() {  # <id>
+  with_gate_on env FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$HOME_DIR/state" \
     FM_DATA_OVERRIDE="$HOME_DIR/data" FM_CONFIG_OVERRIDE="$HOME_DIR/config" \
-    "$ROOT/bin/fm-promote.sh" "$id" --mode no-mistakes --yolo off 2>&1)
+    "$ROOT/bin/fm-promote.sh" "$1" --mode no-mistakes --yolo off 2>&1
+}
+
+test_promote_follows_the_scout_spawn_decision() {
+  local id out status
+  id=promote-gated
+  make_world "$id"
+  write_scout_brief "$id"
+  out=$(with_gate_on run_world_spawn "$id" --scout)
   status=$?
-  expect_code 0 "$status" "promotion to a gated no-mistakes ship should succeed: $out"
-  assert_equals held "$(cat "$STATE_DIR/$id.validation-gate")" "promotion should hold the new ship"
-  assert_grep 'validation_gate=on' "$STATE_DIR/$id.meta" "promotion should record the gate decision"
+  expect_code 0 "$status" "a gated scout spawn should succeed: $out"
+  out=$(promote_world "$id")
+  status=$?
+  expect_code 0 "$status" "promotion of a gated scout should succeed: $out"
+  assert_equals held "$(cat "$STATE_DIR/$id.validation-gate")" "promotion should hold a gated scout's ship"
   assert_present "$GATE_DIR/hooks/pre-receive.no-mistakes-user" "promotion should install the companion"
+  assert_grep 'validation_gate=on' "$STATE_DIR/$id.meta" "promotion should keep the gate decision"
   assert_grep 'ready for final validation' "$HOME_DIR/data/$id/ship-instructions.md" \
-    "the promoted worker should receive the gated Definition of done"
-  pass "promoting a scout to a no-mistakes ship holds it and hands it the gated contract"
+    "the promoted gated worker should receive the gated Definition of done"
+
+  id=promote-plain
+  make_world "$id"
+  write_scout_brief "$id"
+  out=$(with_gate_off run_world_spawn "$id" --scout)
+  status=$?
+  expect_code 0 "$status" "an ungated scout spawn should succeed: $out"
+  out=$(promote_world "$id")
+  status=$?
+  expect_code 0 "$status" "promotion of an ungated scout after the switch turns on should succeed: $out"
+  assert_absent "$STATE_DIR/$id.validation-gate" "an ungated scout must promote to an unheld ship"
+  assert_absent "$GATE_DIR/hooks/pre-receive.no-mistakes-user" "an ungated scout's promotion installs nothing"
+  assert_no_grep 'validation_gate=' "$STATE_DIR/$id.meta" "an ungated scout's promotion records no gate"
+  assert_grep 'it is not a request to push from this copy' "$HOME_DIR/data/$id/ship-instructions.md" \
+    "the promoted ungated worker should receive the ungated Definition of done"
+  assert_no_grep 'ready for final validation' "$HOME_DIR/data/$id/ship-instructions.md" \
+    "the promoted ungated worker must not receive the gated Definition of done"
+  pass "promotion follows the gate decision recorded at the scout spawn, not the current switch"
 }
 
 test_pre_release_push_is_refused
@@ -471,9 +547,10 @@ test_prepare_scope
 test_switch_resolution
 test_spawn_installs_the_gate
 test_spawn_with_switch_absent_installs_nothing
+test_spawn_follows_the_brief_decision
 test_relaunch_keeps_the_spawn_decision
 test_spawn_refuses_when_the_gate_cannot_be_installed
 test_brief_renders_the_gated_definition_of_done
-test_promote_holds_a_promoted_ship
+test_promote_follows_the_scout_spawn_decision
 
 echo "# all fm-validation-gate tests passed"

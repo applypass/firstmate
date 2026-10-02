@@ -422,7 +422,7 @@ EOF
     no-mistakes:*)
       # Validation release gate; bin/fm-validation-gate.sh owns the contract.
       local gate_dir=${BASH_SOURCE[0]%/*}; [ "$gate_dir" != "${BASH_SOURCE[0]}" ] || gate_dir=.
-      if [ "$forge" = none ] && "$gate_dir/fm-validation-gate.sh" enabled 2>/dev/null; then
+      if [ "$forge" = none ] && "$gate_dir/fm-validation-gate.sh" enabled --task "$id" 2>/dev/null; then
         "$gate_dir/fm-validation-gate.sh" dod "$branch" || return 1
       else
       cat <<EOF

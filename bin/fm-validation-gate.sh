@@ -23,17 +23,22 @@
 # with update-ref, so a released run is never gated against itself.
 #
 # SCOPE. Only a ship task in mode no-mistakes with no forge binding is held; a
-# Gerrit-bound no-mistakes run skips push, pr, and ci and is left alone. Ship and
-# scout panes both carry the variable, so a scout promoted to such a ship is held
+# Gerrit-bound no-mistakes run skips push, pr, and ci and is left alone. A gated
+# scout pane carries the variable too, so a scout promoted to such a ship is held
 # by `prepare` at promotion. A secondmate pane carries none.
 #
 # SWITCH. config/validation-gate (`on` or `off`) wins; otherwise the tracked
 # defaults/validation-gate beside bin/ decides; neither present means off, which
-# is upstream behaviour. The switch is read once, when a task is spawned or
-# promoted, and the caller records the decision as `validation_gate=on` in
-# state/<id>.meta; a relaunch reads that record and never the switch, so a task
-# keeps the contract its brief carries. Turning the switch off therefore does not
-# release tasks already held - release those.
+# is upstream behaviour. The switch is read once per task, and every later step
+# follows that one decision, so the Definition of done a worker holds always
+# matches its gate:
+#   - A ship brief records it: bin/fm-brief.sh renders the gated Definition of
+#     done, whose `Validation gate: on` line fm-spawn's `prepare` then obeys.
+#   - A scout spawn reads the switch itself.
+#   - fm-spawn records the result as `validation_gate=on` in state/<id>.meta, and
+#     a relaunch and a promotion read that record, never the switch.
+# Turning the switch off therefore does not release tasks already held - release
+# those.
 # Under FM_TEST_SEAM=1, FM_TEST_VALIDATION_GATE_DEFAULTS names the defaults file
 # instead, so the suite runs on the upstream default.
 #
@@ -45,15 +50,19 @@
 # is safe because only an admitted head can be in the gate.
 #
 # Usage:
-#   fm-validation-gate.sh enabled [--config <dir>]
-#       Exit 0 when the switch resolves on, 1 when off.
+#   fm-validation-gate.sh enabled [--config <dir>] [--task <task-id>]
+#       Exit 0 when the gate is on, 1 when off. With --task and an existing
+#       task record, the record decides; otherwise the switch does.
 #   fm-validation-gate.sh prepare --config <dir> --state <dir> --kind <kind>
-#       --mode <mode> --forge <forge> --worktree <path> --id <task-id> [--relaunch 0|1]
-#       Called by fm-spawn and fm-promote. With the switch on (on a relaunch,
-#       with `validation_gate=on` in the task record): for a held scope,
-#       install the companion into the worktree's no-mistakes gate and write
-#       `held` (a relaunch keeps an existing file); for a ship or scout, print
-#       the gate file path the pane exports, which the caller records as
+#       --mode <mode> --forge <forge> --worktree <path> --id <task-id>
+#       [--brief <file>] [--recorded 0|1]
+#       Called by fm-spawn and fm-promote. The gate is on when, with
+#       --recorded 1 (relaunch, promotion), the task record has
+#       `validation_gate=on`; otherwise, for a ship, when the --brief carries
+#       `Validation gate: on`; for a scout, when the switch is on. When on: for
+#       a held scope, install the companion into the worktree's no-mistakes gate
+#       and write `held` (--recorded 1 keeps an existing file); print the gate
+#       file path the pane exports, which the caller records as
 #       `validation_gate=on`. Prints nothing when off. Exits
 #       nonzero, and the caller stops, when the gate cannot be installed: no
 #       no-mistakes remote, a gate whose pre-receive runs no companion, or a
@@ -156,19 +165,25 @@ install_companion() {  # <worktree>
 }
 
 cmd_enabled() {
-  local config
+  local config id='' meta
   config=$(config_dir)
   while [ "$#" -gt 0 ]; do
     case "$1" in
     --config) config=${2:-}; shift 2 || usage ;;
+    --task) id=${2:-}; shift 2 || usage ;;
     *) usage ;;
     esac
   done
+  meta="$(state_dir)/$id.meta"
+  if [ -n "$id" ] && [ -e "$meta" ]; then
+    grep -qx 'validation_gate=on' "$meta"
+    return
+  fi
   gate_enabled "$config"
 }
 
 cmd_prepare() {
-  local config='' state='' kind='' mode='' forge=none wt='' id='' relaunch=0 file status
+  local config='' state='' kind='' mode='' forge=none wt='' id='' brief='' recorded=0 file status
   while [ "$#" -gt 0 ]; do
     case "$1" in
     --config) config=${2-}; shift 2 || usage ;;
@@ -178,7 +193,8 @@ cmd_prepare() {
     --forge) forge=${2:-none}; shift 2 || usage ;;
     --worktree) wt=${2-}; shift 2 || usage ;;
     --id) id=${2-}; shift 2 || usage ;;
-    --relaunch) relaunch=${2-}; shift 2 || usage ;;
+    --brief) brief=${2-}; shift 2 || usage ;;
+    --recorded) recorded=${2-}; shift 2 || usage ;;
     *) usage ;;
     esac
   done
@@ -188,8 +204,11 @@ cmd_prepare() {
   *) return 0 ;;
   esac
   state=$(cd "$state" && pwd -P) || die "state directory $state is not accessible"
-  if [ "$relaunch" = 1 ]; then
+  if [ "$recorded" = 1 ]; then
     grep -qx 'validation_gate=on' "$state/$id.meta" 2>/dev/null || return 0
+  elif [ "$kind" = ship ]; then
+    [ -n "$brief" ] || usage
+    grep -qx 'Validation gate: on' "$brief" 2>/dev/null || return 0
   else
     gate_enabled "$config"
     status=$?
@@ -199,7 +218,7 @@ cmd_prepare() {
   if [ "$kind" = ship ] && [ "$mode" = no-mistakes ] && [ "$forge" = none ]; then
     [ -n "$wt" ] || usage
     install_companion "$wt"
-    if [ "$relaunch" = 0 ] || [ ! -e "$file" ]; then
+    if [ "$recorded" = 0 ] || [ ! -e "$file" ]; then
       write_atomic "$file" held || die "could not write $file"
     fi
   fi
@@ -227,6 +246,7 @@ cmd_dod() {
   cat <<EOF
 # Definition of done
 Delivery contract: mode=no-mistakes
+Validation gate: on
 Ship branch: $branch
 The full no-mistakes validation runs once, on the final version, after firstmate releases it; until then a gate on the pipeline refuses to start it.
 While the PR iterates, commit on your branch and run the tests related to the change - the unit and integration tests for the changed code and the code it affects - plus lint and type checks, not the whole repository suite.
