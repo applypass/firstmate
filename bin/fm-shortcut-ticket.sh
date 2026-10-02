@@ -237,7 +237,7 @@ require_own_story() {  # GETs $SC and refuses unless its markers name only this 
   [ "$owners" = "$ID" ] && return 0
   [ -n "$owners" ] &&
     die "$SC named by $ID belongs to another item ($(printf '%s' "$owners" | tr '\n' ' ')); remove the Shortcut line and create its own with: bin/fm-shortcut-ticket.sh $ID"
-  die "$SC named by $ID carries no '$MARKER' marker (an umbrella or unowned story); remove the Shortcut line and create its own with: bin/fm-shortcut-ticket.sh $ID"
+  die "$SC named by $ID carries no '$MARKER' marker. If $SC was created for this item (before ownership markers), mark it: bin/fm-shortcut-ticket.sh link $ID $SC. If it is a shared or umbrella story, remove the Shortcut line and create the item's own story: bin/fm-shortcut-ticket.sh $ID"
 }
 
 record_body_line() {  # <num> <url>
