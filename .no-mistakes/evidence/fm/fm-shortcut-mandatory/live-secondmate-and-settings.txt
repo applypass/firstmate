@@ -1,0 +1,40 @@
+## S8: second mate done/ready report gate (gap 4)
+$ bin/fm-secondmate-report.sh done abcdef0123456789 investigation finished
+error: a done report needs --item <id> naming the investigation's backlog item, whose own Shortcut story must pass bin/fm-shortcut-ticket.sh --check <id>
+[exit 1]
+$ bin/fm-secondmate-report.sh --item lf-2 done abcdef0123456789 umbrella-only item
+fm-shortcut-ticket: sc-6104 named by lf-2 carries no 'firstmate-item: fm-lab.cNkoWU/lf-2' marker. If sc-6104 was created for this item (before ownership markers), mark it: bin/fm-shortcut-ticket.sh link lf-2 sc-6104. If it is a shared or umbrella story, remove the Shortcut line and create the item's own story: bin/fm-shortcut-ticket.sh lf-2
+error: refusing to publish done for lf-2: it has no verified Shortcut story of its own (reason above)
+[exit 1]
+$ bin/fm-secondmate-report.sh --item lf-4 ready abcdef0123456789 title-only item
+fm-shortcut-ticket: backlog item lf-4 has no Shortcut story of its own (a title sc-NNNN is only a parent reference); create one with: bin/fm-shortcut-ticket.sh lf-4
+error: refusing to publish ready for lf-4: it has no verified Shortcut story of its own (reason above)
+[exit 1]
+-- parent channel after refusals:
+(empty)
+$ bin/fm-secondmate-report.sh working abcdef0123456789 still digging (non-result line, no item needed)
+
+[exit 0]
+$ bin/fm-secondmate-report.sh --item cleanup-1 --doc done abcdef0123456789 data/cleanup-1/report.md see report
+
+[exit 0]
+-- parent channel now:
+working [corr=abcdef0123456789] [at=1790961534]: still digging (non-result line, no item needed) (via-helper)
+done [corr=abcdef0123456789] [at=1790961535]: see report (data/cleanup-1/report.md via-helper)
+
+## S9: home without owner_id / token_ref refuses with the config line to add (gaps 2, 3)
+$ bin/fm-shortcut-ticket.sh --check cleanup-1
+fm-shortcut-ticket: no owner_id is configured for this home; add this line to $LAB/config/shortcut-tickets: owner_id=<Shortcut member UUID>
+[exit 1]
+$ bin/fm-shortcut-ticket.sh --check cleanup-1
+fm-shortcut-ticket: SHORTCUT_API_TOKEN is not set and no token_ref is configured; add this line to $LAB/config/shortcut-tickets: token_ref=op://<vault>/<item>/<field>
+[exit 1]
+$ bin/fm-tasks-axi.sh add nt-1 No token item --kind ship
+  - Run `tasks-axi start nt-1` to move it to in flight
+  - Run `tasks-axi block nt-1 --by <other>` to record a dependency
+fm-shortcut-ticket: SHORTCUT_API_TOKEN is not set and no token_ref is configured; add this line to $LAB/config/shortcut-tickets: token_ref=op://<vault>/<item>/<field>
+fm-tasks-axi: warning: no Shortcut ticket for nt-1; retry with bin/fm-shortcut-ticket.sh nt-1
+[exit 0]
+$ bin/fm-shortcut-ticket.sh state cleanup-1 progress --best-effort
+fm-shortcut-ticket: warning: SHORTCUT_API_TOKEN is not set and no token_ref is configured; add this line to $LAB/config/shortcut-tickets: token_ref=op://<vault>/<item>/<field>
+[exit 0]

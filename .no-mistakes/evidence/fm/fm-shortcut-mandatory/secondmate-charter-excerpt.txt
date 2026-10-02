@@ -1,0 +1,4 @@
+34:Helper: `bin/fm-secondmate-report.sh <verb> <corr_id> <note>` appends that correlated line to the parent channel itself - do not pass a status path, and do not write a hand path under this home.
+35:A `done` or `ready` result line for an investigation or work MUST go through that helper with `--item <item>`, because it runs the item's Shortcut story check and refuses to publish while it fails; never `echo` such a line.
+36:Any other line may be a plain `echo` that includes the same `corr=<id>` on this parent channel.
+39:Before you start any investigation or work you run yourself rather than hand to a worker, give it its own Shortcut story: add a backlog item with `bin/fm-tasks-axi.sh add` in this home (it creates the story), or run `bin/fm-shortcut-ticket.sh <item>`, and confirm `bin/fm-shortcut-ticket.sh --check <item>` passes; publish its `done` or `ready` result with `bin/fm-secondmate-report.sh --item <item> ...`, which refuses while that check fails.

@@ -1,0 +1,25 @@
+ok - the shipped defaults enable the feature and an absent file means off
+ok - add creates a Shortcut story and records its id and URL on the item
+ok - an existing story becomes an item's own only through link, which marks it and records the body line
+ok - a body line naming an umbrella or another item's story fails the check, and link refuses it and the title umbrella
+ok - a title sc id is a parent: the item gets its own linked story and state moves never touch the parent
+ok - --check passes only on a body-line story that exists and is marked as the item's own
+ok - --check and create refuse with the config line to add when owner_id or token_ref is missing
+ok - a hung op read is bounded by op_timeout: --check refuses and best-effort hooks only warn
+ok - a second mate's done or ready report publishes only for an item whose own story --check verifies
+ok - a missing token refuses the check; op read supplies it on stdin when configured
+ok - a body reference such as 'Follow-up to sc-6092' is never the linked story
+ok - an unreadable named story warns and keeps the add
+ok - secondmate and captain-decision items get no story and pass the check
+ok - an API failure or missing token warns, keeps the add, and the check refuses
+ok - retrying records the id and the check then passes
+ok - feature off (config override or absent defaults) makes no calls and no refusal
+ok - a handoff carries each item's sc id, ticketing an unticketed item first
+ok - state moves the story to In Progress or In Review, refuses done, and leaves a Done story alone
+ok - review moves to In Review, links the PR, and uploads the report
+ok - comment, attach, and outcome post to the story
+ok - done requires evidence and moves the story to Done
+ok - park moves the story back to Backlog with the reason
+ok - a parked hold or a cancelled item sends its story back to Backlog, and a refused rm does not
+ok - best-effort stays quiet without a ticket and never fails the caller
+ok - a captain answer, direct or keyed, comments the recorded decision on the story

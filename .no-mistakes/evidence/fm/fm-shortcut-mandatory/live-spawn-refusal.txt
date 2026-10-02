@@ -1,0 +1,40 @@
+## S6: real fm-spawn.sh scout refuses an item whose body line names the umbrella (lf-2) or another item's story (lf-3)
+$ bin/fm-spawn.sh lf-2 /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.cNkoWU/projects/demo --scout
+fm-gate-refuse: gate agent lifecycle permitted only against lab home $LAB
+fm-shortcut-ticket: sc-6104 named by lf-2 carries no 'firstmate-item: fm-lab.cNkoWU/lf-2' marker. If sc-6104 was created for this item (before ownership markers), mark it: bin/fm-shortcut-ticket.sh link lf-2 sc-6104. If it is a shared or umbrella story, remove the Shortcut line and create the item's own story: bin/fm-shortcut-ticket.sh lf-2
+error: spawn refused - task lf-2 has no verified Shortcut story of its own (see the reason above)
+[exit ]
+$ bin/fm-spawn.sh lf-3 /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.cNkoWU/projects/demo --scout
+fm-gate-refuse: gate agent lifecycle permitted only against lab home $LAB
+fm-shortcut-ticket: sc-9001 named by lf-3 belongs to another item (cleanup-1); remove the Shortcut line and create its own with: bin/fm-shortcut-ticket.sh lf-3
+error: spawn refused - task lf-3 has no verified Shortcut story of its own (see the reason above)
+[exit ]
+-- lab state after refusal (no worktree/pane/record):
+
+## S6 exit codes re-run
+$ bin/fm-spawn.sh lf-2 /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.cNkoWU/projects/demo --scout
+fm-gate-refuse: gate agent lifecycle permitted only against lab home $LAB
+fm-shortcut-ticket: sc-6104 named by lf-2 carries no 'firstmate-item: fm-lab.cNkoWU/lf-2' marker. If sc-6104 was created for this item (before ownership markers), mark it: bin/fm-shortcut-ticket.sh link lf-2 sc-6104. If it is a shared or umbrella story, remove the Shortcut line and create the item's own story: bin/fm-shortcut-ticket.sh lf-2
+error: spawn refused - task lf-2 has no verified Shortcut story of its own (see the reason above)
+[exit 1]
+
+## S7 (gap 1 repro): item whose only sc id is the umbrella in its title (added while sync was off) -> spawn refused
+$ bin/fm-tasks-axi.sh add lf-4 sc-6104 launch fix four --kind scout
+  created: 2026-10-02
+  closed: "-"
+  deps: none
+  links: none
+  body: ""
+help[2]:
+  - Run `tasks-axi start lf-4` to move it to in flight
+  - Run `tasks-axi block lf-4 --by <other>` to record a dependency
+[exit 0]
+$ bin/fm-brief.sh lf-4 demo --scout
+scaffolded: $LAB/data/lf-4/brief.md (scout; replace {TASK} and {FIRSTMATE_SPEC})
+[exit 0]
+$ bin/fm-spawn.sh lf-4 /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.cNkoWU/projects/demo --scout
+fm-gate-refuse: gate agent lifecycle permitted only against lab home $LAB
+fm-shortcut-ticket: backlog item lf-4 has no Shortcut story of its own (a title sc-NNNN is only a parent reference); create one with: bin/fm-shortcut-ticket.sh lf-4
+error: spawn refused - task lf-4 has no verified Shortcut story of its own (see the reason above)
+[exit 1]
+-- state dir contents:
