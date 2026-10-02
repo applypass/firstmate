@@ -1321,7 +1321,7 @@ test_dispatch_moves_the_story_to_in_progress() {
   pass "dispatch moves the Shortcut story to In Progress"
 }
 
-test_teardown_comments_the_outcome_and_leaves_the_story_in_review() {
+test_landed_teardown_moves_the_story_to_review_and_comments_the_outcome() {
   local case_dir id out
   id=atomic-shortcut-b5
   case_dir=$(make_home teardown-shortcut "$id")
@@ -1332,9 +1332,10 @@ test_teardown_comments_the_outcome_and_leaves_the_story_in_review() {
   : > "$case_dir/curl.log"
   out=$(shortcut_env "$case_dir" run_teardown "$case_dir" "$id") || fail "teardown failed: $out"
   assert_grep 'Final outcome: done [at=1]: landed the widget' "$case_dir/curl.log" "teardown did not post the outcome"
+  assert_grep '"workflow_state_id":500000009' "$case_dir/curl.log" "a landed ship without a PR did not reach In Review"
   assert_no_grep '"workflow_state_id":500000010' "$case_dir/curl.log" "teardown moved the story to Done"
   assert_no_grep '"workflow_state_id":500000006' "$case_dir/curl.log" "a landed teardown parked the story"
-  pass "teardown comments the outcome and never moves the story to Done"
+  pass "a landed ship teardown moves the story to In Review, comments the outcome, and never moves it to Done"
 }
 
 test_forced_teardown_parks_the_story() {
@@ -3119,7 +3120,7 @@ test_dispatch_refuses_an_id_this_home_has_no_item_for
 test_dispatch_requires_a_shortcut_ticket_when_the_feature_is_on
 test_dispatch_ignores_shortcut_tickets_when_the_feature_is_off
 test_dispatch_moves_the_story_to_in_progress
-test_teardown_comments_the_outcome_and_leaves_the_story_in_review
+test_landed_teardown_moves_the_story_to_review_and_comments_the_outcome
 test_forced_teardown_parks_the_story
 test_scout_teardown_moves_the_story_to_review_with_its_report
 test_dispatch_reports_a_backlog_read_failure

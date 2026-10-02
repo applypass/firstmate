@@ -351,13 +351,17 @@ A home may instead select another tasks-axi adapter such as Beads through its ow
 
 | Event | Story change |
 | --- | --- |
-| `fm-tasks-axi.sh add` | Created in Backlog (Engineering team), with the `sc-NNNN` id and URL appended to the item body. |
+| `fm-tasks-axi.sh add` | Created in Backlog (Engineering team), with a `Shortcut: sc-NNNN <url>` line appended to the item body. |
 | Dispatch (`fm-spawn.sh`) | Refused when the item has no `sc-NNNN`; otherwise moved to In Progress. |
 | PR registered (`fm-pr-check.sh`) | Moved to In Review, PR linked. |
 | Scout teardown | Moved to In Review, `report.md` uploaded. |
+| Ship teardown | Moved to In Review if the PR has not already done so (a local-only or no-PR landing). |
 | Teardown | Final outcome line commented; a forced teardown, a cancelled item, or a parked hold sends the story back to Backlog with the reason. |
-| `fm-captain-hold.sh answer` | The recorded decision is commented. |
+| `fm-captain-hold.sh answer` or `answers` | The recorded decision (close or release) is commented. |
 | `fm-shortcut-ticket.sh done <item> --evidence <text>` | Moved to Done. |
+
+The linked story is the one a body line `Shortcut: sc-NNNN` names, else an `sc-NNNN` in the item title.
+Any other `sc-NNNN` in the body, such as "Follow-up to sc-6092", is only a reference: the sync never moves it, comments on it, or uploads to it, and the item gets its own story.
 
 Done is never automatic: merge and teardown leave the story In Review until firstmate runs `done` on the captain's word or verified production evidence.
 Every sync call except the dispatch refusal is best-effort: it warns and never blocks the lifecycle step.

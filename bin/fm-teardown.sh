@@ -3765,12 +3765,16 @@ retire_busy_state "$STATE" "$ID" "$BUSY_GEN" || exit 1
 # Opt-in fleet activity ledger (docs/fleet-ledger.md), before the status log is
 # retired so its last lines are captured; off costs one file test.
 [ ! -e "$CONFIG/fleet-ledger" ] || FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE FM_CONFIG_OVERRIDE=$CONFIG "$SCRIPT_DIR/fm-fleet-ledger.sh" cleaned_up "$ID" || true
-# Fork-only: record the outcome on the Shortcut story (best-effort); a scout also goes
-# In Review with its report uploaded. A ship stays where the PR left it.
+# Fork-only: record the outcome on the Shortcut story (best-effort). A landed ship
+# goes In Review (a no-op once the PR moved it), a scout too with its report uploaded.
 if [ "$KIND" != secondmate ]; then
   SC_ENV=(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_DATA_OVERRIDE="$DATA" FM_CONFIG_OVERRIDE="$CONFIG")
-  if [ "$KIND" = scout ] && [ "$FORCE" != "--force" ] && [ -f "$DATA/$ID/report.md" ]; then
-    env "${SC_ENV[@]}" "$SCRIPT_DIR/fm-shortcut-ticket.sh" review "$ID" --report "$DATA/$ID/report.md" --best-effort || true
+  if [ "$FORCE" != "--force" ]; then
+    if [ "$KIND" = ship ]; then
+      env "${SC_ENV[@]}" "$SCRIPT_DIR/fm-shortcut-ticket.sh" review "$ID" --best-effort || true
+    elif [ "$KIND" = scout ] && [ -f "$DATA/$ID/report.md" ]; then
+      env "${SC_ENV[@]}" "$SCRIPT_DIR/fm-shortcut-ticket.sh" review "$ID" --report "$DATA/$ID/report.md" --best-effort || true
+    fi
   fi
   if [ "$FORCE" = "--force" ]; then
     env "${SC_ENV[@]}" "$SCRIPT_DIR/fm-shortcut-ticket.sh" park "$ID" --reason "torn down without landing (forced cleanup)" --best-effort || true

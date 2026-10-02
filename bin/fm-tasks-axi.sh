@@ -142,27 +142,38 @@ fi
 
 cd "$FM_BACKLOG_AXI_ROOT" || fail "cannot enter the backlog root $FM_BACKLOG_AXI_ROOT"
 # Fork-only: cancelling (rm) or parking (hold --kind parked) an item sends its
-# story back to Backlog with the reason (best-effort).
-SC_PARK=
+# story back to Backlog with the reason (best-effort), once tasks-axi succeeds.
+# rm resolves the story first because the item is gone afterwards.
+SC_ITEM='' SC_KIND='' SC_REASON='' sc_prev=''
+for arg in "${@:2}"; do
+  case "$sc_prev" in
+    --kind) SC_KIND=$arg; sc_prev=; continue ;;
+    --reason) SC_REASON=$arg; sc_prev=; continue ;;
+    --until) sc_prev=; continue ;;
+  esac
+  case "$arg" in
+    --kind | --reason | --until) sc_prev=$arg ;;
+    --kind=*) SC_KIND=${arg#*=} ;;
+    --reason=*) SC_REASON=${arg#*=} ;;
+    -*) ;;
+    *) [ -n "$SC_ITEM" ] || SC_ITEM=$arg ;;
+  esac
+done
+SC_PARK=''
 case "${1:-}" in
-  rm) SC_PARK="cancelled: removed from the backlog" ;;
-  hold)
-    case " $* " in *" --kind parked "*)
-      SC_PARK="parked: $(printf '%s\n' "$@" | sed -n '/^--reason$/{n;p;}' | head -1)" ;;
-    esac
+  rm | delete)
+    [ -z "$SC_ITEM" ] || SC_ITEM=$("$SCRIPT_DIR/fm-shortcut-ticket.sh" --linked "$SC_ITEM" --best-effort 2>/dev/null)
+    SC_PARK="cancelled: removed from the backlog"
     ;;
+  hold) [ "$SC_KIND" != parked ] || SC_PARK="parked: $SC_REASON" ;;
 esac
-if [ -n "$SC_PARK" ] && [ -n "${2:-}" ] && [ "$1" = rm ]; then
-  "$SCRIPT_DIR/fm-shortcut-ticket.sh" park "$2" --reason "$SC_PARK" --best-effort >&2 || true
-  SC_PARK=
-fi
 case "${1:-}" in
   add | create) ;;
-  hold)
+  rm | delete | hold)
     tasks-axi ${ARGS[@]+"${ARGS[@]}"}
     RC=$?
-    [ "$RC" -ne 0 ] || [ -z "$SC_PARK" ] || [ -z "${2:-}" ] ||
-      "$SCRIPT_DIR/fm-shortcut-ticket.sh" park "$2" --reason "$SC_PARK" --best-effort >&2 || true
+    [ "$RC" -ne 0 ] || [ -z "$SC_PARK" ] || [ -z "$SC_ITEM" ] ||
+      "$SCRIPT_DIR/fm-shortcut-ticket.sh" park "$SC_ITEM" --reason "$SC_PARK" --best-effort >&2 || true
     exit "$RC"
     ;;
   *) exec tasks-axi ${ARGS[@]+"${ARGS[@]}"} ;;

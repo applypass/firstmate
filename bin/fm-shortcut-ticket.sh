@@ -11,14 +11,18 @@
 #        fm-shortcut-ticket.sh park <item> --reason <text>   back to Backlog with the reason (work abandoned)
 #        fm-shortcut-ticket.sh done <item> --evidence <text> move to Done (never automatic)
 #        fm-shortcut-ticket.sh --check <item>                exit 0 if ticketed or exempt
+#        fm-shortcut-ticket.sh --linked <item>               print the linked sc-NNNN, if any
 #        fm-shortcut-ticket.sh --enabled                     exit 0 if the feature is on
 # Any operation accepts --best-effort: a missing sc id or an API failure then
-# warns and exits 0, which is how the lifecycle hooks call it.
+# warns and exits 0, which is how the lifecycle hooks call it. The story
+# operations also take the story id (sc-NNNN) in place of the item, for an
+# item that no longer exists.
 #
 # Hooks: bin/fm-tasks-axi.sh add creates the story; bin/fm-spawn.sh refuses a
 # ship or scout with no sc id (--check) and moves the story to In Progress on
 # dispatch; bin/fm-pr-check.sh moves it to In Review and links the PR;
-# bin/fm-captain-hold.sh answer comments the recorded decision;
+# bin/fm-captain-hold.sh answer (and keyed answers) comments the recorded decision;
+# a landed ship goes to In Review at teardown even without a PR;
 # bin/fm-teardown.sh comments the outcome (a scout also goes to In Review with
 # its report.md uploaded; a forced teardown, a cancelled (rm) or parked (hold)
 # item moves the story back to Backlog with the reason). Merge and teardown never move a story to Done: firstmate
@@ -26,9 +30,11 @@
 #
 # Create: POST /api/v3/stories with name = item title, description = item body
 # (or a Problem/Fix stub when empty), team/state/owner from the settings. The
-# `sc-NNNN` and story URL are appended to the item body through tasks-axi. If the
-# title or body already names `sc-NNNN`, that story is verified (GET) and nothing
-# is created. `tasks-axi mv` moves the whole item, so a secondmate handoff
+# `Shortcut: sc-NNNN <url>` line is appended to the item body through tasks-axi.
+# The linked story is the one a body line `Shortcut: sc-NNNN` names, else an
+# `sc-NNNN` in the title; that story is verified (GET) and nothing is created.
+# Any other `sc-NNNN` in the body is only a reference: it is never moved,
+# commented on, or uploaded to, and the item still gets its own story. `tasks-axi mv` moves the whole item, so a secondmate handoff
 # carries the id. Skipped kinds: secondmate and captain (decision-only rows).
 #
 # Settings: key=value lines from defaults/shortcut-tickets in the code root, then
@@ -70,7 +76,7 @@ setting() {  # <key> [default]
   local key=$1 value="${2:-}" file line
   for file in "$FM_ROOT/defaults/shortcut-tickets" "$CONFIG/shortcut-tickets"; do
     [ -f "$file" ] || continue
-    line=$(grep -E "^[[:space:]]*$key[[:space:]]*=" "$file" | tail -1) || true
+    line=$(grep -E "^[[:space:]]*${key}[[:space:]]*=" "$file" | tail -1) || true
     [ -n "$line" ] && value=$(printf '%s' "${line#*=}" | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
   done
   printf '%s' "$value"
@@ -102,6 +108,7 @@ esac
 OP=create
 case "${1:-}" in
   --check) OP=check; shift ;;
+  --linked) OP=linked; shift ;;
   state | review | comment | attach | outcome | park | done) OP=$1; shift ;;
 esac
 ID=${1:-}
@@ -110,7 +117,11 @@ shift
 
 enabled || exit 0
 
-SHOW=$("$TASKS" show "$ID" --full 2>&1) || die "cannot read backlog item $ID: $(printf '%s' "$SHOW" | head -1)"
+KIND='' TITLE='' BODY='' SC=''
+case "$OP" in
+  create | check | linked) ;;
+  *) case "${ID#sc-}" in "$ID" | '' | *[!0-9]*) ;; *) SC=$ID ;; esac ;;
+esac
 
 field() {  # <name>; decodes a quoted value
   local raw
@@ -121,10 +132,20 @@ field() {  # <name>; decodes a quoted value
   esac
 }
 
-KIND=$(field kind)
-TITLE=$(field title)
-BODY=$(field body)
-SC=$(printf '%s\n%s\n' "$TITLE" "$BODY" | grep -Eoi '\bsc-[0-9]+\b' | head -1 | tr 'A-Z' 'a-z') || true
+if [ -z "$SC" ]; then
+  SHOW=$("$TASKS" show "$ID" --full 2>&1) || die "cannot read backlog item $ID: $(printf '%s' "$SHOW" | head -1)"
+  KIND=$(field kind)
+  TITLE=$(field title)
+  BODY=$(field body)
+  SC=$(printf '%s\n' "$BODY" | grep -Ei '^[[:space:]]*Shortcut:[[:space:]]*sc-[0-9]+' | head -1 | grep -Eoi 'sc-[0-9]+' | head -1) || true
+  [ -n "$SC" ] || SC=$(printf '%s\n' "$TITLE" | grep -Eoi '\bsc-[0-9]+\b' | head -1) || true
+  SC=$(printf '%s' "$SC" | tr '[:upper:]' '[:lower:]')
+fi
+
+if [ "$OP" = linked ]; then
+  [ -z "$SC" ] || printf '%s\n' "$SC"
+  exit 0
+fi
 
 if [ "$OP" = check ]; then
   case "$KIND" in secondmate | captain) exit 0 ;; esac
@@ -207,7 +228,7 @@ case "$OP" in
     exit 0
     ;;
   review)
-    PR= REPORT=
+    PR='' REPORT=''
     while [ "$#" -gt 0 ]; do
       case "$1" in
         --pr) PR=${2:-}; shift ;;
@@ -256,7 +277,7 @@ case "$OP" in
     ;;
   done)
     [ "${1:-}" = --evidence ] && [ -n "${2:-}" ] || die "usage: done <item> --evidence <text> (the captain's word or verified production evidence)"
-    put_state done
+    put_state "done"
     post_comment "Done: $2"
     exit 0
     ;;

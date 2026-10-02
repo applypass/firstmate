@@ -81,10 +81,34 @@ test_add_naming_existing_story_links_it() {
   out=$(run_tasks "$dir" add st-2 "Follow up sc-4242 widget" --kind ship) || fail "add failed: $out"
   assert_grep "GET https://api.app.shortcut.com/api/v3/stories/4242" "$dir/curl.log" "the named story was not verified"
   assert_no_grep "POST" "$dir/curl.log" "a duplicate story was created"
-  out=$(run_tasks "$dir" add st-3 "Other work" --kind ship --body "Shortcut sc-4343 is the ticket") || fail "add failed: $out"
+  out=$(run_tasks "$dir" add st-3 "Other work" --kind ship --body "Shortcut: sc-4343 https://app.shortcut.com/applypass/story/4343") || fail "add failed: $out"
   assert_grep "GET https://api.app.shortcut.com/api/v3/stories/4343" "$dir/curl.log" "the body-named story was not verified"
   assert_no_grep "POST" "$dir/curl.log" "a duplicate story was created for a body-named id"
   pass "an add naming an existing sc id links that story instead of creating one"
+}
+
+test_body_reference_is_not_the_linked_story() {
+  local dir out
+  dir=$(make_case body-ref)
+  out=$(run_tasks "$dir" add st-11 "Harden the retry" --kind ship --body "Follow-up to sc-6092") \
+    || fail "add failed: $out"
+  assert_grep "POST https://api.app.shortcut.com/api/v3/stories" "$dir/curl.log" "a body reference stopped the item getting its own story"
+  assert_no_grep "stories/6092" "$dir/curl.log" "the referenced story was touched on add"
+  assert_contains "$(show "$dir" st-11)" "Follow-up to sc-6092" "the reference was lost from the body"
+  : > "$dir/curl.log"
+  out=$(ticket "$dir" state st-11 progress) || fail "state failed: $out"
+  out=$(ticket "$dir" comment st-11 "a learning") || fail "comment failed: $out"
+  printf 'a\n' > "$dir/a.png"
+  out=$(ticket "$dir" attach st-11 "$dir/a.png") || fail "attach failed: $out"
+  out=$(ticket "$dir" park st-11 --reason "not now") || fail "park failed: $out"
+  assert_grep "PUT https://api.app.shortcut.com/api/v3/stories/7777" "$dir/curl.log" "the item's own story was not moved"
+  assert_grep "FORM story_id=7777" "$dir/curl.log" "the upload did not go to the item's own story"
+  assert_no_grep "6092" "$dir/curl.log" "a referenced story was moved, commented on, or uploaded to"
+  dir=$(make_case body-ref-unticketed)
+  FAKE_CURL_FAIL=1 run_tasks "$dir" add st-12 "Only a reference" --kind ship --body "Follow-up to sc-6092" >/dev/null
+  (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
+    "$ROOT/bin/fm-shortcut-ticket.sh" --check st-12 >/dev/null 2>&1) && fail "--check took a body reference as the ticket"
+  pass "a body reference such as 'Follow-up to sc-6092' is never the linked story"
 }
 
 test_named_story_that_does_not_exist_warns() {
@@ -118,7 +142,7 @@ test_api_failure_keeps_add_and_check_refuses() {
   check=$(cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
     "$ROOT/bin/fm-shortcut-ticket.sh" --check st-5 2>&1) && fail "--check passed an unticketed item"
   assert_contains "$check" "bin/fm-shortcut-ticket.sh st-5" "the refusal did not name the retry"
-  out=$(TOKEN_OVERRIDE= run_tasks "$dir" add st-7 "No token" --kind ship) \
+  out=$(TOKEN_OVERRIDE='' run_tasks "$dir" add st-7 "No token" --kind ship) \
     || fail "a missing token failed the add: $out"
   assert_contains "$out" "SHORTCUT_API_TOKEN" "a missing token was not reported"
   pass "an API failure or missing token warns, keeps the add, and the check refuses"
@@ -128,7 +152,7 @@ test_retry_then_check_passes() {
   local dir out
   dir=$(make_case retry)
   FAKE_CURL_FAIL=1 run_tasks "$dir" add st-8 "Retry me" --kind ship >/dev/null
-  out=$(cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" SHORTCUT_API_TOKEN=$TOKEN \
+  out=$(cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" SHORTCUT_API_TOKEN="$TOKEN" \
     FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" "$ROOT/bin/fm-shortcut-ticket.sh" st-8 2>&1) \
     || fail "retry failed: $out"
   (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
@@ -162,7 +186,7 @@ ticket() {  # <case-dir> <args...>
   local dir=$1
   shift
   (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
-    SHORTCUT_API_TOKEN=$TOKEN FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" \
+    SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" \
     "$ROOT/bin/fm-shortcut-ticket.sh" "$@" 2>&1)
 }
 
@@ -172,7 +196,7 @@ test_state_moves_the_story() {
   out=$(ticket "$dir" state lc-1 progress) || fail "state progress failed: $out"
   assert_grep 'PUT https://api.app.shortcut.com/api/v3/stories/5000' "$dir/curl.log" "no state update sent"
   assert_grep '"workflow_state_id":500000008' "$dir/curl.log" "story was not moved to In Progress"
-  out=$(ticket "$dir" state lc-1 done) && fail "state accepted done"
+  out=$(ticket "$dir" state lc-1 "done") && fail "state accepted done"
   out=$(ticket "$dir" state lc-1 review) || fail "state review failed: $out"
   assert_grep '"workflow_state_id":500000009' "$dir/curl.log" "story was not moved to In Review"
   : > "$dir/curl.log"
@@ -211,10 +235,10 @@ test_comment_attach_outcome() {
 
 test_done_needs_evidence_and_is_explicit() {
   local dir out
-  dir=$(make_ticketed done)
-  out=$(ticket "$dir" done lc-1) && fail "done ran without evidence"
+  dir=$(make_ticketed "done")
+  out=$(ticket "$dir" "done" lc-1) && fail "done ran without evidence"
   [ ! -s "$dir/curl.log" ] || fail "done without evidence reached Shortcut"
-  out=$(ticket "$dir" done lc-1 --evidence "verified in prod") || fail "done failed: $out"
+  out=$(ticket "$dir" "done" lc-1 --evidence "verified in prod") || fail "done failed: $out"
   assert_grep '"workflow_state_id":500000010' "$dir/curl.log" "story was not moved to Done"
   assert_grep 'Done: verified in prod' "$dir/curl.log" "evidence was not commented"
   pass "done requires evidence and moves the story to Done"
@@ -239,9 +263,20 @@ test_wrapper_rm_and_parked_hold_park_the_story() {
   assert_grep '"workflow_state_id":500000006' "$dir/curl.log" "a parked hold did not return the story to Backlog"
   assert_grep 'parked: not now' "$dir/curl.log" "the parked reason was not commented"
   : > "$dir/curl.log"
-  run_tasks "$dir" rm lc-2 >/dev/null || fail "rm failed"
+  run_tasks "$dir" hold lc-2 --reason="again later" --kind=parked >/dev/null || fail "equals-form parked hold failed"
+  assert_grep 'parked: again later' "$dir/curl.log" "an equals-form parked hold did not park the story"
+  : > "$dir/curl.log"
+  run_tasks "$dir" add lc-9 "Blocked on lc-2" --kind ship --blocked-by lc-2 >/dev/null || fail "blocked add failed"
+  : > "$dir/curl.log"
+  run_tasks "$dir" rm lc-2 >/dev/null && fail "rm of a blocking item succeeded"
+  assert_no_grep 'cancelled' "$dir/curl.log" "a refused rm parked the story"
+  run_tasks "$dir" rm lc-9 >/dev/null || fail "rm of the blocked item failed"
+  : > "$dir/curl.log"
+  run_tasks "$dir" rm --json lc-2 >/dev/null || fail "rm failed"
+  assert_grep 'PUT https://api.app.shortcut.com/api/v3/stories/5000' "$dir/curl.log" "a removed item's story was not moved"
+  assert_grep '"workflow_state_id":500000006' "$dir/curl.log" "a removed item's story did not return to Backlog"
   assert_grep 'cancelled' "$dir/curl.log" "a cancelled item did not post its reason"
-  pass "a parked hold or a cancelled item sends its story back to Backlog"
+  pass "a parked hold or a cancelled item sends its story back to Backlog, and a refused rm does not"
 }
 
 test_captain_answer_comments_the_decision() {
@@ -251,14 +286,21 @@ test_captain_answer_comments_the_decision() {
   fm_fake_exit0 "$dir/fakebin" tmux treehouse no-mistakes gh gh-axi
   hold() {
     (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
-      SHORTCUT_API_TOKEN=$TOKEN FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" \
+      SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" \
       "$ROOT/bin/fm-captain-hold.sh" "$@" 2>&1)
   }
   out=$(hold hold lc-3 --reason "captain must choose") || fail "hold failed: $out"
   [ ! -s "$dir/curl.log" ] || fail "holding a task touched Shortcut"
   out=$(hold answer lc-3 --decision-file "$dir/decision.txt") || fail "answer failed: $out"
   assert_grep 'Captain decision: Use option B.' "$dir/curl.log" "the recorded decision was not commented on the story"
-  pass "a captain answer comments the recorded decision on the story"
+  run_tasks "$dir" add lc-4 "Keyed sc-5001" --kind ship >/dev/null || fail "setup add failed"
+  out=$(hold hold lc-4 --reason "captain go needed") || fail "hold failed: $out"
+  : > "$dir/curl.log"
+  out=$(printf 'lc-4\tgo\t\trelease\n' | hold answers --source "keyed fixture") || fail "keyed answers failed: $out"
+  assert_contains "$out" "closed: lc-4" "the keyed release was not accepted"
+  assert_grep 'POST https://api.app.shortcut.com/api/v3/stories/5001/comments' "$dir/curl.log" \
+    "a keyed release decision was not commented on the story"
+  pass "a captain answer, direct or keyed, comments the recorded decision on the story"
 }
 
 test_best_effort_is_silent_without_a_ticket_and_warns_on_failure() {
@@ -300,7 +342,7 @@ test_handoff_carries_the_sc_id() {
   local fakebin
   fakebin=$(make_fake_tmux "$dir/fake")
   out=$(cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$home" FM_ROOT_OVERRIDE="$dir/code" \
-    SHORTCUT_API_TOKEN=$TOKEN FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$fakebin:$PATH" \
+    SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$fakebin:$PATH" \
     FM_FAKE_TMUX_WINDOW='firstmate:fm-design' FM_FAKE_TMUX_LOG="$dir/tmux.log" \
     FM_FAKE_TMUX_CAPTURE="$dir/fake/pane.txt" FM_SEND_SETTLE=0 FM_SEND_SLEEP=0 FM_SEND_RETRIES=1 \
     "$ROOT/bin/fm-backlog-handoff.sh" design h-1 h-2 2>&1) || fail "handoff failed: $out"
@@ -313,6 +355,7 @@ test_handoff_carries_the_sc_id() {
 test_shipped_defaults_are_on_and_absent_means_off
 test_add_creates_story_and_records_id
 test_add_naming_existing_story_links_it
+test_body_reference_is_not_the_linked_story
 test_named_story_that_does_not_exist_warns
 test_non_work_kinds_are_skipped
 test_api_failure_keeps_add_and_check_refuses
