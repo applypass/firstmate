@@ -87,6 +87,7 @@ The other owners read the file at every arm.
 A non-silent row an away turn records after the captain returned is also queued for main as a durable check wake.
 Silent outcomes remain in the store but are not queued or relayed as notes.
 An attended turn queues nothing: its captain rows reach main through the host's `branch-outcome` exit and the drain, and its routine rows stay in the store.
+A captain outcome needs `--kind`, and in a secondmate home the command also publishes it onto the parent channel ([docs/secondmate-parent-channel.md](secondmate-parent-channel.md)).
 
 ### Leases and authority
 
