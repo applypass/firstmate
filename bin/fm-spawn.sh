@@ -3481,7 +3481,7 @@ if fm_backlog_transition_applies "$CONFIG" "$DATA" "$KIND"; then
   case "$KIND" in
     ship | scout)
       FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA FM_CONFIG_OVERRIDE=$CONFIG "$SCRIPT_DIR/fm-shortcut-ticket.sh" --check "$ID" >&2 || {
-        echo "error: spawn refused - task $ID has no Shortcut ticket" >&2
+        echo "error: spawn refused - task $ID has no verified Shortcut story of its own (see the reason above)" >&2
         exit 1
       }
       ;;

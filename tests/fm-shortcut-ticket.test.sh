@@ -16,6 +16,8 @@ TMP_ROOT=$(fm_test_tmproot fm-shortcut-ticket)
 unset TASKS_AXI_FILE TASKS_AXI_BACKEND FM_HOME FM_ROOT_OVERRIDE FM_DATA_OVERRIDE \
   FM_STATE_OVERRIDE FM_CONFIG_OVERRIDE
 TOKEN=tok-secret-123
+OWNER=11111111-2222-4333-8444-555555555555
+TOKEN_REF='op://home-vault/Shortcut API key/password'
 
 
 # A code root (tracked .tasks.toml, shipped defaults) beside a separate home.
@@ -27,8 +29,10 @@ make_case() {  # <name> [on|off|nodefaults]
   if [ "$mode" != nodefaults ]; then
     cp "$ROOT/defaults/shortcut-tickets" "$dir/code/defaults/shortcut-tickets"
   fi
-  [ "$mode" != off ] || printf 'enabled=off\n' > "$dir/home/config/shortcut-tickets"
+  printf 'owner_id=%s\ntoken_ref=%s\n' "$OWNER" "$TOKEN_REF" > "$dir/home/config/shortcut-tickets"
+  [ "$mode" != off ] || printf 'enabled=off\n' >> "$dir/home/config/shortcut-tickets"
   fm_fake_shortcut_curl "$dir/fakebin"
+  fm_fake_op "$dir/fakebin"
   : > "$dir/curl.log"
   printf '%s\n' "$dir"
 }
@@ -39,6 +43,19 @@ run_tasks() {  # <case-dir> <wrapper args...>
   (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
     SHORTCUT_API_TOKEN="${TOKEN_OVERRIDE-$TOKEN}" FAKE_CURL_LOG="$dir/curl.log" \
     PATH="$dir/fakebin:$PATH" "$ROOT/bin/fm-tasks-axi.sh" "$@" 2>&1)
+}
+
+check_item() {  # <case-dir> <id>
+  local dir=$1
+  (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
+    SHORTCUT_API_TOKEN="${TOKEN_OVERRIDE-$TOKEN}" FAKE_CURL_LOG="$dir/curl.log" \
+    PATH="$dir/fakebin:$PATH" "$ROOT/bin/fm-shortcut-ticket.sh" --check "$2" 2>&1)
+}
+
+# Seed the fake Shortcut store with a story whose description is <text>.
+seed_story() {  # <case-dir> <num> <text>
+  mkdir -p "$1/fake-stories"
+  printf '%s\n' "$3" > "$1/fake-stories/$2.desc"
 }
 
 show() {  # <case-dir> <id>
@@ -59,7 +76,6 @@ test_shipped_defaults_are_on_and_absent_means_off() {
 test_add_creates_story_and_records_id() {
   local dir out
   dir=$(make_case create)
-  printf 'owner_id=68930514-b854-4a8e-95ec-fa3eee30e3a2\n' > "$dir/home/config/shortcut-tickets"
   out=$(run_tasks "$dir" add st-1 "Fix the widget" --kind ship --body "- Problem: broken
 - Fix: repair") || fail "add failed: $out"
   assert_contains "$(show "$dir" st-1)" "sc-7777 https://app.shortcut.com/applypass/story/7777" \
@@ -69,23 +85,175 @@ test_add_creates_story_and_records_id() {
   assert_grep '"name":"Fix the widget"' "$dir/curl.log" "story name is not the item title"
   assert_grep "649562cb-7f18-471f-835f-7ed28a5abf0a" "$dir/curl.log" "team id missing from the request"
   assert_grep '"workflow_state_id":500000006' "$dir/curl.log" "story was not created in Backlog"
-  assert_grep "68930514-b854-4a8e-95ec-fa3eee30e3a2" "$dir/curl.log" "owner missing from the request"
+  assert_grep "$OWNER" "$dir/curl.log" "the home's owner missing from the request"
+  assert_grep 'firstmate-item: home/st-1' "$dir/fake-stories/7777.desc" "create did not write the ownership marker"
+  assert_grep 'Problem: broken' "$dir/fake-stories/7777.desc" "the marker replaced the description"
   assert_grep "TOKEN-ON-STDIN" "$dir/curl.log" "the token did not reach curl on stdin"
   assert_no_grep "TOKEN-IN-ARGV" "$dir/curl.log" "the token leaked into curl's argv"
   assert_not_contains "$out" "$TOKEN" "the token was printed"
   pass "add creates a Shortcut story and records its id and URL on the item"
 }
 
-test_add_naming_existing_story_links_it() {
+test_existing_story_is_adopted_only_by_link() {
   local dir out
   dir=$(make_case link)
-  out=$(run_tasks "$dir" add st-2 "Follow up sc-4242 widget" --kind ship) || fail "add failed: $out"
-  assert_grep "GET https://api.app.shortcut.com/api/v3/stories/4242" "$dir/curl.log" "the named story was not verified"
-  assert_no_grep "POST" "$dir/curl.log" "a duplicate story was created"
+  seed_story "$dir" 4343 "Existing work"
   out=$(run_tasks "$dir" add st-3 "Other work" --kind ship --body "Shortcut: sc-4343 https://app.shortcut.com/applypass/story/4343") || fail "add failed: $out"
-  assert_grep "GET https://api.app.shortcut.com/api/v3/stories/4343" "$dir/curl.log" "the body-named story was not verified"
+  assert_grep "GET https://api.app.shortcut.com/api/v3/stories/4343" "$dir/curl.log" "the body-named story was not read"
   assert_no_grep "POST" "$dir/curl.log" "a duplicate story was created for a body-named id"
-  pass "an add naming an existing sc id links that story instead of creating one"
+  assert_contains "$out" "mark it: bin/fm-shortcut-ticket.sh link st-3 sc-4343" "the refusal did not name the link for a pre-marker own story"
+  assert_contains "$out" "create the item's own story: bin/fm-shortcut-ticket.sh st-3" "the refusal did not name the create command for a shared story"
+  check_item "$dir" st-3 >/dev/null && fail "--check passed an unowned body-named story"
+  out=$(ticket "$dir" link st-3 sc-4343) || fail "link failed: $out"
+  assert_grep 'firstmate-item: home/st-3' "$dir/fake-stories/4343.desc" "link did not write the marker"
+  assert_grep 'Existing work' "$dir/fake-stories/4343.desc" "link lost the story description"
+  check_item "$dir" st-3 >/dev/null || fail "--check refused a linked story"
+  FAKE_CURL_FAIL=1 run_tasks "$dir" add st-13 "Unticketed" --kind ship >/dev/null
+  seed_story "$dir" 4444 "Fresh"
+  out=$(ticket "$dir" link st-13 sc-4444) || fail "link of an item with no body line failed: $out"
+  assert_contains "$(show "$dir" st-13)" "Shortcut: sc-4444" "link did not record the body line"
+  check_item "$dir" st-13 >/dev/null || fail "--check refused a story link recorded"
+  pass "an existing story becomes an item's own only through link, which marks it and records the body line"
+}
+
+test_umbrella_or_shared_body_line_is_refused() {
+  local dir out
+  dir=$(make_case shared)
+  seed_story "$dir" 6104 "Launch fixes umbrella"
+  run_tasks "$dir" add sh-1 "Launch fix one" --kind ship --body "Shortcut: sc-6104" >/dev/null
+  out=$(check_item "$dir" sh-1) && fail "--check passed an umbrella named as a body line"
+  assert_contains "$out" "no 'firstmate-item: home/sh-1' marker" "the umbrella refusal did not name the missing marker"
+  seed_story "$dir" 5555 "firstmate-item: home/sh-2"
+  run_tasks "$dir" add sh-2 "Owner" --kind ship --body "Shortcut: sc-5555" >/dev/null
+  run_tasks "$dir" add sh-3 "Sharer" --kind ship --body "Shortcut: sc-5555" >/dev/null
+  check_item "$dir" sh-2 >/dev/null || fail "--check refused the story's own item"
+  out=$(check_item "$dir" sh-3) && fail "--check passed a second item sharing a story"
+  assert_contains "$out" "belongs to another item (sh-2" "the shared refusal did not name the owner"
+  out=$(ticket "$dir" link sh-3 sc-5555) && fail "link adopted another item's story"
+  assert_contains "$out" "already belongs to another item" "the link refusal did not say why"
+  assert_no_grep 'sh-3' "$dir/fake-stories/5555.desc" "a refused link still marked the story"
+  FAKE_CURL_FAIL=1 run_tasks "$dir" add sh-4 "Launch fix sc-6104 widget" --kind ship >/dev/null
+  out=$(ticket "$dir" link sh-4 sc-6104) && fail "link adopted the title umbrella"
+  assert_contains "$out" "parent (umbrella) story" "the umbrella link refusal did not say why"
+  assert_contains "$out" "bin/fm-shortcut-ticket.sh sh-4" "the umbrella link refusal did not name the create command"
+  assert_no_grep 'sh-4' "$dir/fake-stories/6104.desc" "a refused umbrella link still marked the story"
+  pass "a body line naming an umbrella or another item's story fails the check, and link refuses it and the title umbrella"
+}
+
+test_title_id_is_a_parent_never_reused() {
+  local dir out
+  dir=$(make_case umbrella)
+  out=$(run_tasks "$dir" add st-2 "Launch fix sc-4242 widget" --kind ship) || fail "add failed: $out"
+  assert_grep "POST https://api.app.shortcut.com/api/v3/stories" "$dir/curl.log" "an umbrella title id stopped the item getting its own story"
+  assert_grep "POST https://api.app.shortcut.com/api/v3/story-links" "$dir/curl.log" "the child story was not linked to the umbrella"
+  assert_grep '"object_id":4242' "$dir/curl.log" "the link does not point at the umbrella story"
+  assert_grep '"subject_id":7777' "$dir/curl.log" "the link does not start at the new story"
+  assert_contains "$(show "$dir" st-2)" "Shortcut: sc-7777" "the item's own story was not recorded"
+  : > "$dir/curl.log"
+  out=$(ticket "$dir" state st-2 progress) || fail "state failed: $out"
+  assert_grep "PUT https://api.app.shortcut.com/api/v3/stories/7777" "$dir/curl.log" "the state move missed the item's own story"
+  assert_no_grep "4242" "$dir/curl.log" "a state move touched the umbrella story"
+  pass "a title sc id is a parent: the item gets its own linked story and state moves never touch the parent"
+}
+
+test_check_needs_an_own_verified_story() {
+  local dir out
+  dir=$(make_case check-own)
+  FAKE_CURL_FAIL=1 run_tasks "$dir" add ck-2 "Umbrella sc-4242" --kind ship >/dev/null
+  out=$(check_item "$dir" ck-2) && fail "--check passed on a title-only id"
+  assert_contains "$out" "no Shortcut story of its own" "the refusal did not explain the title id is only a parent"
+  seed_story "$dir" 4343 "firstmate-item: home/ck-3"
+  run_tasks "$dir" add ck-3 "Own story" --kind ship --body "Shortcut: sc-4343" >/dev/null
+  check_item "$dir" ck-3 >/dev/null || fail "--check refused a verified body line"
+  assert_grep "GET https://api.app.shortcut.com/api/v3/stories/4343" "$dir/curl.log" "--check did not confirm the story exists"
+  run_tasks "$dir" add ck-4 "Ghost story" --kind ship --body "Shortcut: sc-9999" >/dev/null
+  out=$(FAKE_CURL_MISSING=9999 check_item "$dir" ck-4) && fail "--check passed a story that does not exist"
+  assert_contains "$out" "sc-9999" "the unreadable story was not named"
+  pass "--check passes only on a body-line story that exists and is marked as the item's own"
+}
+
+test_check_and_create_need_the_home_settings() {
+  local dir out
+  dir=$(make_case settings)
+  seed_story "$dir" 4343 "firstmate-item: home/hs-1"
+  run_tasks "$dir" add hs-1 "Own story" --kind ship --body "Shortcut: sc-4343" >/dev/null
+  printf 'token_ref=%s\n' "$TOKEN_REF" > "$dir/home/config/shortcut-tickets"
+  out=$(check_item "$dir" hs-1) && fail "--check passed with no owner_id"
+  assert_contains "$out" "add this line to $dir/home/config/shortcut-tickets: owner_id=<Shortcut member UUID>" "the refusal did not give the owner_id line"
+  : > "$dir/curl.log"
+  out=$(run_tasks "$dir" add hs-2 "No owner" --kind ship) || fail "a missing owner failed the add: $out"
+  assert_contains "$out" "owner_id=<Shortcut member UUID>" "create did not refuse a missing owner_id"
+  assert_no_grep "POST" "$dir/curl.log" "a story was created with no owner"
+  printf 'owner_id=%s\n' "$OWNER" > "$dir/home/config/shortcut-tickets"
+  out=$(TOKEN_OVERRIDE='' check_item "$dir" hs-1) && fail "--check passed with no token and no token_ref"
+  assert_contains "$out" "token_ref=op://<vault>/<item>/<field>" "the refusal did not give the token_ref line"
+  check_item "$dir" hs-1 >/dev/null || fail "an env token without token_ref was refused"
+  pass "--check and create refuse with the config line to add when owner_id or token_ref is missing"
+}
+
+test_hung_op_read_is_bounded() {
+  local dir out start elapsed
+  dir=$(make_case op-hang)
+  seed_story "$dir" 4343 "firstmate-item: home/oh-1"
+  run_tasks "$dir" add oh-1 "Own story" --kind ship --body "Shortcut: sc-4343" >/dev/null
+  printf 'op_timeout=1\n' >> "$dir/home/config/shortcut-tickets"
+  start=$(date +%s)
+  out=$(TOKEN_OVERRIDE='' FAKE_OP_HANG=1 FAKE_OP_TOKEN=tok-secret-123 check_item "$dir" oh-1) && fail "--check passed on a hung op read"
+  elapsed=$(( $(date +%s) - start ))
+  [ "$elapsed" -lt 10 ] || fail "a hung op read was not bounded (${elapsed}s)"
+  assert_contains "$out" "did not answer within 1s" "the refusal did not name the timeout"
+  : > "$dir/curl.log"
+  out=$(TOKEN_OVERRIDE='' FAKE_OP_HANG=1 FAKE_OP_TOKEN=tok-secret-123 ticket "$dir" state oh-1 progress --best-effort) \
+    || fail "a best-effort hook failed on a hung op read: $out"
+  assert_contains "$out" "warning:" "the best-effort hook did not warn"
+  [ ! -s "$dir/curl.log" ] || fail "a hook reached Shortcut without a token"
+  pass "a hung op read is bounded by op_timeout: --check refuses and best-effort hooks only warn"
+}
+
+test_missing_token_refuses_the_check_and_op_supplies_it() {
+  local dir out
+  dir=$(make_case token)
+  seed_story "$dir" 4343 "firstmate-item: home/tk-1"
+  run_tasks "$dir" add tk-1 "Own story" --kind ship --body "Shortcut: sc-4343" >/dev/null
+  out=$(TOKEN_OVERRIDE='' check_item "$dir" tk-1) && fail "--check passed with no token and no op"
+  assert_contains "$out" "op read $TOKEN_REF" "the refusal did not name the failed 1Password read"
+  : > "$dir/curl.log"
+  out=$(TOKEN_OVERRIDE='' FAKE_OP_TOKEN=tok-secret-123 FAKE_OP_LOG="$dir/op.log" check_item "$dir" tk-1) || fail "op did not supply the token: $out"
+  assert_grep "op read $TOKEN_REF" "$dir/op.log" "the token was not read from token_ref"
+  assert_grep "TOKEN-ON-STDIN" "$dir/curl.log" "the op token did not reach curl on stdin"
+  assert_no_grep "TOKEN-IN-ARGV" "$dir/curl.log" "the op token leaked into curl's argv"
+  assert_no_grep "TOKEN-IN-CHILD-ENV" "$dir/curl.log" "the op token leaked into a child's environment"
+  assert_not_contains "$out" "tok-secret-123" "the token was printed"
+  pass "a missing token refuses the check; op read supplies it on stdin when configured"
+}
+
+test_secondmate_report_needs_the_items_own_story() {
+  local dir mate parent_status corr=abcdef0123456789 out
+  dir=$(make_case report)
+  mate="$dir/home" parent_status="$dir/parent/state/mate.status"
+  mkdir -p "$dir/parent/state"
+  printf 'mate\n' > "$mate/.fm-secondmate-home"
+  printf 'schema=fm-secondmate-parent.v1\nroute=local\nparent_home=%s\n' "$dir/parent" > "$mate/.fm-secondmate-parent"
+  report() {
+    (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$mate" FM_ROOT_OVERRIDE="$dir/code" \
+      SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" \
+      "$ROOT/bin/fm-secondmate-report.sh" "$@" 2>&1)
+  }
+  out=$(report "done" "$corr" "audit clean") && fail "a done report published with no --item"
+  assert_contains "$out" "--item <id>" "the refusal did not ask for the item"
+  seed_story "$dir" 6104 "Launch fixes umbrella"
+  run_tasks "$dir" add inv-1 "Umbrella only" --kind scout --body "Shortcut: sc-6104" >/dev/null
+  out=$(report --item inv-1 --doc "done" "$corr" data/inv-1/report.md "see report") && fail "a --doc report published for an umbrella-only item"
+  assert_contains "$out" "no 'firstmate-item: home/inv-1' marker" "the refusal did not give the check's reason"
+  out=$(report --item inv-1 ready "$corr" "ready to ship") && fail "a ready report published for an umbrella-only item"
+  [ ! -s "$parent_status" ] || fail "a refused report reached the parent channel: $(cat "$parent_status")"
+  report working "$corr" "still digging" >/dev/null || fail "a working report needed a story"
+  run_tasks "$dir" add inv-2 "Own investigation" --kind scout >/dev/null
+  out=$(report --item inv-2 --doc "done" "$corr" data/inv-2/report.md "see report") || fail "an owned item's report was refused: $out"
+  grep -q "^done .*corr=$corr.*data/inv-2/report.md" "$parent_status" || fail "the verified report did not reach the parent channel"
+  out=$(cd "$dir/code" && FM_SHORTCUT_TICKETS=off FM_HOME="$mate" FM_ROOT_OVERRIDE="$dir/code" \
+    "$ROOT/bin/fm-secondmate-report.sh" "done" "$corr" "feature off" 2>&1) || fail "the feature off still required --item: $out"
+  pass "a second mate's done or ready report publishes only for an item whose own story --check verifies"
 }
 
 test_body_reference_is_not_the_linked_story() {
@@ -95,7 +263,7 @@ test_body_reference_is_not_the_linked_story() {
     || fail "add failed: $out"
   assert_grep "POST https://api.app.shortcut.com/api/v3/stories" "$dir/curl.log" "a body reference stopped the item getting its own story"
   assert_no_grep "stories/6092" "$dir/curl.log" "the referenced story was touched on add"
-  assert_no_grep "owner_ids" "$dir/curl.log" "the shipped defaults assigned the story to an owner"
+  assert_grep "$OWNER" "$dir/curl.log" "the home's owner was not assigned"
   assert_contains "$(show "$dir" st-11)" "Follow-up to sc-6092" "the reference was lost from the body"
   : > "$dir/curl.log"
   out=$(ticket "$dir" state st-11 progress) || fail "state failed: $out"
@@ -108,15 +276,14 @@ test_body_reference_is_not_the_linked_story() {
   assert_no_grep "6092" "$dir/curl.log" "a referenced story was moved, commented on, or uploaded to"
   dir=$(make_case body-ref-unticketed)
   FAKE_CURL_FAIL=1 run_tasks "$dir" add st-12 "Only a reference" --kind ship --body "Follow-up to sc-6092" >/dev/null
-  (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
-    "$ROOT/bin/fm-shortcut-ticket.sh" --check st-12 >/dev/null 2>&1) && fail "--check took a body reference as the ticket"
+  check_item "$dir" st-12 >/dev/null && fail "--check took a body reference as the ticket"
   pass "a body reference such as 'Follow-up to sc-6092' is never the linked story"
 }
 
 test_named_story_that_does_not_exist_warns() {
   local dir out
   dir=$(make_case link-missing)
-  out=$(FAKE_CURL_MISSING=9999 run_tasks "$dir" add st-4 "Bad ref sc-9999" --kind ship) \
+  out=$(FAKE_CURL_MISSING=9999 run_tasks "$dir" add st-4 "Bad ref" --body "Shortcut: sc-9999" --kind ship) \
     || fail "a bad reference failed the add: $out"
   assert_contains "$out" "sc-9999" "the unreadable story was not reported"
   assert_contains "$out" "bin/fm-shortcut-ticket.sh st-4" "the retry command was not named"
@@ -129,8 +296,7 @@ test_non_work_kinds_are_skipped() {
   out=$(run_tasks "$dir" add mate-1 "A secondmate" --kind secondmate) || fail "add failed: $out"
   out=$(run_tasks "$dir" add hold-1 "Captain call" --kind captain) || fail "add failed: $out"
   [ ! -s "$dir/curl.log" ] || fail "non-work kinds reached Shortcut: $(cat "$dir/curl.log")"
-  (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" FAKE_CURL_LOG="$dir/curl.log" \
-    "$ROOT/bin/fm-shortcut-ticket.sh" --check hold-1) || fail "--check refused an exempt kind"
+  check_item "$dir" hold-1 >/dev/null || fail "--check refused an exempt kind"
   pass "secondmate and captain-decision items get no story and pass the check"
 }
 
@@ -141,8 +307,7 @@ test_api_failure_keeps_add_and_check_refuses() {
     || fail "an API failure failed the add: $out"
   assert_contains "$out" "bin/fm-shortcut-ticket.sh st-5" "the warning did not name the retry command"
   assert_contains "$(show "$dir" st-5)" "Will not ticket" "the item was not added"
-  check=$(cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
-    "$ROOT/bin/fm-shortcut-ticket.sh" --check st-5 2>&1) && fail "--check passed an unticketed item"
+  check=$(check_item "$dir" st-5) && fail "--check passed an unticketed item"
   assert_contains "$check" "bin/fm-shortcut-ticket.sh st-5" "the refusal did not name the retry"
   out=$(TOKEN_OVERRIDE='' run_tasks "$dir" add st-7 "No token" --kind ship) \
     || fail "a missing token failed the add: $out"
@@ -157,8 +322,7 @@ test_retry_then_check_passes() {
   out=$(cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" SHORTCUT_API_TOKEN="$TOKEN" \
     FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" "$ROOT/bin/fm-shortcut-ticket.sh" st-8 2>&1) \
     || fail "retry failed: $out"
-  (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
-    "$ROOT/bin/fm-shortcut-ticket.sh" --check st-8) || fail "--check refused after the id was recorded"
+  check_item "$dir" st-8 >/dev/null || fail "--check refused after the id was recorded"
   pass "retrying records the id and the check then passes"
 }
 
@@ -167,8 +331,7 @@ test_feature_off_makes_no_calls() {
   dir=$(make_case off off)
   out=$(run_tasks "$dir" add st-9 "Quiet" --kind ship) || fail "add failed: $out"
   [ ! -s "$dir/curl.log" ] || fail "a disabled feature called Shortcut"
-  (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
-    "$ROOT/bin/fm-shortcut-ticket.sh" --check st-9) || fail "--check refused with the feature off"
+  check_item "$dir" st-9 >/dev/null || fail "--check refused with the feature off"
   dir=$(make_case off-nodefaults nodefaults)
   out=$(run_tasks "$dir" add st-10 "Upstream" --kind ship) || fail "add failed: $out"
   [ ! -s "$dir/curl.log" ] || fail "an absent settings file called Shortcut"
@@ -179,7 +342,7 @@ test_feature_off_makes_no_calls() {
 make_ticketed() {  # <name> [item-id]
   local dir id=${2:-lc-1}
   dir=$(make_case "$1")
-  run_tasks "$dir" add "$id" "Lifecycle sc-5000" --kind ship >/dev/null || fail "setup add failed"
+  run_tasks "$dir" add "$id" "Lifecycle" --body "Shortcut: sc-5000" --kind ship >/dev/null || fail "setup add failed"
   : > "$dir/curl.log"
   printf '%s\n' "$dir"
 }
@@ -188,7 +351,7 @@ ticket() {  # <case-dir> <args...>
   local dir=$1
   shift
   (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
-    SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" \
+    SHORTCUT_API_TOKEN="${TOKEN_OVERRIDE-$TOKEN}" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" \
     "$ROOT/bin/fm-shortcut-ticket.sh" "$@" 2>&1)
 }
 
@@ -295,7 +458,7 @@ test_captain_answer_comments_the_decision() {
   [ ! -s "$dir/curl.log" ] || fail "holding a task touched Shortcut"
   out=$(hold answer lc-3 --decision-file "$dir/decision.txt") || fail "answer failed: $out"
   assert_grep 'Captain decision: Use option B.' "$dir/curl.log" "the recorded decision was not commented on the story"
-  run_tasks "$dir" add lc-4 "Keyed sc-5001" --kind ship >/dev/null || fail "setup add failed"
+  run_tasks "$dir" add lc-4 "Keyed" --body "Shortcut: sc-5001" --kind ship >/dev/null || fail "setup add failed"
   out=$(hold hold lc-4 --reason "captain go needed") || fail "hold failed: $out"
   : > "$dir/curl.log"
   out=$(printf 'lc-4\tgo\t\trelease\n' | hold answers --source "keyed fixture") || fail "keyed answers failed: $out"
@@ -325,6 +488,7 @@ test_handoff_carries_the_sc_id() {
   cp "$ROOT/.tasks.toml" "$dir/code/.tasks.toml"
   cp "$ROOT/defaults/shortcut-tickets" "$dir/code/defaults/"
   printf '## In flight\n\n## Queued\n\n## Done\n' > "$home/data/backlog.md"
+  printf 'owner_id=%s\n' "$OWNER" > "$home/config/shortcut-tickets"
   fm_fake_shortcut_curl "$dir/fakebin"
   : > "$dir/curl.log"
   mkdir -p "$sub/state" "$sub/data"
@@ -338,7 +502,7 @@ test_handoff_carries_the_sc_id() {
   printf '## Queued\n\n## Done\n' > "$sub/data/backlog.md"
   # One item already ticketed, one not: the second is ticketed during handoff.
   (cd "$dir/code" && FM_SHORTCUT_TICKETS=off FM_HOME="$home" FM_ROOT_OVERRIDE="$dir/code" \
-    "$ROOT/bin/fm-tasks-axi.sh" add h-1 "Has ticket sc-5151" --kind ship >/dev/null &&
+    "$ROOT/bin/fm-tasks-axi.sh" add h-1 "Has ticket" --body "Shortcut: sc-5151" --kind ship >/dev/null &&
     FM_SHORTCUT_TICKETS=off FM_HOME="$home" FM_ROOT_OVERRIDE="$dir/code" \
     "$ROOT/bin/fm-tasks-axi.sh" add h-2 "Needs ticket" --kind ship >/dev/null) || fail "setup add failed"
   local fakebin
@@ -356,7 +520,14 @@ test_handoff_carries_the_sc_id() {
 
 test_shipped_defaults_are_on_and_absent_means_off
 test_add_creates_story_and_records_id
-test_add_naming_existing_story_links_it
+test_existing_story_is_adopted_only_by_link
+test_umbrella_or_shared_body_line_is_refused
+test_title_id_is_a_parent_never_reused
+test_check_needs_an_own_verified_story
+test_check_and_create_need_the_home_settings
+test_hung_op_read_is_bounded
+test_secondmate_report_needs_the_items_own_story
+test_missing_token_refuses_the_check_and_op_supplies_it
 test_body_reference_is_not_the_linked_story
 test_named_story_that_does_not_exist_warns
 test_non_work_kinds_are_skipped

@@ -1276,16 +1276,38 @@ test_dispatch_requires_a_shortcut_ticket_when_the_feature_is_on() {
   id=atomic-shortcut-b2
   case_dir=$(make_home dispatch-shortcut "$id")
   tasks-axi add "$id" "item without a ticket" --kind ship --file "$(backlog_of "$case_dir")" >/dev/null
+  shortcut_home_settings "$case_dir"
 
-  out=$(FM_SHORTCUT_TICKETS=on run_ship_spawn "$case_dir" "$id") || rc=$?
+  mkdir -p "$case_dir/fakebin"
+  fm_fake_shortcut_curl "$case_dir/fakebin"
+  fm_fake_op "$case_dir/fakebin"
+  out=$(FM_SHORTCUT_TICKETS=on SHORTCUT_API_TOKEN=tok-secret-123 FAKE_CURL_LOG="$case_dir/curl.log" run_ship_spawn "$case_dir" "$id") || rc=$?
   [ "$rc" -ne 0 ] || fail "spawn dispatched an item with no Shortcut ticket"
   assert_contains "$out" "bin/fm-shortcut-ticket.sh $id" "the refusal did not name the retry command"
   assert_absent "$(home_of "$case_dir")/state/$id.meta" "refused dispatch still left a record behind"
 
-  tasks-axi update "$id" --title "item with a ticket sc-4242" --file "$(backlog_of "$case_dir")" >/dev/null
-  out=$(FM_SHORTCUT_TICKETS=on run_ship_spawn "$case_dir" "$id") || fail "spawn refused a ticketed item: $out"
+  tasks-axi update "$id" --title "item with an umbrella sc-4242" --file "$(backlog_of "$case_dir")" >/dev/null
+  out=$(shortcut_env "$case_dir" run_ship_spawn "$case_dir" "$id") && rc=0 || rc=$?
+  [ "$rc" -ne 0 ] || fail "spawn dispatched an item whose only sc id is a title umbrella"
+  assert_contains "$out" "no Shortcut story of its own" "the refusal did not say the title id is only a parent"
+  assert_absent "$(home_of "$case_dir")/state/$id.meta" "umbrella-only dispatch left a record behind"
+
+  tasks-axi update "$id" --body "Shortcut: sc-4242" --file "$(backlog_of "$case_dir")" >/dev/null
+  out=$(FM_SHORTCUT_TICKETS=on SHORTCUT_API_TOKEN='' PATH="$case_dir/fakebin:$PATH" run_ship_spawn "$case_dir" "$id") && rc=0 || rc=$?
+  [ "$rc" -ne 0 ] || fail "spawn dispatched with no Shortcut token"
+  assert_contains "$out" "op read" "the missing-token refusal did not name the failed 1Password read"
+  assert_absent "$(home_of "$case_dir")/state/$id.meta" "token-less dispatch left a record behind"
+
+  out=$(shortcut_env "$case_dir" run_ship_spawn "$case_dir" "$id") && rc=0 || rc=$?
+  [ "$rc" -ne 0 ] || fail "spawn dispatched an item whose body line names an unowned umbrella story"
+  assert_contains "$out" "marker" "the refusal did not say the story is not the item's own"
+  assert_absent "$(home_of "$case_dir")/state/$id.meta" "unowned-story dispatch left a record behind"
+
+  own_story "$case_dir" 4242 "$id"
+  out=$(shortcut_env "$case_dir" run_ship_spawn "$case_dir" "$id") || fail "spawn refused a ticketed item: $out"
   assert_present "$(home_of "$case_dir")/state/$id.meta" "ticketed dispatch published no record"
-  pass "dispatch refuses an unticketed item and passes once the sc id is recorded"
+  assert_grep "GET https://api.app.shortcut.com/api/v3/stories/4242" "$case_dir/curl.log" "the spawn gate did not verify the story exists"
+  pass "dispatch refuses an unticketed, umbrella-only, or unowned-story item and passes once its own marked story is verified"
 }
 
 test_dispatch_ignores_shortcut_tickets_when_the_feature_is_off() {
@@ -1309,11 +1331,23 @@ shortcut_env() {  # <case-dir> <command...>
   FM_SHORTCUT_TICKETS=on SHORTCUT_API_TOKEN=tok-secret-123 FAKE_CURL_LOG="$case_dir/curl.log" "$@"
 }
 
+# The per-home Shortcut settings, and a fake story <num> marked as <id>'s own.
+shortcut_home_settings() {  # <case-dir>
+  printf 'owner_id=11111111-2222-4333-8444-555555555555\ntoken_ref=op://home-vault/Shortcut/password\n' \
+    > "$(home_of "$1")/config/shortcut-tickets"
+}
+own_story() {  # <case-dir> <num> <id>
+  mkdir -p "$1/fake-stories"
+  printf 'firstmate-item: %s/%s\n' "$(basename "$(home_of "$1")")" "$3" > "$1/fake-stories/$2.desc"
+}
+
 test_dispatch_moves_the_story_to_in_progress() {
   local case_dir id out
   id=atomic-shortcut-b4
   case_dir=$(make_home dispatch-shortcut-progress "$id")
-  tasks-axi add "$id" "ticketed sc-5000" --kind ship --file "$(backlog_of "$case_dir")" >/dev/null
+  shortcut_home_settings "$case_dir"
+  own_story "$case_dir" 5000 "$id"
+  tasks-axi add "$id" "ticketed" --body "Shortcut: sc-5000" --kind ship --file "$(backlog_of "$case_dir")" >/dev/null
   : > "$case_dir/curl.log"
   out=$(shortcut_env "$case_dir" run_ship_spawn "$case_dir" "$id") || fail "spawn failed: $out"
   assert_grep 'PUT https://api.app.shortcut.com/api/v3/stories/5000' "$case_dir/curl.log" "dispatch did not update the story"
@@ -1325,7 +1359,7 @@ test_landed_teardown_moves_the_story_to_review_and_comments_the_outcome() {
   local case_dir id out
   id=atomic-shortcut-b5
   case_dir=$(make_home teardown-shortcut "$id")
-  tasks-axi add "$id" "ticketed sc-5000" --kind ship --file "$(backlog_of "$case_dir")" >/dev/null
+  tasks-axi add "$id" "ticketed" --body "Shortcut: sc-5000" --kind ship --file "$(backlog_of "$case_dir")" >/dev/null
   start_item "$case_dir" "$id"
   write_task_meta "$case_dir" "$id" ship local-only "spawn_gen=spawn-shortcut-close"
   printf 'done [at=1]: landed the widget\n' > "$(home_of "$case_dir")/state/$id.status"
@@ -1342,7 +1376,7 @@ test_forced_teardown_parks_the_story() {
   local case_dir id out
   id=atomic-shortcut-b6
   case_dir=$(make_home teardown-shortcut-force "$id")
-  tasks-axi add "$id" "ticketed sc-5000" --kind ship --file "$(backlog_of "$case_dir")" >/dev/null
+  tasks-axi add "$id" "ticketed" --body "Shortcut: sc-5000" --kind ship --file "$(backlog_of "$case_dir")" >/dev/null
   start_item "$case_dir" "$id"
   write_task_meta "$case_dir" "$id" ship local-only "spawn_gen=spawn-shortcut-force"
   : > "$case_dir/curl.log"
@@ -1356,7 +1390,7 @@ test_scout_teardown_moves_the_story_to_review_with_its_report() {
   local case_dir id out
   id=atomic-shortcut-b7
   case_dir=$(make_home teardown-shortcut-scout "$id")
-  tasks-axi add "$id" "ticketed sc-5000" --kind scout --file "$(backlog_of "$case_dir")" >/dev/null
+  tasks-axi add "$id" "ticketed" --body "Shortcut: sc-5000" --kind scout --file "$(backlog_of "$case_dir")" >/dev/null
   start_item "$case_dir" "$id"
   write_task_meta "$case_dir" "$id" scout '' "spawn_gen=spawn-shortcut-scout"
   mkdir -p "$(home_of "$case_dir")/data/$id"

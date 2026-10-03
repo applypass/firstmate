@@ -415,10 +415,12 @@ A request relayed to you by the main firstmate is tagged with a leading \`$FM_FR
 When a message carries that marker, do the work, then respond via the STATUS/ESCALATION path below, never only in this chat: the main firstmate does not read your chat, so a chat-only reply is lost.
 Marked requests also carry a privacy-safe \`corr=<id>\` token after the marker; include that exact token in your parent status reply (or in the status pointer to a detailed doc) so the parent can correlate the answer.
 Only a \`done\`, \`ready\`, \`needs-decision\`, \`blocked\`, or \`failed\` line with that \`corr=<id>\` closes the request; a \`working:\` or \`paused:\` line only acknowledges it and keeps it open.
-Optional helper: \`bin/fm-secondmate-report.sh <verb> <corr_id> <note>\` appends that correlated line to the parent channel itself - do not pass a status path, and do not write a hand path under this home.
-A plain \`echo\` that includes the same \`corr=<id>\` on this parent channel is equally valid; do not depend on the helper being present.
+Helper: \`bin/fm-secondmate-report.sh <verb> <corr_id> <note>\` appends that correlated line to the parent channel itself - do not pass a status path, and do not write a hand path under this home.
+A \`done\` or \`ready\` result line for an investigation or work MUST go through that helper with \`--item <item>\`, because it runs the item's Shortcut story check and refuses to publish while it fails; never \`echo\` such a line.
+Any other line may be a plain \`echo\` that includes the same \`corr=<id>\` on this parent channel.
 For a terse result, a status line is the whole answer.
 For a detailed answer (an investigation, a plan, an audit), write it to a doc under your home's \`data/\` and append a status line that points to that doc - the scout-report pattern - so the main firstmate is woken and can read it.
+Before you start any investigation or work you run yourself rather than hand to a worker, give it its own Shortcut story: add a backlog item with \`bin/fm-tasks-axi.sh add\` in this home (it creates the story), or run \`bin/fm-shortcut-ticket.sh <item>\`, and confirm \`bin/fm-shortcut-ticket.sh --check <item>\` passes; publish its \`done\` or \`ready\` result with \`bin/fm-secondmate-report.sh --item <item> ...\`, which refuses while that check fails.
 Before treating an investigation or visual review as complete, load \`captain-hold-lifecycle\` from this home's \`.agents/skills/\` and pass its shared completion gate.
 A message with NO marker is the captain typing directly into your pane: treat it as authoritative captain intervention and stay conversational exactly as you would for any captain message; do not force it onto the status path.
 A request arriving through the instruction inbox below follows the same marker and reply rules.
