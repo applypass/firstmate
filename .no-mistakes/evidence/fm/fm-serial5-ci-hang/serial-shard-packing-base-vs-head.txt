@@ -1,0 +1,27 @@
+serial lane: 204 scripts; hinted at base=182, at head=204
+fm-supervision-host hint: base=41512 ms, head=761606 ms; failing CI job ran it 1160565 ms; job cap 1800 s
+
+== BASE runner: --list --lane portable-serial-<k>of9 ==
+   complete+disjoint vs serial lane: True (members=204, unique=204)
+   shard 1: n= 12 measured-sum=  1058s  supervision-host@1160.6s=  1058s
+   shard 2: n= 23 measured-sum=   944s  supervision-host@1160.6s=   944s
+   shard 3: n= 25 measured-sum=   756s  supervision-host@1160.6s=   756s
+   shard 4: n= 24 measured-sum=   815s  supervision-host@1160.6s=   815s
+   shard 5: n= 24 measured-sum=  1581s  supervision-host@1160.6s=  1980s  <- fm-supervision-host
+   shard 6: n= 24 measured-sum=   927s  supervision-host@1160.6s=   927s
+   shard 7: n= 25 measured-sum=   759s  supervision-host@1160.6s=   759s
+   shard 8: n= 24 measured-sum=   868s  supervision-host@1160.6s=   868s
+   shard 9: n= 23 measured-sum=  1028s  supervision-host@1160.6s=  1028s
+
+== HEAD runner: --list --lane portable-serial-<k>of9 ==
+   complete+disjoint vs serial lane: True (members=204, unique=204)
+   shard 1: n=  1 measured-sum=  1031s  supervision-host@1160.6s=  1031s
+   shard 2: n= 21 measured-sum=   963s  supervision-host@1160.6s=  1362s  <- fm-supervision-host
+   shard 3: n= 26 measured-sum=   963s  supervision-host@1160.6s=   963s
+   shard 4: n= 26 measured-sum=   963s  supervision-host@1160.6s=   963s
+   shard 5: n= 25 measured-sum=   963s  supervision-host@1160.6s=   963s
+   shard 6: n= 26 measured-sum=   963s  supervision-host@1160.6s=   963s
+   shard 7: n= 26 measured-sum=   963s  supervision-host@1160.6s=   963s
+   shard 8: n= 26 measured-sum=   963s  supervision-host@1160.6s=   963s
+   shard 9: n= 27 measured-sum=   963s  supervision-host@1160.6s=   963s
+

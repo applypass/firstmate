@@ -1,0 +1,5 @@
+=== HEAD 8b1d0d2: bin/fm-test-run.sh --check-coverage ===
+FM_TEST_COVERAGE ok total=244 parallel=24 parallel_max_ms=417163 parallel_imbalance_ms=2894 parallel_unhinted=0 serial=204 serial_shards=9 serial_unhinted=0 herdr=16
+exit=0
+
+=== BASE c06125b: bin/fm-test-run.sh --check-coverage ===
