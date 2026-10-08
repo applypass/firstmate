@@ -41,7 +41,7 @@ When a ship or scout must record a live check, tell it to:
 2. Read every contact sheet, one per case.
    Check that each click shows a cursor, ripple, and outlined target with a caption, and that the frames after it show the resulting screen.
    A sheet with no overlay, a missing hold after a transition, or a click with no visible target fails the recording.
-   Lower `--scene` or `--interval` and rerun when a transition falls between sampled frames.
+   Lower `--scene` or `--interval` and rerun when a transition falls between sampled frames; raise `--max-frames` too when the index says the sample was thinned.
 3. Read the trace summary and the index file.
    A failed action or console error in a case that looks fine on screen is a finding, not noise.
 4. Check each case's frames against what the case claimed to prove.

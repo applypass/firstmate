@@ -9,7 +9,7 @@
 #   --interval <sec>   longest gap between sampled frames (default 3)
 #   --scene <0-1>      scene-change threshold; lower picks more frames (default 0.08)
 #   --min-gap <sec>    shortest gap between sampled frames (default 0.5)
-#   --max-frames <n>   thin the sample to at most n frames (default 24)
+#   --max-frames <n>   thin the sample to at most n frames, noting it (default 24)
 #   --cols <n>         tiles per row (default 4)
 #   --tile-width <px>  width of each tile (default 400)
 #   -h, --help         show this help
@@ -198,15 +198,18 @@ def sample(video, width, height, duration):
         fail(f"{video}: frame count did not match the sampled timestamps")
     frames = [(times[i], raw[i * size:(i + 1) * size]) for i in range(len(times))]
     if frames and duration - frames[-1][0] > 0.5:
-        last, _ = grab(video, f"scale={tile_w}:{tile_h}", before=("-ss", f"{max(duration - 0.1, 0):.3f}"))
-        if len(last) >= size:
-            frames.append((duration, last[-size:]))
+        start = frames[-1][0]
+        tail, tail_log = grab(video, f"showinfo,scale={tile_w}:{tile_h}", before=("-ss", f"{start:.3f}"))
+        tail_times = [float(m) for m in re.findall(r"pts_time:([0-9.]+)", tail_log)]
+        if tail_times and tail_times[-1] > 0 and len(tail) >= size:
+            frames.append((start + tail_times[-1], tail[-size:]))
+    sampled = len(frames)
     if max_frames > 1 and len(frames) > max_frames:
         keep = sorted({round(i * (len(frames) - 1) / (max_frames - 1)) for i in range(max_frames)})
         frames = [frames[i] for i in keep]
     elif max_frames == 1:
         frames = frames[:1]
-    return tile_h, frames
+    return tile_h, frames, sampled
 
 
 def fill(buf, stride, x, y, w, h, color):
@@ -263,18 +266,25 @@ def trace_summary(path):
     try:
         with zipfile.ZipFile(path) as zf:
             names = sorted(n for n in zf.namelist() if n.endswith(".trace"))
-            lines = []
+            events = []
             for name in names:
-                lines.extend(zf.read(name).decode("utf-8", "replace").splitlines())
+                runner = os.path.basename(name) == "test.trace"
+                for line in zf.read(name).decode("utf-8", "replace").splitlines():
+                    try:
+                        ev = json.loads(line)
+                    except ValueError:
+                        continue
+                    if isinstance(ev, dict):
+                        events.append((runner, ev))
     except (OSError, zipfile.BadZipFile) as exc:
         return [f"trace: {path} is unreadable ({exc})"]
+    covered = {ev.get("stepId") for runner, ev in events
+               if not runner and ev.get("type") == "before" and ev.get("stepId")}
     titles, actions, failed, errors, console = {}, 0, [], [], 0
-    for line in lines:
-        try:
-            ev = json.loads(line)
-        except ValueError:
-            continue
+    for runner, ev in events:
         kind = ev.get("type")
+        if runner and kind in ("before", "after") and ev.get("callId") in covered:
+            continue
         if kind == "before":
             titles[ev.get("callId")] = ev.get("title") or ev.get("apiName") or ev.get("method") or "action"
         elif kind == "after":
@@ -324,7 +334,7 @@ for video in videos:
     out_dir = out_dir_arg or os.path.join(os.path.dirname(os.path.abspath(video)), "review")
     os.makedirs(out_dir, exist_ok=True)
     width, height, duration = probe(video)
-    tile_h, frames = sample(video, width, height, duration)
+    tile_h, frames, sampled = sample(video, width, height, duration)
     if not frames:
         fail(f"{video}: no frames sampled")
     png_path = os.path.join(out_dir, f"{name}.contact.png")
@@ -335,12 +345,15 @@ for video in videos:
     if trace is None:
         neighbour = os.path.join(os.path.dirname(video), f"{name}{TRACE_SUFFIX}")
         trace = neighbour if os.path.isfile(neighbour) else None
+    count = f"{len(frames)} frames"
+    if sampled > len(frames):
+        count = f"{len(frames)} of {sampled} sampled frames (thinned by --max-frames)"
     report = [f"video: {video}", f"duration: {duration:.1f}s, {width}x{height}",
-              f"frames: {len(frames)}"]
+              f"frames: {count}"]
     report += [f"  #{i + 1:02d} t={t:.1f}s" for i, (t, _) in enumerate(frames)]
     report += trace_summary(trace) if trace else ["trace: none found beside the video"]
     with open(txt_path, "w", encoding="utf-8") as fh:
         fh.write("\n".join(report) + "\n")
-    print(f"sheet: {png_path} ({len(frames)} frames, {duration:.1f}s)")
+    print(f"sheet: {png_path} ({count}, {duration:.1f}s)")
     print("\n".join(line for line in report if line.startswith(("trace", "  failed", "  error"))))
 PY

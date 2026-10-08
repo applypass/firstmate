@@ -96,6 +96,8 @@ test_out_dir_and_max_frames() {
   assert_present "$dir/out/b.contact.png" "second video has no sheet"
   count=$(grep -c '^  #' "$dir/out/a.contact.txt")
   assert_equals "3" "$count" "--max-frames did not thin the sample"
+  assert_grep "sampled frames (thinned by --max-frames)" "$dir/out/a.contact.txt" "index hides the thinning"
+  assert_contains "$out" "(thinned by --max-frames)" "stdout hides the thinning"
   pass "--out-dir collects every sheet and --max-frames caps the sample"
 }
 
@@ -124,6 +126,56 @@ PY
   pass "a neighbouring <name>.trace.zip is summarised with its failed actions"
 }
 
+test_runner_trace_counts_each_action_once() {
+  local dir out
+  [ "$HAVE_FFMPEG" = 1 ] || { echo "skip: ffmpeg absent"; return 0; }
+  dir="$TMP_ROOT/runner-trace"
+  mkdir -p "$dir"
+  make_clip "$dir/case-2.mp4"
+  python3 -I - "$dir/case-2.trace.zip" <<'PY' || fail "could not build the trace fixture"
+import json, sys, zipfile
+steps = [
+    {"type": "before", "callId": "s1", "title": "Click Next", "category": "pw:api"},
+    {"type": "after", "callId": "s1"},
+    {"type": "before", "callId": "s2", "title": "Fill email", "category": "pw:api"},
+    {"type": "after", "callId": "s2", "error": {"message": "locator not found"}},
+    {"type": "before", "callId": "s3", "title": "Expect heading", "category": "expect"},
+    {"type": "after", "callId": "s3", "error": {"message": "heading not visible"}},
+    {"type": "error", "message": "test failed"},
+]
+library = [
+    {"type": "before", "callId": "call@1", "stepId": "s1", "title": "Click Next"},
+    {"type": "after", "callId": "call@1"},
+    {"type": "before", "callId": "call@2", "stepId": "s2", "title": "Fill email"},
+    {"type": "after", "callId": "call@2", "error": {"message": "locator not found"}},
+]
+with zipfile.ZipFile(sys.argv[1], "w") as zf:
+    zf.writestr("test.trace", "\n".join(json.dumps(e) for e in steps))
+    zf.writestr("trace.trace", "\n".join(json.dumps(e) for e in library))
+PY
+  out=$("$REVIEW" "$dir/case-2.mp4") || fail "review failed: $out"
+  assert_contains "$out" "3 actions, 2 failed, 1 error events, 0 console errors" "runner trace counts"
+  assert_equals "1" "$(grep -c 'failed action - Fill email' "$dir/review/case-2.contact.txt")" "failed click listed more than once"
+  assert_grep "failed action - Expect heading: heading not visible" "$dir/review/case-2.contact.txt" "runner-only step failure is lost"
+  pass "a test-runner trace counts each action once and keeps its own step failures"
+}
+
+test_last_frame_is_kept_when_stream_ends_early() {
+  local dir out
+  [ "$HAVE_FFMPEG" = 1 ] || { echo "skip: ffmpeg absent"; return 0; }
+  dir="$TMP_ROOT/early-end"
+  mkdir -p "$dir"
+  # video stops at 3.9s while the audio runs the container out to 6s
+  ffmpeg -nostdin -v error -f lavfi -i 'color=c=white:s=320x180:r=10:d=2' \
+    -f lavfi -i 'color=c=blue:s=320x180:r=10:d=2' \
+    -f lavfi -i 'anullsrc=r=8000:cl=mono' \
+    -filter_complex '[0][1]concat=n=2:v=1:a=0[v]' -map '[v]' -map 2 -t 6 \
+    -pix_fmt yuv420p "$dir/early.mp4" || fail "could not generate test media"
+  out=$("$REVIEW" --interval 1.5 "$dir/early.mp4") || fail "review failed: $out"
+  assert_grep "t=3.9s" "$dir/review/early.contact.txt" "last video frame is dropped"
+  pass "the last decoded frame is kept when the video stream ends before the container"
+}
+
 test_unreadable_input_fails() {
   local out rc=0
   [ "$HAVE_FFMPEG" = 1 ] || { echo "skip: ffmpeg absent"; return 0; }
@@ -143,6 +195,8 @@ test_missing_ffmpeg_is_reported_clearly
 test_contact_sheet_at_deterministic_path
 test_out_dir_and_max_frames
 test_trace_summary_lists_failed_actions
+test_runner_trace_counts_each_action_once
+test_last_frame_is_kept_when_stream_ends_early
 test_unreadable_input_fails
 
 echo "# all fm-video-review tests passed"
