@@ -24,8 +24,9 @@
 # A trace named <name>.trace.zip beside <name>.mp4 is summarised automatically.
 # A trace zip passed on the command line pairs with the video whose name matches
 # its own (x.trace.zip with x.mp4) and replaces the neighbour.
-# The summary counts Playwright actions, lists failed actions and error events,
-# and counts console errors.
+# The summary counts Playwright actions and test-runner expect steps (not hooks,
+# fixtures, or test.step wrappers), lists failed actions and error events, and
+# counts console errors.
 #
 # Needs ffmpeg 5.1 or newer, ffprobe, and python3 on PATH; it installs nothing.
 # Exit: 0 ok, 1 bad input or a failed run, 2 usage, 3 a required tool is missing.
@@ -219,8 +220,10 @@ def fill(buf, stride, x, y, w, h, color):
         buf[start:start + w * 3] = row
 
 
-def draw_text(buf, stride, x, y, text):
+def draw_text(buf, stride, x, y, text, right):
     for ch in text:
+        if x + 5 * SCALE > right:
+            break
         glyph = GLYPHS.get(ch, GLYPHS[" "]).split()
         for gy, bits in enumerate(glyph):
             for gx, bit in enumerate(bits):
@@ -255,11 +258,14 @@ def contact_sheet(tile_h, frames):
         x = GAP + (i % ncols) * (tile_w + GAP)
         y = GAP + (i // ncols) * (cell_h + GAP)
         fill(buf, stride, x, y, tile_w, LABEL_H, LABEL_BG)
-        draw_text(buf, stride, x + 6, y + 4, f"t={t:.1f}s #{i + 1:02d}")
+        draw_text(buf, stride, x + 6, y + 4, f"t={t:.1f}s #{i + 1:02d}", x + tile_w)
         for r in range(tile_h):
             dst = (y + LABEL_H + r) * stride + x * 3
             buf[dst:dst + tile_w * 3] = raw[r * tile_w * 3:(r + 1) * tile_w * 3]
     return png_bytes(width, height, buf)
+
+
+RUNNER_ACTIONS = ("pw:api", "expect")
 
 
 def trace_summary(path):
@@ -280,10 +286,12 @@ def trace_summary(path):
         return [f"trace: {path} is unreadable ({exc})"]
     covered = {ev.get("stepId") for runner, ev in events
                if not runner and ev.get("type") == "before" and ev.get("stepId")}
+    counted = {ev.get("callId") for runner, ev in events
+               if runner and ev.get("type") == "before" and ev.get("method") in RUNNER_ACTIONS}
     titles, actions, failed, errors, console = {}, 0, [], [], 0
     for runner, ev in events:
         kind = ev.get("type")
-        if runner and kind in ("before", "after") and ev.get("callId") in covered:
+        if runner and kind in ("before", "after") and (ev.get("callId") in covered or ev.get("callId") not in counted):
             continue
         if kind == "before":
             titles[ev.get("callId")] = ev.get("title") or ev.get("apiName") or ev.get("method") or "action"

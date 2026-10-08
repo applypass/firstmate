@@ -135,19 +135,27 @@ test_runner_trace_counts_each_action_once() {
   python3 -I - "$dir/case-2.trace.zip" <<'PY' || fail "could not build the trace fixture"
 import json, sys, zipfile
 steps = [
-    {"type": "before", "callId": "s1", "title": "Click Next", "category": "pw:api"},
-    {"type": "after", "callId": "s1"},
-    {"type": "before", "callId": "s2", "title": "Fill email", "category": "pw:api"},
-    {"type": "after", "callId": "s2", "error": {"message": "locator not found"}},
-    {"type": "before", "callId": "s3", "title": "Expect heading", "category": "expect"},
+    {"type": "before", "callId": "h1", "class": "Test", "method": "hook", "title": "Before Hooks"},
+    {"type": "before", "callId": "f1", "parentId": "h1", "class": "Test", "method": "fixture", "title": "fixture: page"},
+    {"type": "after", "callId": "f1"},
+    {"type": "after", "callId": "h1"},
+    {"type": "before", "callId": "w1", "class": "Test", "method": "test.step", "title": "Go to step two"},
+    {"type": "before", "callId": "s1", "parentId": "w1", "class": "Test", "method": "pw:api", "title": "Click Next"},
+    {"type": "after", "callId": "s1", "error": {"message": "button not found"}},
+    {"type": "after", "callId": "w1", "error": {"message": "button not found"}},
+    {"type": "before", "callId": "s2", "class": "Test", "method": "pw:api", "title": "Fill email"},
+    {"type": "after", "callId": "s2"},
+    {"type": "before", "callId": "s3", "class": "Test", "method": "expect", "title": "Expect heading"},
     {"type": "after", "callId": "s3", "error": {"message": "heading not visible"}},
+    {"type": "before", "callId": "h2", "class": "Test", "method": "hook", "title": "After Hooks"},
+    {"type": "after", "callId": "h2"},
     {"type": "error", "message": "test failed"},
 ]
 library = [
     {"type": "before", "callId": "call@1", "stepId": "s1", "title": "Click Next"},
-    {"type": "after", "callId": "call@1"},
+    {"type": "after", "callId": "call@1", "error": {"message": "button not found"}},
     {"type": "before", "callId": "call@2", "stepId": "s2", "title": "Fill email"},
-    {"type": "after", "callId": "call@2", "error": {"message": "locator not found"}},
+    {"type": "after", "callId": "call@2"},
 ]
 with zipfile.ZipFile(sys.argv[1], "w") as zf:
     zf.writestr("test.trace", "\n".join(json.dumps(e) for e in steps))
@@ -155,9 +163,10 @@ with zipfile.ZipFile(sys.argv[1], "w") as zf:
 PY
   out=$("$REVIEW" "$dir/case-2.mp4") || fail "review failed: $out"
   assert_contains "$out" "3 actions, 2 failed, 1 error events, 0 console errors" "runner trace counts"
-  assert_equals "1" "$(grep -c 'failed action - Fill email' "$dir/review/case-2.contact.txt")" "failed click listed more than once"
+  assert_equals "1" "$(grep -c 'button not found' "$dir/review/case-2.contact.txt")" "failed click listed more than once"
   assert_grep "failed action - Expect heading: heading not visible" "$dir/review/case-2.contact.txt" "runner-only step failure is lost"
-  pass "a test-runner trace counts each action once and keeps its own step failures"
+  assert_not_contains "$out" "Go to step two" "test.step wrapper counted as an action"
+  pass "a test-runner trace counts each action once, skips hooks, fixtures, and step wrappers, and keeps expect failures"
 }
 
 test_last_frame_is_kept_when_stream_ends_early() {
@@ -174,6 +183,36 @@ test_last_frame_is_kept_when_stream_ends_early() {
   out=$("$REVIEW" --interval 1.5 "$dir/early.mp4") || fail "review failed: $out"
   assert_grep "t=3.9s" "$dir/review/early.contact.txt" "last video frame is dropped"
   pass "the last decoded frame is kept when the video stream ends before the container"
+}
+
+test_labels_stay_inside_narrow_tiles() {
+  local dir out
+  [ "$HAVE_FFMPEG" = 1 ] || { echo "skip: ffmpeg absent"; return 0; }
+  dir="$TMP_ROOT/narrow"
+  mkdir -p "$dir"
+  make_clip "$dir/narrow.mp4"
+  out=$("$REVIEW" --tile-width 40 --cols 2 --max-frames 4 "$dir/narrow.mp4") || fail "review failed: $out"
+  # every pixel of the gap columns between and beside tiles keeps the sheet background
+  python3 -I - "$dir/review/narrow.contact.png" <<'PY' || fail "a label spilled out of its 40px tile"
+import struct, sys, zlib
+data = open(sys.argv[1], "rb").read()
+width, height = struct.unpack(">II", data[16:24])
+pos, idat = 8, b""
+while pos < len(data):
+    length, kind = struct.unpack(">I4s", data[pos:pos + 8])
+    if kind == b"IDAT":
+        idat += data[pos + 8:pos + 8 + length]
+    pos += 12 + length
+raw = zlib.decompress(idat)
+stride = width * 3 + 1
+gaps = [x for c in range(3) for x in range(c * 44, c * 44 + 4)]
+for y in range(height):
+    row = raw[y * stride + 1:(y + 1) * stride]
+    for x in gaps:
+        if row[x * 3:x * 3 + 3] != bytes((24, 24, 24)):
+            sys.exit(1)
+PY
+  pass "labels are clipped to their tile on a narrow --tile-width"
 }
 
 test_unreadable_input_fails() {
@@ -197,6 +236,7 @@ test_out_dir_and_max_frames
 test_trace_summary_lists_failed_actions
 test_runner_trace_counts_each_action_once
 test_last_frame_is_kept_when_stream_ends_early
+test_labels_stay_inside_narrow_tiles
 test_unreadable_input_fails
 
 echo "# all fm-video-review tests passed"
