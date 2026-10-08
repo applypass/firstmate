@@ -1,0 +1,9 @@
+video: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-vr-lab.8ADkJx/out/video/case-fail.mp4
+duration: 7.1s, 1000x700
+frames: 4 frames
+  #01 t=0.0s
+  #02 t=3.0s
+  #03 t=6.0s
+  #04 t=7.1s
+trace: case-fail.trace.zip - 18 actions, 1 failed, 0 error events, 1 console errors
+  failed action - click: Timeout 1500ms exceeded.

@@ -1,0 +1,12 @@
+video: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-vr-lab.8ADkJx/out/video/case-pass.mp4
+duration: 18.6s, 1000x700
+frames: 8 frames
+  #01 t=0.0s
+  #02 t=3.0s
+  #03 t=6.0s
+  #04 t=9.0s
+  #05 t=12.0s
+  #06 t=15.0s
+  #07 t=16.4s
+  #08 t=18.6s
+trace: case-pass.trace.zip - 29 actions, 0 failed, 0 error events, 0 console errors

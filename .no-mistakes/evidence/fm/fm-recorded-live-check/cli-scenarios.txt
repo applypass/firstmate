@@ -1,0 +1,38 @@
+$ determinism: rerun into a second out dir and compare bytes
+case-pass.contact.png identical
+case-fail.contact.png identical
+index identical
+
+$ thinning notice: --max-frames 3
+sheet: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-vr-lab.8ADkJx/r3/case-pass.contact.png (3 of 20 sampled frames (thinned by --max-frames), 18.6s)
+trace: case-pass.trace.zip - 29 actions, 0 failed, 0 error events, 0 console errors
+exit=0
+frames: 3 of 20 sampled frames (thinned by --max-frames)
+  #01 t=0.0s
+  #02 t=10.0s
+  #03 t=18.6s
+trace: case-pass.trace.zip - 29 actions, 0 failed, 0 error events, 0 console errors
+
+$ explicit trace pairing: case-fail trace copied as other.trace.zip and passed with renamed video
+sheet: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-vr-lab.8ADkJx/r4/x.contact.png (8 frames, 18.6s)
+trace: x.trace.zip - 18 actions, 1 failed, 0 error events, 1 console errors
+  failed action - click: Timeout 1500ms exceeded.
+exit=0
+
+$ ffmpeg missing: PATH without ffmpeg
+fm-video-review: ffmpeg not found on PATH; install it first (for example 'brew install ffmpeg' for ffmpeg and ffprobe)
+exit=3
+
+$ missing input file
+fm-video-review: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-vr-lab.8ADkJx/nope.mp4: no such file
+exit=1
+
+$ no arguments
+fm-video-review: give at least one video
+Run 'fm-video-review.sh --help' for usage.
+exit=2
+
+$ not a video
+fm-video-review: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-vr-lab.8ADkJx/bad.mp4: not a readable video ([mov,mp4,m4a,3gp,3g2,mj2 @ 0xb28c30000] moov atom not found
+/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-vr-lab.8ADkJx/bad.mp4: Invalid data found when processing input)
+exit=1
