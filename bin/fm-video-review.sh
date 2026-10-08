@@ -198,7 +198,7 @@ def sample(video, width, height, duration):
     if size * len(times) != len(raw):
         fail(f"{video}: frame count did not match the sampled timestamps")
     frames = [(times[i], raw[i * size:(i + 1) * size]) for i in range(len(times))]
-    if frames and duration - frames[-1][0] > 0.5:
+    if frames and duration - frames[-1][0] > 1e-3:
         start = frames[-1][0]
         tail, tail_log = grab(video, f"showinfo,scale={tile_w}:{tile_h}", before=("-ss", f"{start:.3f}"))
         tail_times = [float(m) for m in re.findall(r"pts_time:([0-9.]+)", tail_log)]

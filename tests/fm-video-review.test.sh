@@ -185,6 +185,22 @@ test_last_frame_is_kept_when_stream_ends_early() {
   pass "the last decoded frame is kept when the video stream ends before the container"
 }
 
+test_change_just_before_the_end_is_kept() {
+  local dir out
+  [ "$HAVE_FFMPEG" = 1 ] || { echo "skip: ffmpeg absent"; return 0; }
+  dir="$TMP_ROOT/late-change"
+  mkdir -p "$dir"
+  # blue starts at 4.6s and green at 4.9s, inside --min-gap of the 4.6s sample and the 5.0s end
+  ffmpeg -nostdin -v error -f lavfi -i 'color=c=white:s=320x180:r=10:d=4.6' \
+    -f lavfi -i 'color=c=blue:s=320x180:r=10:d=0.3' \
+    -f lavfi -i 'color=c=green:s=320x180:r=10:d=0.1' \
+    -filter_complex '[0][1][2]concat=n=3:v=1:a=0' -pix_fmt yuv420p "$dir/late.mp4" || fail "could not generate test media"
+  out=$("$REVIEW" "$dir/late.mp4") || fail "review failed: $out"
+  assert_grep "t=4.6s" "$dir/review/late.contact.txt" "scene change at 4.6s is not sampled"
+  assert_grep "t=4.9s" "$dir/review/late.contact.txt" "final screen at 4.9s is dropped"
+  pass "a screen change in the last half second is kept as the final frame"
+}
+
 test_labels_stay_inside_narrow_tiles() {
   local dir out
   [ "$HAVE_FFMPEG" = 1 ] || { echo "skip: ffmpeg absent"; return 0; }
@@ -236,6 +252,7 @@ test_out_dir_and_max_frames
 test_trace_summary_lists_failed_actions
 test_runner_trace_counts_each_action_once
 test_last_frame_is_kept_when_stream_ends_early
+test_change_just_before_the_end_is_kept
 test_labels_stay_inside_narrow_tiles
 test_unreadable_input_fails
 
