@@ -202,7 +202,7 @@ def sample(video, width, height, duration):
         start = frames[-1][0]
         tail, tail_log = grab(video, f"showinfo,scale={tile_w}:{tile_h}", before=("-ss", f"{start:.3f}"))
         tail_times = [float(m) for m in re.findall(r"pts_time:([0-9.]+)", tail_log)]
-        if tail_times and tail_times[-1] > 0 and len(tail) >= size:
+        if tail_times and tail_times[-1] > 1e-3 and len(tail) >= size:
             frames.append((start + tail_times[-1], tail[-size:]))
     sampled = len(frames)
     if max_frames > 1 and len(frames) > max_frames:

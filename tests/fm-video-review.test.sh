@@ -201,6 +201,20 @@ test_change_just_before_the_end_is_kept() {
   pass "a screen change in the last half second is kept as the final frame"
 }
 
+test_final_frame_is_not_repeated() {
+  local dir out
+  [ "$HAVE_FFMPEG" = 1 ] || { echo "skip: ffmpeg absent"; return 0; }
+  dir="$TMP_ROOT/final-once"
+  mkdir -p "$dir"
+  # at 30 fps the one blue frame sits at 1.0333s, which a millisecond seek cannot hit exactly
+  ffmpeg -nostdin -v error -f lavfi -i 'color=c=white:s=320x180:r=30:d=1.0333333' \
+    -f lavfi -i 'color=c=blue:s=320x180:r=30:d=0.0333333' \
+    -filter_complex '[0][1]concat=n=2:v=1:a=0' -pix_fmt yuv420p "$dir/once.mp4" || fail "could not generate test media"
+  out=$("$REVIEW" "$dir/once.mp4") || fail "review failed: $out"
+  assert_equals "2" "$(grep -c '^  #' "$dir/review/once.contact.txt")" "final frame is sampled twice"
+  pass "a final frame that was already sampled is not added again"
+}
+
 test_labels_stay_inside_narrow_tiles() {
   local dir out
   [ "$HAVE_FFMPEG" = 1 ] || { echo "skip: ffmpeg absent"; return 0; }
@@ -253,6 +267,7 @@ test_trace_summary_lists_failed_actions
 test_runner_trace_counts_each_action_once
 test_last_frame_is_kept_when_stream_ends_early
 test_change_just_before_the_end_is_kept
+test_final_frame_is_not_repeated
 test_labels_stay_inside_narrow_tiles
 test_unreadable_input_fails
 
