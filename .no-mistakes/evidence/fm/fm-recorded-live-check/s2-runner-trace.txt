@@ -1,0 +1,6 @@
+$ bin/fm-video-review.sh runner/signup.mp4 runner/signup.trace.zip
+sheet: /tmp/fmvr.BkOlOk/runner/out/signup.contact.png (2 frames, 2.1s)
+trace: signup.trace.zip - 19 actions, 1 failed, 1 error events, 1 console errors
+  failed action - click: Timeout 800ms exceeded.
+  error event - TimeoutError: locator.click: Timeout 800ms exceeded.
+exit=0

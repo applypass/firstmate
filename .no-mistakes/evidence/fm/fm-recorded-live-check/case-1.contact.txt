@@ -1,0 +1,10 @@
+video: /tmp/fmvr.BkOlOk/rec/video/case-1.mp4
+duration: 11.2s, 1280x1000
+frames: 5 frames
+  #01 t=0.0s
+  #02 t=3.0s
+  #03 t=6.0s
+  #04 t=9.0s
+  #05 t=11.2s
+trace: case-1.trace.zip - 28 actions, 1 failed, 0 error events, 1 console errors
+  failed action - click: Timeout 800ms exceeded.

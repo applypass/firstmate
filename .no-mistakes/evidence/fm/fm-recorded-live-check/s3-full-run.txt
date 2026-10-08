@@ -1,0 +1,3 @@
+sheet: /tmp/fmvr.BkOlOk/fine2/case-1.contact.png (22 frames, 11.2s)
+trace: case-1.trace.zip - 28 actions, 1 failed, 0 error events, 1 console errors
+  failed action - click: Timeout 800ms exceeded.

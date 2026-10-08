@@ -1,0 +1,22 @@
+$ PATH=<no ffmpeg> bin/fm-video-review.sh case-1.mp4
+fm-video-review: ffmpeg not found on PATH; install it first (for example 'brew install ffmpeg' for ffmpeg and ffprobe)
+exit=3
+$ bin/fm-video-review.sh --interval abc x.mp4
+fm-video-review: --interval must be a number, got 'abc'
+exit=2
+$ bin/fm-video-review.sh (no args)
+fm-video-review: give at least one video
+Run 'fm-video-review.sh --help' for usage.
+exit=2
+$ bin/fm-video-review.sh other.trace.zip case-1.mp4
+fm-video-review: trace /tmp/other.trace.zip has no video named 'other'
+exit=2
+$ bin/fm-video-review.sh missing.mp4
+fm-video-review: /tmp/nope.mp4: no such file
+exit=1
+$ bin/fm-video-review.sh --help | head -5
+fm-video-review.sh - turn a recorded live check into one contact-sheet PNG per video.
+
+Usage:
+  fm-video-review.sh [options] <video> [<video>...] [<trace.zip>...]
+
