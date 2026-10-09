@@ -153,6 +153,8 @@ test_guard_hook_blocks_direct_writes() {
   guard '{"tool_name":"Bash","tool_input":{"command":"bin/fm-decide.sh audit; echo x >> data/decided.md"}}' && fail "an append chained after fm-decide.sh was allowed"
   guard '{"tool_name":"Bash","tool_input":{"command":"cat bin/fm-decide.sh && sed -i s/a/b/ data/decided.md"}}' && fail "sed -i chained after a mention of fm-decide.sh was allowed"
   guard '{"tool_name":"Bash","tool_input":{"command":"bin/fm-decide.sh audit > data/decided.md"}}' && fail "a redirect of fm-decide.sh output into decided.md was allowed"
+  guard '{"tool_name":"Bash","tool_input":{"command":"bin/fm-decide.sh audit > \"data/decided.md\""}}' && fail "a double-quoted redirect target of fm-decide.sh output was allowed"
+  guard '{"tool_name":"Bash","tool_input":{"command":"bin/fm-decide.sh audit >> '"'"'data/decided.md'"'"'"}}' && fail "a single-quoted redirect target of fm-decide.sh output was allowed"
   guard '{"tool_name":"Bash","tool_input":{"command":"FM_HOME=/h bin/fm-decide.sh record k \"never rm data/decided.md; use > decided.md\""}}' >/dev/null \
     || fail "a record whose text mentions writes to decided.md was blocked"
   jq -e '.hooks.PreToolUse[0].hooks[0].command | contains("fm-decide.sh")' <<<"$("$ROOT/bin/fm-decide.sh" guard-line)" >/dev/null \

@@ -74,7 +74,7 @@ command_audit() {
   [ -z "$out" ]
 }
 
-guard_segments() {  # one shell segment per line; quoted words dropped from fm-decide.sh calls
+guard_segments() {  # one shell segment per line; quoted arguments dropped from fm-decide.sh calls
   FM_CMD=$1 awk 'BEGIN {
     s = ENVIRON["FM_CMD"] "\n"; q = ""
     for (i = 1; i <= length(s); i++) {
@@ -82,10 +82,11 @@ guard_segments() {  # one shell segment per line; quoted words dropped from fm-d
       if (q != "") {
         if (c == q) q = ""
         else if (c == "\\" && q == "\"") { raw = raw c; c = substr(s, ++i, 1) }
-        raw = raw c; continue
+        raw = raw c; if (keep) bare = bare c
+        continue
       }
       if (c == "\\") { c = c substr(s, ++i, 1); raw = raw c; bare = bare c; continue }
-      if (c == "\"" || c == "\047") { q = c; raw = raw c; continue }
+      if (c == "\"" || c == "\047") { q = c; keep = bare ~ />[[:space:]]*$/; raw = raw c; if (keep) bare = bare c; continue }
       if (c ~ /[;|&\n]/) {
         n = split(raw, w, /[[:space:]]+/); k = 1
         while (k <= n && (w[k] == "" || w[k] ~ /^[A-Za-z_][A-Za-z0-9_]*=/)) k++
