@@ -1923,9 +1923,9 @@ command_open() {  # <task-id> [--identity] [--distinguish-absent]
   exit 2
 }
 
-# Fork-only: comment the recorded decision on the held item's Shortcut story (best-effort).
+# Fork-only: record the decision (decided.md plus a Shortcut comment on the item's story, or a new chore story) via fm-decide.sh (best-effort).
 shortcut_comment_answer() {  # <task-id>
-  FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA "$SCRIPT_DIR/fm-shortcut-ticket.sh" comment "$1" "Captain decision: $DECISION_TEXT" --best-effort || true
+  FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA "$SCRIPT_DIR/fm-decide.sh" record "$1" "$DECISION_TEXT" --item "$1" --best-effort || true
 }
 
 case "${1:-}" in

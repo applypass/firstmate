@@ -11,10 +11,12 @@
 #        fm-shortcut-ticket.sh outcome <item>                comment the task's final status line
 #        fm-shortcut-ticket.sh park <item> --reason <text>   back to Backlog with the reason (work abandoned)
 #        fm-shortcut-ticket.sh done <item> --evidence <text> move to Done (never automatic)
+#        fm-shortcut-ticket.sh chore <title> [<text>]        file an Engineering/Backlog chore story, print "sc-NNNN <url>"
+#                                                            (a decision with no story; bin/fm-decide.sh calls it)
 #        fm-shortcut-ticket.sh --check <item>                exit 0 if the item has its own, existing story (or is exempt)
 #        fm-shortcut-ticket.sh --linked <item>               print the linked sc-NNNN, if any
 #        fm-shortcut-ticket.sh --enabled                     exit 0 if the feature is on
-# Any operation accepts --best-effort: a missing sc id or an API failure then
+# `comment ... --print-url` also prints the new comment's URL. Any operation accepts --best-effort: a missing sc id or an API failure then
 # warns and exits 0, which is how the lifecycle hooks call it. The story
 # operations also take the story id (sc-NNNN) in place of the item, for an
 # item that no longer exists.
@@ -74,6 +76,7 @@ TASKS="$SCRIPT_DIR/fm-tasks-axi.sh"
 # shellcheck source=bin/fm-timeout-lib.sh disable=SC1091
 . "$SCRIPT_DIR/fm-timeout-lib.sh"
 BEST_EFFORT=0
+PRINT_URL=0
 
 usage() {
   awk '
@@ -116,7 +119,11 @@ enabled() {
 
 ARGS=()
 for arg in "$@"; do
-  if [ "$arg" = --best-effort ]; then BEST_EFFORT=1; else ARGS+=("$arg"); fi
+  case "$arg" in
+    --best-effort) BEST_EFFORT=1 ;;
+    --print-url) PRINT_URL=1 ;;
+    *) ARGS+=("$arg") ;;
+  esac
 done
 set -- ${ARGS[@]+"${ARGS[@]}"}
 
@@ -129,7 +136,7 @@ OP=create
 case "${1:-}" in
   --check) OP=check; shift ;;
   --linked) OP=linked; shift ;;
-  link | state | review | comment | attach | outcome | park | done) OP=$1; shift ;;
+  link | chore | state | review | comment | attach | outcome | park | done) OP=$1; shift ;;
 esac
 ID=${1:-}
 [ -n "$ID" ] || die "usage: fm-shortcut-ticket.sh [<op>] <item-id> ... (see --help)"
@@ -139,7 +146,7 @@ enabled || exit 0
 
 KIND='' TITLE='' BODY='' SC='' PARENT=''
 case "$OP" in
-  create | check | linked | link) ;;
+  create | check | linked | link | chore) ;;
   *) case "${ID#sc-}" in "$ID" | '' | *[!0-9]*) ;; *) SC=$ID ;; esac ;;
 esac
 
@@ -152,7 +159,7 @@ field() {  # <name>; decodes a quoted value
   esac
 }
 
-if [ -z "$SC" ]; then
+if [ -z "$SC" ] && [ "$OP" != chore ]; then
   SHOW=$("$TASKS" show "$ID" --full 2>&1) || die "cannot read backlog item $ID: $(printf '%s' "$SHOW" | head -1)"
   KIND=$(field kind)
   TITLE=$(field title)
@@ -187,6 +194,8 @@ elif [ "$OP" = link ]; then
   [ -z "$SC" ] || [ "$SC" = "$TARGET" ] || die "backlog item $ID already names $SC as its own story"
   [ "$TARGET" != "$PARENT" ] || die "$TARGET is the parent (umbrella) story in $ID's title, never its own; create its own with: bin/fm-shortcut-ticket.sh $ID"
   SC=$TARGET
+elif [ "$OP" = chore ]; then
+  require_home_settings
 elif [ -z "$SC" ]; then
   [ "$BEST_EFFORT" = 1 ] && exit 0
   die "backlog item $ID names no Shortcut ticket (sc-NNNN)"
@@ -341,6 +350,22 @@ case "$OP" in
     fi
     [ -n "$TEXT" ] || die "usage: comment <item> <text> | --file <file>"
     post_comment "$TEXT"
+    [ "$PRINT_URL" = 0 ] || jq -r '.app_url // empty' "$WORK/resp"
+    exit 0
+    ;;
+  chore)
+    jq -n --arg name "$ID" --arg desc "${1:-}" \
+      --arg team "$(setting team_id)" --arg state "$(setting state_backlog)" --arg owner "$(setting owner_id)" '
+      {name: $name, description: $desc, story_type: "chore"}
+      + (if $team != "" then {group_id: $team} else {} end)
+      + (if $state != "" then {workflow_state_id: ($state | tonumber)} else {} end)
+      + (if $owner != "" then {owner_ids: [$owner]} else {} end)' >"$WORK/req.json" ||
+      die "cannot build the chore request (check state_backlog in the settings)"
+    http_json POST /api/v3/stories "$WORK/req.json"
+    ok || die "Shortcut chore creation failed (HTTP $HTTP_CODE)"
+    NUM=$(jq -r '.id // empty' "$WORK/resp" 2>/dev/null)
+    case "$NUM" in '' | *[!0-9]*) die "Shortcut returned no story id for the chore" ;; esac
+    printf 'sc-%s %s\n' "$NUM" "$(jq -r '.app_url // empty' "$WORK/resp")"
     exit 0
     ;;
   attach)
