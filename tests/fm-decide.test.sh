@@ -102,6 +102,13 @@ test_same_decision_twice_is_a_noop_and_changed_text_refuses() {
   assert_equals 1 "$(grep -c '^- \[dd-4\]' "$dir/home/data/decided.md")" "a replay appended a second entry"
   out=$(decide "$dir" record dd-4 "Different." --story sc-6523) && fail "a changed decision under the same key was accepted"
   assert_contains "$out" "different text" "the refusal does not name the changed text"
+  out=$(decide "$dir" record dd-4 "Sam" --story sc-6523) && fail "a prefix of the recorded text counted as the same decision"
+  assert_contains "$out" "different text" "a prefix of the recorded text was not refused"
+  decide "$dir" record dd-4b "Ship option B." --story sc-6523 >/dev/null || fail "record dd-4b failed"
+  : > "$dir/curl.log"
+  out=$(decide "$dir" record dd-4b "option B." --story sc-6523) && fail "a suffix of the recorded text counted as the same decision"
+  assert_contains "$out" "different text" "a suffix of the recorded text was not refused"
+  assert_equals 1 "$(grep -c '^- \[dd-4b\]' "$dir/home/data/decided.md")" "a suffix of the recorded text appended an entry"
   pass "replaying a key is a no-op and a changed text under it is refused"
 }
 
@@ -138,6 +145,11 @@ test_guard_hook_blocks_direct_writes() {
   guard '{"tool_name":"Write","tool_input":{"file_path":"/h/data/other.md"}}' >/dev/null || fail "an unrelated write was blocked"
   guard '{"tool_name":"Bash","tool_input":{"command":"cat data/decided.md"}}' >/dev/null || fail "reading decided.md was blocked"
   guard '{"tool_name":"Bash","tool_input":{"command":"bin/fm-decide.sh record k t >> /dev/null; grep k data/decided.md"}}' >/dev/null || fail "the sanctioned writer was blocked"
+  guard '{"tool_name":"Bash","tool_input":{"command":"cat a > ./data/decided.md"}}' && fail "a shell overwrite of decided.md was allowed"
+  guard '{"tool_name":"Bash","tool_input":{"command":"sed -i.bak s/a/b/ data/decided.md"}}' && fail "sed -i.bak on decided.md was allowed"
+  guard '{"tool_name":"Bash","tool_input":{"command":"rm data/decided.md"}}' && fail "rm of decided.md was allowed"
+  guard '{"tool_name":"Bash","tool_input":{"command":"git log --format=%h -- data/decided.md"}}' >/dev/null || fail "git log --format on decided.md was blocked"
+  guard '{"tool_name":"Bash","tool_input":{"command":"grep -c x 2>/dev/null data/decided.md"}}' >/dev/null || fail "a read with a stderr redirect was blocked"
   jq -e '.hooks.PreToolUse[0].hooks[0].command | contains("fm-decide.sh")' <<<"$("$ROOT/bin/fm-decide.sh" guard-line)" >/dev/null \
     || fail "guard-line does not print a PreToolUse hook for fm-decide.sh"
   pass "the guard blocks direct writes to decided.md and allows reads and the sanctioned writer"
@@ -158,9 +170,39 @@ test_captain_hold_answer_calls_fm_decide() {
   }
   out=$(hold hold dh-1 --reason "captain must choose") || fail "hold failed: $out"
   out=$(hold answer dh-1 --decision-file "$dir/decision.txt") || fail "answer failed: $out"
-  assert_grep '- [dh-1] 2026-10-09 Go with B.' "$dir/home/data/decided.md" "answer did not record the decision through fm-decide"
+  assert_grep '- [dh-1-1] 2026-10-09 Go with B.' "$dir/home/data/decided.md" "answer did not record the decision through fm-decide"
   assert_grep 'POST https://api.app.shortcut.com/api/v3/stories' "$dir/curl.log" "a decision-only item got no story"
+  : > "$dir/curl.log"
+  out=$(hold answer dh-1 --decision-file "$dir/decision.txt") || fail "answer replay failed: $out"
+  [ ! -s "$dir/curl.log" ] || fail "an answer replay called Shortcut again"
+  assert_equals 1 "$(grep -c '^- \[dh-1-' "$dir/home/data/decided.md")" "an answer replay appended a second entry"
   pass "the captain-hold answer hook records through fm-decide and files a chore for a decision-only item"
+}
+
+test_captain_hold_reanswer_records_each_occurrence() {
+  local dir out
+  dir=$(make_case rehold)
+  install_guard "$dir"
+  (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" SHORTCUT_API_TOKEN="$TOKEN" \
+    FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" "$ROOT/bin/fm-tasks-axi.sh" add rh-1 "Pick one" --kind captain >/dev/null 2>&1) \
+    || fail "setup add failed"
+  printf 'Use A.\n' > "$dir/a.txt"
+  printf 'Use B.\n' > "$dir/b.txt"
+  hold() {
+    (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" FM_DECIDE_DATE=2026-10-09 \
+      SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" \
+      "$ROOT/bin/fm-captain-hold.sh" "$@" 2>&1)
+  }
+  out=$(hold hold rh-1 --reason "captain must choose") || fail "hold failed: $out"
+  out=$(hold answer rh-1 --decision-file "$dir/a.txt" --release) || fail "first answer failed: $out"
+  out=$(hold hold rh-1 --reason "captain must choose again") || fail "second hold failed: $out"
+  : > "$dir/curl.log"
+  out=$(hold answer rh-1 --decision-file "$dir/b.txt") || fail "second answer failed: $out"
+  assert_not_contains "$out" "warning: a decision" "the second answer was refused as a key collision"
+  assert_grep '- [rh-1-1] 2026-10-09 Use A.' "$dir/home/data/decided.md" "the first answer was not recorded"
+  assert_grep '- [rh-1-2] 2026-10-09 Use B.' "$dir/home/data/decided.md" "the second answer was not recorded under its own key"
+  assert_grep 'Captain decision [rh-1-2]: Use B.' "$dir/curl.log" "the second answer was not posted to Shortcut"
+  pass "each answer to a task held more than once is recorded and posted under its own key"
 }
 
 test_record_with_story_posts_then_stamps
@@ -171,3 +213,4 @@ test_audit_lists_unstamped_entries
 test_missing_guard_warns_with_the_line_to_add
 test_guard_hook_blocks_direct_writes
 test_captain_hold_answer_calls_fm_decide
+test_captain_hold_reanswer_records_each_occurrence

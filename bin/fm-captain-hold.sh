@@ -1923,9 +1923,9 @@ command_open() {  # <task-id> [--identity] [--distinguish-absent]
   exit 2
 }
 
-# Fork-only: record the decision (decided.md plus a Shortcut comment on the item's story, or a new chore story) via fm-decide.sh (best-effort).
+# Fork-only: record the decision, keyed <task-id>-<answer occurrence> (decided.md plus a Shortcut comment on the item's story, or a new chore story) via fm-decide.sh (best-effort).
 shortcut_comment_answer() {  # <task-id>
-  FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA "$SCRIPT_DIR/fm-decide.sh" record "$1" "$DECISION_TEXT" --item "$1" --best-effort || true
+  ( task_show "$1" && FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA "$SCRIPT_DIR/fm-decide.sh" record "$1-$(resolution_record_count "$(show_field "$TASK_SHOW_OUTPUT" body)")" "$DECISION_TEXT" --item "$1" --best-effort ) || true
 }
 
 case "${1:-}" in

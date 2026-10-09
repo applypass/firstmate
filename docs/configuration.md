@@ -378,6 +378,9 @@ An `sc-NNNN` in the title is a parent (umbrella) reference: the item gets its ow
 Any other `sc-NNNN` in the body, such as "Follow-up to sc-6092", is only a reference: the sync never moves it, comments on it, or uploads to it, and the item gets its own story.
 
 Done is never automatic: merge and teardown leave the story In Review until firstmate runs `done` on the captain's word or verified production evidence.
+Every sync call except the dispatch refusal is best-effort: it warns and never blocks the lifecycle step, and a failed `add` prints the exact retry command.
+A second mate gives any investigation it runs itself its own story the same way (its charter says so), and its result does not publish without it.
+Use `comment` and `attach` for decisions, learnings, and artifacts recorded elsewhere.
 
 ### Decision record sync (applypass fork)
 
@@ -385,12 +388,9 @@ Done is never automatic: merge and teardown leave the story In Review until firs
 `record <key> <text> [--story sc-NNNN]` comments the decision on a Shortcut story and only then appends `- [key] YYYY-MM-DD text (shortcut: sc-NNNN <url>)`, so a failed post records nothing.
 With no `--story` it files an Engineering/Backlog chore story through `fm-shortcut-ticket.sh chore`, which reuses the settings, token path, and API base above; a decision is never recorded without a story.
 A story the decision merely names is commented on and never moved or edited.
-`fm-captain-hold.sh answer` calls it for the held task.
+`fm-captain-hold.sh answer` calls it for the held task with the key `<task-id>-<answer occurrence>`, so each answer to a task held more than once gets its own entry.
 `audit` lists entries with no stamp.
 To block direct edits of `data/decided.md`, merge the output of `fm-decide.sh guard-line` into the home's untracked `.claude/settings.local.json`, never the shared `.claude/settings.json`; `record` warns with that line while it is missing.
-Every sync call except the dispatch refusal is best-effort: it warns and never blocks the lifecycle step, and a failed `add` prints the exact retry command.
-A second mate gives any investigation it runs itself its own story the same way (its charter says so), and its result does not publish without it.
-Use `comment` and `attach` for decisions, learnings, and artifacts recorded elsewhere.
 
 ### Captain holds on Beads
 

@@ -15,8 +15,9 @@
 # path, and API base; nothing is duplicated here). A story the item does not own
 # is only commented on, never moved or edited. If the comment fails nothing is
 # recorded; a decision is never recorded without a story. Recording the same key
-# and text again is a no-op. --best-effort turns a refusal into a warning, which
-# is how bin/fm-captain-hold.sh answer calls it.
+# and exact text again is a no-op; other text under a recorded key is refused.
+# --best-effort turns a refusal into a warning, which is how
+# bin/fm-captain-hold.sh answer calls it, keyed <task-id>-<answer occurrence>.
 #
 # Guard: add the line `guard-line` prints to the home's untracked
 # .claude/settings.local.json (never the shared .claude/settings.json); record
@@ -83,7 +84,7 @@ command_guard_hook() {
     *) block=0 ;;
   esac
   if [ "$block" = 0 ] && [ -n "$cmd" ] && ! printf '%s' "$cmd" | grep -q 'fm-decide\.sh'; then
-    printf '%s' "$cmd" | grep -Eq '(>|tee|sed +-i|mv|cp|rm|truncate|perl +-i)[^|;&]*decided\.md' && block=1
+    printf '%s' "$cmd" | grep -Eq '>[[:space:]]*[^[:space:]|;&]*decided\.md|(^|[[:space:];|&(])(tee|mv|cp|rm|truncate|(sed|perl)[[:space:]]+-i[^[:space:]]*)[[:space:]][^|;&]*decided\.md' && block=1
   fi
   [ "$block" = 0 ] && exit 0
   printf 'data/decided.md is written only by bin/fm-decide.sh record <key> <text> [--story sc-NNNN], which also posts the decision to Shortcut.\n' >&2
@@ -128,9 +129,17 @@ command_record() {
   "$TICKET" --enabled || die "Shortcut ticket sync is off in this home, so a decision cannot be given a story; turn it on (see docs/configuration.md)"
 
   take_lock
-  if [ -f "$DECIDED" ] && grep -Fq -- "- [$key] " "$DECIDED"; then
-    grep -F -- "- [$key] " "$DECIDED" | grep -Fq -- " $text (shortcut: sc-" && return 0
-    die "a decision with key '$key' is already recorded with different text; use a new key"
+  if [ -f "$DECIDED" ]; then
+    case $(FM_KEY=$key FM_TEXT=$text awk '
+      BEGIN { p = "- [" ENVIRON["FM_KEY"] "] "; t = ENVIRON["FM_TEXT"] " (shortcut: sc-" }
+      index($0, p) == 1 {
+        seen = 1; r = substr($0, length(p) + 12)
+        if (index(r, t) == 1 && substr(r, length(t) + 1) ~ /^[0-9]+ [^ ]*\)$/) same = 1
+      }
+      END { print same ? "same" : seen ? "other" : "" }' "$DECIDED") in
+      same) return 0 ;;
+      other) die "a decision with key '$key' is already recorded with different text; use a new key" ;;
+    esac
   fi
 
   if [ -z "$story" ] && [ -n "$item" ]; then
