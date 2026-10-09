@@ -74,6 +74,30 @@ command_audit() {
   [ -z "$out" ]
 }
 
+guard_segments() {  # one shell segment per line; quoted words dropped from fm-decide.sh calls
+  FM_CMD=$1 awk 'BEGIN {
+    s = ENVIRON["FM_CMD"] "\n"; q = ""
+    for (i = 1; i <= length(s); i++) {
+      c = substr(s, i, 1)
+      if (q != "") {
+        if (c == q) q = ""
+        else if (c == "\\" && q == "\"") { raw = raw c; c = substr(s, ++i, 1) }
+        raw = raw c; continue
+      }
+      if (c == "\\") { c = c substr(s, ++i, 1); raw = raw c; bare = bare c; continue }
+      if (c == "\"" || c == "\047") { q = c; raw = raw c; continue }
+      if (c ~ /[;|&\n]/) {
+        n = split(raw, w, /[[:space:]]+/); k = 1
+        while (k <= n && (w[k] == "" || w[k] ~ /^[A-Za-z_][A-Za-z0-9_]*=/)) k++
+        f = w[k]; gsub(/["\047]/, "", f)
+        print (f ~ /fm-decide\.sh$/ ? bare : raw)
+        raw = ""; bare = ""; continue
+      }
+      raw = raw c; bare = bare c
+    }
+  }'
+}
+
 command_guard_hook() {
   local input path cmd
   input=$(cat)
@@ -83,8 +107,8 @@ command_guard_hook() {
     */data/decided.md | data/decided.md) block=1 ;;
     *) block=0 ;;
   esac
-  if [ "$block" = 0 ] && [ -n "$cmd" ] && ! printf '%s' "$cmd" | grep -q 'fm-decide\.sh'; then
-    printf '%s' "$cmd" | grep -Eq '>[[:space:]]*[^[:space:]|;&]*decided\.md|(^|[[:space:];|&(])(tee|mv|cp|rm|truncate|(sed|perl)[[:space:]]+-i[^[:space:]]*)[[:space:]][^|;&]*decided\.md' && block=1
+  if [ "$block" = 0 ] && [ -n "$cmd" ]; then
+    guard_segments "$cmd" | grep -Eq '>[[:space:]]*[^[:space:]|;&]*decided\.md|(^|[[:space:];|&(])(tee|mv|cp|rm|truncate|(sed|perl)[[:space:]]+-i[^[:space:]]*)[[:space:]][^|;&]*decided\.md' && block=1
   fi
   [ "$block" = 0 ] && exit 0
   printf 'data/decided.md is written only by bin/fm-decide.sh record <key> <text> [--story sc-NNNN], which also posts the decision to Shortcut.\n' >&2
@@ -98,7 +122,7 @@ take_lock() {
   LOCKDIR="$DATA/.decided.lock"
   while ! mkdir "$LOCKDIR" 2>/dev/null; do
     i=$((i + 1))
-    [ "$i" -le 100 ] || die "another fm-decide holds $LOCKDIR"
+    [ "$i" -le 2400 ] || die "another fm-decide has held $LOCKDIR for 2 minutes"
     sleep 0.05
   done
   trap 'rmdir "$LOCKDIR" 2>/dev/null; [ -z "${TMPENTRY:-}" ] || rm -f "$TMPENTRY"' EXIT

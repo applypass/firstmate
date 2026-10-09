@@ -150,9 +150,25 @@ test_guard_hook_blocks_direct_writes() {
   guard '{"tool_name":"Bash","tool_input":{"command":"rm data/decided.md"}}' && fail "rm of decided.md was allowed"
   guard '{"tool_name":"Bash","tool_input":{"command":"git log --format=%h -- data/decided.md"}}' >/dev/null || fail "git log --format on decided.md was blocked"
   guard '{"tool_name":"Bash","tool_input":{"command":"grep -c x 2>/dev/null data/decided.md"}}' >/dev/null || fail "a read with a stderr redirect was blocked"
+  guard '{"tool_name":"Bash","tool_input":{"command":"bin/fm-decide.sh audit; echo x >> data/decided.md"}}' && fail "an append chained after fm-decide.sh was allowed"
+  guard '{"tool_name":"Bash","tool_input":{"command":"cat bin/fm-decide.sh && sed -i s/a/b/ data/decided.md"}}' && fail "sed -i chained after a mention of fm-decide.sh was allowed"
+  guard '{"tool_name":"Bash","tool_input":{"command":"bin/fm-decide.sh audit > data/decided.md"}}' && fail "a redirect of fm-decide.sh output into decided.md was allowed"
+  guard '{"tool_name":"Bash","tool_input":{"command":"FM_HOME=/h bin/fm-decide.sh record k \"never rm data/decided.md; use > decided.md\""}}' >/dev/null \
+    || fail "a record whose text mentions writes to decided.md was blocked"
   jq -e '.hooks.PreToolUse[0].hooks[0].command | contains("fm-decide.sh")' <<<"$("$ROOT/bin/fm-decide.sh" guard-line)" >/dev/null \
     || fail "guard-line does not print a PreToolUse hook for fm-decide.sh"
   pass "the guard blocks direct writes to decided.md and allows reads and the sanctioned writer"
+}
+
+test_record_waits_for_a_slow_concurrent_record() {
+  local dir out
+  dir=$(make_case lockwait)
+  mkdir "$dir/home/data/.decided.lock"
+  (sleep 6; rmdir "$dir/home/data/.decided.lock") &
+  out=$(decide "$dir" record dd-9 "Wait your turn." --story sc-6523) || fail "record gave up on a lock held for 6s: $out"
+  wait
+  assert_grep '- [dd-9] 2026-10-09 Wait your turn. (shortcut: sc-6523 ' "$dir/home/data/decided.md" "the waiting record was not written"
+  pass "record waits out a concurrent record that holds the lock across slow Shortcut calls"
 }
 
 test_captain_hold_answer_calls_fm_decide() {
@@ -212,5 +228,6 @@ test_same_decision_twice_is_a_noop_and_changed_text_refuses
 test_audit_lists_unstamped_entries
 test_missing_guard_warns_with_the_line_to_add
 test_guard_hook_blocks_direct_writes
+test_record_waits_for_a_slow_concurrent_record
 test_captain_hold_answer_calls_fm_decide
 test_captain_hold_reanswer_records_each_occurrence
