@@ -1,0 +1,7 @@
+- [dd-1] 2026-10-09 Ship option B for the resume parser. (shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523#activity-1)
+- [ops-1] 2026-10-09 Pause the nightly scraper until Monday. (shortcut: sc-9001 https://app.shortcut.com/applypass/story/9001#activity-2)
+- [lc-7-1] 2026-10-09 Use option A. (shortcut: sc-9002 https://app.shortcut.com/applypass/story/9002#activity-3)
+- [rp-2-1] 2026-10-09 Use option A. (shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523#activity-4)
+- [rp-2-2] 2026-10-09 Actually use option B. (shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523#activity-5)
+- [old-1] 2026-10-07 Hand-written decision never posted.
+- [old-2] 2026-10-08 Another hand-written one.

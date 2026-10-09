@@ -1,0 +1,9 @@
+$ /Users/uayyagari/.no-mistakes/evidence/01M4FQYTZTDT0KFZXK6ZW83S1F/run.sh bin/fm-decide.sh audit
+- [old-1] 2026-10-07 Hand-written decision never posted.
+- [old-2] 2026-10-08 Another hand-written one.
+[exit 1]
+$ # Shortcut sync turned off for this home (enabled=off)
+$ /Users/uayyagari/.no-mistakes/evidence/01M4FQYTZTDT0KFZXK6ZW83S1F/run.sh bin/fm-decide.sh record off-1 Should not be recorded.
+fm-decide: Shortcut ticket sync is off in this home, so a decision cannot be given a story; turn it on (see docs/configuration.md)
+[exit 1]
+decided.md unchanged

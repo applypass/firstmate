@@ -1,0 +1,44 @@
+$ bin/fm-tasks-axi.sh add lc-7 Choose the parser rollout plan --kind captain
+ok: added lc-7 (captain) -> Queued
+task:
+  id: lc-7
+  title: Choose the parser rollout plan
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: captain
+  repo: "-"
+  priority: "-"
+  created: 2026-10-09
+  closed: "-"
+  deps: none
+  links: none
+  body: ""
+help[2]:
+  - Run `tasks-axi start lc-7` to move it to in flight
+  - Run `tasks-axi block lc-7 --by <other>` to record a dependency
+[exit 0]
+$ bin/fm-captain-hold.sh hold lc-7 --reason captain must choose
+lc-7
+[exit 0]
+$ bin/fm-captain-hold.sh answer lc-7 --decision-file /Users/uayyagari/.no-mistakes/evidence/01M4FQYTZTDT0KFZXK6ZW83S1F/d1.txt
+answered: lc-7
+fm-decide: recorded lc-7-1 on sc-9002
+[exit 0]
+$ bin/fm-captain-hold.sh answer lc-7 --decision-file /Users/uayyagari/.no-mistakes/evidence/01M4FQYTZTDT0KFZXK6ZW83S1F/d1.txt
+answered: lc-7
+[exit 0]
+$ bin/fm-captain-hold.sh hold lc-7 --reason reopened
+fm-captain-hold: task lc-7 is already closed; a new captain call needs its own task
+[exit 1]
+$ bin/fm-captain-hold.sh answer lc-7 --decision-file /Users/uayyagari/.no-mistakes/evidence/01M4FQYTZTDT0KFZXK6ZW83S1F/d2.txt
+fm-captain-hold: captain-held task lc-7 records a different captain decision
+[exit 1]
+--- decided.md
+- [dd-1] 2026-10-09 Ship option B for the resume parser. (shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523#activity-1)
+- [ops-1] 2026-10-09 Pause the nightly scraper until Monday. (shortcut: sc-9001 https://app.shortcut.com/applypass/story/9001#activity-2)
+- [lc-7-1] 2026-10-09 Use option A. (shortcut: sc-9002 https://app.shortcut.com/applypass/story/9002#activity-3)

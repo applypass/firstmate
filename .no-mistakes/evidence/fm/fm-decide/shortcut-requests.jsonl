@@ -1,0 +1,2 @@
+{"method": "POST", "path": "/api/v3/stories/6523/comments", "auth": "fake-lab-token", "body": {"text": "Captain decision [rp-2-1]: Use option A."}}
+{"method": "POST", "path": "/api/v3/stories/6523/comments", "auth": "fake-lab-token", "body": {"text": "Captain decision [rp-2-2]: Actually use option B."}}

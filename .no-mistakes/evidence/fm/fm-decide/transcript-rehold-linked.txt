@@ -1,0 +1,49 @@
+$ bin/fm-tasks-axi.sh add rp-2 Resume parser rollout --kind captain --body Shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523
+ok: added rp-2 (captain) -> Queued
+task:
+  id: rp-2
+  title: Resume parser rollout
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: captain
+  repo: "-"
+  priority: "-"
+  created: 2026-10-09
+  closed: "-"
+  deps: none
+  links: none
+  body: "Shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523"
+help[2]:
+  - Run `tasks-axi start rp-2` to move it to in flight
+  - Run `tasks-axi block rp-2 --by <other>` to record a dependency
+[exit 0]
+$ bin/fm-shortcut-ticket.sh --linked rp-2
+sc-6523
+[exit 0]
+$ bin/fm-captain-hold.sh hold rp-2 --reason captain must choose
+rp-2
+[exit 0]
+$ bin/fm-captain-hold.sh answer rp-2 --decision-file /Users/uayyagari/.no-mistakes/evidence/01M4FQYTZTDT0KFZXK6ZW83S1F/d1.txt --release
+released: rp-2
+fm-decide: recorded rp-2-1 on sc-6523
+[exit 0]
+$ bin/fm-captain-hold.sh hold rp-2 --reason captain must choose again
+rp-2
+[exit 0]
+$ bin/fm-captain-hold.sh answer rp-2 --decision-file /Users/uayyagari/.no-mistakes/evidence/01M4FQYTZTDT0KFZXK6ZW83S1F/d2.txt
+answered: rp-2
+fm-decide: recorded rp-2-2 on sc-6523
+[exit 0]
+$ bin/fm-decide.sh audit
+[exit 0]
+--- decided.md
+- [dd-1] 2026-10-09 Ship option B for the resume parser. (shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523#activity-1)
+- [ops-1] 2026-10-09 Pause the nightly scraper until Monday. (shortcut: sc-9001 https://app.shortcut.com/applypass/story/9001#activity-2)
+- [lc-7-1] 2026-10-09 Use option A. (shortcut: sc-9002 https://app.shortcut.com/applypass/story/9002#activity-3)
+- [rp-2-1] 2026-10-09 Use option A. (shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523#activity-4)
+- [rp-2-2] 2026-10-09 Actually use option B. (shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523#activity-5)

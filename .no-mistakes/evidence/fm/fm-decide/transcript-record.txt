@@ -1,0 +1,53 @@
+$ bin/fm-decide.sh record dd-1 Ship option B for the resume parser. --story sc-6523
+fm-decide: recorded dd-1 on sc-6523
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.7tFJpU/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4FQYTZTDT0KFZXK6ZW83S1F/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+[exit 0]
+$ bin/fm-decide.sh record ops-1 Pause the nightly scraper until Monday.
+fm-decide: recorded ops-1 on sc-9001
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.7tFJpU/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4FQYTZTDT0KFZXK6ZW83S1F/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+[exit 0]
+$ bin/fm-decide.sh record dd-fail This post will fail. --story sc-6666
+fm-shortcut-ticket: could not comment on sc-6666 (HTTP 500)
+fm-decide: could not post decision dd-fail to sc-6666; nothing was recorded
+[exit 1]
+$ bin/fm-decide.sh record dd-1 Ship option B for the resume parser. --story sc-6523
+[exit 0]
+$ bin/fm-decide.sh record dd-1 option B for the resume parser. --story sc-6523
+fm-decide: a decision with key 'dd-1' is already recorded with different text; use a new key
+[exit 1]
+$ bin/fm-decide.sh record dd-1 Ship option C instead. --story sc-6523 --best-effort
+fm-decide: warning: a decision with key 'dd-1' is already recorded with different text; use a new key
+[exit 0]
+--- decided.md
+- [dd-1] 2026-10-09 Ship option B for the resume parser. (shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523#activity-1)
+- [ops-1] 2026-10-09 Pause the nightly scraper until Monday. (shortcut: sc-9001 https://app.shortcut.com/applypass/story/9001#activity-2)
