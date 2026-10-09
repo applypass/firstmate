@@ -457,7 +457,7 @@ test_captain_answer_comments_the_decision() {
   out=$(hold hold lc-3 --reason "captain must choose") || fail "hold failed: $out"
   [ ! -s "$dir/curl.log" ] || fail "holding a task touched Shortcut"
   out=$(hold answer lc-3 --decision-file "$dir/decision.txt") || fail "answer failed: $out"
-  assert_grep 'Captain decision [lc-3]: Use option B.' "$dir/curl.log" "the recorded decision was not commented on the story"
+  assert_grep 'Captain decision [lc-3-1]: Use option B.' "$dir/curl.log" "the recorded decision was not commented on the story"
   run_tasks "$dir" add lc-4 "Keyed" --body "Shortcut: sc-5001" --kind ship >/dev/null || fail "setup add failed"
   out=$(hold hold lc-4 --reason "captain go needed") || fail "hold failed: $out"
   : > "$dir/curl.log"
