@@ -476,7 +476,7 @@ test_active_dispatch_profile_allows_raw_launch_command() {
   # The unverified-adapter escape hatch is still an agent this fleet launched,
   # so it carries the compact-adviser floor and the AI-trailer strip; nothing
   # else may rewrite the captain's own command.
-  [ "$launch" = "export COMPACT_ADVISER_DISABLE=1; $(ai_trailer_hooks_prefix "$HOME_DIR" "$id")custom-agent --flag" ] || fail "raw launch command changed"$'\n'"actual: $launch"
+  [ "$launch" = "export COMPACT_ADVISER_DISABLE=1; export CHROME_DEVTOOLS_AXI_SESSION='$id'; $(ai_trailer_hooks_prefix "$HOME_DIR" "$id")custom-agent --flag" ] || fail "raw launch command changed"$'\n'"actual: $launch"
   pass "active crew-dispatch profile allows the raw launch-command escape hatch"
 }
 
@@ -1073,7 +1073,7 @@ test_claude_forwards_firstmate_config_dir_when_set() {
   status=$?
   expect_code 0 "$status" "claude spawn with CLAUDE_CONFIG_DIR set should succeed"
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "CLAUDE_CONFIG_DIR='$CASE_DIR/claude-work' env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_FEEDBACK=0 claude --dangerously-skip-permissions $(claude_worker_add_dirs "$HOME_DIR" "$id")--settings '{\"feedbackDrafts\":\"off\",\"enabledPlugins\":{\"applypass-coach\":false,\"applypass-coach\":false},\"attribution\":{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}}'" \
+  assert_contains "$launch" "CLAUDE_CONFIG_DIR='$CASE_DIR/claude-work' env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_FEEDBACK=0 claude --dangerously-skip-permissions $(claude_worker_add_dirs "$HOME_DIR" "$id")--settings '{\"feedbackDrafts\":\"off\",\"enabledPlugins\":{\"applypass-coach@synced\":false,\"applypass-coach@inline\":false},\"attribution\":{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}}'" \
     "claude launch did not forward firstmate's CLAUDE_CONFIG_DIR to the crewmate pane"
   pass "claude forwards firstmate's CLAUDE_CONFIG_DIR so the crewmate uses the same credential store"
 }
@@ -1161,14 +1161,14 @@ test_non_claude_harness_ignores_config_dir() {
 assert_attribution_policy() {  # <launch-command> <what>
   local launch=$1 what=$2 settings
   settings=$(claude_settings_json_arg "$launch")
-  printf '%s' "$settings" | jq -e '.feedbackDrafts == "off" and .enabledPlugins["applypass-coach@synced"] == false and .attribution == {"commit":"","pr":"","sessionUrl":false}' >/dev/null \
+  printf '%s' "$settings" | jq -e '.feedbackDrafts == "off" and .enabledPlugins == {"applypass-coach@synced":false,"applypass-coach@inline":false} and .attribution == {"commit":"","pr":"","sessionUrl":false}' >/dev/null \
     || fail "$what launch settings JSON does not disable Claude attribution: $settings"
 }
 
 assert_attribution_policy_absent() {  # <launch-command> <what>
   local launch=$1 what=$2 settings
   settings=$(claude_settings_json_arg "$launch")
-  printf '%s' "$settings" | jq -e '.feedbackDrafts == "off" and .enabledPlugins["applypass-coach@synced"] == false and (has("attribution") | not)' >/dev/null \
+  printf '%s' "$settings" | jq -e '.feedbackDrafts == "off" and .enabledPlugins == {"applypass-coach@synced":false,"applypass-coach@inline":false} and (has("attribution") | not)' >/dev/null \
     || fail "$what launch settings JSON still disables Claude attribution: $settings"
 }
 
@@ -1682,7 +1682,7 @@ claude_expected_launch() {  # <launch> <home> <id> <permission-flag>
   [ "$(printf '%s' "$doorbell" | "$ROOT/bin/fm-operational-input.sh" doorbell-kind)" = launch-brief ] \
     || doorbell="not a launch-brief doorbell"
   quoted="'$(printf '%s' "$doorbell" | sed "s/'/'\\\\''/g")'"
-  printf '%s' "export COMPACT_ADVISER_DISABLE=1; $(ai_trailer_hooks_prefix "$2" "$3")env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_FEEDBACK=0 claude $4 $(claude_worker_add_dirs "$2" "$3")--settings '{\"feedbackDrafts\":\"off\",\"enabledPlugins\":{\"applypass-coach\":false,\"applypass-coach\":false},\"attribution\":{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}}' $CLAUDE_CONTROL_CHANNEL_FLAG $quoted"
+  printf '%s' "export COMPACT_ADVISER_DISABLE=1; export CHROME_DEVTOOLS_AXI_SESSION='$3'; $(ai_trailer_hooks_prefix "$2" "$3")env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_FEEDBACK=0 claude $4 $(claude_worker_add_dirs "$2" "$3")--settings '{\"feedbackDrafts\":\"off\",\"enabledPlugins\":{\"applypass-coach@synced\":false,\"applypass-coach@inline\":false},\"attribution\":{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}}' $CLAUDE_CONTROL_CHANNEL_FLAG $quoted"
 }
 
 test_claude_permission_mode_bypass_matches_absent_launch() {
