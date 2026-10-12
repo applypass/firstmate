@@ -401,6 +401,7 @@ test_spawn_installs_the_gate() {
   assert_equals held "$(cat "$STATE_DIR/spawn-on.validation-gate")" "spawn should hold the task"
   assert_grep "FM_VALIDATION_GATE=" "$LAUNCH_LOG" "the launch should carry the task's gate path"
   assert_grep "spawn-on.validation-gate" "$LAUNCH_LOG" "the launch should point at this task's gate file"
+  assert_grep "CHROME_DEVTOOLS_AXI_SESSION='spawn-on'" "$LAUNCH_LOG" "the launch should name the task's own chrome session"
   assert_grep 'validation_gate=on' "$STATE_DIR/spawn-on.meta" "the task record should carry the gate decision"
   pass "a no-mistakes ship spawn installs the companion, holds the task, and exports its gate"
 }

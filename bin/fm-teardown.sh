@@ -3677,6 +3677,11 @@ elif [ "$BACKEND" != orca ] && [ "$TEARDOWN_WINDOWLESS" != 1 ]; then
   fm_backend_kill "$BACKEND" "$T" "$(meta_value "$META" zellij_tab_id)" "fm-$ID" \
     || endpoint_close_refusal "$ID" "$BACKEND" "$T" 1 || exit 1
 fi
+# Best-effort: stop the chrome-devtools-axi bridge and Chrome this task started under its
+# own session name (set by fm-spawn); never fails teardown.
+if [ "$KIND" != secondmate ] && command -v chrome-devtools-axi >/dev/null 2>&1; then
+  CHROME_DEVTOOLS_AXI_SESSION=$ID chrome-devtools-axi stop >/dev/null 2>&1 || true
+fi
 if [ "$HERDR_PRESENTATION_RETIRE_CANDIDATE" = 1 ]; then
   if [ "$(fm_backend_herdr_pane_agent_state "$HERDR_PRESENTATION_SESSION" "$HERDR_PRESENTATION_PANE")" = dead ]; then
     rm -f "$HERDR_PRESENTATION_JOURNAL"

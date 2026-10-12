@@ -5187,6 +5187,9 @@ if [ "$KEEP_AI_TRAILERS" = 0 ]; then
   LAUNCH="export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=$(shell_quote "$GIT_HOOKS_DIR"); $LAUNCH"
 fi
 [ -z "$VALIDATION_GATE_FILE" ] || LAUNCH="export FM_VALIDATION_GATE=$(shell_quote "$VALIDATION_GATE_FILE"); $LAUNCH"
+# A task worker names its own chrome-devtools-axi session after the task, so teardown
+# can stop exactly the bridge and Chrome this task started.
+[ "$KIND" = secondmate ] || LAUNCH="export CHROME_DEVTOOLS_AXI_SESSION=$(shell_quote "$ID"); $LAUNCH"
 # Every agent this fleet launches - crewmate, scout, and secondmate, on a fresh
 # spawn and on a relaunch alike - runs with the compact-adviser kill switch on.
 # This is an export statement rather than a forwarded ambient name or a
