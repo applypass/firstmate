@@ -1,0 +1,12 @@
+chrome-devtools-axi resolves to: /Users/uayyagari/.asdf/shims/chrome-devtools-axi
+--- before
+task-x1 bridge pid=50176 ALIVE, chrome children: 1
+nmtest-bystander bridge pid=17875 ALIVE, chrome children: 1
+fm-teardown.sh task-x1 exit=0
+/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-teardown-tests.CPo07b/chrome-live/project: already current
+teardown task-x1 complete (window firstmate:fm-task-x1, worktree /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-teardown-tests.CPo07b/chrome-live/wt)
+Backlog: task-x1 just finished (this home keeps no markdown backlog at /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-teardown-tests.CPo07b/chrome-live/data/backlog.md). Update /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-teardown-tests.CPo07b/chrome-live/data/backlog.md - move task-x1 to Done, keep Done to the 10 most recent, then re-scan Queued and dispatch only work whose blockers are gone and date is due.
+--- after
+--- after (checked separately)
+task-x1: bridge pid 50176 alive? no; session pidfile: removed
+nmtest-bystander: bridge pid 17875 alive? yes; its headless Chrome 21306 alive? yes
