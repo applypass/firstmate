@@ -1,0 +1,98 @@
+== Scenario 0 (setup): main sent 'please re-read AGENTS.md and acknowledge' -> pending reply corr=20e304e441502b9a
+Shortcut sync enabled in child home: yes
+
+== Baseline (pre-change bin @0b27b2d): plain done with corr and no --item
+
+$ FM_HOME=child base/bin/fm-secondmate-report.sh done 20e304e441502b9a 're-read AGENTS.md, acknowledged'
+error: a done report needs --item <id> naming the investigation's backlog item, whose own Shortcut story must pass bin/fm-shortcut-ticket.sh --check <id>
+rc=1
+parent channel state/web-frontend.status:
+(absent - nothing published)
+pending reply 20e304e441502b9a: STILL OPEN (phase=awaiting_report)
+
+== Scenario 1: --doc done without --item is still refused (adversarial)
+
+$ FM_HOME=child bin/fm-secondmate-report.sh --doc done 20e304e441502b9a data/x/report.md 'see report'
+error: a --doc done report needs --item <id> naming the investigation's backlog item, whose own Shortcut story must pass bin/fm-shortcut-ticket.sh --check <id>
+rc=1
+parent channel:
+(absent - nothing published)
+pending reply 20e304e441502b9a: STILL OPEN (phase=awaiting_report)
+
+== Scenario 1b: --item naming an item with no verified story is still refused (adversarial)
+
+$ FM_HOME=child bin/fm-secondmate-report.sh --item ghost-1 done 20e304e441502b9a 'shipped'
+fm-shortcut-ticket: cannot read backlog item ghost-1: error: "Task \"ghost-1\" not found in this backlog"
+error: refusing to publish done for ghost-1: it has no verified Shortcut story of its own (reason above)
+rc=1
+parent channel:
+(absent - nothing published)
+
+== Scenario 2: secondmate closes the pure acknowledgement with plain done + corr, no --item
+
+$ FM_HOME=child bin/fm-secondmate-report.sh done 20e304e441502b9a 're-read AGENTS.md, acknowledged'
+rc=0
+parent channel:
+done [corr=20e304e441502b9a] [at=1791912962]: re-read AGENTS.md, acknowledged (via-helper)
+pending reply 20e304e441502b9a: RESOLVED (phase=resolved via=helper)
+
+== Baseline: main closes a keyed acknowledgement with plain --resolve-key (the loop)
+
+$ FM_HOME=main bin/fm-send.sh web-frontend --resolve-key ack-base 'acknowledged, carry on'
+fm-send: doorbell not typed because the agent in fm-lab-ackclose-57959-14636:w1:p1 has exited; the steer is durably recorded at /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.Y9LYDf/main/state/web-frontend.inbox/002.msg for recovery (stuck-crewmate-recovery), and the watcher will not re-ring a dead pane
+pending-reply records: before=1 after=2  (a new expectation was opened)
+
+$ FM_HOME=main bin/fm-send.sh web-frontend --resolve-key ack-base --fire-and-forget 0123456789abcdef 'x'  (base build)
+error: --fire-and-forget cannot accompany --resolve-key
+rc=1
+
+== Scenario 3: main closes a keyed acknowledgement with --resolve-key --close-ack
+
+$ FM_HOME=main bin/fm-send.sh web-frontend --resolve-key ack-loop --close-ack 'acknowledged, carry on'
+fm-send: doorbell not typed because the agent in fm-lab-ackclose-57959-14636:w1:p1 has exited; the steer is durably recorded at /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.Y9LYDf/main/state/web-frontend.inbox/003.msg for recovery (stuck-crewmate-recovery), and the watcher will not re-ring a dead pane
+rc=0
+pending-reply records: before=2 after=2
+new inbox record 003.msg:
+schema=fm-task-inbox.v1
+at=2026-10-13T17:36:03Z
+delivery=fire-and-forget
+--
+[fm-from-firstmate]⁣delivery=436be95e1a3aa88a acknowledged, carry on
+status ledger tail:
+blocked [key=ack-loop]: please re-read AGENTS.md
+resolved [key=ack-loop] [at=1791912963]: answered: acknowledged, carry on
+
+== Scenario 4: a later identical --close-ack is delivered again (not deduplicated)
+fm-send: doorbell not typed because the agent in fm-lab-ackclose-57959-14636:w1:p1 has exited; the steer is durably recorded at /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.Y9LYDf/main/state/web-frontend.inbox/004.msg for recovery (stuck-crewmate-recovery), and the watcher will not re-ring a dead pane
+rc=0
+inbox records now: 001.msg 002.msg 003.msg 004.msg 
+resolved [key=ack-loop] lines: 2
+pending-reply records: 2
+
+== Scenario 5: explicit --resolve-key + --fire-and-forget <id>
+fm-send: doorbell not typed because the agent in fm-lab-ackclose-57959-14636:w1:p1 has exited; the steer is durably recorded at /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.Y9LYDf/main/state/web-frontend.inbox/005.msg for recovery (stuck-crewmate-recovery), and the watcher will not re-ring a dead pane
+rc=0
+blocked [key=ack-ff]: please re-read AGENTS.md
+resolved [key=ack-ff] [at=1791912965]: answered: ack
+pending-reply records: 2
+
+== Scenario 6 (adversarial): --close-ack misuse is refused before sending
+
+$ bin/fm-send.sh web-frontend --close-ack 'acknowledged'   (no --resolve-key)
+error: --close-ack requires --resolve-key
+rc=1
+
+$ bin/fm-send.sh web-frontend --resolve-key ack-x --close-ack --fire-and-forget 0123456789abcdef 'a'
+error: --close-ack cannot accompany --fire-and-forget; it derives its own delivery id
+rc=1
+
+$ bin/fm-send.sh web-frontend --resolve-key not-open --close-ack 'a'   (key not open)
+error: --resolve-key 'not-open': no open decision or blocker with that key in /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.Y9LYDf/main/state/web-frontend.status, and no captain-held task 'not-open' or 'web-frontend-decision-not-open' still open (already closed or mistyped). Re-check the OPEN DECISIONS listing, then resend without that key or with the right one; nothing was sent.
+rc=1
+inbox records before=5 after=5
+
+== Wake drain OPEN DECISIONS view (main):
+OPEN DECISIONS (still open, folded from the durable status logs - not just the latest line):
+web-frontend [key=ack-base2] blocked: re-read
+web-frontend [key=ack-x] blocked: x
+OPEN DECISIONS: close one by answering it: bin/fm-send.sh <task> --resolve-key <key> '<answer>'
