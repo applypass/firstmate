@@ -333,6 +333,40 @@ test_release_hook_on_a_backend_repo_needs_no_token() {
   pass "release-hook on a captain-deployed repo prints the release-done command with 1Password signed out"
 }
 
+test_a_replayed_backend_hook_reports_the_next_step() {
+  local dir out key
+  dir=$(make_case hook-backend-replay)
+  printf 'working [at=1]: start\n' > "$dir/home/state/st-1.status"
+  out=$(ticket "$dir" release-hook "$BACKEND_RELEASE" --task st-1 --best-effort) || fail "release-hook failed: $out"
+  assert_equals 1 "$(grep -c "^blocked .*run: bin/fm-shortcut-ticket.sh release-done $BACKEND_RELEASE\$" "$dir/home/state/st-1.status")" \
+    "a hook that could not read the release did not name the release-done step"
+  key=$(sed -n 's/.*\[key=\(shortcut-sync-[^]]*\)\].*/\1/p' "$dir/home/state/st-1.status" | head -1)
+  pr_info "$dir" 300 main MERGED abc1234abc1234abc1234abc1234abc1234abc12
+  ticket "$dir" pending >/dev/null || fail "pending failed"
+  assert_grep "resolved [at=" "$dir/home/state/st-1.status" "the replay did not resolve the record"
+  assert_equals 1 "$(grep -c "^resolved .*\[key=$key\]: .*run: bin/fm-shortcut-ticket.sh release-done $BACKEND_RELEASE\$" "$dir/home/state/st-1.status")" \
+    "the replayed hook lost the release-done step"
+  assert_no_grep "went through" "$dir/home/state/st-1.status" "the replayed hook claimed Shortcut updated"
+  pass "a replayed release-hook on a captain-deployed repo hands firstmate the release-done step"
+}
+
+test_a_signed_out_vercel_hook_names_the_release_step() {
+  local dir sha=abc1234abc1234abc1234abc1234abc1234abc12
+  dir=$(make_case hook-vercel-signed-out)
+  seed_release "$dir"
+  printf 'working [at=1]: start\n' > "$dir/home/state/st-101.status"
+  NO_TOKEN=1 ticket "$dir" release-hook "$RELEASE" --task st-101 --best-effort >/dev/null || fail "release-hook failed"
+  assert_equals 1 "$(grep -c "^blocked .*run: bin/fm-shortcut-ticket.sh release-done $RELEASE\$" "$dir/home/state/st-101.status")" \
+    "the token failure did not name the release-done step"
+  deploy "$dir" 55 "$sha" pending
+  ticket "$dir" pending >/dev/null || fail "pending failed"
+  assert_equals 1 "$(grep -c "^blocked .*: $RELEASE merged.*run: bin/fm-shortcut-ticket.sh release-done $RELEASE\$" "$dir/home/state/st-101.status")" \
+    "a replay that now waits for production did not say so"
+  ticket "$dir" pending >/dev/null || fail "pending failed"
+  assert_equals 2 "$(grep -c '^blocked' "$dir/home/state/st-101.status")" "a replay that still waits repeated the blocked line"
+  pass "a Vercel release-hook first blocked on the token names the release-done step, once per reason"
+}
+
 test_a_later_failure_keeps_the_pending_record() {
   local dir out
   dir=$(make_case retry-then-die)
@@ -380,6 +414,8 @@ test_release_hook_on_a_vercel_repo_waits_for_production
 test_release_hook_accepts_a_later_production_deployment
 test_release_hook_on_a_backend_repo_prints_the_next_step
 test_release_hook_on_a_backend_repo_needs_no_token
+test_a_replayed_backend_hook_reports_the_next_step
+test_a_signed_out_vercel_hook_names_the_release_step
 test_a_later_failure_keeps_the_pending_record
 test_release_hook_ignores_merges_to_other_bases
 test_feature_off_makes_no_release_calls

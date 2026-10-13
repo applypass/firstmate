@@ -34,6 +34,7 @@
 PENDING_DIR="$STATE/shortcut-pending"
 PENDING_FAILED=0
 PENDING_NOTE=''
+PENDING_RESOLVED='Shortcut update went through on retry'
 
 pending_key() { printf '%s\0' "$@" | cksum | cut -d' ' -f1; }
 
@@ -44,16 +45,17 @@ pending_status() {  # <verb> <key> <text>; appends to the call's status file
 }
 
 pending_record() {  # <reason> <status-text> <arg>...; returns 0 when the record is new
-  local reason=$1 text=$2 key f new=0
+  local reason=$1 text=$2 key f new=0 old
   shift 2
   key=sc-$(pending_key "$@")
   f="$PENDING_DIR/$key"
   [ -f "$f.args" ] || new=1
+  old=$(sed -n 's/^reason=//p' "$f.meta" 2>/dev/null | head -1)
   mkdir -p "$PENDING_DIR" || return 1
   printf '%s\0' "$@" >"$f.args.tmp" && mv "$f.args.tmp" "$f.args"
   printf 'reason=%s\nstatus=%s\n' "$reason" "${STATUS_FILE:-}" >"$f.meta"
   PENDING_FAILED=1
-  [ "$new" = 0 ] || pending_status blocked "shortcut-sync-$key" "$text"
+  [ "$new" = 0 ] && [ "$old" = "$reason" ] || pending_status blocked "shortcut-sync-$key" "$text"
   return $((1 - new))
 }
 
@@ -61,7 +63,9 @@ pending_on_failure() {  # <message>; called by die_retry, never during a replay
   [ "${FM_SHORTCUT_REPLAY:-}" != 1 ] || return 0
   case "$OP" in state | review | comment | outcome | park | done | release-done | release-hook) ;; *) return 0 ;; esac
   [ "${#CALL_ARGS[@]}" -gt 0 ] || return 0
-  pending_record "$1" "Shortcut did not update ($1); queued, retried on the next fm-shortcut-ticket.sh run or by: fm-shortcut-ticket.sh pending" "${CALL_ARGS[@]}" || true
+  local next=''
+  [ "$OP" != release-hook ] || next=" Once production runs the merge of $URL, run: bin/fm-shortcut-ticket.sh release-done $URL"
+  pending_record "$1" "Shortcut did not update ($1); queued, retried on the next fm-shortcut-ticket.sh run or by: fm-shortcut-ticket.sh pending.$next" "${CALL_ARGS[@]}" || true
   PENDING_NOTE=" (queued for retry: $PENDING_DIR)"
 }
 
@@ -73,7 +77,7 @@ pending_clear_on_success() {  # <exit-code>; the EXIT trap of the call
   [ -f "$f.args" ] || return 0
   status=$(sed -n 's/^status=//p' "$f.meta" 2>/dev/null | head -1)
   rm -f "$f.args" "$f.meta"
-  STATUS_FILE=$status pending_status resolved "shortcut-sync-$key" "Shortcut update went through on retry"
+  STATUS_FILE=$status pending_status resolved "shortcut-sync-$key" "$PENDING_RESOLVED"
 }
 
 pending_replay() {  # replays every record but the current call's own
@@ -213,8 +217,8 @@ release_probe() {  # <pr-url>: sets RELEASE_BASE RELEASE_SHA; fails (quietly) un
 release_hook_start() {  # <pr-url>; fails once Shortcut has nothing to do: not a release, or a repo deployed from the captain terminal
   release_probe "$1" || return 1
   case " $(setting vercel_repos) " in *" $PR_REPO "*) return 0 ;; esac
-  printf 'fm-shortcut-ticket: %s merged to %s and deploys from the captain terminal. After confirming production runs %s, run: bin/fm-shortcut-ticket.sh release-done %s\n' \
-    "$1" "$RELEASE_BASE" "${RELEASE_SHA:0:9}" "$1"
+  PENDING_RESOLVED="$1 merged to $RELEASE_BASE and deploys from the captain terminal. After confirming production runs ${RELEASE_SHA:0:9}, run: bin/fm-shortcut-ticket.sh release-done $1"
+  printf 'fm-shortcut-ticket: %s\n' "$PENDING_RESOLVED"
   return 1
 }
 
@@ -230,9 +234,8 @@ release_hook() {  # <pr-url>, after release_hook_start: a repo in vercel_repos
   printf 'fm-shortcut-ticket: %s\n' "$next"
 }
 
-pending_report() {  # replay, then list what remains
+pending_report() {  # list what remains after the replay
   local f left=0
-  pending_replay
   for f in "$PENDING_DIR"/sc-*.meta; do
     [ -f "$f" ] || continue
     left=$((left + 1))
