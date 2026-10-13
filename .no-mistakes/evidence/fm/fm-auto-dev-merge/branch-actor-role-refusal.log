@@ -1,0 +1,26 @@
+### scenario: branch-actor-role-refusal
+### env: GH_FAKE_BASE=dev FM_SUPERVISION_ACTOR=branch
+### status before:
+working [at=1]: go
+done [at=2]: PR https://github.com/applypass/firstmate/pull/28 checks green
+### $ bin/fm-pr-check.sh t1 https://github.com/applypass/firstmate/pull/28
+fm-shortcut-ticket: warning: cannot read backlog item t1: error: "Task \"t1\" not found in this backlog"
+auto-dev-merge: skipped https://github.com/applypass/firstmate/pull/28: this actor is not the merge authority; main merges it
+armed: state/t1.check.sh
+### exit=0
+### status after:
+working [at=1]: go
+done [at=2]: PR https://github.com/applypass/firstmate/pull/28 checks green
+### gh calls:
+gh pr view https://github.com/applypass/firstmate/pull/28 --json isDraft
+gh pr view https://github.com/applypass/firstmate/pull/28 --json headRefOid -q .headRefOid
+gh pr view https://github.com/applypass/firstmate/pull/28 --json baseRefName,author,labels
+gh api user -q .login
+### armed files:
+contributions.check-trust
+contributions.check.sh
+t1.check.sh
+t1.meta
+t1.pr-poll
+t1.pr-poll-registration
+t1.status

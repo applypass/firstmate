@@ -1,0 +1,34 @@
+### scenario: real-base-main
+### env: 
+### status before:
+working [at=1]: go
+done [at=2]: PR https://github.com/applypass/firstmate/pull/28 checks green
+### $ bin/fm-pr-check.sh t1 https://github.com/applypass/firstmate/pull/28
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  watcher supervision needs Stop-owned automatic recovery; inspect the hook registration and startup status before ending the turn.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+fm-shortcut-ticket: warning: cannot read backlog item t1: error: "Task \"t1\" not found in this backlog"
+auto-dev-merge: skipped https://github.com/applypass/firstmate/pull/28: base is main, not dev
+armed: state/t1.check.sh
+### exit=0
+### status after:
+working [at=1]: go
+done [at=2]: PR https://github.com/applypass/firstmate/pull/28 checks green
+paused [at=1791875835]: auto-dev-merge skipped https://github.com/applypass/firstmate/pull/28: base is main, not dev; merge it with bin/fm-pr-merge.sh once green
+### gh calls:
+gh pr view https://github.com/applypass/firstmate/pull/28 --json isDraft
+gh pr view https://github.com/applypass/firstmate/pull/28 --json headRefOid -q .headRefOid
+gh pr view https://github.com/applypass/firstmate/pull/28 --json baseRefName,author,labels
+gh api user -q .login
+### armed files:
+contributions.check-trust
+contributions.check.sh
+t1.check.sh
+t1.meta
+t1.pr-poll
+t1.pr-poll-registration
+t1.status

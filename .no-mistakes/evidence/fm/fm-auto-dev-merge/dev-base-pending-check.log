@@ -1,0 +1,38 @@
+### scenario: dev-base-pending-check
+### env: GH_FAKE_BASE=dev
+### status before:
+working [at=1]: go
+done [at=2]: PR https://github.com/applypass/firstmate/pull/28 checks green
+### $ bin/fm-pr-check.sh t1 https://github.com/applypass/firstmate/pull/28
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  watcher supervision needs Stop-owned automatic recovery; inspect the hook registration and startup status before ending the turn.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+fm-shortcut-ticket: warning: cannot read backlog item t1: error: "Task \"t1\" not found in this backlog"
+auto-dev-merge: skipped https://github.com/applypass/firstmate/pull/28: merge refused: WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.; armed: state/t1.check.sh; error: refusing to merge https://github.com/applypass/firstmate/pull/28; - check 'vercel-preview' is not green; - the branch protection summary for base branch dev could not be read, so a required check that has not reported cannot be ruled out; error: these checks are not green: vercel-preview; fm-pr-merge.sh gates on every check, required or not
+armed: state/t1.check.sh
+### exit=0
+### status after:
+working [at=1]: go
+done [at=2]: PR https://github.com/applypass/firstmate/pull/28 checks green
+paused [at=1791875860]: auto-dev-merge skipped https://github.com/applypass/firstmate/pull/28: merge refused: WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.; armed: state/t1.check.sh; error: refusing to merge https://github.com/applypass/firstmate/pull/28; - check 'vercel-preview' is not green; - the branch protection summary for base branch dev could not be read, so a required check that has not reported cannot be ruled out; error: these checks are not green: vercel-preview; fm-pr-merge.sh gates on every check, required or not; merge it with bin/fm-pr-merge.sh once green
+### gh calls:
+gh pr view https://github.com/applypass/firstmate/pull/28 --json isDraft
+gh pr view https://github.com/applypass/firstmate/pull/28 --json headRefOid -q .headRefOid
+gh pr view https://github.com/applypass/firstmate/pull/28 --json baseRefName,author,labels
+gh api user -q .login
+gh pr view https://github.com/applypass/firstmate/pull/28 --json headRefOid -q .headRefOid
+gh pr view https://github.com/applypass/firstmate/pull/28 --json state,isDraft,mergeable,mergeStateStatus,headRefOid,baseRefName,statusCheckRollup
+gh api repos/applypass/firstmate/branches/dev
+gh api --paginate repos/applypass/firstmate/rules/branches/dev
+### armed files:
+contributions.check-trust
+contributions.check.sh
+t1.check.sh
+t1.meta
+t1.pr-poll
+t1.pr-poll-registration
+t1.status

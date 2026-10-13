@@ -1,0 +1,12 @@
+### scenario: secondmate-ready-line-before-merge (merge command stubbed, GH_FAKE_BASE=dev)
+fm-shortcut-ticket: warning: cannot read backlog item t1: error: "Task \"t1\" not found in this backlog"
+verified: https://github.com/applypass/firstmate/pull/28 is merged (state=MERGED, merged=true, isInMergeQueue=false)
+auto-dev-merge: merged https://github.com/applypass/firstmate/pull/28 to dev
+armed: state/t1.check.sh
+### exit=0
+### parent channel (parent state/mate1.status), in order:
+done [key=child-pr-t1] [at=1791875903]: child t1 PR ready: https://github.com/applypass/firstmate/pull/28 mode=no-mistakes
+done [at=1791875905]: child t1 PR merged: https://github.com/applypass/firstmate/pull/28
+### child status after:
+working [at=1]: go
+done [at=2]: PR https://github.com/applypass/firstmate/pull/28 checks green
