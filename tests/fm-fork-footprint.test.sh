@@ -113,6 +113,69 @@ test_ledger_file_may_change() {
   pass "ledger file stays green"
 }
 
+test_resync_merge_of_upstream_is_green() {
+  local d; d=$(new_repo resync)
+  git -C "$d" checkout -q main
+  sed -i.bak '1a\
+# Fork-only: applypass hook\
+run_hook' "$d/app.sh"; rm -f "$d/app.sh.bak"; commit_all "$d"
+  git -C "$d" checkout -q upstream
+  sed -i.bak 's/four/FOUR/' "$d/app.sh"; rm -f "$d/app.sh.bak"; commit_all "$d"
+  git -C "$d" checkout -q -B feat main
+  "${GIT[@]}" -C "$d" merge -q --no-edit upstream >/dev/null
+  run_check "$d"
+  assert_equals 0 "$RC" "merging an upstream rewrite must pass: $OUT"
+  assert_contains "$OUT" "app.sh (+2/-0): Fork-only block" "fork delta vs upstream not reported"
+  pass "resync merge of upstream stays green"
+}
+
+test_pr_cannot_allowlist_itself() {
+  local d; d=$(new_repo self-ledger)
+  sed -i.bak 's/three/THREE/' "$d/app.sh"; rm -f "$d/app.sh.bak"
+  # shellcheck disable=SC2016 # literal backticks are ledger syntax
+  printf '%s\n' '- `app.sh` - dodge' >> "$d/.fork/ledger.md"; commit_all "$d"
+  run_check "$d"
+  assert_equals 1 "$RC" "a PR's own ledger entry must not allow its edit"
+  assert_contains "$OUT" "app.sh:3: removes or rewrites" "violation not named"
+  assert_contains "$OUT" "ignored until they merge in their own PR: app.sh" "ignored entry not reported"
+  pass "a PR cannot allowlist its own edit"
+}
+
+test_new_ledger_applies_while_base_has_none() {
+  local d; d=$(new_repo first-ledger)
+  git -C "$d" checkout -q -B feat upstream
+  sed -i.bak 's/b/B/' "$d/lib.sh"; rm -f "$d/lib.sh.bak"
+  mkdir -p "$d/.fork"
+  # shellcheck disable=SC2016 # literal backticks are ledger syntax
+  printf '%s\n' '- `lib.sh` - fork needs it' > "$d/.fork/ledger.md"; commit_all "$d"
+  OUT=$(cd "$d" && "$CHECK" --base upstream --upstream upstream 2>&1); RC=$?
+  assert_equals 0 "$RC" "the first ledger applies while the base has none: $OUT"
+  assert_contains "$OUT" "has no .fork/ledger.md yet" "bootstrap note missing"
+  pass "the first ledger applies while the base has none"
+}
+
+test_binary_change_is_red() {
+  local d; d=$(new_repo binary)
+  git -C "$d" checkout -q upstream
+  printf 'PNG\000one' > "$d/logo.png"; commit_all "$d"
+  git -C "$d" checkout -q main; "${GIT[@]}" -C "$d" merge -q --no-edit upstream >/dev/null
+  git -C "$d" checkout -q -B feat main
+  printf 'PNG\000two' > "$d/logo.png"; commit_all "$d"
+  run_check "$d"
+  assert_equals 1 "$RC" "a binary change to an upstream file must fail: $OUT"
+  assert_contains "$OUT" "logo.png:1: change has no text hunks" "binary violation not named"
+  pass "binary change goes red"
+}
+
+test_mode_change_is_red() {
+  local d; d=$(new_repo mode)
+  chmod +x "$d/app.sh"; commit_all "$d"
+  run_check "$d"
+  assert_equals 1 "$RC" "a mode change to an upstream file must fail: $OUT"
+  assert_contains "$OUT" "app.sh:1: changes the file mode" "mode violation not named"
+  pass "mode change goes red"
+}
+
 test_missing_upstream_ref_is_an_error() {
   local d; d=$(new_repo noref)
   OUT=$(cd "$d" && "$CHECK" --base main --upstream nope/main 2>&1); RC=$?
@@ -139,6 +202,11 @@ else
   test_deletion_is_red
   test_oversized_block_is_red
   test_ledger_file_may_change
+  test_resync_merge_of_upstream_is_green
+  test_pr_cannot_allowlist_itself
+  test_new_ledger_applies_while_base_has_none
+  test_binary_change_is_red
+  test_mode_change_is_red
   test_missing_upstream_ref_is_an_error
   test_soft_skips_a_missing_upstream_ref
 fi

@@ -4,20 +4,29 @@
 # usage: fm-fork-footprint.sh [--base REF] [--upstream REF] [--ledger FILE] [--max-block N] [--fetch] [--soft]
 #
 # Lists the files of the current branch (HEAD vs --base) that also exist in the
-# upstream ref and checks how they changed. An upstream file passes when it is on
-# the fork ledger (.fork/ledger.md, one "- `path` - reason" line per file) or when
-# every change to it is a pure addition inside a Fork-only block:
+# upstream ref and checks the fork's own delta on each: HEAD vs the upstream
+# commit it last merged (merge-base of --upstream and HEAD). Lines that match that
+# upstream never count, so merging upstream/main into the fork passes.
+# An upstream file passes when it is on the fork ledger (.fork/ledger.md, one
+# "- `path` - reason" line per file) or when every change to it is a pure
+# addition inside a Fork-only block:
 #   - the block's first added line carries the marker "Fork-only" in a comment;
 #   - an optional last line carrying "Fork-only end" closes it, otherwise the
 #     block is the whole contiguous run of added lines;
 #   - it holds at most --max-block lines (default 40);
-#   - no upstream line is deleted or rewritten.
+#   - no upstream line is deleted or rewritten, and the file mode and binary
+#     content stay as upstream has them.
+# The ledger is read from --base, so a PR cannot allowlist its own file: a new
+# entry applies only after it merges in its own PR, and the summary names the
+# working-tree entries it ignored. While --base has no ledger yet, the working-tree
+# ledger applies and the summary says so.
 # Files that do not exist upstream are fork-only and always pass.
 # Any other change to an upstream file exits 1 and names the file and line.
 # The summary section "Fork footprint vs upstream main" is meant to be pasted into
 # PR bodies. --fetch refreshes the upstream ref first (CI uses it).
-# --soft turns a missing upstream or base ref into a warning and exit 0, for the
-# no-mistakes lint step on a clone that has no upstream remote; CI never uses it.
+# --soft turns a missing upstream ref into a warning and exit 0, for the
+# no-mistakes lint step on a clone that has no upstream remote; there the step
+# only warns, and the CI workflow is the gate that enforces the check on every PR.
 # Defaults: --base origin/main (else main), --upstream upstream/main.
 set -u
 
@@ -66,11 +75,20 @@ if [ -z "$BASE" ] || ! git rev-parse --verify --quiet "$BASE^{commit}" >/dev/nul
   exit 2
 fi
 
-# ledger: path -> reason, from "- `path` - reason" lines
+# ledger paths, from "- `path` - reason" lines
+# shellcheck disable=SC2016 # the backticks are literal ledger syntax
+ledger_parse() { sed -n 's/^- `\([^`]*\)` - .\{1,\}$/\1/p'; }
 ledger_paths=""
-if [ -f "$LEDGER" ]; then
-  # shellcheck disable=SC2016 # the backticks are literal ledger syntax
-  ledger_paths=$(sed -n 's/^- `\([^`]*\)` - .\{1,\}$/\1/p' "$LEDGER")
+ledger_note=""
+if git cat-file -e "$BASE:$LEDGER" 2>/dev/null; then
+  ledger_paths=$(git show "$BASE:$LEDGER" | ledger_parse)
+  if [ -f "$LEDGER" ]; then
+    ignored=$(ledger_parse < "$LEDGER" | grep -Fxv -f <(printf '%s\n' "$ledger_paths") | paste -sd, - | sed 's/,/, /g')
+    [ -z "$ignored" ] || ledger_note="Ledger entries this change adds are ignored until they merge in their own PR: $ignored"
+  fi
+elif [ -f "$LEDGER" ]; then
+  ledger_paths=$(ledger_parse < "$LEDGER")
+  ledger_note="$BASE has no $LEDGER yet, so the working-tree ledger applies"
 fi
 on_ledger() { printf '%s\n' "$ledger_paths" | grep -Fxq -- "$1"; }
 
@@ -83,10 +101,9 @@ pr_add=0
 pr_del=0
 report=""
 
-check_file() {
-  local f=$1
-  # awk walks the zero-context diff; prints "line: reason" for each violation
-  git diff --no-renames -U0 "$BASE"...HEAD -- "$f" | awk -v max="$MAX_BLOCK" '
+check_delta() {
+  # awk walks the zero-context diff on stdin; prints "line: reason" for each violation
+  awk -v max="$MAX_BLOCK" '
     function flush(   bad) {
       if (n == 0 && dels == 0) return
       if (dels > 0) { print start ": removes or rewrites " dels " upstream line(s)"; }
@@ -103,17 +120,20 @@ check_file() {
       d = h[2]; sub(/^-/, "", d); split(d, r, ","); dels = (r[2] == "" ? 1 : r[2] + 0); n = 0; first = ""
       next
     }
+    /^old mode/ && !seen { print "1: changes the file mode"; flagged = 1; next }
     !seen { next }
     /^\+/ { n++; if (n == 1) first = substr($0, 2); if ($0 ~ /Fork-only end/) endat = n; next }
-    END { flush() }
+    END { flush(); if (!seen && !flagged) print "1: change has no text hunks to check (binary or mode-only change)" }
   '
 }
 
 while IFS= read -r f; do
   [ -n "$f" ] || continue
   git cat-file -e "$UPSTREAM:$f" 2>/dev/null || continue
+  delta=$(git diff --no-renames -U0 "$UPSTREAM"...HEAD -- "$f")
+  [ -n "$delta" ] || continue
   touched=$((touched + 1))
-  read -r a d _ < <(git diff --no-renames --numstat "$BASE"...HEAD -- "$f")
+  read -r a d _ < <(git diff --no-renames --numstat "$UPSTREAM"...HEAD -- "$f")
   case "$a" in ''|-) a=0 ;; esac
   case "$d" in ''|-) d=0 ;; esac
   pr_add=$((pr_add + a)); pr_del=$((pr_del + d))
@@ -121,7 +141,7 @@ while IFS= read -r f; do
     report="$report- $f (+$a/-$d): on the fork ledger"$'\n'
     continue
   fi
-  out=$(check_file "$f")
+  out=$(printf '%s\n' "$delta" | check_delta)
   if [ -z "$out" ]; then
     report="$report- $f (+$a/-$d): Fork-only block"$'\n'
   else
@@ -145,13 +165,14 @@ done < <(git diff --no-renames --name-only "$UPSTREAM"..."$BASE")
 
 echo "## Fork footprint vs upstream main"
 echo
-echo "- Upstream files touched by this change: $touched (+$pr_add/-$pr_del lines)"
+echo "- Upstream files touched by this change: $touched (+$pr_add/-$pr_del lines vs upstream)"
 if [ -n "$report" ]; then printf '%s' "$report" | sed 's/^/  /'; fi
+if [ -n "$ledger_note" ]; then echo "- $ledger_note"; fi
 echo "- Upstream files the fork already modifies on $BASE: $up_total of $tot_files changed files (+$tot_add/-$tot_del lines, includes fork-only files)"
 if [ "$violations" -gt 0 ]; then
   echo "- Result: FAIL, $violations upstream file(s) changed outside a Fork-only block"
   echo "  Fix: move the behaviour into a fork-only file, or wrap the addition in a short '# Fork-only:' block."
-  echo "  Last resort: add \"- \`path\` - reason\" to $LEDGER."
+  echo "  Last resort: add \"- \`path\` - reason\" to $LEDGER in its own PR; it applies once merged."
   exit 1
 fi
 echo "- Result: ok"
