@@ -255,13 +255,20 @@ test_op_needs_a_service_account_token() {
   assert_not_contains "$out" "sa-from-parent" "the parent token was printed"
 
   rm -f "$dir/op.log"
+  mkdir -p "$dir/primary"
+  mv "$parent/.env" "$dir/primary/.env"
+  printf 'schema=fm-secondmate-parent.v1\nroute=local\nparent_home=%s\n' "$dir/primary" > "$parent/.fm-secondmate-parent"
+  out=$(FAKE_OP_TOKEN=tok-secret-123 FAKE_OP_LOG="$dir/op.log" TOKEN_OVERRIDE='' check_item "$dir" sa-1) || fail "the primary home .env token was not reached through a nested secondmate: $out"
+  assert_grep "sa=sa-from-parent" "$dir/op.log" "op did not get the primary home's service account token"
+
+  rm -f "$dir/op.log"
   out=$(SA_TOKEN=sa-from-env FAKE_OP_TOKEN=tok-secret-123 FAKE_OP_LOG="$dir/op.log" TOKEN_OVERRIDE='' check_item "$dir" sa-1) || fail "the environment token was not used: $out"
   assert_grep "sa=sa-from-env" "$dir/op.log" "the environment token did not win"
 
   rm -f "$dir/op.log"
   out=$(FAKE_OP_LOG="$dir/op.log" check_item "$dir" sa-1) || fail "an explicit SHORTCUT_API_TOKEN failed: $out"
   [ ! -e "$dir/op.log" ] || fail "op was invoked although SHORTCUT_API_TOKEN was set"
-  pass "op runs only with a service account token (env, home .env, parent .env) and never prints it"
+  pass "op runs only with a service account token (env, home .env, ancestor .env) and never prints it"
 }
 
 test_secondmate_report_needs_the_items_own_story() {
