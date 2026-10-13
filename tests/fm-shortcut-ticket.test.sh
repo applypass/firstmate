@@ -449,18 +449,20 @@ code
 <script>alert(1)</script>
 MD
   printf 'x\n' > "$dir/a.png"
-  out=$(ticket "$dir" attach lc-1 "$dir/report.md") || fail "attach failed: $out"
-  [ "$(grep -c '^POST https://api.app.shortcut.com/api/v3/files' "$dir/curl.log")" -eq 2 ] || fail "a .md upload did not make two uploads"
-  assert_grep '/report.md' "$dir/curl.log" "the .md was not kept"
-  assert_grep '/report.html' "$dir/curl.log" "no report.html was uploaded"
-  : > "$dir/curl.log"
   out=$(ticket "$dir" attach lc-1 "$dir/a.png") || fail "attach failed: $out"
   [ "$(grep -c '^POST https://api.app.shortcut.com/api/v3/files' "$dir/curl.log")" -eq 1 ] || fail "a non-.md upload made more than one upload"
   assert_no_grep '.html' "$dir/curl.log" "a non-.md upload got an HTML copy"
+  : > "$dir/curl.log"
+  out=$(ticket "$dir" attach lc-1 "$dir/report.md") || fail "attach failed: $out"
+  assert_grep '/report.md' "$dir/curl.log" "the .md was not kept"
   if ! python3 -c 'import markdown_it' 2>/dev/null; then
-    pass "md upload makes a second upload (render checks skipped: markdown-it-py absent)"
+    assert_contains "$out" "uploading the .md only" "a missing markdown-it-py gave no warning"
+    [ "$(grep -c '^POST https://api.app.shortcut.com/api/v3/files' "$dir/curl.log")" -eq 1 ] || fail "only the .md should upload without markdown-it-py"
+    pass "a non-.md uploads once and a .md still uploads (render checks skipped: markdown-it-py absent)"
     return
   fi
+  [ "$(grep -c '^POST https://api.app.shortcut.com/api/v3/files' "$dir/curl.log")" -eq 2 ] || fail "a .md upload did not make two uploads"
+  assert_grep '/report.html' "$dir/curl.log" "no report.html was uploaded"
   python3 "$ROOT/bin/fm-md-to-html.py" "$dir/report.md" "$dir/out.html" || fail "render failed"
   assert_grep '<table>' "$dir/out.html" "the GFM table did not render to a <table>"
   assert_grep '<h1>Report</h1>' "$dir/out.html" "the heading did not render"
