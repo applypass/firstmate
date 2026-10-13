@@ -1,0 +1,14 @@
+# Scenario 1+2: attach a .png and a .md to a story via the real script + real curl, against a local stub Shortcut API
+$ bin/fm-shortcut-ticket.sh attach sc-9001 shot.png report.md
+exit=0
+--- stub Shortcut request log ---
+POST /api/v3/files token=present ct=multipart/form-data
+  uploaded shot.png (3 bytes) story_id=9001
+POST /api/v3/files token=present ct=multipart/form-data
+  uploaded report.md (1306 bytes) story_id=9001
+POST /api/v3/files token=present ct=multipart/form-data
+  uploaded report.html (3622 bytes) story_id=9001
+--- stored uploads ---
+1-shot.png
+2-report.md
+3-report.html

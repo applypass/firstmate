@@ -1,0 +1,5 @@
+# Scenario 5 (adversarial): parse the uploaded report.html as HTML and list every element type and attribute
+element types: ['a', 'blockquote', 'body', 'code', 'div', 'h1', 'h2', 'h3', 'head', 'html', 'li', 'main', 'meta', 'ol', 'p', 'pre', 's', 'strong', 'style', 'table', 'tbody', 'td', 'th', 'thead', 'title', 'tr', 'ul']
+script/img/iframe/link elements: []
+event-handler attrs: []
+href/src values: [('a', 'href', 'https://github.com/applypass/firstmate/pull/36')]

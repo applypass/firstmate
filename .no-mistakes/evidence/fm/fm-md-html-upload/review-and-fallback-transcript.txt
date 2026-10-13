@@ -1,0 +1,15 @@
+# Scenario 3: review --report with a .md also uploads the HTML copy
+$ bin/fm-shortcut-ticket.sh review sc-9002 --report review-report.md
+exit=0
+PUT /api/v3/stories/9002
+POST /api/v3/files token=present ct=multipart/form-data
+  uploaded review-report.md (1306 bytes) story_id=9002
+POST /api/v3/files token=present ct=multipart/form-data
+  uploaded review-report.html (3629 bytes) story_id=9002
+
+# Scenario 4 (adversarial): python3 on PATH lacks markdown-it-py -> .md still uploads, with a warning, no .html
+$ PATH=<dir with /usr/bin/python3 (no markdown-it-py)>:$PATH bin/fm-shortcut-ticket.sh attach sc-9003 report.md
+fm-shortcut-ticket: warning: could not render /tmp/fm-live.2kMJff/report.md to HTML (the markdown-it-py package is not installed for /Library/Developer/CommandLineTools/usr/bin/python3); uploading the .md only
+exit=0
+POST /api/v3/files token=present ct=multipart/form-data
+  uploaded report.md (1306 bytes) story_id=9003

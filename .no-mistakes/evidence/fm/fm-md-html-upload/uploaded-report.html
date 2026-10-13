@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>report.md</title><style>
+:root{color-scheme:light dark;--bg:#fff;--fg:#1f2328;--muted:#59636e;--line:#d1d9e0;--code:#f6f8fa;--link:#0969da}
+@media(prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#9198a1;--line:#3d444d;--code:#151b23;--link:#4493f8}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}
+main{max-width:860px;margin:0 auto;padding:24px 16px 64px;overflow-wrap:break-word}
+h1,h2,h3,h4,h5,h6{line-height:1.25;margin:1.6em 0 .6em}
+h1,h2{padding-bottom:.3em;border-bottom:1px solid var(--line)}
+h1{font-size:1.9em}h2{font-size:1.5em}h3{font-size:1.25em}
+a{color:var(--link)}
+p,ul,ol,blockquote,pre,.table-wrap{margin:0 0 1em}
+ul,ol{padding-left:2em}
+blockquote{margin-left:0;padding:0 1em;color:var(--muted);border-left:.25em solid var(--line)}
+code{font:.9em ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--code);padding:.15em .35em;border-radius:4px}
+pre{background:var(--code);padding:12px 16px;border-radius:6px;overflow-x:auto;line-height:1.45}
+pre code{background:none;padding:0;font-size:.875em}
+.table-wrap{overflow-x:auto}
+table{border-collapse:collapse;min-width:100%}
+th,td{border:1px solid var(--line);padding:6px 12px;text-align:left;vertical-align:top}
+th{background:var(--code)}
+tr:nth-child(even) td{background:var(--code)}
+hr{border:0;border-top:1px solid var(--line);margin:1.5em 0}
+img{max-width:100%}
+</style></head><body><main>
+<h1>Review report: sc-6836 upload rendering</h1>
+<p>Summary of the <strong>review</strong> for <code>fm/fm-md-html-upload</code>. See <a href="https://github.com/applypass/firstmate/pull/36">the PR</a>.</p>
+<h2>Findings</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>#</th>
+<th>Severity</th>
+<th>File</th>
+<th>Finding</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>warning</td>
+<td><code>tests/fm-shortcut-ticket.test.sh:452</code></td>
+<td>Two-upload assertion ran before the markdown-it-py importability guard, so CI without the package would fail</td>
+<td>auto-fix</td>
+</tr>
+<tr>
+<td>2</td>
+<td>info</td>
+<td><code>bin/fm-md-to-html.py</code></td>
+<td>Raw HTML is escaped, never passed through</td>
+<td>no-op</td>
+</tr>
+<tr>
+<td>3</td>
+<td>info</td>
+<td><code>bin/fm-shortcut-ticket.sh:340</code></td>
+<td>A failed render still uploads the <code>.md</code> with a warning</td>
+<td>no-op</td>
+</tr>
+</tbody>
+</table></div>
+<h2>Checks</h2>
+<ul>
+<li>[x] GFM tables render</li>
+<li><s>old behaviour</s> replaced</li>
+<li>Nested list:
+<ol>
+<li>first</li>
+<li>second</li>
+</ol>
+</li>
+</ul>
+<blockquote>
+<p>Shortcut serves <code>.md</code> attachments as <code>text/html</code>, so the browser collapses them into one paragraph.</p>
+</blockquote>
+<pre><code class="language-bash">bin/fm-shortcut-ticket.sh attach sc-6836 report.md
+# uploads report.md and report.html
+</code></pre>
+<h3>A wide table</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Column one</th>
+<th>Column two</th>
+<th>Column three</th>
+<th>Column four</th>
+<th>Column five</th>
+<th>Column six</th>
+<th>Column seven</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>a long cell value here</td>
+<td>another long value</td>
+<td>yet another value</td>
+<td>more text here</td>
+<td>and more</td>
+<td>and more again</td>
+<td>last</td>
+</tr>
+</tbody>
+</table></div>
+<p>&lt;script&gt;alert('xss')&lt;/script&gt;
+&lt;img src=x onerror=alert(1)&gt;
+[bad link](javascript:alert(1))</p>
+</main></body></html>
