@@ -369,7 +369,7 @@ The credential is `SHORTCUT_API_TOKEN` in the environment, else `op read <token_
 | Ship teardown | Moved to In Review if the PR has not already done so (a local-only or no-PR landing). |
 | Teardown | Final outcome line commented; a forced teardown sends the story back to Backlog with the reason instead. |
 | `fm-tasks-axi.sh rm` or `hold --kind parked` | Sent back to Backlog with the reason (cancelled or parked). |
-| `fm-captain-hold.sh answer` or `answers` | The recorded decision (close or release) is commented. |
+| `fm-captain-hold.sh answer` | Recorded through `fm-decide.sh` (see Decision record sync). |
 | `fm-shortcut-ticket.sh done <item> --evidence <text>` | Moved to Done. |
 
 The item's own story is the one a body line `Shortcut: sc-NNNN` names, and only while its description carries the line `firstmate-item: <home-name>/<item-id>` (home-name is the basename of the home that created it) for this item id and no other.
@@ -381,6 +381,16 @@ Done is never automatic: merge and teardown leave the story In Review until firs
 Every sync call except the dispatch refusal is best-effort: it warns and never blocks the lifecycle step, and a failed `add` prints the exact retry command.
 A second mate gives any investigation it runs itself its own story the same way (its charter says so), and its result does not publish without it.
 Use `comment` and `attach` for decisions, learnings, and artifacts recorded elsewhere.
+
+### Decision record sync (applypass fork)
+
+[`bin/fm-decide.sh`](../bin/fm-decide.sh) is the only writer of `data/decided.md`; its header owns the commands.
+`record <key> <text> [--story sc-NNNN]` comments the decision on a Shortcut story and only then appends `- [key] YYYY-MM-DD text (shortcut: sc-NNNN <url>)`, so a failed post records nothing.
+With no `--story` it files an Engineering/Backlog chore story through `fm-shortcut-ticket.sh chore`, which reuses the settings, token path, and API base above; a decision is never recorded without a story.
+A story the decision merely names is commented on and never moved or edited.
+`fm-captain-hold.sh answer` calls it for the held task with the key `<task-id>-<answer occurrence>`, so each answer to a task held more than once gets its own entry.
+`audit` lists entries with no stamp.
+To block direct edits of `data/decided.md`, merge the output of `fm-decide.sh guard-line` into the home's untracked `.claude/settings.local.json`, never the shared `.claude/settings.json`; `record` warns with that line while it is missing.
 
 ### Captain holds on Beads
 
