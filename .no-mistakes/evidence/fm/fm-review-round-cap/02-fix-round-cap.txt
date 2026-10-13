@@ -1,0 +1,49 @@
+## Scenario 2: worker answers review gate with fix three times (cap 2)
+$ fm-review-round-cap.sh fix t-no-mistakes run01 review --findings F (round 1)
+fix-allowed: round 1 of 2
+exit=0
+$ ... (round 2)
+fix-allowed: round 2 of 2
+exit=0
+$ ... (round 3, over cap)
+capped: 2 fix rounds already sent on review (cap 2); needs-decision recorded, stop and wait for firstmate
+exit=3
+--- state/t-no-mistakes.fix-rounds:
+run01	review	1	2 medium unclear variable,src/app.ts
+run01	review	2	src/app.ts,tests/app.test.ts
+--- data/t-no-mistakes/nm-run01-review-rounds.txt:
+step: review
+run: run01
+fix rounds already sent: 2 (cap 2)
+repeated finding themes:
+  - src/app.ts
+  - tests/app.test.ts
+remaining findings:
+  1 high src/app.ts null deref on empty input
+  2 low tests/app.test.ts still lacks case
+--- state/t-no-mistakes.status:
+needs-decision [at=1791898564] [key=nm-run01-review-cap]: review fix-round cap reached after 2 of 2 rounds; not sending another fix. details file=/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.sDeUo3/data/t-no-mistakes/nm-run01-review-rounds.txt
+--- classifier: status_has_open_needs_decision <status> run01
+OPEN-for-run01
+not-open-for-run99
+nm-run01-review-cap	needs-decision	review fix-round cap reached after 2 of 2 rounds; not sending another fix. details file=/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.sDeUo3/data/t-no-mistakes/nm-run01-review-rounds.txt## Scenario 3 (adversarial): retry after cap stays capped and records no extra round
+capped: 2 fix rounds already sent on review (cap 2); needs-decision recorded, stop and wait for firstmate
+exit=3
+rounds recorded for run01/review: 2
+## Scenario 3b: a different step and a different run each get their own budget
+fix-allowed: round 1 of 2
+exit=0
+fix-allowed: round 1 of 2
+exit=0
+## Scenario 3c: cap 0 sends the first fix to firstmate; bad cap and traversal ids refused; grant removed
+capped: 0 fix rounds already sent on review (cap 0); needs-decision recorded, stop and wait for firstmate
+exit=3
+fm-review-round-cap: review fix cap must be a non-negative integer, got 'two'
+exit=2
+fm-review-round-cap: invalid task id '../evil'
+exit=2
+fm-review-round-cap: invalid run id '../x'
+exit=2
+files named evil: 0
+grant exit=2
+fix-grants files: 0

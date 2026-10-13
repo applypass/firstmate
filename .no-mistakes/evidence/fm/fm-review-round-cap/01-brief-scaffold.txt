@@ -1,0 +1,17 @@
+## Scenario 1: brief scaffold carries the cap rule (no-mistakes only)
+rc=0 mode=no-mistakes
+--- data/t-no-mistakes/brief.md:
+138:Review fix rounds are capped at 2 per run and step, and an agent timeout goes straight to firstmate:
+139-- Before you answer any review gate with `fix`, write its remaining findings one per line to a scratch file and run `FM_HOME='/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.sDeUo3' '/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4TQCDDE5NGA7HYJ4RTFD41H/bin/fm-review-round-cap.sh' fix t-no-mistakes <run> <step> --findings <file>`.
+140-  Exit 0 means send the fix.
+141-  Exit 3 means the cap is reached and a needs-decision is already recorded: stop, send nothing, and wait for firstmate's reply.
+142-- When a review or test step fails with an agent timeout (the 30-minute limit), run `FM_HOME='/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.sDeUo3' '/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4TQCDDE5NGA7HYJ4RTFD41H/bin/fm-review-round-cap.sh' timeout t-no-mistakes <run> <step> --error "<the failure text>"`, then stop on exit 3.
+143-  Never retry a timed-out step silently.
+rc=0 mode=direct-PR
+--- data/t-direct-PR/brief.md:
+(no cap rule in brief)
+rc=0 mode=local-only
+--- data/t-local-only/brief.md:
+(no cap rule in brief)
+## Scenario 1b: config/review-fix-cap=3 flows into the brief
+138:Review fix rounds are capped at 3 per run and step, and an agent timeout goes straight to firstmate:

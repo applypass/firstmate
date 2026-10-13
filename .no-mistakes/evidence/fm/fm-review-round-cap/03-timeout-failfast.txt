@@ -1,0 +1,15 @@
+## Scenario 4 (adversarial): ordinary failure text is not escalated
+not an agent timeout: nothing recorded
+exit=1
+status lines: 0
+## Scenario 5: review step hits the 30-minute agent limit -> immediate needs-decision
+timeout recorded: needs-decision written, stop and wait for firstmate
+exit=3
+--- state/t-timeout.status:
+needs-decision [at=1791898574] [key=nm-run07-review-timeout]: review step failed with an agent timeout (30-minute limit); not retrying, decide whether to retry or narrow the work
+captain-relevant=yes
+OPEN-for-run07
+--- scan_open_decisions over lab state:
+t-no-mistakes	nm-run01-review-cap	needs-decision	review fix-round cap reached after 2 of 2 rounds; not sending another fix. details file=/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.sDeUo3/data/t-no-mistakes/nm-run01-review-rounds.txt
+t-no-mistakes	nm-run03-review-cap	needs-decision	review fix-round cap reached after 0 of 0 rounds; not sending another fix. details file=/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.sDeUo3/data/t-no-mistakes/nm-run03-review-rounds.txt
+t-timeout	nm-run07-review-timeout	needs-decision	review step failed with an agent timeout (30-minute limit); not retrying, decide whether to retry or narrow the work
