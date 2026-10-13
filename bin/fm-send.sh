@@ -2,6 +2,7 @@
 # Steer a task by durable record: write the message into the task's steering
 # inbox and ring a constant doorbell line into its terminal, best-effort.
 # Usage: fm-send.sh <target> [--resolve-key <key>]... [--fire-and-forget <delivery-id>] <text...>
+# Fork-only (applypass): fm-send.sh <task> --resolve-key <key>... --close-ack <text...>
 #   <target> may be an exact task id, a legacy fm-<id> task label resolved
 #   through this home's state/<id>.meta, or an explicit well-formed backend
 #   target. fm-send refuses unresolved guesses rather than falling back to a
@@ -150,6 +151,14 @@
 # FM_SEND_EXPECTED_REMOTE_HOST to require that sampled identity to still match
 # during the final locked remote-route validation; unset or empty guards do not
 # change ordinary sends.
+#
+# Fork-only (applypass): --resolve-key combines with --fire-and-forget. The send
+# still resolves each key after the durable enqueue, and no pending reply is
+# opened, so a closing steer to a pure acknowledgement cannot start a new loop.
+# --close-ack (requires --resolve-key) implies --fire-and-forget with a delivery
+# id fm-send derives from the task id, the sorted keys, the message, and a
+# per-send nonce, so the caller needs no id and a later identical close is
+# delivered rather than deduplicated onto an earlier record.
 #
 # Decision closure (answerer-closes): pass --resolve-key <key> (repeatable,
 # before the message) when this send answers an open keyed needs-decision: or
@@ -465,6 +474,8 @@ fi
 # message exactly as before, so ordinary sends are byte-identical.
 RESOLVE_KEYS=
 FIRE_AND_FORGET_ID=
+# Fork-only (applypass): set by --close-ack.
+FORK_CLOSE_ACK=0
 fm_send_add_resolve_key() { # <key>
   local k=$1
   case "$k" in
@@ -513,6 +524,11 @@ while :; do
       exit 1
     }
     FIRE_AND_FORGET_ID=${1#--fire-and-forget=}
+    shift
+    ;;
+  # Fork-only (applypass): --close-ack, see the header.
+  --close-ack)
+    FORK_CLOSE_ACK=1
     shift
     ;;
   *) break ;;
@@ -595,6 +611,32 @@ fm_send_resolve_close_note() { # <key> <excerpt>
   printf 'answered: %s' "$excerpt"
 }
 
+# Fork-only (applypass): --resolve-key may ride with --fire-and-forget, so a
+# steer that closes a pure acknowledgement resolves its key without opening a
+# new pending reply. Hold the keys aside so the exclusivity check below passes.
+# --close-ack derives the delivery id itself (see the header).
+if [ "$FORK_CLOSE_ACK" = 1 ]; then
+  [ -n "$RESOLVE_KEYS" ] || {
+    echo "error: --close-ack requires --resolve-key" >&2
+    exit 1
+  }
+  [ -z "$FIRE_AND_FORGET_ID" ] || {
+    echo "error: --close-ack cannot accompany --fire-and-forget; it derives its own delivery id" >&2
+    exit 1
+  }
+  FIRE_AND_FORGET_ID=$({
+    printf '%s\n' "$(fm_send_id_from_meta "$TARGET_META")"
+    printf '%s' "$RESOLVE_KEYS" | tr ' ' '\n' | LC_ALL=C sort
+    printf '%s\n' "$*"
+    od -An -N8 -tx1 /dev/urandom
+  } | if command -v shasum >/dev/null 2>&1; then shasum -a 256; else sha256sum; fi | cut -c1-16)
+fi
+FORK_RESOLVE_KEYS_HELD=
+if [ -n "$FIRE_AND_FORGET_ID" ] && [ -n "$RESOLVE_KEYS" ]; then
+  FORK_RESOLVE_KEYS_HELD=$RESOLVE_KEYS
+  RESOLVE_KEYS=
+fi
+
 if [ -n "$FIRE_AND_FORGET_ID" ]; then
   printf '%s' "$FIRE_AND_FORGET_ID" | grep -Eq '^[a-f0-9]{16}$' ||
     {
@@ -611,6 +653,11 @@ if [ -n "$FIRE_AND_FORGET_ID" ]; then
       echo "error: --fire-and-forget cannot accompany --resolve-key" >&2
       exit 1
     }
+fi
+
+# Fork-only (applypass): restore the keys held aside above.
+if [ -n "$FORK_RESOLVE_KEYS_HELD" ]; then
+  RESOLVE_KEYS=$FORK_RESOLVE_KEYS_HELD
 fi
 
 if [ -n "$RESOLVE_KEYS" ]; then

@@ -283,8 +283,13 @@ test_secondmate_report_needs_the_items_own_story() {
       SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" \
       "$ROOT/bin/fm-secondmate-report.sh" "$@" 2>&1)
   }
-  out=$(report "done" "$corr" "audit clean") && fail "a done report published with no --item"
-  assert_contains "$out" "--item <id>" "the refusal did not ask for the item"
+  out=$(report "done" "$corr" "re-read AGENTS.md acknowledged") || fail "a pure acknowledgement with a corr and no --item was refused: $out"
+  grep -q "^done .*corr=$corr.*re-read AGENTS.md acknowledged" "$parent_status" || fail "the acknowledgement did not reach the parent channel"
+  [ ! -s "$dir/curl.log" ] || fail "an acknowledgement with no --item called Shortcut: $(cat "$dir/curl.log")"
+  : > "$parent_status"
+  out=$(report --doc "done" "$corr" data/x/report.md "see report") && fail "a --doc done report published with no --item"
+  assert_contains "$out" "--item <id>" "the --doc refusal did not ask for the item"
+  [ ! -s "$parent_status" ] || fail "a refused --doc report reached the parent channel: $(cat "$parent_status")"
   seed_story "$dir" 6104 "Launch fixes umbrella"
   run_tasks "$dir" add inv-1 "Umbrella only" --kind scout --body "Shortcut: sc-6104" >/dev/null
   out=$(report --item inv-1 --doc "done" "$corr" data/inv-1/report.md "see report") && fail "a --doc report published for an umbrella-only item"
@@ -297,7 +302,7 @@ test_secondmate_report_needs_the_items_own_story() {
   grep -q "^done .*corr=$corr.*data/inv-2/report.md" "$parent_status" || fail "the verified report did not reach the parent channel"
   out=$(cd "$dir/code" && FM_SHORTCUT_TICKETS=off FM_HOME="$mate" FM_ROOT_OVERRIDE="$dir/code" \
     "$ROOT/bin/fm-secondmate-report.sh" "done" "$corr" "feature off" 2>&1) || fail "the feature off still required --item: $out"
-  pass "a second mate's done or ready report publishes only for an item whose own story --check verifies"
+  pass "a second mate's done or ready report with --item publishes only for an item whose own story --check verifies, a --doc report always needs --item, and a plain one with no --item closes a pure acknowledgement"
 }
 
 test_body_reference_is_not_the_linked_story() {

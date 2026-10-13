@@ -17,9 +17,12 @@
 # set to that home.
 #
 # Fork-only (applypass): while Shortcut ticket sync is on, a done or ready
-# report (including --doc) needs --item <id> naming the backlog item of the
-# investigation, and refuses to publish unless
-# `bin/fm-shortcut-ticket.sh --check <id>` passes in this home.
+# report that names a backlog item with --item <id> refuses to publish unless
+# `bin/fm-shortcut-ticket.sh --check <id>` passes in this home. A --doc report
+# points at investigation work, so it always needs --item. Only a plain report
+# with no --item, which answers its corr_id without a work item (a pure
+# acknowledgement), publishes without the story check, so it can close the
+# pending reply.
 #
 # Usage:
 #   fm-secondmate-report.sh [--item <id>] <verb> <corr_id> <note...>
@@ -96,11 +99,11 @@ fi
 case "$VERB" in
   done | ready)
     if FM_HOME="$HOME_DIR" "$SCRIPT_DIR/fm-shortcut-ticket.sh" --enabled; then
-      if [ -z "$ITEM" ]; then
-        echo "error: a $VERB report needs --item <id> naming the investigation's backlog item, whose own Shortcut story must pass bin/fm-shortcut-ticket.sh --check <id>" >&2
+      if [ "$DOC_MODE" = 1 ] && [ -z "$ITEM" ]; then
+        echo "error: a --doc $VERB report needs --item <id> naming the investigation's backlog item, whose own Shortcut story must pass bin/fm-shortcut-ticket.sh --check <id>" >&2
         exit 1
       fi
-      if ! FM_HOME="$HOME_DIR" "$SCRIPT_DIR/fm-shortcut-ticket.sh" --check "$ITEM"; then
+      if [ -n "$ITEM" ] && ! FM_HOME="$HOME_DIR" "$SCRIPT_DIR/fm-shortcut-ticket.sh" --check "$ITEM"; then
         echo "error: refusing to publish $VERB for $ITEM: it has no verified Shortcut story of its own (reason above)" >&2
         exit 1
       fi

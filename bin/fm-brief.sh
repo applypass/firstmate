@@ -417,6 +417,7 @@ Marked requests also carry a privacy-safe \`corr=<id>\` token after the marker; 
 Only a \`done\`, \`ready\`, \`needs-decision\`, \`blocked\`, or \`failed\` line with that \`corr=<id>\` closes the request; a \`working:\` or \`paused:\` line only acknowledges it and keeps it open.
 Helper: \`bin/fm-secondmate-report.sh <verb> <corr_id> <note>\` appends that correlated line to the parent channel itself - do not pass a status path, and do not write a hand path under this home.
 A \`done\` or \`ready\` result line for an investigation or work MUST go through that helper with \`--item <item>\`, because it runs the item's Shortcut story check and refuses to publish while it fails; never \`echo\` such a line.
+A pure acknowledgement with no work item (for example "re-read AGENTS.md") closes with \`bin/fm-secondmate-report.sh done <corr_id> <note>\` and no \`--item\`; the helper then skips the story check, but a \`--doc\` report always needs \`--item\`.
 Any other line may be a plain \`echo\` that includes the same \`corr=<id>\` on this parent channel.
 For a terse result, a status line is the whole answer.
 For a detailed answer (an investigation, a plan, an audit), write it to a doc under your home's \`data/\` and append a status line that points to that doc - the scout-report pattern - so the main firstmate is woken and can read it.
