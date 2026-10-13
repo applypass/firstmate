@@ -594,7 +594,7 @@ SH
   : > "$case_dir/gh-axi.log"
 
   set +e
-  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/9 \
+  FM_SHORTCUT_TICKETS=on run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/9 \
     > "$case_dir/stdout" 2> "$case_dir/stderr"
   rc=$?
   set -e
