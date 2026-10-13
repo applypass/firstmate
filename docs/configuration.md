@@ -399,6 +399,7 @@ Merge and teardown leave the story In Review; it moves to Done only through `rel
 Every sync call except the dispatch refusal is best-effort: it warns and never blocks the lifecycle step, and a failed `add` prints the exact retry command.
 A second mate gives any investigation it runs itself its own story the same way (its charter says so), and its result does not publish without it.
 Use `comment` and `attach` for decisions, learnings, and artifacts recorded elsewhere.
+Shortcut serves an uploaded `.md` as `text/html`, which the browser shows as one block of text, so every `.md` upload (`attach`, `review --report`, the scout `report.md`) also uploads `<name>.html`, a styled render from [`bin/fm-md-to-html.py`](../bin/fm-md-to-html.py) that needs `python3` with `markdown-it-py`; when the render fails the `.md` still uploads, with a warning.
 
 ### Decision record sync (applypass fork)
 
