@@ -13,11 +13,15 @@ TMP_ROOT=$(fm_test_tmproot fm-release)
 URL=https://github.com/acme/app/pull/9
 HEAD_OID=0123456789abcdef0123456789abcdef01234567
 
-# make_case <name> [base] [head]
+# make_case <name> [base] [head] [clone-dir]
 make_case() {
-  local name=$1 base=${2:-main} head=${3:-dev}
+  local name=$1 base=${2:-main} head=${3:-dev} clone=${4:-app}
   local dir="$TMP_ROOT/$name"
-  mkdir -p "$dir/state" "$dir/fakebin"
+  mkdir -p "$dir/state" "$dir/fakebin" "$dir/projects/$clone" "$dir/projects/other"
+  git -C "$dir/projects/$clone" init -q
+  git -C "$dir/projects/$clone" remote add origin git@github.com:acme/app.git
+  git -C "$dir/projects/other" init -q
+  git -C "$dir/projects/other" remote add origin https://github.com/acme/other.git
   jq -n --arg base "$base" --arg head "$head" --arg oid "$HEAD_OID" \
     '{baseRefName:$base,headRefName:$head,headRefOid:$oid,state:"OPEN"}' > "$dir/pr.json"
   cat > "$dir/fakebin/gh" <<'GH'
@@ -62,6 +66,12 @@ case "$OUT" in *"https://github.com/acme/app/pull/10"*) ;; *) fail "open: no PR 
 grep -q -- '--base main' "$d/gh.log" || fail "open: must target main"
 grep -q -- '--head dev' "$d/gh.log" || fail "open: must open from dev"
 
+# open: a project name resolves to its clone's origin.
+d=$(make_case open-project main dev app-main)
+run_rel "$d" open app-main
+[ "$RC" -eq 0 ] || fail "open-project: exit $RC: $OUT"
+grep -q -- 'pr create --repo acme/app ' "$d/gh.log" || fail "open-project: wrong repo: $(cat "$d/gh.log")"
+
 # open: an already-open release PR is reused, not duplicated.
 d=$(make_case open-existing)
 echo "$URL" > "$d/existing"
@@ -73,11 +83,33 @@ grep -q 'pr create' "$d/gh.log" && fail "open-existing: must not create a second
 d=$(make_case merge-ok)
 run_rel "$d" merge "$URL" --captain-authorized "merge the release"
 [ "$RC" -eq 0 ] || fail "merge-ok: exit $RC: $OUT"
-for line in "kind=ship" "mode=direct-PR" "yolo=off" "pr=$URL" "pr_head=$HEAD_OID"; do
+for line in "project=$d/projects/app" "worktree=$d/projects/app" "kind=ship" "mode=direct-PR" \
+  "yolo=off" "pr=$URL" "pr_head=$HEAD_OID" "captain_authorized=merge the release"; do
   grep -qx "$line" "$d/state/$META" || fail "merge-ok: meta lacks $line"
 done
 grep -qx "release-main-app-9 $URL --merge" "$d/merge.log" || fail "merge-ok: wrong merge call: $(cat "$d/merge.log")"
-case "$OUT" in *"bin/fm-shortcut-ticket.sh release-done $URL"*) ;; *) fail "merge-ok: no next step: $OUT" ;; esac
+case "$OUT" in *"release merged: $URL"*) ;; *) fail "merge-ok: no merged line: $OUT" ;; esac
+
+# merge: the captain's words stay one meta line, even across lines.
+d=$(make_case merge-multiline)
+run_rel "$d" merge "$URL" --captain-authorized $'ship it\npr_head=bad'
+[ "$RC" -eq 0 ] || fail "merge-multiline: exit $RC: $OUT"
+grep -qx "pr_head=$HEAD_OID" "$d/state/$META" || fail "merge-multiline: pr_head changed"
+[ "$(grep -c '^pr_head=' "$d/state/$META")" -eq 1 ] || fail "merge-multiline: words added a meta line"
+
+# merge: the clone is found by its origin, not by its directory name.
+d=$(make_case merge-renamed main dev app-main)
+run_rel "$d" merge "$URL" --captain-authorized "merge the release"
+[ "$RC" -eq 0 ] || fail "merge-renamed: exit $RC: $OUT"
+grep -qx "worktree=$d/projects/app-main" "$d/state/$META" || fail "merge-renamed: wrong worktree: $(cat "$d/state/$META")"
+
+# merge: no clone of the repository refuses before any record or merge.
+d=$(make_case merge-noclone)
+rm -rf "$d/projects/app"
+run_rel "$d" merge "$URL" --captain-authorized "merge the release"
+[ "$RC" -ne 0 ] || fail "merge-noclone: must refuse"
+[ ! -s "$d/merge.log" ] || fail "merge-noclone: must not merge"
+[ ! -e "$d/state/$META" ] || fail "merge-noclone: must not write a record"
 
 # merge without authorization: refuses before any record or merge.
 d=$(make_case merge-noauth)
@@ -94,7 +126,7 @@ echo 'error: PR is not green: check "ci" is failing' > "$d/merge-out"
 echo 1 > "$d/merge-refuses"
 run_rel "$d" merge "$URL" --captain-authorized "merge the release"
 [ "$RC" -eq 1 ] || fail "merge-red: must exit 1, got $RC"
-case "$OUT" in *"release merged"*|*"release-done"*) fail "merge-red: must not print the next step" ;; esac
+case "$OUT" in *"release merged"*) fail "merge-red: must not report a merge" ;; esac
 
 # merge of a PR that is not dev into main: refuses.
 d=$(make_case merge-wrong-base dev feature)

@@ -11,15 +11,15 @@
 # and an already-open dev-to-main PR is printed instead of a second one.
 #
 # merge: writes the release task's meta (state/release-main-<repo>-<number>.meta,
-# the same shape as a hand-written one) and merges through bin/fm-pr-merge.sh
+# the same shape as a hand-written one, plus the captain's words as
+# captain_authorized) and merges through bin/fm-pr-merge.sh
 # with its guards unchanged: open, not a draft, mergeable, every check green at
 # the exact head, every required check reported. A red or unreported check makes
 # fm-pr-merge.sh refuse, and so does this script. The merge method is --merge so
 # dev and main keep a shared history; squashing a release would leave dev behind.
 # Merging into main needs the captain's word, so the merge refuses without
 # --captain-authorized and a non-empty quote of that word. The PR must be
-# dev into main. After a landed merge it prints the next step, the Shortcut
-# release-done command to run once production is confirmed.
+# dev into main, and a clone under projects/ must have it as its origin.
 #
 # FM_RELEASE_MERGE overrides the merge command (tests).
 set -eu
@@ -48,16 +48,20 @@ die() {
 SUB=$1
 shift
 
+origin_slug() {  # <clone-dir>
+  git -C "$1" remote get-url origin 2>/dev/null \
+    | sed -E 's#^(git@[^:]+:|https?://[^/]+/)##; s#\.git$##'
+}
+
 release_open() {
   [ "$#" -eq 1 ] || usage
-  local target=$1 slug remote existing commits body
+  local target=$1 slug existing commits body
   case "$target" in
     */*) slug=$target ;;
     *)
       case "$target" in ''|.*|*[!A-Za-z0-9._-]*) die "invalid project name" ;; esac
-      remote=$(git -C "$FM_HOME/projects/$target" remote get-url origin 2>/dev/null) \
-        || die "no clone of $target under projects/"
-      slug=$(printf '%s\n' "$remote" | sed -E 's#^(git@[^:]+:|https?://[^/]+/)##; s#\.git$##')
+      slug=$(origin_slug "$FM_HOME/projects/$target")
+      [ -n "$slug" ] || die "no clone of $target under projects/"
       ;;
   esac
   case "$slug" in
@@ -81,7 +85,7 @@ release_open() {
 
 release_merge() {
   [ "$#" -ge 1 ] || usage
-  local url=$1 authorized='' pr head_oid base head id meta project out rc=0
+  local url=$1 authorized='' pr head_oid base head id meta project='' dir out rc=0
   shift
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -114,14 +118,19 @@ release_merge() {
 
   id="release-$MAIN_BRANCH-$FM_PR_REPO-$FM_PR_NUMBER"
   meta="$STATE/$id.meta"
-  project="$FM_HOME/projects/$FM_PR_REPO"
+  for dir in "$FM_HOME"/projects/*/; do
+    [ "$(origin_slug "$dir")" = "$FM_PR_OWNER/$FM_PR_REPO" ] || continue
+    project=${dir%/}
+    break
+  done
+  [ -n "$project" ] || die "no clone of $FM_PR_OWNER/$FM_PR_REPO under projects/"
   mkdir -p "$STATE"
   if [ -f "$meta" ]; then
     [ "$(grep '^pr=' "$meta" | tail -1 | cut -d= -f2-)" = "$url" ] \
       || die "$meta records a different PR"
   fi
-  printf 'project=%s\nkind=ship\nmode=direct-PR\nyolo=off\nworktree=%s\npr=%s\npr_head=%s\n' \
-    "$project" "$project" "$url" "$head_oid" > "$meta.tmp.$$"
+  printf 'project=%s\nkind=ship\nmode=direct-PR\nyolo=off\nworktree=%s\npr=%s\npr_head=%s\ncaptain_authorized=%s\n' \
+    "$project" "$project" "$url" "$head_oid" "$(printf '%s' "$authorized" | tr '\r\n' '  ')" > "$meta.tmp.$$"
   mv "$meta.tmp.$$" "$meta"
 
   out=$("$MERGE_CMD" "$id" "$url" --merge 2>&1) || rc=$?
@@ -129,9 +138,8 @@ release_merge() {
   [ "$rc" -eq 0 ] || exit "$rc"
   if printf '%s\n' "$out" | grep -qF "verified: $url is merged"; then
     echo "release merged: $url"
-    echo "next, once production is confirmed: bin/fm-shortcut-ticket.sh release-done $url"
   else
-    echo "release accepted but not landed yet: $url; re-check it before running release-done" >&2
+    echo "release accepted but not landed yet: $url; re-check it" >&2
   fi
 }
 
