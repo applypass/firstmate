@@ -156,8 +156,9 @@
 # still resolves each key after the durable enqueue, and no pending reply is
 # opened, so a closing steer to a pure acknowledgement cannot start a new loop.
 # --close-ack (requires --resolve-key) implies --fire-and-forget with a delivery
-# id fm-send derives from the task id, the sorted keys, and the message, so the
-# caller needs no id and a retry of the same close is idempotent.
+# id fm-send derives from the task id, the sorted keys, the message, and a
+# per-send nonce, so the caller needs no id and a later identical close is
+# delivered rather than deduplicated onto an earlier record.
 #
 # Decision closure (answerer-closes): pass --resolve-key <key> (repeatable,
 # before the message) when this send answers an open keyed needs-decision: or
@@ -626,7 +627,8 @@ if [ "$FORK_CLOSE_ACK" = 1 ]; then
   FIRE_AND_FORGET_ID=$({
     printf '%s\n' "$(fm_send_id_from_meta "$TARGET_META")"
     printf '%s' "$RESOLVE_KEYS" | tr ' ' '\n' | LC_ALL=C sort
-    printf '%s' "$*"
+    printf '%s\n' "$*"
+    od -An -N8 -tx1 /dev/urandom
   } | if command -v shasum >/dev/null 2>&1; then shasum -a 256; else sha256sum; fi | cut -c1-16)
 fi
 FORK_RESOLVE_KEYS_HELD=

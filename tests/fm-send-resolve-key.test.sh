@@ -953,7 +953,13 @@ test_close_ack_closes_without_pending_reply() {
     || fail "the key was not resolved: $(cat "$home/state/domain.status")"
   [ -z "$(find "$home/state" -name '*pending-repl*' 2>/dev/null)" ] \
     || fail "a pending-reply record was created: $(ls -A "$home/state")"
-  pass "fm-send --resolve-key --close-ack: resolves the key with a derived delivery id and opens no pending reply"
+  printf 'blocked [key=ack-loop]: re-read AGENTS.md\n' >> "$home/state/domain.status"
+  run_send "$fb" "$home" "$log" fm-domain --resolve-key ack-loop --close-ack "acknowledged"; rc=$?
+  expect_code 0 "$rc" "a second identical --close-ack should succeed"
+  [ -e "$home/state/domain.inbox/002.msg" ] || fail "a second identical --close-ack was not enqueued"
+  [ "$(grep -cF 'resolved [key=ack-loop]' "$home/state/domain.status")" = 2 ] \
+    || fail "the second close did not resolve the key: $(cat "$home/state/domain.status")"
+  pass "fm-send --resolve-key --close-ack: resolves the key with a derived delivery id, opens no pending reply, and delivers a later identical close"
 }
 # Fork-only end
 test_answer_send_closes_open_decision
