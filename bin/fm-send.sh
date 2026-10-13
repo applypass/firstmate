@@ -154,7 +154,6 @@
 # Fork-only (applypass): --resolve-key combines with --fire-and-forget. The send
 # still resolves each key after the durable enqueue, and no pending reply is
 # opened, so a closing steer to a pure acknowledgement cannot start a new loop.
-# Fork-only end
 #
 # Decision closure (answerer-closes): pass --resolve-key <key> (repeatable,
 # before the message) when this send answers an open keyed needs-decision: or
@@ -608,7 +607,6 @@ if [ -n "$FIRE_AND_FORGET_ID" ] && [ -n "$RESOLVE_KEYS" ]; then
   FORK_RESOLVE_KEYS_HELD=$RESOLVE_KEYS
   RESOLVE_KEYS=
 fi
-# Fork-only end
 
 if [ -n "$FIRE_AND_FORGET_ID" ]; then
   printf '%s' "$FIRE_AND_FORGET_ID" | grep -Eq '^[a-f0-9]{16}$' ||
@@ -632,7 +630,6 @@ fi
 if [ -n "$FORK_RESOLVE_KEYS_HELD" ]; then
   RESOLVE_KEYS=$FORK_RESOLVE_KEYS_HELD
 fi
-# Fork-only end
 
 if [ -n "$RESOLVE_KEYS" ]; then
   if [ -z "$TARGET_SELECTOR" ] || [ -z "$TARGET_META" ]; then

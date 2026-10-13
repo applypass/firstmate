@@ -904,7 +904,6 @@ test_decision_answer_partition_relocates_under_the_record() {
     || fail "main's attended decision answer did not close the key"
   pass "fm-send --resolve-key: a decision answer refuses the attended branch before sending, a blocked: key stays steering, and the away-posture record relocates the answer"
 }
-
 # Fork-only (applypass): --resolve-key combined with --fire-and-forget closes the
 # key after the durable enqueue and opens no pending reply.
 test_resolve_key_with_fire_and_forget_closes_without_pending_reply() {
@@ -931,7 +930,6 @@ test_resolve_key_with_fire_and_forget_closes_without_pending_reply() {
   fi
   pass "fm-send --resolve-key --fire-and-forget: resolves the key and opens no pending reply"
 }
-# Fork-only end
 
 test_answer_send_closes_open_decision
 test_answer_close_is_self_announced
@@ -957,4 +955,5 @@ test_stamped_close_line_stays_within_the_status_line_cap
 test_failed_close_recovery_command_is_shell_safe
 test_remote_reserved_pending_reply_key_closes_locally
 test_decision_answer_partition_relocates_under_the_record
+# Fork-only (applypass): fire-and-forget close case.
 test_resolve_key_with_fire_and_forget_closes_without_pending_reply
