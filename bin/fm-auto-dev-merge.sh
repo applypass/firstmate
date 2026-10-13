@@ -21,7 +21,8 @@
 #
 # Every outcome exits 0, so the ready registration that called it is
 # unaffected. A PR the authority does not cover (not a ship, no ready report,
-# foreign author, flagged label, disabled) is a quiet skip: one
+# foreign author, flagged label, disabled, or a supervision-branch actor that
+# fm-pr-merge.sh refuses by role, exit 6) is a quiet skip: one
 # "auto-dev-merge: skipped" line on stderr. A covered PR that cannot merge now
 # (base not dev, or fm-pr-merge.sh refused) is a loud skip: the same line, plus
 # a paused line appended to state/<task-id>.status that names the PR and every
@@ -32,6 +33,8 @@
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bin/fm-lease-lib.sh
+. "$SCRIPT_DIR/fm-lease-lib.sh"
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
@@ -92,7 +95,10 @@ fi
 BASE=$(jq -r '.baseRefName' <<<"$PR")
 [ "$BASE" = "$DEV_BRANCH" ] || pause "base is $BASE, not $DEV_BRANCH"
 
-if ! OUT=$("$MERGE_CMD" "$ID" "$URL" 2>&1); then
+MERGE_RC=0
+OUT=$("$MERGE_CMD" "$ID" "$URL" 2>&1) || MERGE_RC=$?
+[ "$MERGE_RC" -ne "$FM_LEASE_REFUSE_EXIT" ] || skip "this actor is not the merge authority; main merges it"
+if [ "$MERGE_RC" -ne 0 ]; then
   REASON=$(printf '%s\n' "$OUT" | awk 'NF { sub(/^[[:space:]]+/, ""); printf "%s%s", (n++ ? "; " : ""), $0 }')
   case "$OUT" in
     *"is not green"*) REASON="$REASON; fm-pr-merge.sh gates on every check, required or not" ;;

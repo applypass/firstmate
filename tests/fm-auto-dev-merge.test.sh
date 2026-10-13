@@ -32,13 +32,13 @@ case "$1 $2" in
   *) exit 1 ;;
 esac
 GH
-  # The merge stub prints merge-out (default: a landed merge) and exits 1 when
-  # merge-refuses exists.
+  # The merge stub prints merge-out (default: a landed merge) and exits with
+  # the status in merge-refuses when that file exists.
   cat > "$dir/merge" <<'M'
 #!/usr/bin/env bash
 echo "$*" >> "$CASE_DIR/merge.log"
 cat "$CASE_DIR/merge-out"
-[ ! -e "$CASE_DIR/merge-refuses" ] || exit 1
+[ ! -e "$CASE_DIR/merge-refuses" ] || exit "$(cat "$CASE_DIR/merge-refuses")"
 M
   chmod +x "$dir/fakebin/gh" "$dir/merge"
   : > "$dir/merge.log"
@@ -121,11 +121,21 @@ test_merge_refusal_pauses_with_every_reason() {
   local dir; dir=$(make_case refused)
   printf '%s\n' "error: refusing to merge $URL" "  - check 'preview' is not green" \
     "  - mergeable is \"UNKNOWN\", not MERGEABLE" "error: these checks are not green: preview" > "$dir/merge-out"
-  : > "$dir/merge-refuses"
+  echo 1 > "$dir/merge-refuses"
   run_auto "$dir"
   expect_paused refused "$dir" "merge refused: error: refusing to merge $URL" \
     "- check 'preview' is not green" "not MERGEABLE" "these checks are not green: preview" \
     "gates on every check, required or not"
+}
+
+test_role_refusal_is_a_quiet_skip() {
+  local dir; dir=$(make_case branch)
+  printf '%s\n' "error: PR merge (fm-pr-merge) refused - the supervision branch never performs this action" > "$dir/merge-out"
+  echo 6 > "$dir/merge-refuses"
+  run_auto "$dir"
+  [ "$RC" -eq 0 ] || fail "branch: skip must exit 0, got $RC"
+  case "$OUT" in *"skipped"*"not the merge authority"*) ;; *) fail "branch: expected a role skip, got: $OUT" ;; esac
+  [ "$(last_status "$dir")" = "$READY" ] || fail "branch: a role refusal must not append a status line"
 }
 
 test_quiet_skip_foreign_pr() {

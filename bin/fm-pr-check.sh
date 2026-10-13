@@ -223,9 +223,6 @@ fi
 # Fork-only: code complete moves the Shortcut story to In Review and links the PR (best-effort).
 [ "${FM_PR_CHECK_MERGE:-}" = 1 ] \
   || FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE "$SCRIPT_DIR/fm-shortcut-ticket.sh" review "$ID" --pr "$URL" --best-effort || true
-# Fork-only: a green ready report on our own PR to dev merges without a word (best-effort).
-[ "${FM_PR_CHECK_MERGE:-}" = 1 ] \
-  || FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE "$SCRIPT_DIR/fm-auto-dev-merge.sh" "$ID" "$URL" || true
 # The contribution observer uses the same authenticated check mechanism and
 # owns verdict freshness, required actors and external feedback separately from
 # the exact merged-state poll. Registration is local and performs no forge read.
@@ -253,4 +250,7 @@ case "$READY_RC" in
   0|1) ;;
   *) printf 'actionable: PR %s is registered but its ready line did not reach the parent channel (rc=%s)\n' "$URL" "$READY_RC" >&2 ;;
 esac
+# Fork-only: a green ready report on our own PR to dev merges without a word (best-effort).
+[ "${FM_PR_CHECK_MERGE:-}" = 1 ] \
+  || FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE "$SCRIPT_DIR/fm-auto-dev-merge.sh" "$ID" "$URL" || true
 printf 'armed: state/%s.check.sh\n' "$ID"
