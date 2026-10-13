@@ -106,4 +106,3 @@ ok - fm-pr-merge --allow-missing is single use, attended-only, and GitHub-only l
 ok - fm-pr-merge enforces required producer identity and named waivers
 ok - fm-pr-merge matches an app-bound required commit status by name
 ok - fm-pr-merge reports known missing checks and all independent read errors
-env ASDF_DATA_DIR=$HOME/.asdf ASDF_NODEJS_VERSION=24.14.0 bash   237.25s user 315.46s system 71% cpu 12:51.54 total

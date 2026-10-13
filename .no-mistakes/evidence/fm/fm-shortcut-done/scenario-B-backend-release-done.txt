@@ -1,0 +1,46 @@
+### Scenario B1: release-done while 1Password is signed out
+fm-shortcut-ticket: SHORTCUT_API_TOKEN is not set and 'op read op://fm-lab-nonexistent-vault/none/credential' failed or did not answer within 5s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_backend/pull/695 --evidence captain\ deployed\ fec62c9\ to\ prod --task t1 (queued for retry: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.iNSrkI/state/shortcut-pending)
+exit=1
+--- t1.status:
+blocked [at=1791880663] [key=shortcut-sync-sc-3208702387]: Shortcut did not update (SHORTCUT_API_TOKEN is not set and 'op read op://fm-lab-nonexistent-vault/none/credential' failed or did not answer within 5s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_backend/pull/695 --evidence captain\ deployed\ fec62c9\ to\ prod --task t1); queued, retried on the next fm-shortcut-ticket.sh run or by: fm-shortcut-ticket.sh pending.
+--- pending dir:
+sc-3208702387.args
+sc-3208702387.meta
+--- stories:
+101 state= 500000009 comments= 0
+102 state= 500000009 comments= 0
+103 state= 500000009 comments= 0
+201 state= 500000009 comments= 0
+301 state= 500000009 comments= 0
+
+### Scenario B2: 1Password works again (token present); next run replays the record via 'pending'
+fm-shortcut-ticket: 0 pending record(s) remain
+exit=0
+--- t1.status:
+blocked [at=1791880663] [key=shortcut-sync-sc-3208702387]: Shortcut did not update (SHORTCUT_API_TOKEN is not set and 'op read op://fm-lab-nonexistent-vault/none/credential' failed or did not answer within 5s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_backend/pull/695 --evidence captain\ deployed\ fec62c9\ to\ prod --task t1); queued, retried on the next fm-shortcut-ticket.sh run or by: fm-shortcut-ticket.sh pending.
+resolved [at=1791880667] [key=shortcut-sync-sc-3208702387]: Shortcut update went through on retry
+--- stories:
+101 state= 500000010 comments= 1
+102 state= 500000009 comments= 1
+103 state= 500000009 comments= 0
+201 state= 500000009 comments= 0
+301 state= 500000009 comments= 0
+--- comments:
+101 Done: merged to the release branch and running in production. | PRs: https://github.com/applypass/apply_pass_backend/pull/693 | Release PR: https://github.com/applypass/apply_pass_backend/pull/695 | Deploy evidence: captain deployed fec62c9 to prod
+102 Release https://github.com/applypass/apply_pass_backend/pull/695 merged; sc-102 stays In Review because https://github.com/applypass/apply_pass_backend/pull/383 is still open.
+backlog t1   state: done
+backlog t2   state: in_flight
+--- Shortcut writes:
+PUT /api/v3/stories/101 token=yes {"workflow_state_id": 500000010}
+POST /api/v3/stories/101/comments token=yes {"text": "Done: merged to the release branch and running in production.\nPRs: https://github.com/applypass/apply_pass_backend/pull/693\nRelease PR: https://github.com/applypass/apply_pass_backend/pull/695\nDeploy evidence: captain deployed fec62c9 to prod"}
+POST /api/v3/stories/102/comments token=yes {"text": "Release https://github.com/applypass/apply_pass_backend/pull/695 merged; sc-102 stays In Review because https://github.com/applypass/apply_pass_backend/pull/383 is still open."}
+
+### Scenario B3: re-run release-done directly: nothing changes
+fm-shortcut-ticket: release https://github.com/applypass/apply_pass_backend/pull/695: Done: none; left In Review: sc-102
+exit=0
+writes before=3 after=3
+101 state= 500000010 comments= 1
+102 state= 500000009 comments= 1
+103 state= 500000009 comments= 0
+201 state= 500000009 comments= 0
+301 state= 500000009 comments= 0

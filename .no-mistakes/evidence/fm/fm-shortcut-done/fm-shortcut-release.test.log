@@ -11,4 +11,4 @@ ok - a Vercel release-hook first blocked on the token names the release-done ste
 ok - a best-effort call that fails for another reason keeps its pending record and claims nothing
 ok - release-hook is silent for a merge that is not into the release base
 ok - with the feature off release-done does nothing
-bash tests/fm-shortcut-release.test.sh  13.14s user 14.48s system 59% cpu 46.505 total
+bash tests/fm-shortcut-release.test.sh  11.49s user 12.19s system 64% cpu 36.630 total

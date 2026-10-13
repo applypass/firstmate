@@ -1,0 +1,9 @@
+### Scenario A: 1Password signed out (token_ref points at a vault op cannot read), backend release PR #695 merged into main
+[ERROR] 2026/10/13 14:07:27 account is not signed in
+$ FM_HOME=$LAB bin/fm-shortcut-ticket.sh release-hook https://github.com/applypass/apply_pass_backend/pull/695 --task t1
+fm-shortcut-ticket: https://github.com/applypass/apply_pass_backend/pull/695 merged to main and deploys from the captain terminal. After confirming production runs fec62c9aa, run: bin/fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_backend/pull/695
+exit=0
+--- Shortcut API requests made:
+(none means no token read / no API call)
+--- t1.status:
+ls: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.iNSrkI/state/shortcut-pending: No such file or directory
