@@ -48,7 +48,13 @@ case "$method $url" in
     link=$(jq -rn --arg u "${url#*external_link=}" '$u|@uri|.' >/dev/null; printf '%s' "${url#*external_link=}" | jq -Rr '@urid')
     awk -F'\t' -v l="$link" '$1 == l {print $2}' "$D/extlinks.tsv" | jq -Rn '[inputs | tonumber | {id: .}]' > "$out"
     printf 200 ;;
-  "GET "*/api/v3/stories/*) cp "$D/stories/$id.json" "$out"; printf 200 ;;
+  "GET "*/api/v3/stories/*)
+    if [ -f "$D/comments/$id" ]; then
+      jq --rawfile c "$D/comments/$id" '.comments = [$c | split("\n")[] | select(. != "") | {text: .}]' "$D/stories/$id.json" > "$out"
+    else
+      cp "$D/stories/$id.json" "$out"
+    fi
+    printf 200 ;;
   "PUT "*/api/v3/stories/*)
     jq -s '.[0] * .[1]' "$D/stories/$id.json" "$data" > "$D/stories/$id.json.new" && mv "$D/stories/$id.json.new" "$D/stories/$id.json"
     printf '{}' > "$out"; printf 200 ;;
@@ -201,7 +207,7 @@ test_release_done_finishes_only_complete_stories() {
   assert_equals "$REVIEW_STATE" "$(state_of "$dir" 17)" "an unassigned story without a firstmate marker was moved"
   [ ! -e "$dir/sc/comments/15" ] && [ ! -e "$dir/sc/comments/17" ] || fail "a skipped story was commented on"
   assert_no_grep "PUT https://api.app.shortcut.com/api/v3/stories/15" "$dir/sc/curl.log" "another person's story was written"
-  assert_equals done "$(item_state "$dir" st-101)" "the firstmate backlog item did not close with its story"
+  assert_equals "done" "$(item_state "$dir" st-101)" "the firstmate backlog item did not close with its story"
   assert_not_contains "$out" "$TOKEN" "the token was printed"
   pass "release-done moves finished stories to Done with evidence, closes their backlog item, and leaves open-work stories in review, and never touches another person's story"
 }
@@ -215,6 +221,7 @@ test_release_done_is_idempotent() {
   ticket "$dir" release-done "$RELEASE" >/dev/null || fail "second release-done failed"
   assert_no_grep "PUT " "$dir/sc/curl.log" "a repeat release-done moved a story again"
   assert_equals 1 "$(grep -c '^Done:' "$dir/sc/comments/11")" "a repeat release-done commented Done twice"
+  assert_equals 1 "$(grep -c 'stays In Review' "$dir/sc/comments/12")" "a repeat release-done explained a held story twice"
   pass "a repeated release-done changes nothing"
 }
 
@@ -260,23 +267,29 @@ ${OWNED}st-9"
 }
 
 test_release_hook_on_a_vercel_repo_waits_for_production() {
-  local dir out sha=abc1234abc1234abc1234abc1234abc1234abc12
+  local dir out key sha=abc1234abc1234abc1234abc1234abc1234abc12
   dir=$(make_case hook-vercel)
   seed_release "$dir"
   printf 'working [at=1]: start\n' > "$dir/home/state/st-101.status"
   out=$(ticket "$dir" release-hook "$RELEASE" --task st-101 --best-effort) || fail "release-hook failed: $out"
   assert_equals "$REVIEW_STATE" "$(state_of "$dir" 11)" "a story moved before production ran the release"
   assert_contains "$out" "once production runs abc1234ab" "the hook did not say it is waiting for production"
-  assert_no_grep "blocked" "$dir/home/state/st-101.status" "waiting for the deploy raised a blocked line"
+  assert_contains "$out" "run: bin/fm-shortcut-ticket.sh release-done $RELEASE" "the hook did not name the release-done step"
+  assert_equals 1 "$(grep -c "^blocked \[at=[0-9]*\] \[key=shortcut-sync-[^]]*\]: $RELEASE merged.*run: bin/fm-shortcut-ticket.sh release-done $RELEASE\$" "$dir/home/state/st-101.status")" \
+    "waiting for the deploy did not append one keyed blocked line naming the release and the release-done step"
+  key=$(sed -n 's/.*\[key=\(shortcut-sync-[^]]*\)\].*/\1/p' "$dir/home/state/st-101.status" | head -1)
   deploy "$dir" 55 "$sha" pending
   ticket "$dir" pending >/dev/null || fail "pending failed"
   assert_equals "$REVIEW_STATE" "$(state_of "$dir" 11)" "a deployment that is not READY finished the release"
+  assert_equals 1 "$(grep -c '^blocked' "$dir/home/state/st-101.status")" "a replay that still waits appended another blocked line"
   : > "$dir/gh/deployments"
   deploy "$dir" 56 "$sha" success
   ticket "$dir" pending >/dev/null || fail "pending failed"
   assert_equals "$DONE_STATE" "$(state_of "$dir" 11)" "a READY production deployment did not finish the release"
   assert_grep "Vercel production deployment 56 READY" "$dir/sc/comments/11" "the Done comment lacks the deployment evidence"
   assert_grep "frontend-56.vercel.app" "$dir/sc/comments/11" "the Done comment lacks the deployment URL"
+  assert_grep "resolved [at=" "$dir/home/state/st-101.status" "the finished release did not append a resolved line"
+  assert_grep "[key=$key]" "$dir/home/state/st-101.status" "the resolved line does not carry the blocked key"
   pass "release-hook on a Vercel repo finishes the release only once a READY production deployment covers the merge commit"
 }
 
@@ -305,6 +318,36 @@ test_release_hook_on_a_backend_repo_prints_the_next_step() {
   assert_contains "$out" "bin/fm-shortcut-ticket.sh release-done $BACKEND_RELEASE" "the hook did not print the release-done command"
   assert_no_grep "api.app.shortcut.com" "$dir/sc/curl.log" "the backend hook reached Shortcut before the deploy was confirmed"
   pass "release-hook on a captain-deployed repo prints the release-done command and moves nothing"
+}
+
+test_release_hook_on_a_backend_repo_needs_no_token() {
+  local dir out
+  dir=$(make_case hook-backend-signed-out)
+  pr_info "$dir" 300 main MERGED abc1234abc1234abc1234abc1234abc1234abc12
+  printf 'working [at=1]: start\n' > "$dir/home/state/st-1.status"
+  out=$(NO_TOKEN=1 ticket "$dir" release-hook "$BACKEND_RELEASE" --task st-1 --best-effort) || fail "release-hook failed: $out"
+  assert_contains "$out" "bin/fm-shortcut-ticket.sh release-done $BACKEND_RELEASE" "a signed-out 1Password hid the release-done command"
+  assert_not_contains "$out" "warning" "the backend hook read the token"
+  ls "$dir"/home/state/shortcut-pending/sc-*.args >/dev/null 2>&1 && fail "the backend hook left a pending record"
+  assert_no_grep "blocked" "$dir/home/state/st-1.status" "the backend hook raised a blocked line"
+  pass "release-hook on a captain-deployed repo prints the release-done command with 1Password signed out"
+}
+
+test_a_later_failure_keeps_the_pending_record() {
+  local dir out
+  dir=$(make_case retry-then-die)
+  tasks_add "$dir" st-9 "Widget"
+  (cd "$dir/code" && FM_SHORTCUT_TICKETS=off FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" "$ROOT/bin/fm-tasks-axi.sh" update st-9 --body "Shortcut: sc-21" >/dev/null 2>&1)
+  story "$dir" 21 500000008 "x
+${OWNED}st-9"
+  printf 'working [at=1]: start\n' > "$dir/home/state/st-9.status"
+  out=$(NO_TOKEN=1 ticket "$dir" comment st-9 --file "$dir/missing.md" --best-effort) || fail "a best-effort hook failed the caller: $out"
+  assert_contains "$out" "run: bin/fm-shortcut-ticket.sh comment st-9 --file $dir/missing.md" "the token warning did not name the call to rerun"
+  out=$(ticket "$dir" comment st-9 --file "$dir/missing.md" --best-effort) || fail "a best-effort hook failed the caller: $out"
+  assert_contains "$out" "no such comment file" "the second call did not fail on the missing file"
+  ls "$dir"/home/state/shortcut-pending/sc-*.args >/dev/null 2>&1 || fail "a failed best-effort call cleared the pending record"
+  assert_no_grep "resolved" "$dir/home/state/st-9.status" "a failed best-effort call claimed the update went through"
+  pass "a best-effort call that fails for another reason keeps its pending record and claims nothing"
 }
 
 test_release_hook_ignores_merges_to_other_bases() {
@@ -336,5 +379,7 @@ test_best_effort_hook_failure_is_loud_and_replayed_by_any_run
 test_release_hook_on_a_vercel_repo_waits_for_production
 test_release_hook_accepts_a_later_production_deployment
 test_release_hook_on_a_backend_repo_prints_the_next_step
+test_release_hook_on_a_backend_repo_needs_no_token
+test_a_later_failure_keeps_the_pending_record
 test_release_hook_ignores_merges_to_other_bases
 test_feature_off_makes_no_release_calls
