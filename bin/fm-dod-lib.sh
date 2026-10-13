@@ -455,6 +455,8 @@ EOF
       echo "error: fm_dod_block: unknown delivery mode '$mode'" >&2
       return 1 ;;
   esac
+  # Fork-only: review fix-round cap and agent-timeout rule; bin/fm-review-round-cap.sh owns it.
+  [ "$mode" != no-mistakes ] || { printf '\n'; FM_HOME="${FM_HOME:-}" "${BASH_SOURCE[0]%/*}/fm-review-round-cap.sh" brief-rule "$id"; }
 }
 
 # 0 when <sha> is contained in a ref under <namespace> in <repo>.
