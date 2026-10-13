@@ -21,6 +21,10 @@
 #        fm-shortcut-ticket.sh --check <item>                exit 0 if the item has its own, existing story (or is exempt)
 #        fm-shortcut-ticket.sh --linked <item>               print the linked sc-NNNN, if any
 #        fm-shortcut-ticket.sh --enabled                     exit 0 if the feature is on
+# Uploads (attach, review --report) of a .md file also upload <name>.html, a styled
+# self-contained render (bin/fm-md-to-html.py, needs python3 with markdown-it-py), because
+# Shortcut serves .md attachments as text/html and the browser collapses them; if the
+# render fails the .md still uploads, with a warning.
 # `comment ... --print-url` also prints the new comment's URL. Any operation accepts --best-effort: a missing sc id or an API failure then
 # warns and exits 0, which is how the lifecycle hooks call it. The story
 # operations also take the story id (sc-NNNN) in place of the item, for an
@@ -314,12 +318,35 @@ post_comment() {  # <text>
   ok || die_retry "could not comment on $SC (HTTP $HTTP_CODE)"
 }
 
+upload_one() {  # <file>
+  http POST /api/v3/files -F "file0=@$1" -F "story_id=$(sc_num)"
+  ok || die_retry "could not upload $1 to $SC (HTTP $HTTP_CODE)"
+}
+
+html_copy() {  # <md-file>; prints the rendered copy's path, nothing when the render fails
+  local md=$1 out py
+  out="$WORK/html/$(basename "${md%.*}").html"
+  py=$(command -v python3) || { printf 'fm-shortcut-ticket: warning: python3 not found, %s uploads without an HTML copy\n' "$md" >&2; return 0; }
+  mkdir -p "$WORK/html"
+  if "$py" "$SCRIPT_DIR/fm-md-to-html.py" "$md" "$out" 2>"$WORK/render.err"; then
+    printf '%s' "$out"
+  else
+    printf 'fm-shortcut-ticket: warning: could not render %s to HTML (%s); uploading the .md only\n' "$md" "$(head -1 "$WORK/render.err")" >&2
+  fi
+}
+
 upload() {  # <file>...
-  local f
+  local f copy
   for f in "$@"; do
     [ -f "$f" ] || die "no such file to attach: $f"
-    http POST /api/v3/files -F "file0=@$f" -F "story_id=$(sc_num)"
-    ok || die_retry "could not upload $f to $SC (HTTP $HTTP_CODE)"
+    upload_one "$f"
+    # Fork-only: Shortcut serves an uploaded .md as text/html and the browser collapses it, so a .md also goes up as a styled .html.
+    case "$f" in
+      *.md | *.MD)
+        copy=$(html_copy "$f")
+        [ -z "$copy" ] || upload_one "$copy"
+        ;;
+    esac
   done
 }
 
