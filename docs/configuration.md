@@ -384,7 +384,7 @@ A release is a merge into `release_base`.
 [`bin/fm-shortcut-release-lib.sh`](../bin/fm-shortcut-release-lib.sh) owns what follows.
 `fm-shortcut-ticket.sh release-done <release-pr-url>` moves every story linked to a PR the release carries to Done with a comment naming the PR, the release PR, and the deploy evidence, and closes the backlog item that owns the story.
 It touches only stories assigned to `owner_id`, or unassigned stories carrying a firstmate marker, and leaves a story with another open PR, or with no marker, In Review with a comment.
-For a repo in `vercel_repos` the merge path runs it once a READY Vercel production deployment covers the merge commit (read as a GitHub `Production` deployment), and keeps a pending record until then.
+For a repo in `vercel_repos` the merge path runs it once a READY Vercel production deployment covers the merge commit (read as a GitHub `Production` deployment). Until then it keeps a pending record and appends one keyed `blocked` line that names the `release-done` command to run once production is READY.
 For the other repos, which deploy from the captain's terminal, the merge path prints the command and firstmate runs it after confirming the prod deploy.
 A call that fails on the token or the Shortcut API leaves a pending record in `state/shortcut-pending/` and one keyed `blocked` line in the task's status file; the next run of any `fm-shortcut-ticket.sh` operation, or `fm-shortcut-ticket.sh pending`, replays it and appends the matching `resolved` line.
 

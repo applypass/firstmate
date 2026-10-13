@@ -106,6 +106,7 @@ die_retry() {  # a failure worth retrying: the token or the API
 }
 
 die() {
+  PENDING_FAILED=1
   if [ "$BEST_EFFORT" = 1 ]; then
     printf 'fm-shortcut-ticket: warning: %s%s\n' "$*" "$PENDING_NOTE" >&2
     exit 0
@@ -185,7 +186,6 @@ field() {  # <name>; decodes a quoted value
 RELEASE=0
 case "$OP" in release-done | release-hook | pending) RELEASE=1 ;; esac
 case "$OP" in release-done | release-hook) release_parse_args "$ID" "$@" ;; esac
-[ "$OP" != release-hook ] || release_probe "$URL" || exit 0
 if [ -z "$SC" ] && [ "$RELEASE" = 0 ] && [ "$OP" != chore ]; then
   SHOW=$("$TASKS" show "$ID" --full 2>&1) || die "cannot read backlog item $ID: $(printf '%s' "$SHOW" | head -1)"
   KIND=$(field kind)
@@ -228,22 +228,24 @@ elif [ "$RELEASE" = 0 ] && [ -z "$SC" ]; then
   die "backlog item $ID names no Shortcut ticket (sc-NNNN)"
 fi
 
+API=$(setting api_base "${SHORTCUT_API_BASE:-https://api.app.shortcut.com}")
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/fm-shortcut.XXXXXX") || die "cannot create a temp directory"
+trap 'pending_clear_on_success $?; rm -rf "$WORK"' EXIT
+[ "$OP" != release-hook ] || release_hook_start "$URL" || exit 0
+
 command -v jq >/dev/null 2>&1 || die "jq is required"
 command -v curl >/dev/null 2>&1 || die "curl is required"
+RERUN=$(printf ' %q' "${CALL_ARGS[@]}")
 TOKEN=${SHORTCUT_API_TOKEN:-}
 if [ -z "$TOKEN" ]; then
   TOKEN_REF=$(setting token_ref)
   [ -n "$TOKEN_REF" ] || die "SHORTCUT_API_TOKEN is not set and no token_ref is configured; add this line to $CONFIG/shortcut-tickets: token_ref=op://<vault>/<item>/<field>"
-  command -v op >/dev/null 2>&1 || die_retry "SHORTCUT_API_TOKEN is not set and the 1Password CLI (op) is not installed to read $TOKEN_REF; run: bin/fm-shortcut-ticket.sh $ID"
+  command -v op >/dev/null 2>&1 || die_retry "SHORTCUT_API_TOKEN is not set and the 1Password CLI (op) is not installed to read $TOKEN_REF; run: bin/fm-shortcut-ticket.sh$RERUN"
   OP_TIMEOUT=$(setting op_timeout 10)
   case "$OP_TIMEOUT" in '' | 0* | *[!0-9]*) die "op_timeout must be a positive number of seconds (got '$OP_TIMEOUT')" ;; esac
   TOKEN=$(fm_run_timed "$OP_TIMEOUT" op read "$TOKEN_REF" 2>/dev/null) || TOKEN=''
-  [ -n "$TOKEN" ] || die_retry "SHORTCUT_API_TOKEN is not set and 'op read $TOKEN_REF' failed or did not answer within ${OP_TIMEOUT}s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh $ID"
+  [ -n "$TOKEN" ] || die_retry "SHORTCUT_API_TOKEN is not set and 'op read $TOKEN_REF' failed or did not answer within ${OP_TIMEOUT}s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh$RERUN"
 fi
-
-API=$(setting api_base "${SHORTCUT_API_BASE:-https://api.app.shortcut.com}")
-WORK=$(mktemp -d "${TMPDIR:-/tmp}/fm-shortcut.XXXXXX") || die "cannot create a temp directory"
-trap 'pending_clear_on_success $?; rm -rf "$WORK"' EXIT
 
 HTTP_CODE=
 http() {  # <method> <path> [curl args...]; response body lands in $WORK/resp

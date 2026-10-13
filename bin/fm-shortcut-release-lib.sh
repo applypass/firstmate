@@ -14,9 +14,10 @@
 #   release-hook <pr-url>  run by bin/fm-pr-merge.sh after a verified merge: for
 #                          a repo in `vercel_repos`, finish the release once a
 #                          READY production deployment covers the merge commit
-#                          (else keep a pending record); for any other repo,
-#                          print the release-done command to run after the
-#                          prod deploy is confirmed.
+#                          (else keep a pending record and name the release-done
+#                          command); for any other repo, print the release-done
+#                          command to run after the prod deploy is confirmed,
+#                          without reading the token.
 #   release-done <pr-url>  the same finish, run by firstmate once it has
 #                          confirmed the deploy; takes --evidence <text>.
 #   pending                replay every pending record and list what remains.
@@ -27,7 +28,8 @@
 # line to that status file, so it reaches firstmate; the next run of any
 # fm-shortcut-ticket.sh operation replays the record, and a success clears it
 # and appends the matching `resolved` line. A merge whose production deploy is
-# not up yet keeps a record without the status line: that wait is expected.
+# not up yet keeps a record too, and its `blocked` line names the release-done
+# command to run once production is READY.
 
 PENDING_DIR="$STATE/shortcut-pending"
 PENDING_FAILED=0
@@ -41,8 +43,8 @@ pending_status() {  # <verb> <key> <text>; appends to the call's status file
   printf '%s [at=%s] [key=%s]: %s\n' "$1" "$(date +%s)" "$2" "$3" >>"$f" 2>/dev/null || true
 }
 
-pending_record() {  # <quiet:0|1> <reason> <arg>...; returns 0 when the record is new
-  local quiet=$1 reason=$2 key f new=0
+pending_record() {  # <reason> <status-text> <arg>...; returns 0 when the record is new
+  local reason=$1 text=$2 key f new=0
   shift 2
   key=sc-$(pending_key "$@")
   f="$PENDING_DIR/$key"
@@ -51,17 +53,15 @@ pending_record() {  # <quiet:0|1> <reason> <arg>...; returns 0 when the record i
   printf '%s\0' "$@" >"$f.args.tmp" && mv "$f.args.tmp" "$f.args"
   printf 'reason=%s\nstatus=%s\n' "$reason" "${STATUS_FILE:-}" >"$f.meta"
   PENDING_FAILED=1
-  if [ "$new" = 1 ] && [ "$quiet" = 0 ]; then
-    pending_status blocked "shortcut-sync-$key" "Shortcut did not update ($reason); queued, retried on the next fm-shortcut-ticket.sh run or by: fm-shortcut-ticket.sh pending"
-  fi
+  [ "$new" = 0 ] || pending_status blocked "shortcut-sync-$key" "$text"
   return $((1 - new))
 }
 
 pending_on_failure() {  # <message>; called by die_retry, never during a replay
-  [ "${FM_SHORTCUT_REPLAY:-}" != 1 ] || { PENDING_FAILED=1; return 0; }
+  [ "${FM_SHORTCUT_REPLAY:-}" != 1 ] || return 0
   case "$OP" in state | review | comment | outcome | park | done | release-done | release-hook) ;; *) return 0 ;; esac
   [ "${#CALL_ARGS[@]}" -gt 0 ] || return 0
-  pending_record 0 "$1" "${CALL_ARGS[@]}" || true
+  pending_record "$1" "Shortcut did not update ($1); queued, retried on the next fm-shortcut-ticket.sh run or by: fm-shortcut-ticket.sh pending" "${CALL_ARGS[@]}" || true
   PENDING_NOTE=" (queued for retry: $PENDING_DIR)"
 }
 
@@ -137,7 +137,7 @@ story_is_ours() {  # <marker-owners>; the story in $WORK/resp is the home owner'
 }
 
 release_done() {  # <release-pr-url> <evidence>
-  local release=$1 evidence=$2 carried pr ids id owner prs p state held done_list='' held_list=''
+  local release=$1 evidence=$2 carried pr ids id owner prs p state held note done_list='' held_list=''
   carried=$(carried_prs "$release") || true
   : >"$WORK/ids"
   for pr in $carried; do
@@ -163,7 +163,8 @@ release_done() {  # <release-pr-url> <evidence>
       [ "$state" != OPEN ] || { held="$p is still open"; break; }
     done
     if [ -n "$held" ]; then
-      post_comment "Release $release merged; $SC stays In Review because $held."
+      note="Release $release merged; $SC stays In Review because $held."
+      jq -e --arg t "$note" 'any((.comments // [])[]; .text == $t)' "$WORK/resp" >/dev/null || post_comment "$note"
       held_list="$held_list $SC"
       continue
     fi
@@ -209,23 +210,24 @@ release_probe() {  # <pr-url>: sets RELEASE_BASE RELEASE_SHA; fails (quietly) un
   [ "$state" = MERGED ] && [ "$RELEASE_BASE" = "$(setting release_base main)" ]
 }
 
-release_hook() {  # <pr-url>, after release_probe
-  local url=$1 sha=$RELEASE_SHA evidence
-  case " $(setting vercel_repos) " in
-    *" $PR_REPO "*)
-      evidence=$(production_evidence "$PR_OWNER" "$PR_REPO" "$sha")
-      if [ -n "$evidence" ]; then
-        release_done "$url" "$evidence"
-      else
-        pending_record 1 "awaiting a READY production deployment of ${sha:0:9}" "${CALL_ARGS[@]}" || true
-        printf 'fm-shortcut-ticket: %s merged to %s; stories move to Done once production runs %s (retried on the next run)\n' "$url" "$RELEASE_BASE" "${sha:0:9}"
-      fi
-      ;;
-    *)
-      printf 'fm-shortcut-ticket: %s merged to %s and deploys from the captain terminal. After confirming production runs %s, run: bin/fm-shortcut-ticket.sh release-done %s\n' \
-        "$url" "$RELEASE_BASE" "${sha:0:9}" "$url"
-      ;;
-  esac
+release_hook_start() {  # <pr-url>; fails once Shortcut has nothing to do: not a release, or a repo deployed from the captain terminal
+  release_probe "$1" || return 1
+  case " $(setting vercel_repos) " in *" $PR_REPO "*) return 0 ;; esac
+  printf 'fm-shortcut-ticket: %s merged to %s and deploys from the captain terminal. After confirming production runs %s, run: bin/fm-shortcut-ticket.sh release-done %s\n' \
+    "$1" "$RELEASE_BASE" "${RELEASE_SHA:0:9}" "$1"
+  return 1
+}
+
+release_hook() {  # <pr-url>, after release_hook_start: a repo in vercel_repos
+  local url=$1 sha=$RELEASE_SHA evidence next
+  evidence=$(production_evidence "$PR_OWNER" "$PR_REPO" "$sha")
+  if [ -n "$evidence" ]; then
+    release_done "$url" "$evidence"
+    return 0
+  fi
+  next="$url merged to $RELEASE_BASE; its stories move to Done once production runs ${sha:0:9} (retried on the next fm-shortcut-ticket.sh run). Once production is READY, run: bin/fm-shortcut-ticket.sh release-done $url"
+  pending_record "awaiting a READY production deployment of ${sha:0:9}" "$next" "${CALL_ARGS[@]}" || true
+  printf 'fm-shortcut-ticket: %s\n' "$next"
 }
 
 pending_report() {  # replay, then list what remains
