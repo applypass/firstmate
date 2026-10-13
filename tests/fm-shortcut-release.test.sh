@@ -45,7 +45,7 @@ if [ "${FAKE_CURL_FAIL:-}" = 1 ]; then printf '{}' > "$out"; printf 500; exit 0;
 id=${url##*/}
 case "$method $url" in
   "GET "*/api/v3/external-link/stories\?external_link=*)
-    link=$(jq -rn --arg u "${url#*external_link=}" '$u|@uri|.' >/dev/null; printf '%s' "${url#*external_link=}" | jq -Rr '@urid')
+    link=${url#*external_link=}; link=$(printf '%b' "${link//%/\\x}")
     awk -F'\t' -v l="$link" '$1 == l {print $2}' "$D/extlinks.tsv" | jq -Rn '[inputs | tonumber | {id: .}]' > "$out"
     printf 200 ;;
   "GET "*/api/v3/stories/*)
