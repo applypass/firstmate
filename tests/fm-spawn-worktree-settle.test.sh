@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Regression test for the fm-spawn.sh treehouse-get worktree-detection settle
-# loop (bin/fm-spawn.sh, the `for _ in $(seq 1 60)` loop after `treehouse get`).
+# loop (bin/fm-spawn.sh, the `for _ in $(seq 1 "$get_timeout")` loop after
+# `treehouse get`, bounded by FM_TREEHOUSE_GET_TIMEOUT).
 #
 # On some tmux/WSL setups a brand-new window's pane_current_path transiently
 # reports a stale, unrelated-but-real path on the very first poll, before the
