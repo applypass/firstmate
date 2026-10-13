@@ -496,7 +496,7 @@ fm_fake_op() {  # <fakebin>
   cat > "$1/op" <<'SH'
 #!/usr/bin/env bash
 [ "${1:-}" = read ] || exit 2
-[ -z "${FAKE_OP_LOG:-}" ] || printf 'op read %s\n' "${2:-}" >> "$FAKE_OP_LOG"
+[ -z "${FAKE_OP_LOG:-}" ] || printf 'op read %s sa=%s\n' "${2:-}" "${OP_SERVICE_ACCOUNT_TOKEN:-unset}" >> "$FAKE_OP_LOG"
 [ "${FAKE_OP_HANG:-}" != 1 ] || sleep 30
 [ -n "${FAKE_OP_TOKEN:-}" ] || { echo "op: not signed in" >&2; exit 1; }
 printf '%s\n' "$FAKE_OP_TOKEN"

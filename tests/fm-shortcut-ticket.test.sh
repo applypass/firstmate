@@ -48,7 +48,7 @@ run_tasks() {  # <case-dir> <wrapper args...>
 check_item() {  # <case-dir> <id>
   local dir=$1
   (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
-    SHORTCUT_API_TOKEN="${TOKEN_OVERRIDE-$TOKEN}" FAKE_CURL_LOG="$dir/curl.log" \
+    SHORTCUT_API_TOKEN="${TOKEN_OVERRIDE-$TOKEN}" OP_SERVICE_ACCOUNT_TOKEN="${SA_TOKEN-}" FAKE_CURL_LOG="$dir/curl.log" \
     PATH="$dir/fakebin:$PATH" "$ROOT/bin/fm-shortcut-ticket.sh" --check "$2" 2>&1)
 }
 
@@ -198,12 +198,12 @@ test_hung_op_read_is_bounded() {
   run_tasks "$dir" add oh-1 "Own story" --kind ship --body "Shortcut: sc-4343" >/dev/null
   printf 'op_timeout=1\n' >> "$dir/home/config/shortcut-tickets"
   start=$(date +%s)
-  out=$(TOKEN_OVERRIDE='' FAKE_OP_HANG=1 FAKE_OP_TOKEN=tok-secret-123 check_item "$dir" oh-1) && fail "--check passed on a hung op read"
+  out=$(SA_TOKEN=sa-tok TOKEN_OVERRIDE='' FAKE_OP_HANG=1 FAKE_OP_TOKEN=tok-secret-123 check_item "$dir" oh-1) && fail "--check passed on a hung op read"
   elapsed=$(( $(date +%s) - start ))
   [ "$elapsed" -lt 10 ] || fail "a hung op read was not bounded (${elapsed}s)"
   assert_contains "$out" "did not answer within 1s" "the refusal did not name the timeout"
   : > "$dir/curl.log"
-  out=$(TOKEN_OVERRIDE='' FAKE_OP_HANG=1 FAKE_OP_TOKEN=tok-secret-123 ticket "$dir" state oh-1 progress --best-effort) \
+  out=$(SA_TOKEN=sa-tok TOKEN_OVERRIDE='' FAKE_OP_HANG=1 FAKE_OP_TOKEN=tok-secret-123 ticket "$dir" state oh-1 progress --best-effort) \
     || fail "a best-effort hook failed on a hung op read: $out"
   assert_contains "$out" "warning:" "the best-effort hook did not warn"
   [ ! -s "$dir/curl.log" ] || fail "a hook reached Shortcut without a token"
@@ -215,16 +215,53 @@ test_missing_token_refuses_the_check_and_op_supplies_it() {
   dir=$(make_case token)
   seed_story "$dir" 4343 "firstmate-item: home/tk-1"
   run_tasks "$dir" add tk-1 "Own story" --kind ship --body "Shortcut: sc-4343" >/dev/null
-  out=$(TOKEN_OVERRIDE='' check_item "$dir" tk-1) && fail "--check passed with no token and no op"
+  out=$(SA_TOKEN=sa-tok TOKEN_OVERRIDE='' check_item "$dir" tk-1) && fail "--check passed with no token and a signed-out op"
   assert_contains "$out" "op read $TOKEN_REF" "the refusal did not name the failed 1Password read"
   : > "$dir/curl.log"
-  out=$(TOKEN_OVERRIDE='' FAKE_OP_TOKEN=tok-secret-123 FAKE_OP_LOG="$dir/op.log" check_item "$dir" tk-1) || fail "op did not supply the token: $out"
+  out=$(SA_TOKEN=sa-tok TOKEN_OVERRIDE='' FAKE_OP_TOKEN=tok-secret-123 FAKE_OP_LOG="$dir/op.log" check_item "$dir" tk-1) || fail "op did not supply the token: $out"
   assert_grep "op read $TOKEN_REF" "$dir/op.log" "the token was not read from token_ref"
   assert_grep "TOKEN-ON-STDIN" "$dir/curl.log" "the op token did not reach curl on stdin"
   assert_no_grep "TOKEN-IN-ARGV" "$dir/curl.log" "the op token leaked into curl's argv"
   assert_no_grep "TOKEN-IN-CHILD-ENV" "$dir/curl.log" "the op token leaked into a child's environment"
   assert_not_contains "$out" "tok-secret-123" "the token was printed"
   pass "a missing token refuses the check; op read supplies it on stdin when configured"
+}
+
+# Fork-only: op must never run without a service account token, or it falls back to the 1Password desktop app.
+test_op_needs_a_service_account_token() {
+  local dir out parent
+  dir=$(make_case sa-token)
+  seed_story "$dir" 4343 "firstmate-item: home/sa-1"
+  run_tasks "$dir" add sa-1 "Own story" --kind ship --body "Shortcut: sc-4343" >/dev/null
+  rm -f "$dir/op.log"
+  out=$(FAKE_OP_TOKEN=tok-secret-123 FAKE_OP_LOG="$dir/op.log" TOKEN_OVERRIDE='' check_item "$dir" sa-1) && fail "--check passed with no service account token"
+  assert_contains "$out" "service account token missing" "the refusal did not name the missing service account token"
+  assert_contains "$out" "OP_SERVICE_ACCOUNT_TOKEN" "the refusal did not name the variable"
+  [ ! -e "$dir/op.log" ] || fail "op was invoked without a service account token"
+
+  printf 'OTHER=1\nOP_SERVICE_ACCOUNT_TOKEN="sa-from-home"\n' > "$dir/home/.env"
+  out=$(FAKE_OP_TOKEN=tok-secret-123 FAKE_OP_LOG="$dir/op.log" TOKEN_OVERRIDE='' check_item "$dir" sa-1) || fail "the active home .env token was not used: $out"
+  assert_grep "sa=sa-from-home" "$dir/op.log" "op did not get the active home's service account token"
+  assert_not_contains "$out" "sa-from-home" "the service account token was printed"
+  assert_not_contains "$out" "tok-secret-123" "the Shortcut token was printed"
+
+  rm -f "$dir/home/.env" "$dir/op.log"
+  parent="$dir/parent"
+  mkdir -p "$parent"
+  printf 'OP_SERVICE_ACCOUNT_TOKEN=sa-from-parent\n' > "$parent/.env"
+  printf 'schema=fm-secondmate-parent.v1\nroute=local\nparent_home=%s\n' "$parent" > "$dir/home/.fm-secondmate-parent"
+  out=$(FAKE_OP_TOKEN=tok-secret-123 FAKE_OP_LOG="$dir/op.log" TOKEN_OVERRIDE='' check_item "$dir" sa-1) || fail "the parent home .env token was not used: $out"
+  assert_grep "sa=sa-from-parent" "$dir/op.log" "op did not get the parent home's service account token"
+  assert_not_contains "$out" "sa-from-parent" "the parent token was printed"
+
+  rm -f "$dir/op.log"
+  out=$(SA_TOKEN=sa-from-env FAKE_OP_TOKEN=tok-secret-123 FAKE_OP_LOG="$dir/op.log" TOKEN_OVERRIDE='' check_item "$dir" sa-1) || fail "the environment token was not used: $out"
+  assert_grep "sa=sa-from-env" "$dir/op.log" "the environment token did not win"
+
+  rm -f "$dir/op.log"
+  out=$(FAKE_OP_LOG="$dir/op.log" check_item "$dir" sa-1) || fail "an explicit SHORTCUT_API_TOKEN failed: $out"
+  [ ! -e "$dir/op.log" ] || fail "op was invoked although SHORTCUT_API_TOKEN was set"
+  pass "op runs only with a service account token (env, home .env, parent .env) and never prints it"
 }
 
 test_secondmate_report_needs_the_items_own_story() {
@@ -351,7 +388,7 @@ ticket() {  # <case-dir> <args...>
   local dir=$1
   shift
   (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
-    SHORTCUT_API_TOKEN="${TOKEN_OVERRIDE-$TOKEN}" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" \
+    SHORTCUT_API_TOKEN="${TOKEN_OVERRIDE-$TOKEN}" OP_SERVICE_ACCOUNT_TOKEN="${SA_TOKEN-}" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" \
     "$ROOT/bin/fm-shortcut-ticket.sh" "$@" 2>&1)
 }
 
@@ -528,6 +565,7 @@ test_check_and_create_need_the_home_settings
 test_hung_op_read_is_bounded
 test_secondmate_report_needs_the_items_own_story
 test_missing_token_refuses_the_check_and_op_supplies_it
+test_op_needs_a_service_account_token
 test_body_reference_is_not_the_linked_story
 test_named_story_that_does_not_exist_warns
 test_non_work_kinds_are_skipped
