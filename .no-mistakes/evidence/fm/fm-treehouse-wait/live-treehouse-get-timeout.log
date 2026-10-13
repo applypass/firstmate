@@ -1,0 +1,25 @@
+=== case thdef: FM_TREEHOUSE_GET_TIMEOUT=UNSET ===
+exit=0 elapsed=5s
+meta worktree=/Users/uayyagari/.treehouse/proj-7d14d9/1/proj
+=== case thone: FM_TREEHOUSE_GET_TIMEOUT=1 ===
+exit=1 elapsed=2s
+error: treehouse get did not enter an isolated worktree within 1s (set FM_TREEHOUSE_GET_TIMEOUT to wait longer; last seen '/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-thget.DkeFHP/proj': it is the spawning project itself; spawning project '/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-thget.DkeFHP/proj'); inspect window fm-lab-thget-63785:w1:p3
+=== case thzero: FM_TREEHOUSE_GET_TIMEOUT=00 ===
+exit=0 elapsed=4s
+meta worktree=/Users/uayyagari/.treehouse/proj-7d14d9/3/proj
+=== case thbad: FM_TREEHOUSE_GET_TIMEOUT=abc ===
+exit=0 elapsed=5s
+meta worktree=/Users/uayyagari/.treehouse/proj-7d14d9/4/proj
+=== treehouse pool for the scratch project ===
+A new version of treehouse is available: v3.1.0 → v3.1.2
+Run "treehouse update" to update
+
+base  master  (repository default)
+1     in-use       ~/.treehouse/proj-7d14d9/1/proj  (detached)
+                   zsh (66052)
+2     in-use       ~/.treehouse/proj-7d14d9/2/proj  (detached)
+                   zsh (70989)
+3     in-use       ~/.treehouse/proj-7d14d9/3/proj  (detached)
+                   zsh (72271)
+4     in-use       ~/.treehouse/proj-7d14d9/4/proj  (detached)
+                   zsh (76394)

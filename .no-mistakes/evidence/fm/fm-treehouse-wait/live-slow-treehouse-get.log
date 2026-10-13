@@ -1,0 +1,13 @@
+=== case slowdef: FM_TREEHOUSE_GET_TIMEOUT=UNSET ===
+exit=0 elapsed=74s
+meta worktree=/Users/uayyagari/.treehouse/proj-c3c5ea/1/proj
+=== case slow60: FM_TREEHOUSE_GET_TIMEOUT=60 ===
+exit=1 elapsed=68s
+error: treehouse get did not enter an isolated worktree within 60s (set FM_TREEHOUSE_GET_TIMEOUT to wait longer; last seen '/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-thget.390iOs/proj': it is the spawning project itself; spawning project '/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-thget.390iOs/proj'); inspect window fm-lab-thget-35820:w1:p3
+=== treehouse pool for the scratch project ===
+A new version of treehouse is available: v3.1.0 → v3.1.2
+Run "treehouse update" to update
+
+base  master  (repository default)
+1     in-use       ~/.treehouse/proj-c3c5ea/1/proj  (detached)
+                   zsh (6183)
