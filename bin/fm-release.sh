@@ -19,9 +19,12 @@
 # dev and main keep a shared history; squashing a release would leave dev behind.
 # Merging into main needs the captain's word, so the merge refuses without
 # --captain-authorized and a non-empty quote of that word. The PR must be
-# dev into main, and a clone under projects/ must have it as its origin.
+# dev into main, and a clone under projects/ must have it as its origin. After
+# a landed merge, when bin/fm-shortcut-ticket.sh supports release-done, it
+# prints that command as the next step, to run once production is confirmed.
 #
-# FM_RELEASE_MERGE overrides the merge command (tests).
+# FM_RELEASE_MERGE and FM_RELEASE_SHORTCUT override the merge and Shortcut
+# commands (tests).
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -29,6 +32,7 @@ FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
 FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 MERGE_CMD="${FM_RELEASE_MERGE:-$SCRIPT_DIR/fm-pr-merge.sh}"
+SHORTCUT_CMD="${FM_RELEASE_SHORTCUT:-$SCRIPT_DIR/fm-shortcut-ticket.sh}"
 DEV_BRANCH=dev
 MAIN_BRANCH=main
 
@@ -51,6 +55,10 @@ shift
 origin_slug() {  # <clone-dir>
   git -C "$1" remote get-url origin 2>/dev/null \
     | sed -E 's#^(git@[^:]+:|https?://[^/]+/)##; s#\.git$##'
+}
+
+lower() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]'
 }
 
 release_open() {
@@ -85,7 +93,7 @@ release_open() {
 
 release_merge() {
   [ "$#" -ge 1 ] || usage
-  local url=$1 authorized='' pr head_oid base head id meta project='' dir out rc=0
+  local url=$1 authorized='' pr head_oid base head id meta project='' want dir out rc=0
   shift
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -118,8 +126,9 @@ release_merge() {
 
   id="release-$MAIN_BRANCH-$FM_PR_REPO-$FM_PR_NUMBER"
   meta="$STATE/$id.meta"
+  want=$(lower "$FM_PR_OWNER/$FM_PR_REPO")
   for dir in "$FM_HOME"/projects/*/; do
-    [ "$(origin_slug "$dir")" = "$FM_PR_OWNER/$FM_PR_REPO" ] || continue
+    [ "$(lower "$(origin_slug "$dir")")" = "$want" ] || continue
     project=${dir%/}
     break
   done
@@ -138,6 +147,9 @@ release_merge() {
   [ "$rc" -eq 0 ] || exit "$rc"
   if printf '%s\n' "$out" | grep -qF "verified: $url is merged"; then
     echo "release merged: $url"
+    if grep -q 'release-done' "$SHORTCUT_CMD" 2>/dev/null; then
+      echo "next, once production is confirmed: $SHORTCUT_CMD release-done $url"
+    fi
   else
     echo "release accepted but not landed yet: $url; re-check it" >&2
   fi

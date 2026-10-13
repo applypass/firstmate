@@ -52,7 +52,7 @@ run_rel() {  # <case-dir> <args...>; sets OUT and RC
   local dir=$1
   shift
   OUT=$(CASE_DIR="$dir" PATH="$dir/fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$dir/state" \
-    FM_RELEASE_MERGE="$dir/merge" "$REL" "$@" 2>&1)
+    FM_RELEASE_MERGE="$dir/merge" FM_RELEASE_SHORTCUT="$dir/shortcut" "$REL" "$@" 2>&1)
   RC=$?
 }
 
@@ -89,6 +89,14 @@ for line in "project=$d/projects/app" "worktree=$d/projects/app" "kind=ship" "mo
 done
 grep -qx "release-main-app-9 $URL --merge" "$d/merge.log" || fail "merge-ok: wrong merge call: $(cat "$d/merge.log")"
 case "$OUT" in *"release merged: $URL"*) ;; *) fail "merge-ok: no merged line: $OUT" ;; esac
+case "$OUT" in *"release-done"*) fail "merge-ok: release-done unsupported, must not print it: $OUT" ;; esac
+
+# merge: a Shortcut command that supports release-done gets the next step.
+d=$(make_case merge-release-done)
+printf '#!/usr/bin/env bash\n# usage: shortcut release-done <url>\n' > "$d/shortcut"
+run_rel "$d" merge "$URL" --captain-authorized "merge the release"
+[ "$RC" -eq 0 ] || fail "merge-release-done: exit $RC: $OUT"
+case "$OUT" in *"$d/shortcut release-done $URL"*) ;; *) fail "merge-release-done: no next step: $OUT" ;; esac
 
 # merge: the captain's words stay one meta line, even across lines.
 d=$(make_case merge-multiline)
@@ -97,8 +105,9 @@ run_rel "$d" merge "$URL" --captain-authorized $'ship it\npr_head=bad'
 grep -qx "pr_head=$HEAD_OID" "$d/state/$META" || fail "merge-multiline: pr_head changed"
 [ "$(grep -c '^pr_head=' "$d/state/$META")" -eq 1 ] || fail "merge-multiline: words added a meta line"
 
-# merge: the clone is found by its origin, not by its directory name.
+# merge: the clone is found by its origin, in any case, not by its directory name.
 d=$(make_case merge-renamed main dev app-main)
+git -C "$d/projects/app-main" remote set-url origin git@github.com:Acme/App.git
 run_rel "$d" merge "$URL" --captain-authorized "merge the release"
 [ "$RC" -eq 0 ] || fail "merge-renamed: exit $RC: $OUT"
 grep -qx "worktree=$d/projects/app-main" "$d/state/$META" || fail "merge-renamed: wrong worktree: $(cat "$d/state/$META")"
