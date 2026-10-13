@@ -1,0 +1,63 @@
+
+=== 1. open by project name (dir name != repo name) ===
+https://github.com/acme/app/pull/10
+exit=0
+pr create --repo Acme/App --base main --head dev --title Release: dev to main --body ## Release
+
+=== 2. open when a release PR is already open ===
+release PR already open: https://github.com/acme/app/pull/10
+https://github.com/acme/app/pull/10
+exit=0
+pr create calls: 0
+
+=== 3. merge without captain's word ===
+error: merging to main needs the captain's word: pass --captain-authorized "<captain's words>"
+exit=1
+release metas: 0
+
+=== 4. merge with blank captain's word ===
+error: merging to main needs the captain's word: pass --captain-authorized "<captain's words>"
+exit=1
+
+=== 5. merge of a non dev-to-main PR ===
+error: https://github.com/acme/app/pull/9 is dev into develop, not a dev-to-main release
+exit=1
+
+=== 6. merge with a red check (real fm-pr-merge.sh guard) ===
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  watcher supervision needs Stop-owned automatic recovery; inspect the hook registration and startup status before ending the turn.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+armed: state/release-main-app-9.check.sh
+error: refusing to merge https://github.com/acme/app/pull/9
+  - check 'ci' is not green
+error: these checks are not green: ci
+exit=1
+gh pr merge calls: 0
+
+=== 7. merge, green, captain authorized (real fm-pr-merge.sh + fm-pr-check.sh) ===
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+armed: state/release-main-app-9.check.sh
+verified: https://github.com/acme/app/pull/9 is open and mergeable, with every unwaived required check reported and every unwaived check green at head 04b84f79c3af3e9d1d7ff83dbee3b9a94cfe412a
+verified: https://github.com/acme/app/pull/9 is merged (state=MERGED, merged=true, isInMergeQueue=false)
+release merged: https://github.com/acme/app/pull/9
+next, once production is confirmed: /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4TEMZFH1WTM7YKYGBJF22N6/bin/fm-shortcut-ticket.sh release-done https://github.com/acme/app/pull/9
+exit=0
+--- gh pr merge call:
+pr merge 9 --repo acme/app --match-head-commit 04b84f79c3af3e9d1d7ff83dbee3b9a94cfe412a --merge
+--- written meta (/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.Edb0sq/state/release-main-app-9.meta):
+project=/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.Edb0sq/projects/acme-app-checkout
+kind=ship
+mode=direct-PR
+yolo=off
+worktree=/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.Edb0sq/projects/acme-app-checkout
+captain_authorized=Captain: merge the release to main
+pr=https://github.com/acme/app/pull/9
+pr_head=04b84f79c3af3e9d1d7ff83dbee3b9a94cfe412a
+--- meta parses as PR identity:
+url=https://github.com/acme/app/pull/9
+
+lab removed: yes
