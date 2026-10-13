@@ -931,6 +931,31 @@ test_resolve_key_with_fire_and_forget_closes_without_pending_reply() {
   pass "fm-send --resolve-key --fire-and-forget: resolves the key and opens no pending reply"
 }
 
+# Fork-only (applypass): main closes a pure acknowledgement with --close-ack and
+# needs no delivery id; --close-ack without --resolve-key sends nothing.
+test_close_ack_closes_without_pending_reply() {
+  local dir fb log home rc got
+  dir="$TMP_ROOT/close-ack"; mkdir -p "$dir"
+  fb=$(make_stubs "$dir"); log="$dir/send.log"
+  home=$(setup_home close-ack)
+  fm_write_secondmate_meta "$home/state/domain.meta" "$home" "sess:fm-domain"
+  printf 'blocked [key=ack-loop]: re-read AGENTS.md\n' > "$home/state/domain.status"
+  run_send "$fb" "$home" "$log" fm-domain --close-ack "acknowledged"; rc=$?
+  [ "$rc" -ne 0 ] || fail "--close-ack without --resolve-key should be refused"
+  [ ! -e "$home/state/domain.inbox/001.msg" ] || fail "a refused --close-ack still enqueued a record"
+  run_send "$fb" "$home" "$log" fm-domain --resolve-key ack-loop --close-ack "acknowledged"; rc=$?
+  expect_code 0 "$rc" "a --resolve-key --close-ack steer should succeed"
+  got=$(bash -c '. "$1"; fm_task_inbox_body "$2"' _ "$ROOT/bin/fm-task-inbox-lib.sh" \
+    "$home/state/domain.inbox/001.msg")
+  printf '%s' "$got" | grep -Eq 'delivery=[a-f0-9]{16}' || fail "the record carries no derived delivery id: $got"
+  case "$got" in *corr=*) fail "a --close-ack steer must not open a pending reply: $got" ;; esac
+  grep -qF 'resolved [key=ack-loop]' "$home/state/domain.status" \
+    || fail "the key was not resolved: $(cat "$home/state/domain.status")"
+  [ -z "$(find "$home/state" -name '*pending-repl*' 2>/dev/null)" ] \
+    || fail "a pending-reply record was created: $(ls -A "$home/state")"
+  pass "fm-send --resolve-key --close-ack: resolves the key with a derived delivery id and opens no pending reply"
+}
+# Fork-only end
 test_answer_send_closes_open_decision
 test_answer_close_is_self_announced
 test_separate_resolve_key_answers_do_not_rewake
@@ -957,3 +982,4 @@ test_remote_reserved_pending_reply_key_closes_locally
 test_decision_answer_partition_relocates_under_the_record
 # Fork-only (applypass): fire-and-forget close case.
 test_resolve_key_with_fire_and_forget_closes_without_pending_reply
+test_close_ack_closes_without_pending_reply
