@@ -25,6 +25,7 @@ new_repo() {
   git -C "$dir" add -A
   "${GIT[@]}" -C "$dir" commit -qm upstream
   git -C "$dir" checkout -q -b main
+  # shellcheck disable=SC2016 # literal backticks are ledger syntax
   printf '%s\n' '- `lib.sh` - fork needs it' > "$dir/.fork/ledger.md"
   git -C "$dir" add -A
   "${GIT[@]}" -C "$dir" commit -qm 'fork base'
@@ -120,6 +121,14 @@ test_missing_upstream_ref_is_an_error() {
   pass "missing upstream ref is reported"
 }
 
+test_soft_skips_a_missing_upstream_ref() {
+  local d; d=$(new_repo soft)
+  OUT=$(cd "$d" && "$CHECK" --soft --base main --upstream nope/main 2>&1); RC=$?
+  assert_equals 0 "$RC" "--soft must not fail without an upstream ref: $OUT"
+  assert_contains "$OUT" "skipping the footprint check" "skip notice missing"
+  pass "--soft skips a missing upstream ref"
+}
+
 if [ -n "${FM_TEST_ONLY:-}" ]; then
   "$FM_TEST_ONLY"
 else
@@ -131,4 +140,5 @@ else
   test_oversized_block_is_red
   test_ledger_file_may_change
   test_missing_upstream_ref_is_an_error
+  test_soft_skips_a_missing_upstream_ref
 fi
