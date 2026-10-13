@@ -783,6 +783,31 @@ test_local_only_merged_to_local_main_allows() {
   pass "local-only worktree with work merged into local main is torn down (no regression)"
 }
 
+test_teardown_stops_the_task_chrome_session() {
+  local case_dir rc
+  case_dir=$(make_case chrome-stop)
+  write_meta "$case_dir" no-mistakes ship
+  wt_commit "$case_dir" "shippable work"
+  git -C "$case_dir/wt" push -q origin fm/task-x1
+  git -C "$case_dir/project" fetch -q origin
+  cat > "$case_dir/fakebin/chrome-devtools-axi" <<'SH'
+#!/usr/bin/env bash
+printf '%s %s\n' "${CHROME_DEVTOOLS_AXI_SESSION:-}" "$*" >> "$FM_FAKE_CHROME_LOG"
+exit 1
+SH
+  chmod +x "$case_dir/fakebin/chrome-devtools-axi"
+
+  set +e
+  FM_FAKE_CHROME_LOG="$case_dir/chrome.log" run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "chrome-stop: a failing chrome stop must not fail teardown"
+  grep -Fxq "task-x1 stop" "$case_dir/chrome.log" \
+    || fail "chrome-stop: teardown did not stop the task's own chrome session"
+  pass "teardown stops the task's own chrome-devtools-axi session and ignores its failure"
+}
+
 test_no_mistakes_origin_remote_allows() {
   local case_dir rc
   case_dir=$(make_case nm-origin)
@@ -4256,6 +4281,7 @@ test_teardown_manual_backend_leaves_the_backlog_to_the_operator
 test_local_only_truly_unpushed_refuses
 test_local_only_merged_to_local_main_allows
 test_no_mistakes_origin_remote_allows
+test_teardown_stops_the_task_chrome_session
 test_no_mistakes_truly_unpushed_refuses
 test_local_only_force_overrides_unpushed
 test_secondmate_pr_registration_publishes_ready_line
