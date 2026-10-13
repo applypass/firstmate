@@ -1,0 +1,160 @@
+=== S1 regression: no service account token anywhere, secondmate adds a backlog item (story create) ===
+$ [BASE c560095] fm-tasks-axi.sh add s1 'Fix login' --kind ship
+ok: added s1 (ship) -> Queued
+task:
+  id: s1
+  title: Fix login
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: ship
+  repo: "-"
+  priority: "-"
+  created: 2026-10-13
+  closed: "-"
+  deps: none
+  links: none
+  body: ""
+help[2]:
+  - Run `tasks-axi start s1` to move it to in flight
+  - Run `tasks-axi block s1 --by <other>` to record a dependency
+fm-shortcut-ticket: s1 -> sc-7777 https://app.shortcut.com/applypass/story/7777
+[exit 0]
+--- op invocations ($LAB/base1/op.log):
+op read op://home-vault/Shortcut API key/password sa=unset
+
+$ [HEAD] fm-tasks-axi.sh add s1 'Fix login' --kind ship
+ok: added s1 (ship) -> Queued
+task:
+  id: s1
+  title: Fix login
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: ship
+  repo: "-"
+  priority: "-"
+  created: 2026-10-13
+  closed: "-"
+  deps: none
+  links: none
+  body: ""
+help[2]:
+  - Run `tasks-axi start s1` to move it to in flight
+  - Run `tasks-axi block s1 --by <other>` to record a dependency
+fm-shortcut-ticket: service account token missing: OP_SERVICE_ACCOUNT_TOKEN not found in the environment, $LAB/head1/home/.env, and each parent home .env up its .fm-secondmate-parent chain; set SHORTCUT_API_TOKEN or add OP_SERVICE_ACCOUNT_TOKEN to the .env (the desktop 1Password session is never used); then run: bin/fm-shortcut-ticket.sh s1
+fm-tasks-axi: warning: no Shortcut ticket for s1; retry with bin/fm-shortcut-ticket.sh s1
+[exit 0]
+--- op invocations ($LAB/head1/op.log):
+(none - op never ran)
+
+$ [HEAD] fm-shortcut-ticket.sh comment sc-4343 'hello'
+fm-shortcut-ticket: service account token missing: OP_SERVICE_ACCOUNT_TOKEN not found in the environment, $LAB/head1/home/.env, and each parent home .env up its .fm-secondmate-parent chain; set SHORTCUT_API_TOKEN or add OP_SERVICE_ACCOUNT_TOKEN to the .env (the desktop 1Password session is never used); then run: bin/fm-shortcut-ticket.sh comment sc-4343 hello (queued for retry: $LAB/head1/home/state/shortcut-pending)
+[exit 1]
+--- op invocations ($LAB/head1/op.log):
+(none - op never ran)
+Shortcut API calls made:
+(none)
+
+=== S2 active home .env holds the token (CRLF, indented export, trailing space) ===
+$ [HEAD] fm-tasks-axi.sh add s2 'Fix signup' --kind ship
+ok: added s2 (ship) -> Queued
+task:
+  id: s2
+  title: Fix signup
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: ship
+  repo: "-"
+  priority: "-"
+  created: 2026-10-13
+  closed: "-"
+  deps: none
+  links: none
+  body: ""
+help[2]:
+  - Run `tasks-axi start s2` to move it to in flight
+  - Run `tasks-axi block s2 --by <other>` to record a dependency
+fm-shortcut-ticket: s2 -> sc-7777 https://app.shortcut.com/applypass/story/7777
+[exit 0]
+--- op invocations ($LAB/head2/op.log):
+op read op://home-vault/Shortcut API key/password sa=sa-HOME-secret
+check: no token value in output
+curl calls with token on stdin: 1
+check: token never in curl argv/env
+
+=== S3 nested secondmate: C -> B -> primary A; only A/.env has the token ===
+$ [HEAD] fm-tasks-axi.sh add s3 'Nested' --kind ship
+ok: added s3 (ship) -> Queued
+task:
+  id: s3
+  title: Nested
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: ship
+  repo: "-"
+  priority: "-"
+  created: 2026-10-13
+  closed: "-"
+  deps: none
+  links: none
+  body: ""
+help[2]:
+  - Run `tasks-axi start s3` to move it to in flight
+  - Run `tasks-axi block s3 --by <other>` to record a dependency
+fm-shortcut-ticket: s3 -> sc-7777 https://app.shortcut.com/applypass/story/7777
+[exit 0]
+--- op invocations ($LAB/head3/op.log):
+op read op://home-vault/Shortcut API key/password sa=sa-PRIMARY-secret
+check: no token value in output
+--- adversarial: parent cycle C -> B -> C, no token anywhere
+fm-shortcut-ticket: service account token missing: OP_SERVICE_ACCOUNT_TOKEN not found in the environment, $LAB/head3b/home/.env, and each parent home .env up its .fm-secondmate-parent chain; set SHORTCUT_API_TOKEN or add OP_SERVICE_ACCOUNT_TOKEN to the .env (the desktop 1Password session is never used); then run: bin/fm-shortcut-ticket.sh comment sc-4343 hi (queued for retry: $LAB/head3b/home/state/shortcut-pending)
+[exit 1]
+--- op invocations ($LAB/head3b/op.log):
+(none - op never ran)
+
+=== S4 best-effort lifecycle hook with no token queues a retry; replay after token is added ===
+$ [HEAD] fm-shortcut-ticket.sh state sc-4343 review --best-effort
+fm-shortcut-ticket: warning: service account token missing: OP_SERVICE_ACCOUNT_TOKEN not found in the environment, $LAB/head4/home/.env, and each parent home .env up its .fm-secondmate-parent chain; set SHORTCUT_API_TOKEN or add OP_SERVICE_ACCOUNT_TOKEN to the .env (the desktop 1Password session is never used); then run: bin/fm-shortcut-ticket.sh state sc-4343 review (queued for retry: $LAB/head4/home/state/shortcut-pending)
+[exit 0]
+--- op invocations ($LAB/head4/op.log):
+(none - op never ran)
+pending records:
+sc-703720358.args
+sc-703720358.meta
+$ (operator adds token to home .env) fm-shortcut-ticket.sh pending
+fm-shortcut-ticket: 0 pending record(s) remain
+[exit 0]
+--- op invocations ($LAB/head4/op.log):
+op read op://home-vault/Shortcut API key/password sa=sa-late-secret
+op read op://home-vault/Shortcut API key/password sa=sa-late-secret
+Shortcut calls:
+GET https://api.app.shortcut.com/api/v3/stories/4343
+TOKEN-ON-STDIN
+PUT https://api.app.shortcut.com/api/v3/stories/4343
+TOKEN-ON-STDIN
+pending records left:
+0
+
+=== S5 SHORTCUT_API_TOKEN set: op is never called ===
+[exit 0]
+--- op invocations ($LAB/head5/op.log):
+(none - op never ran)
