@@ -1,0 +1,32 @@
+$ # Scenario B: firstmate confirms the backend deploy and runs the printed step (1Password signed in)
+$ fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_backend/pull/691 --evidence "DO deploy of 1da7c7114 ACTIVE" --task rel-be
+fm-shortcut-ticket: release https://github.com/applypass/apply_pass_backend/pull/691: Done: sc-9101; left In Review: none
+exit=0
+--- sc-9101 after:
+{
+  "workflow_state_id": 500000010,
+  "comments": [
+    {
+      "text": "Done: merged to the release branch and running in production.\nPRs: https://github.com/applypass/apply_pass_backend/pull/687\nRelease PR: https://github.com/applypass/apply_pass_backend/pull/691\nDeploy evidence: DO deploy of 1da7c7114 ACTIVE"
+    }
+  ]
+}
+--- backlog item be-a:
+  state: done
+  priority: "-"
+  links: "pr:https://github.com/applypass/apply_pass_backend/pull/687"
+--- Shortcut API calls:
+GET /api/v3/external-link/stories?external_link=https%3A%2F%2Fgithub.com%2Fapplypass%2Fapply_pass_backend%2Fpull%2F691 token=yes 
+GET /api/v3/external-link/stories?external_link=https%3A%2F%2Fgithub.com%2Fapplypass%2Fapply_pass_backend%2Fpull%2F680 token=yes 
+GET /api/v3/external-link/stories?external_link=https%3A%2F%2Fgithub.com%2Fapplypass%2Fapply_pass_backend%2Fpull%2F681 token=yes 
+GET /api/v3/external-link/stories?external_link=https%3A%2F%2Fgithub.com%2Fapplypass%2Fapply_pass_backend%2Fpull%2F687 token=yes 
+GET /api/v3/external-link/stories?external_link=https%3A%2F%2Fgithub.com%2Fapplypass%2Fapply_pass_backend%2Fpull%2F688 token=yes 
+GET /api/v3/external-link/stories?external_link=https%3A%2F%2Fgithub.com%2Fapplypass%2Fapply_pass_backend%2Fpull%2F689 token=yes 
+GET /api/v3/external-link/stories?external_link=https%3A%2F%2Fgithub.com%2Fapplypass%2Fapply_pass_backend%2Fpull%2F690 token=yes 
+GET /api/v3/stories/9101 token=yes 
+PUT /api/v3/stories/9101 token=yes {"workflow_state_id": 500000010}
+POST /api/v3/stories/9101/comments token=yes {"text": "Done: merged to the release branch and running in production.\nPRs: https://github.com/applypass/apply_pass_backend/pull/687\nRelease PR: https://github.com/applypass/apply_pass_backend/pull/691\nDeploy evidence: DO deploy of 1da7c7114 ACTIVE"}
+$ # rerun (idempotent):
+fm-shortcut-ticket: release https://github.com/applypass/apply_pass_backend/pull/691: Done: none; left In Review: none
+exit=0
+comments now: 1

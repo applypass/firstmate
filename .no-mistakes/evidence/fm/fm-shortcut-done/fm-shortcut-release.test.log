@@ -1,0 +1,14 @@
+ok - release-done moves finished stories to Done with evidence, closes their backlog item, and leaves open-work stories in review, and never touches another person's story
+ok - a repeated release-done changes nothing
+ok - a token failure leaves a pending record and one keyed blocked line, and the next run finishes and resolves it
+ok - a best-effort hook that fails is loud in the task status and replayed by the next run of any operation
+ok - release-hook on a Vercel repo finishes the release only once a READY production deployment covers the merge commit
+ok - a production deployment of a later commit confirms the release, an older one does not
+ok - release-hook on a captain-deployed repo prints the release-done command and moves nothing
+ok - release-hook on a captain-deployed repo prints the release-done command with 1Password signed out
+ok - a replayed release-hook on a captain-deployed repo hands firstmate the release-done step
+ok - a Vercel release-hook first blocked on the token names the release-done step, once per reason
+ok - a best-effort call that fails for another reason keeps its pending record and claims nothing
+ok - release-hook is silent for a merge that is not into the release base
+ok - with the feature off release-done does nothing
+bash tests/fm-shortcut-release.test.sh  13.14s user 14.48s system 59% cpu 46.505 total

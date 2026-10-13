@@ -1,0 +1,30 @@
+$ # Scenario E: backend release merged while GitHub is unreachable (GH_TOKEN invalid), replayed later
+$ GH_TOKEN=invalid fm-shortcut-ticket.sh release-hook https://github.com/applypass/apply_pass_backend/pull/691 --task rel-gh --best-effort
+fm-shortcut-ticket: warning: could not read https://github.com/applypass/apply_pass_backend/pull/691 to decide whether it is a release (queued for retry: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.pXs8Wm/state/shortcut-pending)
+exit=0
+--- rel-gh.status:
+status: merging
+blocked [at=1791869484] [key=shortcut-sync-sc-769511036]: Shortcut did not update (could not read https://github.com/applypass/apply_pass_backend/pull/691 to decide whether it is a release); queued, retried on the next fm-shortcut-ticket.sh run or by: fm-shortcut-ticket.sh pending.
+$ fm-shortcut-ticket.sh pending   # GitHub reachable again
+fm-shortcut-ticket: 0 pending record(s) remain
+--- rel-gh.status:
+status: merging
+blocked [at=1791869484] [key=shortcut-sync-sc-769511036]: Shortcut did not update (could not read https://github.com/applypass/apply_pass_backend/pull/691 to decide whether it is a release); queued, retried on the next fm-shortcut-ticket.sh run or by: fm-shortcut-ticket.sh pending.
+resolved [at=1791869488] [key=shortcut-sync-sc-769511036]: https://github.com/applypass/apply_pass_backend/pull/691 merged to main and deploys from the captain terminal. After confirming production runs 1da7c7114, run: bin/fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_backend/pull/691
+
+$ # Scenario F: feature PR merged into dev (not a release), plus while GitHub is unreachable
+$ fm-shortcut-ticket.sh release-hook https://github.com/applypass/apply_pass_frontend/pull/373 --task feat --best-effort
+exit=0
+$ GH_TOKEN=invalid fm-shortcut-ticket.sh release-hook https://github.com/applypass/apply_pass_frontend/pull/373 --task feat --best-effort
+fm-shortcut-ticket: warning: could not read https://github.com/applypass/apply_pass_frontend/pull/373 to decide whether it is a release (queued for retry: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.pXs8Wm/state/shortcut-pending)
+exit=0
+--- feat.status:
+status: merging
+blocked [at=1791869492] [key=shortcut-sync-sc-3771889371]: Shortcut did not update (could not read https://github.com/applypass/apply_pass_frontend/pull/373 to decide whether it is a release); queued, retried on the next fm-shortcut-ticket.sh run or by: fm-shortcut-ticket.sh pending.
+$ fm-shortcut-ticket.sh pending   # GitHub reachable again
+fm-shortcut-ticket: 0 pending record(s) remain
+--- feat.status:
+status: merging
+blocked [at=1791869492] [key=shortcut-sync-sc-3771889371]: Shortcut did not update (could not read https://github.com/applypass/apply_pass_frontend/pull/373 to decide whether it is a release); queued, retried on the next fm-shortcut-ticket.sh run or by: fm-shortcut-ticket.sh pending.
+resolved [at=1791869493] [key=shortcut-sync-sc-3771889371]: Shortcut update went through on retry
+--- sc-9201/9001 states: 500000009 500000010

@@ -1,0 +1,40 @@
+$ # Scenario C1: frontend (Vercel) release merged while 1Password is signed out
+$ fm-shortcut-ticket.sh release-hook https://github.com/applypass/apply_pass_frontend/pull/383 --task rel-fe --best-effort
+fm-shortcut-ticket: warning: SHORTCUT_API_TOKEN is not set and 'op read op://lab/shortcut/token' failed or did not answer within 10s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh release-hook https://github.com/applypass/apply_pass_frontend/pull/383 --task rel-fe (queued for retry: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.pXs8Wm/state/shortcut-pending)
+exit=0
+--- rel-fe.status:
+status: merging
+blocked [at=1791869406] [key=shortcut-sync-sc-3003948882]: Shortcut did not update (SHORTCUT_API_TOKEN is not set and 'op read op://lab/shortcut/token' failed or did not answer within 10s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh release-hook https://github.com/applypass/apply_pass_frontend/pull/383 --task rel-fe); queued, retried on the next fm-shortcut-ticket.sh run or by: fm-shortcut-ticket.sh pending. Once production runs the merge of https://github.com/applypass/apply_pass_frontend/pull/383, run: bin/fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_frontend/pull/383
+--- pending records:
+sc-3003948882.args
+sc-3003948882.meta
+reason=SHORTCUT_API_TOKEN is not set and 'op read op://lab/shortcut/token' failed or did not answer within 10s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh release-hook https://github.com/applypass/apply_pass_frontend/pull/383 --task rel-fe
+status=/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.pXs8Wm/state/rel-fe.status
+--- story states (all still In Review=500000009):
+sc-9001 500000009
+sc-9002 500000009
+sc-9003 500000009
+sc-9004 500000009
+
+$ # Scenario C2: 1Password signed back in; an unrelated pending listing replays the record
+$ fm-shortcut-ticket.sh pending
+fm-shortcut-ticket: 0 pending record(s) remain
+exit=0
+--- rel-fe.status:
+status: merging
+blocked [at=1791869406] [key=shortcut-sync-sc-3003948882]: Shortcut did not update (SHORTCUT_API_TOKEN is not set and 'op read op://lab/shortcut/token' failed or did not answer within 10s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh release-hook https://github.com/applypass/apply_pass_frontend/pull/383 --task rel-fe); queued, retried on the next fm-shortcut-ticket.sh run or by: fm-shortcut-ticket.sh pending. Once production runs the merge of https://github.com/applypass/apply_pass_frontend/pull/383, run: bin/fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_frontend/pull/383
+resolved [at=1791869424] [key=shortcut-sync-sc-3003948882]: Shortcut update went through on retry
+--- pending records:
+sc-9001 state=500000010 comments=["Done: merged to the release branch and running in production.
+PRs: https://github.com/applypass/apply_pass_frontend/pull/373
+Release PR: https://github.com/applypass/apply_pass_frontend/pull/383
+Deploy evidence: Vercel production deployment 7029551666 READY at https://apply-pass-frontend-rkv82mkov-apply-pass.vercel.app (covers d663c2bba)"]
+sc-9002 state=500000009 comments=["Release https://github.com/applypass/apply_pass_frontend/pull/383 merged; sc-9002 stays In Review because https://github.com/applypass/apply_pass_frontend/pull/82 is still open."]
+sc-9003 state=500000009 comments=[]
+sc-9004 state=500000009 comments=["Release https://github.com/applypass/apply_pass_frontend/pull/383 merged; sc-9004 stays In Review because it carries no firstmate ownership marker (umbrella or shared story)."]
+--- backlog fe-a:   state: done   fe-b:   state: in_flight
+--- writes to Shortcut:
+PUT /api/v3/stories/9001 token=yes {"workflow_state_id": 500000010}
+POST /api/v3/stories/9001/comments token=yes {"text": "Done: merged to the release branch and running in production.\nPRs: https://github.com/applypass/apply_pass_frontend/pull/373\nRelease PR: https://github.com/applypass/apply_pass_frontend/pull/383\nDeploy evidence: Vercel production deployment 7029551666 READY at https://apply-pass-frontend-rkv82mkov-apply-pass.vercel.app (covers d663c2bba)"}
+POST /api/v3/stories/9002/comments token=yes {"text": "Release https://github.com/applypass/apply_pass_frontend/pull/383 merged; sc-9002 stays In Review because https://github.com/applypass/apply_pass_frontend/pull/82 is still open."}
+POST /api/v3/stories/9004/comments token=yes {"text": "Release https://github.com/applypass/apply_pass_frontend/pull/383 merged; sc-9004 stays In Review because it carries no firstmate ownership marker (umbrella or shared story)."}

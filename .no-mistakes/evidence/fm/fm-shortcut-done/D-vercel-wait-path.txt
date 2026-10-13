@@ -1,0 +1,30 @@
+# lab config: vercel_repos also lists apply_pass_backend, which has no GitHub Production deployments, so no READY deploy exists
+$ # Scenario D1: Vercel-style release merged, signed in, production not READY yet
+$ fm-shortcut-ticket.sh release-hook https://github.com/applypass/apply_pass_backend/pull/686 --task rel-vs --best-effort
+fm-shortcut-ticket: https://github.com/applypass/apply_pass_backend/pull/686 merged to main; its stories move to Done once production runs d8352064b (retried on the next fm-shortcut-ticket.sh run). Once production is READY, run: bin/fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_backend/pull/686
+exit=0
+--- rel-vs.status:
+status: merging
+blocked [at=1791869443] [key=shortcut-sync-sc-4057751631]: https://github.com/applypass/apply_pass_backend/pull/686 merged to main; its stories move to Done once production runs d8352064b (retried on the next fm-shortcut-ticket.sh run). Once production is READY, run: bin/fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_backend/pull/686
+$ # replay twice via `pending` (still no deploy): the blocked line must not repeat
+pending: awaiting a READY production deployment of d8352064b
+fm-shortcut-ticket: 1 pending record(s) remain
+pending: awaiting a READY production deployment of d8352064b
+fm-shortcut-ticket: 1 pending record(s) remain
+--- rel-vs.status:
+status: merging
+blocked [at=1791869443] [key=shortcut-sync-sc-4057751631]: https://github.com/applypass/apply_pass_backend/pull/686 merged to main; its stories move to Done once production runs d8352064b (retried on the next fm-shortcut-ticket.sh run). Once production is READY, run: bin/fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_backend/pull/686
+
+$ # Scenario D2: signed out at merge, then signed in while production is still not READY
+fm-shortcut-ticket: warning: SHORTCUT_API_TOKEN is not set and 'op read op://lab/shortcut/token' failed or did not answer within 10s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh release-hook https://github.com/applypass/apply_pass_backend/pull/678 --task rel-tk (queued for retry: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.pXs8Wm/state/shortcut-pending)
+exit=0
+pending: awaiting a READY production deployment of d8352064b
+pending: awaiting a READY production deployment of a4fa52074
+fm-shortcut-ticket: 2 pending record(s) remain
+pending: awaiting a READY production deployment of d8352064b
+pending: awaiting a READY production deployment of a4fa52074
+fm-shortcut-ticket: 2 pending record(s) remain
+--- rel-tk.status:
+status: merging
+blocked [at=1791869452] [key=shortcut-sync-sc-62130462]: Shortcut did not update (SHORTCUT_API_TOKEN is not set and 'op read op://lab/shortcut/token' failed or did not answer within 10s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh release-hook https://github.com/applypass/apply_pass_backend/pull/678 --task rel-tk); queued, retried on the next fm-shortcut-ticket.sh run or by: fm-shortcut-ticket.sh pending. Once production runs the merge of https://github.com/applypass/apply_pass_backend/pull/678, run: bin/fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_backend/pull/678
+blocked [at=1791869461] [key=shortcut-sync-sc-62130462]: https://github.com/applypass/apply_pass_backend/pull/678 merged to main; its stories move to Done once production runs a4fa52074 (retried on the next fm-shortcut-ticket.sh run). Once production is READY, run: bin/fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_backend/pull/678

@@ -1,0 +1,10 @@
+$ # Scenario A: backend release merged while 1Password is signed out
+$ fm-shortcut-ticket.sh release-hook https://github.com/applypass/apply_pass_backend/pull/691 --task rel-be --best-effort
+fm-shortcut-ticket: https://github.com/applypass/apply_pass_backend/pull/691 merged to main and deploys from the captain terminal. After confirming production runs 1da7c7114, run: bin/fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_backend/pull/691
+exit=0
+--- Shortcut API calls made:
+GET /api/v3/stories/9001 token=no 
+--- pending records:
+(none)
+--- rel-be.status:
+status: merging
