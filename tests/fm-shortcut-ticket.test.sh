@@ -239,9 +239,9 @@ test_op_needs_a_service_account_token() {
   assert_contains "$out" "OP_SERVICE_ACCOUNT_TOKEN" "the refusal did not name the variable"
   [ ! -e "$dir/op.log" ] || fail "op was invoked without a service account token"
 
-  printf 'OTHER=1\nOP_SERVICE_ACCOUNT_TOKEN="sa-from-home"\n' > "$dir/home/.env"
+  printf 'OTHER=1\r\n  export  OP_SERVICE_ACCOUNT_TOKEN="sa-from-home" \r\n' > "$dir/home/.env"
   out=$(FAKE_OP_TOKEN=tok-secret-123 FAKE_OP_LOG="$dir/op.log" TOKEN_OVERRIDE='' check_item "$dir" sa-1) || fail "the active home .env token was not used: $out"
-  assert_grep "sa=sa-from-home" "$dir/op.log" "op did not get the active home's service account token"
+  grep -q 'sa=sa-from-home$' "$dir/op.log" || fail "op did not get the active home's trimmed service account token"
   assert_not_contains "$out" "sa-from-home" "the service account token was printed"
   assert_not_contains "$out" "tok-secret-123" "the Shortcut token was printed"
 

@@ -5,25 +5,12 @@
 # the desktop app and prompts for full-account CLI access. fm_op_service_account_token
 # prints OP_SERVICE_ACCOUNT_TOKEN from, in order: the environment, the active home's
 # .env, then each ancestor home's .env up the local .fm-secondmate-parent chain to
-# the primary home. It reads only that one key from a .env file, never sources it,
+# the primary home. It reads only that one key through fmx_env_get, never sources a .env,
 # and prints nothing and returns 1 when no token is found.
 # fm_op_service_account_sources names where it looks, for error messages.
 
-fm_op_env_file_key() {  # <env-file> <key>; prints the last value, quotes stripped
-  local file=$1 key=$2 line value=''
-  [ -f "$file" ] && [ -r "$file" ] || return 1
-  while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in
-      "$key="* | "export $key="*) value=${line#*=} ;;
-    esac
-  done < "$file"
-  case "$value" in
-    \"*\") value=${value#\"}; value=${value%\"} ;;
-    \'*\') value=${value#\'}; value=${value%\'} ;;
-  esac
-  [ -n "$value" ] || return 1
-  printf '%s' "$value"
-}
+# shellcheck source=bin/fm-env-lib.sh disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/fm-env-lib.sh"
 
 fm_op_parent_home() {  # <home>; prints the local parent home of a secondmate home
   local lib
@@ -41,13 +28,14 @@ fm_op_service_account_sources() {  # <home>
 }
 
 fm_op_service_account_token() {  # <home>
-  local home=$1 seen='|' depth=0
+  local home=$1 seen='|' depth=0 value
   if [ -n "${OP_SERVICE_ACCOUNT_TOKEN:-}" ]; then
     printf '%s' "$OP_SERVICE_ACCOUNT_TOKEN"
     return 0
   fi
   while [ "$depth" -le 64 ]; do
-    fm_op_env_file_key "$home/.env" OP_SERVICE_ACCOUNT_TOKEN && return 0
+    value=$(fmx_env_get OP_SERVICE_ACCOUNT_TOKEN "$home/.env")
+    [ -z "$value" ] || { printf '%s' "$value"; return 0; }
     seen="$seen$home|"
     home=$(fm_op_parent_home "$home") || return 1
     home=$(CDPATH='' cd -- "$home" 2>/dev/null && pwd -P) || return 1
