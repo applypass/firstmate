@@ -344,6 +344,13 @@ The validation release gate holds a no-mistakes ship's full pipeline run until f
 A local, gitignored `config/validation-gate` holding `on` or `off` wins; otherwise the tracked `defaults/validation-gate` decides, and neither present means off.
 [`bin/fm-validation-gate.sh`](../bin/fm-validation-gate.sh)'s header owns the mechanism, scope, and release command.
 
+### Own-PR-to-dev auto-merge (applypass fork)
+
+This fork holds a standing dev-merge authority: when `bin/fm-pr-check.sh` registers a ship's ready report, it tries the merge once, with no retry, through `bin/fm-pr-merge.sh`.
+It covers only our own unflagged PRs whose base is `dev`, and `bin/fm-pr-merge.sh` merges only when every check is green at the head; a PR to `main` or any other base stays the captain's to merge.
+Set `FM_AUTO_DEV_MERGE=off` to get upstream behaviour.
+[`bin/fm-auto-dev-merge.sh`](../bin/fm-auto-dev-merge.sh)'s header owns the exact conditions and the quiet and `paused` skip outcomes.
+
 ## Backlog backend (.tasks.toml / config/backlog-backend)
 
 The tracked `.tasks.toml` pins the default `tasks-axi` markdown backend to `data/backlog.md`, with `done_keep = 10` and an archive at `data/done-archive.md`.
