@@ -138,8 +138,8 @@ release_merge() {
     [ "$(grep '^pr=' "$meta" | tail -1 | cut -d= -f2-)" = "$url" ] \
       || die "$meta records a different PR"
   fi
-  printf 'project=%s\nkind=ship\nmode=direct-PR\nyolo=off\nworktree=%s\npr=%s\npr_head=%s\ncaptain_authorized=%s\n' \
-    "$project" "$project" "$url" "$head_oid" "$(printf '%s' "$authorized" | tr '\r\n' '  ')" > "$meta.tmp.$$"
+  printf 'project=%s\nkind=ship\nmode=direct-PR\nyolo=off\nworktree=%s\ncaptain_authorized=%s\npr=%s\npr_head=%s\n' \
+    "$project" "$project" "$(printf '%s' "$authorized" | tr '\r\n' '  ')" "$url" "$head_oid" > "$meta.tmp.$$"
   mv "$meta.tmp.$$" "$meta"
 
   out=$("$MERGE_CMD" "$id" "$url" --merge 2>&1) || rc=$?
