@@ -338,8 +338,8 @@ test_a_replayed_backend_hook_reports_the_next_step() {
   dir=$(make_case hook-backend-replay)
   printf 'working [at=1]: start\n' > "$dir/home/state/st-1.status"
   out=$(ticket "$dir" release-hook "$BACKEND_RELEASE" --task st-1 --best-effort) || fail "release-hook failed: $out"
-  assert_equals 1 "$(grep -c "^blocked .*run: bin/fm-shortcut-ticket.sh release-done $BACKEND_RELEASE\$" "$dir/home/state/st-1.status")" \
-    "a hook that could not read the release did not name the release-done step"
+  assert_grep "blocked [at=" "$dir/home/state/st-1.status" "a hook that could not read the release did not block"
+  assert_no_grep "release-done" "$dir/home/state/st-1.status" "a hook that could not tell whether the PR is a release named the release-done step"
   key=$(sed -n 's/.*\[key=\(shortcut-sync-[^]]*\)\].*/\1/p' "$dir/home/state/st-1.status" | head -1)
   pr_info "$dir" 300 main MERGED abc1234abc1234abc1234abc1234abc1234abc12
   ticket "$dir" pending >/dev/null || fail "pending failed"

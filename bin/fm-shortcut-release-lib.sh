@@ -35,6 +35,7 @@ PENDING_DIR="$STATE/shortcut-pending"
 PENDING_FAILED=0
 PENDING_NOTE=''
 PENDING_RESOLVED='Shortcut update went through on retry'
+RELEASE_BASE=''
 
 pending_key() { printf '%s\0' "$@" | cksum | cut -d' ' -f1; }
 
@@ -64,7 +65,7 @@ pending_on_failure() {  # <message>; called by die_retry, never during a replay
   case "$OP" in state | review | comment | outcome | park | done | release-done | release-hook) ;; *) return 0 ;; esac
   [ "${#CALL_ARGS[@]}" -gt 0 ] || return 0
   local next=''
-  [ "$OP" != release-hook ] || next=" Once production runs the merge of $URL, run: bin/fm-shortcut-ticket.sh release-done $URL"
+  [ "$OP" != release-hook ] || [ -z "$RELEASE_BASE" ] || next=" Once production runs the merge of $URL, run: bin/fm-shortcut-ticket.sh release-done $URL"
   pending_record "$1" "Shortcut did not update ($1); queued, retried on the next fm-shortcut-ticket.sh run or by: fm-shortcut-ticket.sh pending.$next" "${CALL_ARGS[@]}" || true
   PENDING_NOTE=" (queued for retry: $PENDING_DIR)"
 }
