@@ -70,7 +70,9 @@
 # unset.
 #
 # The API token comes from SHORTCUT_API_TOKEN, else from `op read <token_ref>`
-# bounded to op_timeout seconds (default 10), read once per call. It is held in
+# bounded to op_timeout seconds (default 10), read once per call. Fork-only: op
+# runs only with OP_SERVICE_ACCOUNT_TOKEN from the environment, the home .env, or a
+# parent home .env up the secondmate chain; without one it is never called. It is held in
 # memory only, reaches curl on stdin, never the command line or a child's
 # environment, and is never printed or stored. A missing `op`, a failed read, or a read
 # that does not answer in time is a concrete refusal (a best-effort caller only
@@ -241,10 +243,14 @@ if [ -z "$TOKEN" ]; then
   TOKEN_REF=$(setting token_ref)
   [ -n "$TOKEN_REF" ] || die "SHORTCUT_API_TOKEN is not set and no token_ref is configured; add this line to $CONFIG/shortcut-tickets: token_ref=op://<vault>/<item>/<field>"
   command -v op >/dev/null 2>&1 || die_retry "SHORTCUT_API_TOKEN is not set and the 1Password CLI (op) is not installed to read $TOKEN_REF; run: bin/fm-shortcut-ticket.sh$RERUN"
+  # Fork-only: never reach op without the vault-scoped service account token, so it cannot fall back to the 1Password desktop session.
+  # shellcheck source=bin/fm-op-service-account-lib.sh disable=SC1091
+  . "$SCRIPT_DIR/fm-op-service-account-lib.sh"
+  OP_SA_TOKEN=$(fm_op_service_account_token "$FM_HOME") || die_retry "service account token missing: OP_SERVICE_ACCOUNT_TOKEN not found in $(fm_op_service_account_sources "$FM_HOME"); set SHORTCUT_API_TOKEN or add OP_SERVICE_ACCOUNT_TOKEN to the .env (the desktop 1Password session is never used); then run: bin/fm-shortcut-ticket.sh$RERUN"
   OP_TIMEOUT=$(setting op_timeout 10)
   case "$OP_TIMEOUT" in '' | 0* | *[!0-9]*) die "op_timeout must be a positive number of seconds (got '$OP_TIMEOUT')" ;; esac
-  TOKEN=$(fm_run_timed "$OP_TIMEOUT" op read "$TOKEN_REF" 2>/dev/null) || TOKEN=''
-  [ -n "$TOKEN" ] || die_retry "SHORTCUT_API_TOKEN is not set and 'op read $TOKEN_REF' failed or did not answer within ${OP_TIMEOUT}s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh$RERUN"
+  TOKEN=$(OP_SERVICE_ACCOUNT_TOKEN=$OP_SA_TOKEN fm_run_timed "$OP_TIMEOUT" op read "$TOKEN_REF" 2>/dev/null) || TOKEN=''
+  [ -n "$TOKEN" ] || die_retry "SHORTCUT_API_TOKEN is not set and 'op read $TOKEN_REF' failed or did not answer within ${OP_TIMEOUT}s (check that OP_SERVICE_ACCOUNT_TOKEN can read it); then run: bin/fm-shortcut-ticket.sh$RERUN"
 fi
 
 HTTP_CODE=

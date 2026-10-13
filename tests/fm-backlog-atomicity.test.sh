@@ -1293,9 +1293,9 @@ test_dispatch_requires_a_shortcut_ticket_when_the_feature_is_on() {
   assert_absent "$(home_of "$case_dir")/state/$id.meta" "umbrella-only dispatch left a record behind"
 
   tasks-axi update "$id" --body "Shortcut: sc-4242" --file "$(backlog_of "$case_dir")" >/dev/null
-  out=$(FM_SHORTCUT_TICKETS=on SHORTCUT_API_TOKEN='' PATH="$case_dir/fakebin:$PATH" run_ship_spawn "$case_dir" "$id") && rc=0 || rc=$?
+  out=$(FM_SHORTCUT_TICKETS=on SHORTCUT_API_TOKEN='' OP_SERVICE_ACCOUNT_TOKEN='' PATH="$case_dir/fakebin:$PATH" run_ship_spawn "$case_dir" "$id") && rc=0 || rc=$?
   [ "$rc" -ne 0 ] || fail "spawn dispatched with no Shortcut token"
-  assert_contains "$out" "op read" "the missing-token refusal did not name the failed 1Password read"
+  assert_contains "$out" "service account token missing" "the missing-token refusal did not name the missing service account token"
   assert_absent "$(home_of "$case_dir")/state/$id.meta" "token-less dispatch left a record behind"
 
   out=$(shortcut_env "$case_dir" run_ship_spawn "$case_dir" "$id") && rc=0 || rc=$?

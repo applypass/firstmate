@@ -363,7 +363,8 @@ A home may instead select another tasks-axi adapter such as Beads through its ow
 `config/shortcut-tickets` overrides any key per home.
 Two keys are per-home and have no shipped default: `owner_id=<Shortcut member UUID>`, the member the home's stories are assigned to, and `token_ref=op://<vault>/<item>/<field>`, the 1Password reference the token is read from.
 The dispatch check and story creation refuse with the exact line to add to `config/shortcut-tickets` when `owner_id` is missing, or when `token_ref` is missing and `SHORTCUT_API_TOKEN` is unset.
-The credential is `SHORTCUT_API_TOKEN` in the environment, else `op read <token_ref>`, bounded to `op_timeout` seconds (default 10) so an unanswered 1Password prompt fails fast; each call reads it at most once, holds it in memory only, passes it to curl on stdin, and never writes it anywhere or exports it to child processes.
+The credential is `SHORTCUT_API_TOKEN` in the environment, else `op read <token_ref>`, bounded to `op_timeout` seconds (default 10) so a hung read fails fast; each call reads it at most once, holds it in memory only, passes it to curl on stdin, and never writes it anywhere or exports it to child processes.
+`op` runs only with `OP_SERVICE_ACCOUNT_TOKEN` from the environment, the home `.env`, or a parent home `.env` up the secondmate chain; without one the script refuses with "service account token missing" and never calls `op`, so it cannot fall back to the 1Password desktop session.
 [`bin/fm-shortcut-ticket.sh`](../bin/fm-shortcut-ticket.sh) owns the operations and their hooks.
 
 | Event | Story change |
