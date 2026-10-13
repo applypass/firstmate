@@ -1,0 +1,8 @@
+# gate worktree (remotes: origin )
+$ bin/fm-fork-footprint.sh --soft   # as wired in .no-mistakes.yaml commands.lint
+fm-fork-footprint: upstream ref 'upstream/main' not found (git remote add upstream https://github.com/kunchenguid/firstmate; git fetch upstream)
+fm-fork-footprint: --soft: skipping the footprint check
+exit=0
+$ bin/fm-fork-footprint.sh
+fm-fork-footprint: upstream ref 'upstream/main' not found (git remote add upstream https://github.com/kunchenguid/firstmate; git fetch upstream)
+exit=2

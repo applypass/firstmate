@@ -1,0 +1,63 @@
+$ git checkout -b chore/reconcile-upstream-test origin/main && git merge upstream/main  (real kunchenguid/firstmate main)
+Auto-merging tests/fm-pr-check-security.test.sh
+Auto-merging tests/fm-pr-merge.test.sh
+CONFLICT (content): Merge conflict in tests/fm-pr-merge.test.sh
+Auto-merging tests/fm-secondmate-harness.test.sh
+CONFLICT (content): Merge conflict in tests/fm-secondmate-harness.test.sh
+Auto-merging tests/fm-spawn-dispatch-profile.test.sh
+CONFLICT (content): Merge conflict in tests/fm-spawn-dispatch-profile.test.sh
+Auto-merging tests/fm-supervision-host.test.sh
+CONFLICT (content): Merge conflict in tests/fm-supervision-host.test.sh
+Auto-merging tests/fm-task-inbox.test.sh
+Auto-merging tests/fm-teardown.test.sh
+Auto-merging tests/fm-test-run.test.sh
+Auto-merging tests/fm-wake-queue.test.sh
+Auto-merging tests/lib.sh
+Automatic merge failed; fix conflicts and then commit the result.
+merge exit=0
+bin/fm-spawn.sh
+bin/fm-task-inbox-lib.sh
+bin/fm-tasks-axi.sh
+bin/fm-teardown.sh
+bin/fm-test-run.sh
+bin/fm-watch.sh
+docs/configuration.md
+docs/fm-test-portable-shards.md
+docs/secondmate-parent-channel.md
+tests/fm-kimi-harness.test.sh
+tests/fm-pending-reply.test.sh
+tests/fm-pr-merge.test.sh
+tests/fm-secondmate-harness.test.sh
+tests/fm-spawn-dispatch-profile.test.sh
+tests/fm-supervision-host.test.sh
+# after resolving conflicts by keeping upstream text, commit the merge, then:
+$ bin/fm-fork-footprint.sh --base origin/main --upstream upstream/main
+## Fork footprint vs upstream main
+
+- Upstream files touched by this change: 23 (+525/-15 lines vs upstream)
+  - .agents/skills/agent-skill-trigger-index/SKILL.md (+1/-0): on the fork ledger
+  - .agents/skills/operational-home-layout/SKILL.md (+3/-0): on the fork ledger
+  - README.md (+1/-0): on the fork ledger
+  - bin/fm-backlog-handoff.sh (+14/-0): on the fork ledger
+  - bin/fm-brief.sh (+6/-2): on the fork ledger
+  - bin/fm-captain-hold.sh (+6/-1): on the fork ledger
+  - bin/fm-dod-lib.sh (+11/-0): on the fork ledger
+  - bin/fm-pending-reply-lib.sh (+100/-8): on the fork ledger
+  - bin/fm-pr-check.sh (+6/-0): on the fork ledger
+  - bin/fm-pr-merge.sh (+13/-1): on the fork ledger
+  - bin/fm-promote.sh (+5/-1): on the fork ledger
+  - bin/fm-wake-lib.sh (+1/-0): on the fork ledger
+  - docs/documentation-audiences.json (+20/-0): on the fork ledger
+  - docs/scripts.md (+2/-1): on the fork ledger
+  - docs/supervision-host.md (+1/-0): on the fork ledger
+  - tests/fm-backlog-atomicity.test.sh (+139/-0): on the fork ledger
+  - tests/fm-calm-pi-extension.test.sh (+4/-0): on the fork ledger
+  - tests/fm-pi-branch-extension.test.sh (+24/-1): on the fork ledger
+  - tests/fm-pr-check-security.test.sh (+25/-0): on the fork ledger
+  - tests/fm-task-inbox.test.sh (+28/-0): on the fork ledger
+  - tests/fm-teardown.test.sh (+26/-0): on the fork ledger
+  - tests/fm-wake-queue.test.sh (+4/-0): on the fork ledger
+  - tests/lib.sh (+85/-0): on the fork ledger
+- Upstream files the fork already modifies on origin/main: 52 of 79 changed files (+6924/-267 lines, includes fork-only files)
+- Result: ok
+exit=0

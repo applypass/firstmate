@@ -1,0 +1,68 @@
+## S3: PR rewrites line 5 of upstream file bin/backends/cmux.sh (not on ledger)
+$ bin/fm-fork-footprint.sh --base origin/main --upstream upstream/main
+fm-fork-footprint: bin/backends/cmux.sh:5: removes or rewrites 1 upstream line(s)
+## Fork footprint vs upstream main
+
+- Upstream files touched by this change: 1 (+1/-1 lines vs upstream)
+  - bin/backends/cmux.sh (+1/-1): NOT ALLOWED
+- Upstream files the fork already modifies on origin/main: 52 of 79 changed files (+6924/-267 lines, includes fork-only files)
+- Result: FAIL, 1 upstream file(s) changed outside a Fork-only block
+  Fix: move the behaviour into a fork-only file, or wrap the addition in a short '# Fork-only:' block.
+  Last resort: add "- `path` - reason" to .fork/ledger.md in its own PR; it applies once merged.
+exit=1
+
+## S4: same rewrite plus the PR adds its own ledger entry for bin/backends/cmux.sh
+$ bin/fm-fork-footprint.sh --base origin/main --upstream upstream/main
+fm-fork-footprint: bin/backends/cmux.sh:5: removes or rewrites 1 upstream line(s)
+## Fork footprint vs upstream main
+
+- Upstream files touched by this change: 1 (+1/-1 lines vs upstream)
+  - bin/backends/cmux.sh (+1/-1): NOT ALLOWED
+- Ledger entries this change adds are ignored until they merge in their own PR: bin/backends/cmux.sh
+- Upstream files the fork already modifies on origin/main: 52 of 79 changed files (+6924/-267 lines, includes fork-only files)
+- Result: FAIL, 1 upstream file(s) changed outside a Fork-only block
+  Fix: move the behaviour into a fork-only file, or wrap the addition in a short '# Fork-only:' block.
+  Last resort: add "- `path` - reason" to .fork/ledger.md in its own PR; it applies once merged.
+exit=1
+
+## S5: PR adds a 2-line '# Fork-only:' block to bin/backends/cmux.sh
+$ bin/fm-fork-footprint.sh --base origin/main --upstream upstream/main
+## Fork footprint vs upstream main
+
+- Upstream files touched by this change: 1 (+2/-0 lines vs upstream)
+  - bin/backends/cmux.sh (+2/-0): Fork-only block
+- Upstream files the fork already modifies on origin/main: 52 of 79 changed files (+6924/-267 lines, includes fork-only files)
+- Result: ok
+exit=0
+
+## S6: PR only chmods bin/backends/cmux.sh
+$ bin/fm-fork-footprint.sh --base origin/main --upstream upstream/main
+## Fork footprint vs upstream main
+
+- Upstream files touched by this change: 0 (+0/-0 lines vs upstream)
+- Upstream files the fork already modifies on origin/main: 52 of 79 changed files (+6924/-267 lines, includes fork-only files)
+- Result: ok
+exit=0
+
+## S6b: PR changes binary upstream file assets/banner.png
+$ bin/fm-fork-footprint.sh --base origin/main --upstream upstream/main
+fm-fork-footprint: assets/banner.png:1: change has no text hunks to check (binary or mode-only change)
+## Fork footprint vs upstream main
+
+- Upstream files touched by this change: 1 (+0/-0 lines vs upstream)
+  - assets/banner.png (+0/-0): NOT ALLOWED
+- Upstream files the fork already modifies on origin/main: 52 of 79 changed files (+6924/-267 lines, includes fork-only files)
+- Result: FAIL, 1 upstream file(s) changed outside a Fork-only block
+  Fix: move the behaviour into a fork-only file, or wrap the addition in a short '# Fork-only:' block.
+  Last resort: add "- `path` - reason" to .fork/ledger.md in its own PR; it applies once merged.
+exit=1
+
+## S7: PR adds only a new fork-only file
+$ bin/fm-fork-footprint.sh --base origin/main --upstream upstream/main
+## Fork footprint vs upstream main
+
+- Upstream files touched by this change: 0 (+0/-0 lines vs upstream)
+- Upstream files the fork already modifies on origin/main: 52 of 79 changed files (+6924/-267 lines, includes fork-only files)
+- Result: ok
+exit=0
+
