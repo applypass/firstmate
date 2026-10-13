@@ -925,7 +925,7 @@ test_resolve_key_with_fire_and_forget_closes_without_pending_reply() {
   esac
   closing=$(grep -F 'resolved [key=ack-loop]' "$home/state/domain.status" || true)
   [ -n "$closing" ] || fail "the key was not resolved: $(cat "$home/state/domain.status")"
-  if ls "$home/state"/.pending-reply-* "$home/state"/pending-replies 2>/dev/null | grep -q .; then
+  if [ -n "$(find "$home/state" -name '*pending-repl*' 2>/dev/null)" ]; then
     fail "a pending-reply record was created: $(ls -A "$home/state")"
   fi
   pass "fm-send --resolve-key --fire-and-forget: resolves the key and opens no pending reply"
