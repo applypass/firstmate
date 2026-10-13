@@ -1,0 +1,36 @@
+# Fork-only: applypass/firstmate. Fails a PR that changes a kunchenguid/firstmate
+# file outside a Fork-only block, so a resync with upstream stays conflict-free.
+# Owner: bin/fm-fork-footprint.sh. Ledger: .fork/ledger.md.
+name: Fork footprint
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-footprint-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  footprint:
+    name: Fork footprint vs upstream main
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Fetch upstream and the PR base
+        run: |
+          set -eu
+          git remote add upstream https://github.com/kunchenguid/firstmate.git
+          git fetch --quiet upstream main
+          git fetch --quiet origin main
+      - name: Check the fork footprint
+        run: |
+          set -eu -o pipefail
+          bin/fm-fork-footprint.sh --base origin/main --upstream upstream/main | tee -a "$GITHUB_STEP_SUMMARY"
