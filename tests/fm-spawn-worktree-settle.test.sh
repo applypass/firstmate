@@ -221,9 +221,43 @@ test_primary_checkout_that_never_settles_fails_at_the_deadline() {
   pass "a pane stuck on the primary checkout fails loudly at the deadline"
 }
 
+# Fork-only: the wait is FM_TREEHOUSE_GET_TIMEOUT seconds and defaults to 180. Counting
+# pane reads measures the loop itself (sleep is a no-op), and the refusal names
+# the bound that applied. An invalid value falls back to the default.
+test_get_timeout_is_configurable_with_a_default() {
+  local rec id out reads
+  id=settle-timeout-default-z5
+  rec=$(make_primary_case settle-timeout-default "$id" 100000)
+  read_settle_record "$rec"
+  fm_test_fake_sleep_noop "$FAKEBIN_DIR"
+  out=$(run_settle_spawn "$id")
+  assert_contains "$out" "within 180s" "default wait is not 180s"
+  reads=$(cat "$COUNTFILE")
+  [ "$reads" -eq 180 ] || fail "default wait polled $reads times, expected 180"
+
+  id=settle-timeout-custom-z6
+  rec=$(make_primary_case settle-timeout-custom "$id" 100000)
+  read_settle_record "$rec"
+  fm_test_fake_sleep_noop "$FAKEBIN_DIR"
+  out=$(FM_TREEHOUSE_GET_TIMEOUT=7 run_settle_spawn "$id")
+  assert_contains "$out" "within 7s" "configured wait not reported"
+  reads=$(cat "$COUNTFILE")
+  [ "$reads" -eq 7 ] || fail "configured wait polled $reads times, expected 7"
+
+  id=settle-timeout-invalid-z7
+  rec=$(make_primary_case settle-timeout-invalid "$id" 100000)
+  read_settle_record "$rec"
+  fm_test_fake_sleep_noop "$FAKEBIN_DIR"
+  out=$(FM_TREEHOUSE_GET_TIMEOUT=abc run_settle_spawn "$id")
+  assert_contains "$out" "within 180s" "invalid value did not fall back to the default"
+  pass "FM_TREEHOUSE_GET_TIMEOUT sets the wait; default 180s; invalid value falls back"
+}
+
 test_single_stale_first_read_is_not_accepted
 test_already_settled_pane_costs_one_confirm_read
 test_transient_primary_checkout_is_not_accepted
 test_primary_checkout_that_never_settles_fails_at_the_deadline
+# Fork-only: run the timeout test.
+test_get_timeout_is_configurable_with_a_default
 
 echo "# all fm-spawn-worktree-settle tests passed"
