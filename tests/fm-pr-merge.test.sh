@@ -241,6 +241,14 @@ case "${1:-} ${2:-}" in
     exit 0
     ;;
   api\ *)
+    # The main-merge guard's live base read; dev unless a case says otherwise.
+    case " $* " in
+      *" repos/"*"/pulls/"*)
+        [ "${FM_TEST_GH_PR_BASE:-dev}" != unreadable ] || exit 1
+        printf '%s\n' "${FM_TEST_GH_PR_BASE:-dev}"
+        exit 0
+        ;;
+    esac
     # The required-check reads: the branch itself, and its rules read without
     # the merge-queue filter the queue reader below applies.
     case " $* " in
@@ -3863,6 +3871,39 @@ test_allow_missing_follows_the_allow_red_rules() {
   pass "fm-pr-merge --allow-missing is single use, attended-only, and GitHub-only like --allow-red"
 }
 
+# Fork-only: a merge whose live base is main is refused without --release-main.
+test_main_base_merge_needs_release_main() {
+  local case_dir head=c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1
+  case_dir=$(make_case main-guard-refused)
+  add_gh_mocks "$case_dir" "$head"
+  FM_TEST_GH_PR_BASE=main run_required_case "$case_dir" 95
+  expect_code 1 "$RC" "main-guard: a main-base merge without --release-main must refuse"
+  assert_grep '--release-main' "$case_dir/stderr" "main-guard: the refusal did not name the flag"
+  assert_grep "captain's explicit word for this specific merge" "$case_dir/stderr" \
+    "main-guard: the refusal did not say the flag needs the captain's word"
+  assert_no_grep 'pr merge' "$case_dir/gh.log" "main-guard: gh pr merge ran for a main-base PR"
+
+  case_dir=$(make_case main-guard-flag)
+  add_gh_mocks "$case_dir" "$head"
+  FM_TEST_GH_PR_BASE=main run_required_case "$case_dir" 96 --release-main
+  expect_code 0 "$RC" "main-guard: --release-main must let a main-base merge through: $(cat "$case_dir/stderr")"
+  assert_logged_gh_merge "$case_dir" 96 example/repo --squash
+
+  case_dir=$(make_case main-guard-dev)
+  add_gh_mocks "$case_dir" "$head"
+  run_required_case "$case_dir" 97
+  expect_code 0 "$RC" "main-guard: a dev-base merge must be unchanged: $(cat "$case_dir/stderr")"
+  assert_logged_gh_merge "$case_dir" 97 example/repo --squash
+
+  case_dir=$(make_case main-guard-unreadable)
+  add_gh_mocks "$case_dir" "$head"
+  FM_TEST_GH_PR_BASE=unreadable run_required_case "$case_dir" 98 --release-main
+  expect_code 1 "$RC" "main-guard: an unreadable base must refuse"
+  assert_no_grep 'pr merge' "$case_dir/gh.log" "main-guard: gh pr merge ran with an unreadable base"
+  pass "fm-pr-merge refuses a main-base merge without --release-main, and merges dev-base or flagged ones"
+}
+
+test_main_base_merge_needs_release_main
 test_gitlab_head_override_args_refuse_before_recording
 test_secondmate_merge_reports_upward_once
 test_secondmate_merge_reports_on_the_local_route
