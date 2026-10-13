@@ -151,6 +151,11 @@
 # during the final locked remote-route validation; unset or empty guards do not
 # change ordinary sends.
 #
+# Fork-only (applypass): --resolve-key combines with --fire-and-forget. The send
+# still resolves each key after the durable enqueue, and no pending reply is
+# opened, so a closing steer to a pure acknowledgement cannot start a new loop.
+# Fork-only end
+#
 # Decision closure (answerer-closes): pass --resolve-key <key> (repeatable,
 # before the message) when this send answers an open keyed needs-decision: or
 # blocked: record in the target task's state/<id>.status. fm-send itself
@@ -595,6 +600,16 @@ fm_send_resolve_close_note() { # <key> <excerpt>
   printf 'answered: %s' "$excerpt"
 }
 
+# Fork-only (applypass): --resolve-key may ride with --fire-and-forget, so a
+# steer that closes a pure acknowledgement resolves its key without opening a
+# new pending reply. Hold the keys aside so the exclusivity check below passes.
+FORK_RESOLVE_KEYS_HELD=
+if [ -n "$FIRE_AND_FORGET_ID" ] && [ -n "$RESOLVE_KEYS" ]; then
+  FORK_RESOLVE_KEYS_HELD=$RESOLVE_KEYS
+  RESOLVE_KEYS=
+fi
+# Fork-only end
+
 if [ -n "$FIRE_AND_FORGET_ID" ]; then
   printf '%s' "$FIRE_AND_FORGET_ID" | grep -Eq '^[a-f0-9]{16}$' ||
     {
@@ -612,6 +627,12 @@ if [ -n "$FIRE_AND_FORGET_ID" ]; then
       exit 1
     }
 fi
+
+# Fork-only (applypass): restore the keys held aside above.
+if [ -n "$FORK_RESOLVE_KEYS_HELD" ]; then
+  RESOLVE_KEYS=$FORK_RESOLVE_KEYS_HELD
+fi
+# Fork-only end
 
 if [ -n "$RESOLVE_KEYS" ]; then
   if [ -z "$TARGET_SELECTOR" ] || [ -z "$TARGET_META" ]; then

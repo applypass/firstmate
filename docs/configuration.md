@@ -372,7 +372,7 @@ The credential is `SHORTCUT_API_TOKEN` in the environment, else `op read <token_
 | `fm-tasks-axi.sh add` | Created in Backlog (Engineering team) with the item's ownership marker in its description, and a `Shortcut: sc-NNNN <url>` line appended to the item body. |
 | `fm-shortcut-ticket.sh link <item> sc-NNNN` | An existing story becomes the item's own: refused when it is the parent (umbrella) story in the item's title or carries another item's marker, else this item's marker is added and the body line recorded. |
 | Dispatch (`fm-spawn.sh`) | Refused unless the item's body names its own story and a GET shows that story's marker for this item (including a missing setting, token, or failed `op read`); otherwise moved to In Progress. |
-| Second mate `done` or `ready` (`fm-secondmate-report.sh`, including `--doc`) | Refused unless `--item <id>` names the investigation's backlog item and `fm-shortcut-ticket.sh --check <id>` passes. |
+| Second mate `done` or `ready` (`fm-secondmate-report.sh`, including `--doc`) | With `--item <id>`, refused unless `fm-shortcut-ticket.sh --check <id>` passes. Without `--item` the report answers its corr_id as a pure acknowledgement and closes the pending reply with no story check. |
 | PR registered (`fm-pr-check.sh`) | Moved to In Review, PR linked. |
 | Scout teardown | Moved to In Review, `report.md` uploaded. |
 | Ship teardown | Moved to In Review if the PR has not already done so (a local-only or no-PR landing). |

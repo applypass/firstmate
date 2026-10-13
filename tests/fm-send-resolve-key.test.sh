@@ -905,6 +905,34 @@ test_decision_answer_partition_relocates_under_the_record() {
   pass "fm-send --resolve-key: a decision answer refuses the attended branch before sending, a blocked: key stays steering, and the away-posture record relocates the answer"
 }
 
+# Fork-only (applypass): --resolve-key combined with --fire-and-forget closes the
+# key after the durable enqueue and opens no pending reply.
+test_resolve_key_with_fire_and_forget_closes_without_pending_reply() {
+  local dir fb log home rc got closing
+  dir="$TMP_ROOT/ff"; mkdir -p "$dir"
+  fb=$(make_stubs "$dir"); log="$dir/send.log"
+  home=$(setup_home ff)
+  fm_write_secondmate_meta "$home/state/domain.meta" "$home" "sess:fm-domain"
+  printf 'blocked [key=ack-loop]: re-read AGENTS.md\n' > "$home/state/domain.status"
+
+  run_send "$fb" "$home" "$log" fm-domain --resolve-key ack-loop \
+    --fire-and-forget 0123456789abcdef "acknowledged, nothing more to do"; rc=$?
+  expect_code 0 "$rc" "a resolve-key steer with --fire-and-forget should succeed"
+  got=$(bash -c '. "$1"; fm_task_inbox_body "$2"' _ "$ROOT/bin/fm-task-inbox-lib.sh" \
+    "$home/state/domain.inbox/001.msg")
+  assert_contains "$got" "delivery=0123456789abcdef" "the record should carry the fire-and-forget delivery id"
+  case "$got" in
+    *corr=*) fail "a fire-and-forget close must not open a pending reply: $got" ;;
+  esac
+  closing=$(grep -F 'resolved [key=ack-loop]' "$home/state/domain.status" || true)
+  [ -n "$closing" ] || fail "the key was not resolved: $(cat "$home/state/domain.status")"
+  if ls "$home/state"/.pending-reply-* "$home/state"/pending-replies 2>/dev/null | grep -q .; then
+    fail "a pending-reply record was created: $(ls -A "$home/state")"
+  fi
+  pass "fm-send --resolve-key --fire-and-forget: resolves the key and opens no pending reply"
+}
+# Fork-only end
+
 test_answer_send_closes_open_decision
 test_answer_close_is_self_announced
 test_separate_resolve_key_answers_do_not_rewake
@@ -929,3 +957,4 @@ test_stamped_close_line_stays_within_the_status_line_cap
 test_failed_close_recovery_command_is_shell_safe
 test_remote_reserved_pending_reply_key_closes_locally
 test_decision_answer_partition_relocates_under_the_record
+test_resolve_key_with_fire_and_forget_closes_without_pending_reply
