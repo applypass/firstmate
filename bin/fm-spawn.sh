@@ -4287,7 +4287,7 @@ elif [ "$KIND" != secondmate ] && [ "$BACKEND" != orca ]; then
   last_reason="the pane reported no path"
   # Fork-only: wait FM_TREEHOUSE_GET_TIMEOUT seconds (default 180) instead of a fixed 60.
   get_timeout=${FM_TREEHOUSE_GET_TIMEOUT:-180}
-  case "$get_timeout" in ''|*[!0-9]*|0) get_timeout=180 ;; esac
+  case "$get_timeout" in ''|*[!0-9]*) get_timeout=180 ;; *[!0]*) ;; *) get_timeout=180 ;; esac
   for _ in $(seq 1 "$get_timeout"); do
     p=$(spawn_current_path "$WT_TARGET" || true)
     [ -z "$p" ] || last_seen="$p"

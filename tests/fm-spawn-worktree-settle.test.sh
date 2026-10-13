@@ -224,7 +224,7 @@ test_primary_checkout_that_never_settles_fails_at_the_deadline() {
 
 # Fork-only: the wait is FM_TREEHOUSE_GET_TIMEOUT seconds and defaults to 180. Counting
 # pane reads measures the loop itself (sleep is a no-op), and the refusal names
-# the bound that applied. An invalid value falls back to the default.
+# the bound that applied. An invalid or zero value falls back to the default.
 test_get_timeout_is_configurable_with_a_default() {
   local rec id out reads
   id=settle-timeout-default-z5
@@ -251,7 +251,14 @@ test_get_timeout_is_configurable_with_a_default() {
   fm_test_fake_sleep_noop "$FAKEBIN_DIR"
   out=$(FM_TREEHOUSE_GET_TIMEOUT=abc run_settle_spawn "$id")
   assert_contains "$out" "within 180s" "invalid value did not fall back to the default"
-  pass "FM_TREEHOUSE_GET_TIMEOUT sets the wait; default 180s; invalid value falls back"
+
+  id=settle-timeout-zero-z8
+  rec=$(make_primary_case settle-timeout-zero "$id" 100000)
+  read_settle_record "$rec"
+  fm_test_fake_sleep_noop "$FAKEBIN_DIR"
+  out=$(FM_TREEHOUSE_GET_TIMEOUT=00 run_settle_spawn "$id")
+  assert_contains "$out" "within 180s" "zero-padded zero did not fall back to the default"
+  pass "FM_TREEHOUSE_GET_TIMEOUT sets the wait; default 180s; invalid or zero value falls back"
 }
 
 test_single_stale_first_read_is_not_accepted
