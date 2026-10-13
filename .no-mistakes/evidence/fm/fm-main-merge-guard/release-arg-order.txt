@@ -1,0 +1,7 @@
+rc=0
+--- gh.log merge line:
+pr merge 96 --repo example/repo --match-head-commit c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1 --merge
+noflag rc=1
+error: example/repo#95 targets main, and a merge into main deploys prod; pass --release-main only after the captain's explicit word for this specific merge
+--- merge lines:
+0

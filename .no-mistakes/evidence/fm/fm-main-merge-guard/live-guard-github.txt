@@ -1,0 +1,25 @@
+$ bin/fm-main-merge-guard.sh github applypass/firstmate 30 false
+error: applypass/firstmate#30 targets main, and a merge into main deploys prod; pass --release-main only after the captain's explicit word for this specific merge
+exit=1
+
+$ bin/fm-main-merge-guard.sh github applypass/firstmate 30 true
+exit=0
+
+$ bin/fm-main-merge-guard.sh github applypass/apply_pass_backend 695 false
+error: applypass/apply_pass_backend#695 targets main, and a merge into main deploys prod; pass --release-main only after the captain's explicit word for this specific merge
+exit=1
+
+$ bin/fm-main-merge-guard.sh github applypass/apply_pass_backend 697 false
+exit=0
+
+$ bin/fm-main-merge-guard.sh github applypass/apply_pass_backend 697 true
+exit=0
+
+$ bin/fm-main-merge-guard.sh github applypass/does-not-exist-xyz 1 true
+error: could not read the base branch of applypass/does-not-exist-xyz#1 from the forge, so the main-merge guard refuses the merge
+exit=1
+
+$ bin/fm-main-merge-guard.sh github applypass/firstmate 30
+usage: fm-main-merge-guard.sh <github <owner>/<repo>|gitlab <project-url>> <number> <true|false>
+exit=2
+

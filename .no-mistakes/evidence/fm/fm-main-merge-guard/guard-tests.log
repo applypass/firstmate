@@ -1,0 +1,2 @@
+ok - fm-pr-merge refuses a main-base merge without --release-main, and merges dev-base or flagged ones
+ok - fm-pr-merge refuses a GitLab main-target merge without --release-main
