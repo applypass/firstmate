@@ -833,6 +833,7 @@ tests/fm-sessionstart-hook-live-e2e.test.sh 64
 tests/fm-sessionstart-instruction-refresh-live-e2e.test.sh 76
 tests/fm-sessionstart-nudge.test.sh 77800
 tests/fm-shared-captain-inheritance.test.sh 7985
+tests/fm-shortcut-release.test.sh 12000
 tests/fm-shortcut-ticket.test.sh 31138
 tests/fm-spawn-compact-adviser-disable-remote.test.sh 35064
 tests/fm-spawn-compact-adviser-disable.test.sh 21029

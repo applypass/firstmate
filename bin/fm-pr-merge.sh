@@ -1481,3 +1481,5 @@ case "$outcome_rc" in
     printf 'actionable: merged %s but could not record the outcome for supervision\n' "$URL" >&2
     ;;
 esac
+# Fork-only: a merge to the release base moves its Shortcut stories to Done once production runs it, or prints the next step (best-effort).
+[ "$PROVIDER" != github ] || FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE "$SCRIPT_DIR/fm-shortcut-ticket.sh" release-hook "$URL" --task "$ID" --best-effort || true
