@@ -381,7 +381,7 @@ write_mr_json() {
   local file=$1 kv key value
   local state=opened detail=mergeable conflicts=false discussions=true
   local head=$MR_HEAD pipeline_sha=$MR_HEAD pipeline_status=success pipeline=present
-  local merge_when_pipeline_succeeds=false merge_after=null
+  local merge_when_pipeline_succeeds=false merge_after=null target_branch=dev
   shift
   for kv in "$@"; do
     key=${kv%%=*}
@@ -397,6 +397,7 @@ write_mr_json() {
       pipeline) pipeline=$value ;;
       merge_when_pipeline_succeeds) merge_when_pipeline_succeeds=$value ;;
       merge_after) merge_after=$value ;;
+      target_branch) target_branch=$value ;;
       *) fail "write_mr_json: unknown field '$key'" ;;
     esac
   done
@@ -407,8 +408,8 @@ write_mr_json() {
     "$state" "$detail" "$conflicts" > "$file"
   printf '"blocking_discussions_resolved":%s,"sha":"%s","head_pipeline":%s,' \
     "$discussions" "$head" "$pipeline" >> "$file"
-  printf '"merge_when_pipeline_succeeds":%s,"merge_after":%s}\n' \
-    "$merge_when_pipeline_succeeds" "$merge_after" >> "$file"
+  printf '"merge_when_pipeline_succeeds":%s,"merge_after":%s,"target_branch":"%s"}\n' \
+    "$merge_when_pipeline_succeeds" "$merge_after" "$target_branch" >> "$file"
 }
 
 # make_gitlab_case <name> [<field>=<value> ...]: a case dir with both forge
@@ -3903,7 +3904,27 @@ test_main_base_merge_needs_release_main() {
   pass "fm-pr-merge refuses a main-base merge without --release-main, and merges dev-base or flagged ones"
 }
 
+# Fork-only: a GitLab merge request whose live target is main is refused without --release-main.
+test_gitlab_main_target_merge_needs_release_main() {
+  local case_dir rc
+  case_dir=$(make_gitlab_case gitlab-main-guard target_branch=main)
+  set +e
+  run_pr_merge "$case_dir" task-x1 "$MR_URL" \
+    > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "gitlab-main-guard: a main-target merge without --release-main must refuse"
+  assert_grep "captain's explicit word for this specific merge" "$case_dir/stderr" \
+    "gitlab-main-guard: the refusal did not say the flag needs the captain's word"
+  assert_grep "GITLAB_HOST=$MR_HOST mr view 7 -R $MR_PROJECT_URL -F json" "$case_dir/glab.log" \
+    "gitlab-main-guard: the target branch was not read live from the project URL"
+  [ -z "$(glab_merge_line "$case_dir/glab.log")" ] \
+    || fail "gitlab-main-guard: glab mr merge ran for a main-target merge request"
+  pass "fm-pr-merge refuses a GitLab main-target merge without --release-main"
+}
+
 test_main_base_merge_needs_release_main
+test_gitlab_main_target_merge_needs_release_main
 test_gitlab_head_override_args_refuse_before_recording
 test_secondmate_merge_reports_upward_once
 test_secondmate_merge_reports_on_the_local_route

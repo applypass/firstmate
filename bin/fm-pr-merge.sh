@@ -1349,7 +1349,7 @@ require_released_captain_hold || exit 1
 case "$PROVIDER" in
   github)
     # Fork-only: a main-base merge needs --release-main, read live before any merge call.
-    "$SCRIPT_DIR/fm-main-merge-guard.sh" "$PR_OWNER" "$PR_REPO" "$PR_NUMBER" "$RELEASE_MAIN" || exit 1
+    "$SCRIPT_DIR/fm-main-merge-guard.sh" github "$PR_OWNER/$PR_REPO" "$PR_NUMBER" "$RELEASE_MAIN" || exit 1
     merge_output=
     merge_args=()
     if ! caller_has_merge_method "$@"; then
@@ -1436,6 +1436,8 @@ case "$PROVIDER" in
     ;;
   gitlab)
     gitlab_verify_mergeable || exit 1
+    # Fork-only: a main-target merge needs --release-main, read live before any merge call.
+    GITLAB_HOST="$FM_PR_HOST" "$SCRIPT_DIR/fm-main-merge-guard.sh" gitlab "$PROJECT_URL" "$PR_NUMBER" "$RELEASE_MAIN" || exit 1
     # --sha binds the merge to the head this run verified, so a push that lands
     # in between is refused by GitLab instead of merged unverified. --yes only
     # skips the interactive confirmation, which no supervised run can answer;
