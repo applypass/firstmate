@@ -83,16 +83,6 @@ test_zero_cap_sends_first_gate_to_firstmate() {
   assert_grep '(not supplied)' "$h/data/t1/nm-r1-review-rounds.txt" "snapshot without findings"
 }
 
-test_grant_adds_rounds() {
-  local h rc=0; h=$(new_home grant)
-  FM_HOME="$h" FM_REVIEW_FIX_CAP=1 "$CAP" fix t1 r1 review >/dev/null || fail "round 1"
-  FM_HOME="$h" FM_REVIEW_FIX_CAP=1 "$CAP" fix t1 r1 review >/dev/null 2>&1 || rc=$?
-  [ "$rc" = 3 ] || fail "capped before grant"
-  FM_HOME="$h" "$CAP" grant t1 r1 review 2 >/dev/null || fail "grant"
-  [ "$(FM_HOME="$h" FM_REVIEW_FIX_CAP=1 "$CAP" fix t1 r1 review)" = "fix-allowed: round 2 of 3" ] || fail "granted round"
-  FM_HOME="$h" "$CAP" grant t1 r1 review 0 >/dev/null 2>&1 && fail "grant 0 should be refused"
-}
-
 test_timeout_reports_at_once() {
   local h rc=0; h=$(new_home timeout)
   FM_HOME="$h" "$CAP" timeout t1 r1 review --error "agent timed out after 30 minutes" >/dev/null 2>&1 || rc=$?

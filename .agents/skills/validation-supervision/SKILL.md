@@ -34,5 +34,5 @@ The worker reports the PR when CI first becomes green rather than waiting for me
 A worker's `fix` answer at a review gate goes through `bin/fm-review-round-cap.sh fix`, and the brief tells it so.
 At the cap (default 2 fix rounds per run and step, `config/review-fix-cap` or `FM_REVIEW_FIX_CAP`) the worker stops and reports `needs-decision [key=nm-<run>-<step>-cap]` with a snapshot of the round count, repeated finding themes, and remaining findings.
 Treat that as a loop that has stopped converging: decide it under `ask-user-authority`, preferring approve-as-is, a narrower fix, or a captain call over another unbounded round.
-To allow more rounds, run `bin/fm-review-round-cap.sh grant <task> <run> <step>` and steer the worker with `--resolve-key`; otherwise answer approve or skip.
+Answer the capped gate with approve, skip, or a steer through `--resolve-key`.
 A step that fails with an agent timeout reaches you as `needs-decision [key=nm-<run>-<step>-timeout]`; decide retry, narrower scope, or escalation rather than letting the worker retry silently.

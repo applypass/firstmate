@@ -357,7 +357,7 @@ Set `FM_AUTO_DEV_MERGE=off` to get upstream behaviour.
 
 A no-mistakes worker's `fix` answers at a review gate are capped per run and step, and an agent timeout is reported to firstmate at once.
 The cap is the `FM_REVIEW_FIX_CAP` environment variable, else the first line of a local, gitignored `config/review-fix-cap` (a non-negative integer), else 2.
-[`bin/fm-review-round-cap.sh`](../bin/fm-review-round-cap.sh)'s header owns the round log, the needs-decision keys, the snapshot file, and the `grant` command that allows more rounds.
+[`bin/fm-review-round-cap.sh`](../bin/fm-review-round-cap.sh)'s header owns the round log, the needs-decision keys, and the snapshot file; firstmate answers a capped gate with approve, skip, or a steer.
 
 ## Backlog backend (.tasks.toml / config/backlog-backend)
 

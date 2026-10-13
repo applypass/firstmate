@@ -4,7 +4,6 @@
 # Usage:
 #   fm-review-round-cap.sh fix <task-id> <run> <step> [--findings FILE]
 #   fm-review-round-cap.sh timeout <task-id> <run> <step> [--error TEXT]
-#   fm-review-round-cap.sh grant <task-id> <run> <step> [N]
 #   fm-review-round-cap.sh cap
 #   fm-review-round-cap.sh brief-rule <task-id>
 #
@@ -22,8 +21,7 @@
 # else 2. It must be a non-negative integer; 0 sends every review gate to
 # firstmate. Only `fix` rounds count: approve and skip never do.
 #
-# `grant` is firstmate's answer to a capped gate that deserves more rounds: it
-# adds N (default 1) fix rounds for that run and step in state/<task-id>.fix-grants.
+# Firstmate answers a capped gate with approve, skip, or a steer.
 #
 # `timeout` is for a step that failed with an agent timeout (the 30-minute wall
 # clock). With --error TEXT it exits 1, doing nothing, unless TEXT reads like a
@@ -100,11 +98,9 @@ cmd_fix() {
   done
   [ -z "$findings" ] || [ -f "$findings" ] || die "findings file not found: $findings"
 
-  local cap log used themes="" granted
+  local cap log used themes=""
   cap=$(cap_value) || exit 2
   log="$STATE/$id.fix-rounds"
-  granted=$(awk -F'\t' -v r="$run" -v s="$step" '$1 == r && $2 == s { n += $3 } END { print n + 0 }' "$STATE/$id.fix-grants" 2>/dev/null || echo 0)
-  cap=$((cap + granted))
   used=$(awk -F'\t' -v r="$run" -v s="$step" '$1 == r && $2 == s { n++ } END { print n + 0 }' "$log" 2>/dev/null || echo 0)
   [ -z "$findings" ] || themes=$(themes_of_file "$findings")
 
@@ -135,17 +131,6 @@ cmd_fix() {
   append_status "$id" "needs-decision [at=$(date +%s)] [key=nm-$run-$step-cap]: $step fix-round cap reached after $used of $cap rounds; not sending another fix. details file=$snap"
   echo "capped: $used fix rounds already sent on $step (cap $cap); needs-decision recorded, stop and wait for firstmate" >&2
   return 3
-}
-
-cmd_grant() {
-  [ $# -ge 3 ] && [ $# -le 4 ] || die "usage: grant <task-id> <run> <step> [N]"
-  local n=${4:-1}
-  parse_ids "$1" "$2" "$3"
-  case "$n" in ''|*[!0-9]*) die "grant count must be a positive integer, got '$n'" ;; esac
-  [ "$n" -gt 0 ] || die "grant count must be a positive integer, got '$n'"
-  mkdir -p "$STATE" || die "cannot create $STATE"
-  printf '%s\t%s\t%s\n' "$2" "$3" "$n" >> "$STATE/$1.fix-grants"
-  echo "granted $n more fix round(s) on $3 of run $2"
 }
 
 cmd_timeout() {
@@ -187,7 +172,6 @@ RULE
 case "${1:-}" in
   fix) shift; cmd_fix "$@" ;;
   timeout) shift; cmd_timeout "$@" ;;
-  grant) shift; cmd_grant "$@" ;;
   cap) cap_value ;;
   brief-rule) shift; cmd_brief_rule "$@" ;;
   -h|--help) usage ;;
