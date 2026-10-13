@@ -432,6 +432,58 @@ test_review_links_pr_and_uploads_report() {
   pass "review moves to In Review, links the PR, and uploads the report"
 }
 
+test_md_upload_adds_a_rendered_html_copy() {
+  local dir out
+  dir=$(make_ticketed mdhtml)
+  cat > "$dir/report.md" <<'MD'
+# Report
+
+| a | b |
+|---|---|
+| 1 | 2 |
+
+```
+code
+```
+
+<script>alert(1)</script>
+MD
+  printf 'x\n' > "$dir/a.png"
+  out=$(ticket "$dir" attach lc-1 "$dir/report.md") || fail "attach failed: $out"
+  [ "$(grep -c '^POST https://api.app.shortcut.com/api/v3/files' "$dir/curl.log")" -eq 2 ] || fail "a .md upload did not make two uploads"
+  assert_grep '/report.md' "$dir/curl.log" "the .md was not kept"
+  assert_grep '/report.html' "$dir/curl.log" "no report.html was uploaded"
+  : > "$dir/curl.log"
+  out=$(ticket "$dir" attach lc-1 "$dir/a.png") || fail "attach failed: $out"
+  [ "$(grep -c '^POST https://api.app.shortcut.com/api/v3/files' "$dir/curl.log")" -eq 1 ] || fail "a non-.md upload made more than one upload"
+  assert_no_grep '.html' "$dir/curl.log" "a non-.md upload got an HTML copy"
+  if ! python3 -c 'import markdown_it' 2>/dev/null; then
+    pass "md upload makes a second upload (render checks skipped: markdown-it-py absent)"
+    return
+  fi
+  python3 "$ROOT/bin/fm-md-to-html.py" "$dir/report.md" "$dir/out.html" || fail "render failed"
+  assert_grep '<table>' "$dir/out.html" "the GFM table did not render to a <table>"
+  assert_grep '<h1>Report</h1>' "$dir/out.html" "the heading did not render"
+  assert_grep '<pre><code>code' "$dir/out.html" "the fenced code did not render"
+  assert_grep '&lt;script&gt;' "$dir/out.html" "raw HTML was not escaped"
+  assert_no_grep '<script' "$dir/out.html" "the page carries a script tag"
+  pass "a .md upload also uploads a rendered .html, a non-.md uploads once, and the render has a table and no script"
+}
+
+test_md_render_failure_still_uploads_the_md() {
+  local dir out
+  dir=$(make_ticketed mdfail)
+  printf '# r\n' > "$dir/report.md"
+  mkdir -p "$dir/badpy"
+  printf '%s\n' '#!/bin/sh' 'echo "stub renderer broke" >&2' 'exit 2' > "$dir/badpy/python3"
+  chmod +x "$dir/badpy/python3"
+  out=$(PATH="$dir/badpy:$PATH" ticket "$dir" attach lc-1 "$dir/report.md") || fail "attach failed: $out"
+  assert_contains "$out" "uploading the .md only" "a failed render gave no warning"
+  [ "$(grep -c '^POST https://api.app.shortcut.com/api/v3/files' "$dir/curl.log")" -eq 1 ] || fail "only the .md should upload when the render fails"
+  assert_no_grep 'report.html' "$dir/curl.log" "an HTML copy was uploaded despite the failed render"
+  pass "the .md upload does not depend on the HTML render"
+}
+
 test_comment_attach_outcome() {
   local dir out
   dir=$(make_ticketed comment)
@@ -588,6 +640,8 @@ test_handoff_carries_the_sc_id
 test_state_moves_the_story
 test_review_links_pr_and_uploads_report
 test_comment_attach_outcome
+test_md_upload_adds_a_rendered_html_copy
+test_md_render_failure_still_uploads_the_md
 test_done_needs_evidence_and_is_explicit
 test_park_returns_story_to_backlog
 test_wrapper_rm_and_parked_hold_park_the_story
