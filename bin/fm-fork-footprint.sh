@@ -61,12 +61,15 @@ if [ -z "$BASE" ]; then
     if git rev-parse --verify --quiet "$c^{commit}" >/dev/null; then BASE=$c; break; fi
   done
 fi
-[ -n "$BASE" ] && git rev-parse --verify --quiet "$BASE^{commit}" >/dev/null \
-  || { echo "fm-fork-footprint: base ref not found" >&2; exit 2; }
+if [ -z "$BASE" ] || ! git rev-parse --verify --quiet "$BASE^{commit}" >/dev/null; then
+  echo "fm-fork-footprint: base ref not found" >&2
+  exit 2
+fi
 
 # ledger: path -> reason, from "- `path` - reason" lines
 ledger_paths=""
 if [ -f "$LEDGER" ]; then
+  # shellcheck disable=SC2016 # the backticks are literal ledger syntax
   ledger_paths=$(sed -n 's/^- `\([^`]*\)` - .\{1,\}$/\1/p' "$LEDGER")
 fi
 on_ledger() { printf '%s\n' "$ledger_paths" | grep -Fxq -- "$1"; }
