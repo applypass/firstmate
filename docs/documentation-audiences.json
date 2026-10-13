@@ -161,6 +161,10 @@
       "audience": "agent-runtime"
     },
     {
+      "path": ".agents/skills/fork-upstream-resync/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
       "path": ".agents/skills/harness-adapters/SKILL.md",
       "audience": "agent-runtime"
     },
@@ -263,6 +267,10 @@
     {
       "path": ".agents/skills/updatefirstmate/SKILL.md",
       "audience": "agent-runtime"
+    },
+    {
+      "path": ".fork/ledger.md",
+      "audience": "maintainer-architecture"
     },
     {
       "path": ".github/pull_request_template.md",
