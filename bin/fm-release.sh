@@ -18,7 +18,8 @@
 # fm-pr-merge.sh refuse, and so does this script. The merge method is --merge so
 # dev and main keep a shared history; squashing a release would leave dev behind.
 # Merging into main needs the captain's word, so the merge refuses without
-# --captain-authorized and a non-empty quote of that word. The PR must be
+# --captain-authorized and a non-empty quote of that word, and the merge passes
+# --release-main to fm-pr-merge.sh, whose main-base guard refuses without it. The PR must be
 # dev into main, and a clone under projects/ must have it as its origin. After
 # a landed merge, when bin/fm-shortcut-ticket.sh supports release-done, it
 # prints that command as the next step, to run once production is confirmed.
@@ -142,7 +143,7 @@ release_merge() {
     "$project" "$project" "$(printf '%s' "$authorized" | tr '\r\n' '  ')" "$url" "$head_oid" > "$meta.tmp.$$"
   mv "$meta.tmp.$$" "$meta"
 
-  out=$("$MERGE_CMD" "$id" "$url" --merge 2>&1) || rc=$?
+  out=$("$MERGE_CMD" "$id" "$url" --release-main --merge 2>&1) || rc=$?
   [ -z "$out" ] || printf '%s\n' "$out" >&2
   [ "$rc" -eq 0 ] || exit "$rc"
   if printf '%s\n' "$out" | grep -qF "verified: $url is merged"; then

@@ -89,7 +89,7 @@ for line in "project=$d/projects/app" "worktree=$d/projects/app" "kind=ship" "mo
 done
 ( . "$ROOT/bin/fm-pr-lib.sh" && fm_pr_metadata_identity_parse "$d/state/$META" && [ "$FM_PR_META_URL" = "$URL" ] ) \
   || fail "merge-ok: meta must parse as a PR identity: $(cat "$d/state/$META")"
-grep -qx "release-main-app-9 $URL --merge" "$d/merge.log" || fail "merge-ok: wrong merge call: $(cat "$d/merge.log")"
+grep -qx "release-main-app-9 $URL --release-main --merge" "$d/merge.log" || fail "merge-ok: wrong merge call: $(cat "$d/merge.log")"
 case "$OUT" in *"release merged: $URL"*) ;; *) fail "merge-ok: no merged line: $OUT" ;; esac
 case "$OUT" in *"release-done"*) fail "merge-ok: release-done unsupported, must not print it: $OUT" ;; esac
 

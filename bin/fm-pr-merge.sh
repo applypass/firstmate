@@ -135,7 +135,7 @@
 # explicit captain instruction and never skips the live green check, the
 # away-record read, or a captain hold.
 #
-# Usage: fm-pr-merge.sh <task-id> <pr-url> [--attended-override] [--allow-red <check-name>] [--allow-missing <check-name>] [-- <extra forge merge args>]
+# Usage: fm-pr-merge.sh <task-id> <pr-url> [--attended-override] [--release-main] [--allow-red <check-name>] [--allow-missing <check-name>] [-- <extra forge merge args>]
 #
 # On GitLab, this script confirms the MR is actually merged before reporting it;
 # an auto-merge-queued or unconfirmed request leaves the poll armed and records
@@ -194,6 +194,8 @@ if [ "$PROVIDER" = gerrit ]; then
 fi
 shift 2
 ATTENDED_OVERRIDE=false
+# Fork-only: --release-main permits a merge whose base is main (bin/fm-main-merge-guard.sh).
+RELEASE_MAIN=false
 ALLOW_RED=()
 ALLOW_MISSING=()
 while [ "$#" -gt 0 ]; do
@@ -205,6 +207,10 @@ while [ "$#" -gt 0 ]; do
     --attended-override=*)
       echo "error: --attended-override takes no value" >&2
       exit 2
+      ;;
+    --release-main)
+      RELEASE_MAIN=true
+      shift
       ;;
     --allow-red)
       [ -n "${2:-}" ] || { echo "error: --allow-red requires a check name" >&2; exit 2; }
@@ -1342,6 +1348,8 @@ require_released_captain_hold || exit 1
 # the orphaned forge child can still merge on the lapsed away authority.
 case "$PROVIDER" in
   github)
+    # Fork-only: a main-base merge needs --release-main, read live before any merge call.
+    "$SCRIPT_DIR/fm-main-merge-guard.sh" github "$PR_OWNER/$PR_REPO" "$PR_NUMBER" "$RELEASE_MAIN" || exit 1
     merge_output=
     merge_args=()
     if ! caller_has_merge_method "$@"; then
@@ -1428,6 +1436,8 @@ case "$PROVIDER" in
     ;;
   gitlab)
     gitlab_verify_mergeable || exit 1
+    # Fork-only: a main-target merge needs --release-main, read live before any merge call.
+    GITLAB_HOST="$FM_PR_HOST" "$SCRIPT_DIR/fm-main-merge-guard.sh" gitlab "$PROJECT_URL" "$PR_NUMBER" "$RELEASE_MAIN" || exit 1
     # --sha binds the merge to the head this run verified, so a push that lands
     # in between is refused by GitLab instead of merged unverified. --yes only
     # skips the interactive confirmation, which no supervised run can answer;
