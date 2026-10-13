@@ -10,9 +10,14 @@
 #        fm-shortcut-ticket.sh attach <item> <file>...       upload files (screenshots, reports)
 #        fm-shortcut-ticket.sh outcome <item>                comment the task's final status line
 #        fm-shortcut-ticket.sh park <item> --reason <text>   back to Backlog with the reason (work abandoned)
-#        fm-shortcut-ticket.sh done <item> --evidence <text> move to Done (never automatic)
+#        fm-shortcut-ticket.sh done <item> --evidence <text> move to Done (the captain's word)
 #        fm-shortcut-ticket.sh chore <title> [<text>]        file an Engineering/Backlog chore story, print "sc-NNNN <url>"
 #                                                            (a decision with no story; bin/fm-decide.sh calls it)
+#        fm-shortcut-ticket.sh release-done <release-pr-url> [--evidence <text>] [--task <id>]
+#                                                            stories of a merged, deployed release PR to Done
+#        fm-shortcut-ticket.sh release-hook <pr-url> [--task <id>]
+#                                                            the merge-path form: finish, or say what to run next
+#        fm-shortcut-ticket.sh pending                       replay and list calls that failed earlier
 #        fm-shortcut-ticket.sh --check <item>                exit 0 if the item has its own, existing story (or is exempt)
 #        fm-shortcut-ticket.sh --linked <item>               print the linked sc-NNNN, if any
 #        fm-shortcut-ticket.sh --enabled                     exit 0 if the feature is on
@@ -29,8 +34,13 @@
 # bin/fm-teardown.sh comments the outcome (a scout also goes to In Review with
 # its report.md uploaded; a forced teardown moves the story back to Backlog);
 # bin/fm-tasks-axi.sh rm or hold --kind parked moves it back to Backlog with
-# the reason. Merge and teardown never move a story to Done: firstmate
-# runs `done` on the captain's word or verified production evidence.
+# the reason. Merge and teardown never move a story to Done on their own:
+# bin/fm-pr-merge.sh runs release-hook after a verified merge, and release-hook
+# or release-done (bin/fm-shortcut-release-lib.sh owns both, and the retry
+# record below) moves the stories a release carries to Done once production
+# runs it. `done` stays for the captain's word. A call that fails on the token
+# or the API leaves a pending record and a `blocked` status line, and the next
+# run replays it, so a signed-out 1Password no longer stops stories quietly.
 #
 # Create: POST /api/v3/stories with name = item title, description = item body
 # (or a Problem/Fix stub when empty) plus the ownership marker line
@@ -77,6 +87,10 @@ TASKS="$SCRIPT_DIR/fm-tasks-axi.sh"
 . "$SCRIPT_DIR/fm-timeout-lib.sh"
 BEST_EFFORT=0
 PRINT_URL=0
+CALL_ARGS=()
+STATUS_FILE=${FM_SHORTCUT_STATUS_FILE:-}
+# shellcheck source=bin/fm-shortcut-release-lib.sh disable=SC1091
+. "$SCRIPT_DIR/fm-shortcut-release-lib.sh"
 
 usage() {
   awk '
@@ -86,12 +100,17 @@ usage() {
   ' "$0"
 }
 
+die_retry() {  # a failure worth retrying: the token or the API
+  pending_on_failure "$*"
+  die "$@"
+}
+
 die() {
   if [ "$BEST_EFFORT" = 1 ]; then
-    printf 'fm-shortcut-ticket: warning: %s\n' "$*" >&2
+    printf 'fm-shortcut-ticket: warning: %s%s\n' "$*" "$PENDING_NOTE" >&2
     exit 0
   fi
-  printf 'fm-shortcut-ticket: %s\n' "$*" >&2
+  printf 'fm-shortcut-ticket: %s%s\n' "$*" "$PENDING_NOTE" >&2
   exit 1
 }
 
@@ -126,6 +145,8 @@ for arg in "$@"; do
   esac
 done
 set -- ${ARGS[@]+"${ARGS[@]}"}
+# shellcheck disable=SC2034
+CALL_ARGS=(${ARGS[@]+"${ARGS[@]}"})
 
 case "${1:-}" in
   -h | --help) usage; exit 0 ;;
@@ -136,13 +157,15 @@ OP=create
 case "${1:-}" in
   --check) OP=check; shift ;;
   --linked) OP=linked; shift ;;
-  link | chore | state | review | comment | attach | outcome | park | done) OP=$1; shift ;;
+  link | chore | state | review | comment | attach | outcome | park | done | release-done | release-hook | pending) OP=$1; shift ;;
 esac
 ID=${1:-}
-[ -n "$ID" ] || die "usage: fm-shortcut-ticket.sh [<op>] <item-id> ... (see --help)"
+[ -n "$ID" ] || [ "$OP" = pending ] || die "usage: fm-shortcut-ticket.sh [<op>] <item-id> ... (see --help)"
 shift
 
 enabled || exit 0
+# shellcheck disable=SC2034
+case "$ID" in https://*/*) ;; *) [ ! -f "$STATE/$ID.status" ] || STATUS_FILE=$STATE/$ID.status ;; esac
 
 KIND='' TITLE='' BODY='' SC='' PARENT=''
 case "$OP" in
@@ -159,7 +182,11 @@ field() {  # <name>; decodes a quoted value
   esac
 }
 
-if [ -z "$SC" ] && [ "$OP" != chore ]; then
+RELEASE=0
+case "$OP" in release-done | release-hook | pending) RELEASE=1 ;; esac
+case "$OP" in release-done | release-hook) release_parse_args "$ID" "$@" ;; esac
+[ "$OP" != release-hook ] || release_probe "$URL" || exit 0
+if [ -z "$SC" ] && [ "$RELEASE" = 0 ] && [ "$OP" != chore ]; then
   SHOW=$("$TASKS" show "$ID" --full 2>&1) || die "cannot read backlog item $ID: $(printf '%s' "$SHOW" | head -1)"
   KIND=$(field kind)
   TITLE=$(field title)
@@ -196,7 +223,7 @@ elif [ "$OP" = link ]; then
   SC=$TARGET
 elif [ "$OP" = chore ]; then
   require_home_settings
-elif [ -z "$SC" ]; then
+elif [ "$RELEASE" = 0 ] && [ -z "$SC" ]; then
   [ "$BEST_EFFORT" = 1 ] && exit 0
   die "backlog item $ID names no Shortcut ticket (sc-NNNN)"
 fi
@@ -207,16 +234,16 @@ TOKEN=${SHORTCUT_API_TOKEN:-}
 if [ -z "$TOKEN" ]; then
   TOKEN_REF=$(setting token_ref)
   [ -n "$TOKEN_REF" ] || die "SHORTCUT_API_TOKEN is not set and no token_ref is configured; add this line to $CONFIG/shortcut-tickets: token_ref=op://<vault>/<item>/<field>"
-  command -v op >/dev/null 2>&1 || die "SHORTCUT_API_TOKEN is not set and the 1Password CLI (op) is not installed to read $TOKEN_REF; run: bin/fm-shortcut-ticket.sh $ID"
+  command -v op >/dev/null 2>&1 || die_retry "SHORTCUT_API_TOKEN is not set and the 1Password CLI (op) is not installed to read $TOKEN_REF; run: bin/fm-shortcut-ticket.sh $ID"
   OP_TIMEOUT=$(setting op_timeout 10)
   case "$OP_TIMEOUT" in '' | 0* | *[!0-9]*) die "op_timeout must be a positive number of seconds (got '$OP_TIMEOUT')" ;; esac
   TOKEN=$(fm_run_timed "$OP_TIMEOUT" op read "$TOKEN_REF" 2>/dev/null) || TOKEN=''
-  [ -n "$TOKEN" ] || die "SHORTCUT_API_TOKEN is not set and 'op read $TOKEN_REF' failed or did not answer within ${OP_TIMEOUT}s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh $ID"
+  [ -n "$TOKEN" ] || die_retry "SHORTCUT_API_TOKEN is not set and 'op read $TOKEN_REF' failed or did not answer within ${OP_TIMEOUT}s (sign in to 1Password); then run: bin/fm-shortcut-ticket.sh $ID"
 fi
 
 API=$(setting api_base "${SHORTCUT_API_BASE:-https://api.app.shortcut.com}")
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/fm-shortcut.XXXXXX") || die "cannot create a temp directory"
-trap 'rm -rf "$WORK"' EXIT
+trap 'pending_clear_on_success $?; rm -rf "$WORK"' EXIT
 
 HTTP_CODE=
 http() {  # <method> <path> [curl args...]; response body lands in $WORK/resp
@@ -241,7 +268,7 @@ story_owners() {  # item ids the markers in the fetched story name, one per line
 require_own_story() {  # GETs $SC and refuses unless its markers name only this item
   local owners
   http GET "/api/v3/stories/$(sc_num)"
-  ok || die "$SC named by $ID is not a readable Shortcut story (HTTP $HTTP_CODE); create one with: bin/fm-shortcut-ticket.sh $ID"
+  ok || die_retry "$SC named by $ID is not a readable Shortcut story (HTTP $HTTP_CODE); create one with: bin/fm-shortcut-ticket.sh $ID"
   owners=$(story_owners)
   [ "$owners" = "$ID" ] && return 0
   [ -n "$owners" ] &&
@@ -264,19 +291,19 @@ put_state() {  # <state-key>
   [ -n "$state" ] || die "no state_$1 in the Shortcut settings"
   jq -n --argjson s "$state" '{workflow_state_id: $s}' >"$WORK/state.json"
   http_json PUT "/api/v3/stories/$(sc_num)" "$WORK/state.json"
-  ok || die "could not move $SC to $1 (HTTP $HTTP_CODE)"
+  ok || die_retry "could not move $SC to $1 (HTTP $HTTP_CODE)"
 }
 
 story_is_done() {
   http GET "/api/v3/stories/$(sc_num)"
-  ok || die "$SC is not a readable Shortcut story (HTTP $HTTP_CODE)"
+  ok || die_retry "$SC is not a readable Shortcut story (HTTP $HTTP_CODE)"
   [ "$(jq -r '.workflow_state_id // empty' "$WORK/resp")" = "$(setting state_done)" ]
 }
 
 post_comment() {  # <text>
   jq -n --arg t "$1" '{text: $t}' >"$WORK/comment.json"
   http_json POST "/api/v3/stories/$(sc_num)/comments" "$WORK/comment.json"
-  ok || die "could not comment on $SC (HTTP $HTTP_CODE)"
+  ok || die_retry "could not comment on $SC (HTTP $HTTP_CODE)"
 }
 
 upload() {  # <file>...
@@ -284,16 +311,16 @@ upload() {  # <file>...
   for f in "$@"; do
     [ -f "$f" ] || die "no such file to attach: $f"
     http POST /api/v3/files -F "file0=@$f" -F "story_id=$(sc_num)"
-    ok || die "could not upload $f to $SC (HTTP $HTTP_CODE)"
+    ok || die_retry "could not upload $f to $SC (HTTP $HTTP_CODE)"
   done
 }
 
 link_pr() {  # <url>
   http GET "/api/v3/stories/$(sc_num)"
-  ok || die "$SC is not a readable Shortcut story (HTTP $HTTP_CODE)"
+  ok || die_retry "$SC is not a readable Shortcut story (HTTP $HTTP_CODE)"
   jq --arg u "$1" '{external_links: ((.external_links // []) + [$u] | unique)}' "$WORK/resp" >"$WORK/links.json"
   http_json PUT "/api/v3/stories/$(sc_num)" "$WORK/links.json"
-  ok || die "could not link $1 to $SC (HTTP $HTTP_CODE)"
+  ok || die_retry "could not link $1 to $SC (HTTP $HTTP_CODE)"
 }
 
 if [ "$OP" = check ]; then
@@ -303,14 +330,14 @@ fi
 
 if [ "$OP" = link ]; then
   http GET "/api/v3/stories/$(sc_num)"
-  ok || die "$SC is not a readable Shortcut story (HTTP $HTTP_CODE)"
+  ok || die_retry "$SC is not a readable Shortcut story (HTTP $HTTP_CODE)"
   OWNERS=$(story_owners)
   URL=$(jq -r '.app_url // empty' "$WORK/resp")
   if [ -z "$OWNERS" ]; then
     jq --arg m "$MARKER" '{description: (if (.description // "") == "" then $m else .description + "\n\n" + $m end)}' \
       "$WORK/resp" >"$WORK/desc.json"
     http_json PUT "/api/v3/stories/$(sc_num)" "$WORK/desc.json"
-    ok || die "could not mark $SC as $ID's own story (HTTP $HTTP_CODE)"
+    ok || die_retry "could not mark $SC as $ID's own story (HTTP $HTTP_CODE)"
   elif [ "$OWNERS" != "$ID" ]; then
     die "$SC already belongs to another item ($(printf '%s' "$OWNERS" | tr '\n' ' ')); give $ID its own story with: bin/fm-shortcut-ticket.sh $ID"
   fi
@@ -319,7 +346,20 @@ if [ "$OP" = link ]; then
   exit 0
 fi
 
+pending_replay
 case "$OP" in
+  pending)
+    pending_report
+    exit 0
+    ;;
+  release-hook | release-done)
+    if [ "$OP" = release-hook ]; then
+      release_hook "$URL"
+    else
+      release_done "$URL" "${EVIDENCE:-confirmed by firstmate that production runs the merged release}"
+    fi
+    exit 0
+    ;;
   state)
     case "${1:-}" in progress | review) ;; *) die "state takes progress or review; Done only via: done <item> --evidence <text>" ;; esac
     story_is_done && exit 0
@@ -417,7 +457,7 @@ jq -n --arg name "$TITLE" --arg desc "$DESC" \
   die "cannot build the story request (check state_backlog in the settings)"
 
 http_json POST /api/v3/stories "$WORK/req.json"
-ok || die "Shortcut story creation failed for $ID (HTTP $HTTP_CODE)"
+ok || die_retry "Shortcut story creation failed for $ID (HTTP $HTTP_CODE)"
 NUM=$(jq -r '.id // empty' "$WORK/resp" 2>/dev/null)
 URL=$(jq -r '.app_url // empty' "$WORK/resp" 2>/dev/null)
 case "$NUM" in '' | *[!0-9]*) die "Shortcut returned no story id for $ID" ;; esac

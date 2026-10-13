@@ -6,9 +6,16 @@ enabled=on
 # Engineering team (API group_id); its workflow is Standard (500000005).
 team_id=649562cb-7f18-471f-835f-7ed28a5abf0a
 # Workflow states: stories start in Backlog, move to In Progress at dispatch
-# and In Review at code complete. Done is set only by `fm-shortcut-ticket.sh done`.
+# and In Review at code complete. Done is set by `fm-shortcut-ticket.sh release-done`
+# (run by the merge path for a release PR once production runs it) or `done`.
 state_backlog=500000006
 state_progress=500000008
 state_review=500000009
 state_done=500000010
 story_type=feature
+# A merge to release_base is a release. Repos listed in vercel_repos finish it
+# once a READY Vercel production deployment covers the merge commit; the others
+# deploy from the captain's terminal, so the merge path prints the release-done
+# command to run once firstmate has confirmed the deploy.
+release_base=main
+vercel_repos=apply_pass_frontend

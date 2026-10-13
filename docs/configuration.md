@@ -374,17 +374,26 @@ The credential is `SHORTCUT_API_TOKEN` in the environment, else `op read <token_
 | PR registered (`fm-pr-check.sh`) | Moved to In Review, PR linked. |
 | Scout teardown | Moved to In Review, `report.md` uploaded. |
 | Ship teardown | Moved to In Review if the PR has not already done so (a local-only or no-PR landing). |
+| Release merge (`fm-pr-merge.sh` into `release_base`, default main) | `release-hook` finishes the release (below), or prints the `release-done` command to run. |
 | Teardown | Final outcome line commented; a forced teardown sends the story back to Backlog with the reason instead. |
 | `fm-tasks-axi.sh rm` or `hold --kind parked` | Sent back to Backlog with the reason (cancelled or parked). |
 | `fm-captain-hold.sh answer` | Recorded through `fm-decide.sh` (see Decision record sync). |
 | `fm-shortcut-ticket.sh done <item> --evidence <text>` | Moved to Done. |
+
+A release is a merge into `release_base`.
+[`bin/fm-shortcut-release-lib.sh`](../bin/fm-shortcut-release-lib.sh) owns what follows.
+`fm-shortcut-ticket.sh release-done <release-pr-url>` moves every story linked to a PR the release carries to Done with a comment naming the PR, the release PR, and the deploy evidence, and closes the backlog item that owns the story.
+It touches only stories assigned to `owner_id`, or unassigned stories carrying a firstmate marker, and leaves a story with another open PR, or with no marker, In Review with a comment.
+For a repo in `vercel_repos` the merge path runs it once a READY Vercel production deployment covers the merge commit (read as a GitHub `Production` deployment), and keeps a pending record until then.
+For the other repos, which deploy from the captain's terminal, the merge path prints the command and firstmate runs it after confirming the prod deploy.
+A call that fails on the token or the Shortcut API leaves a pending record in `state/shortcut-pending/` and one keyed `blocked` line in the task's status file; the next run of any `fm-shortcut-ticket.sh` operation, or `fm-shortcut-ticket.sh pending`, replays it and appends the matching `resolved` line.
 
 The item's own story is the one a body line `Shortcut: sc-NNNN` names, and only while its description carries the line `firstmate-item: <home-name>/<item-id>` (home-name is the basename of the home that created it) for this item id and no other.
 A body line naming an umbrella or another item's story therefore fails the check, and the refusal gives both paths: a story created for the item before ownership markers is marked with `fm-shortcut-ticket.sh link <item> sc-NNNN`, and for a shared or umbrella story the line is removed and the item's own story created with `fm-shortcut-ticket.sh <item>`.
 An `sc-NNNN` in the title is a parent (umbrella) reference: the item gets its own story, linked to the parent with a "relates to" story link, and state moves never touch the parent.
 Any other `sc-NNNN` in the body, such as "Follow-up to sc-6092", is only a reference: the sync never moves it, comments on it, or uploads to it, and the item gets its own story.
 
-Done is never automatic: merge and teardown leave the story In Review until firstmate runs `done` on the captain's word or verified production evidence.
+Merge and teardown leave the story In Review; it moves to Done only through `release-done` (above) or `done` on the captain's word.
 Every sync call except the dispatch refusal is best-effort: it warns and never blocks the lifecycle step, and a failed `add` prints the exact retry command.
 A second mate gives any investigation it runs itself its own story the same way (its charter says so), and its result does not publish without it.
 Use `comment` and `attach` for decisions, learnings, and artifacts recorded elsewhere.
