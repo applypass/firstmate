@@ -575,6 +575,36 @@ test_merge_failure_propagates_after_recording() {
   pass "fm-pr-merge propagates a real merge failure without silently succeeding"
 }
 
+# Fork-only: a merge into the release base ends with the Shortcut release hook,
+# which for a repo that deploys from the captain's terminal names the next step.
+test_release_merge_prints_the_shortcut_release_step() {
+  local case_dir rc
+  case_dir=$(make_case release-hook-next-step)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" 1212121212121212121212121212121212121212
+  mv "$case_dir/fakebin/gh" "$case_dir/fakebin/gh.real"
+  cat > "$case_dir/fakebin/gh" <<'SH'
+#!/usr/bin/env bash
+case "$*" in
+  *baseRefName,state,mergeCommit*) printf 'main\tMERGED\t1212121212121212121212121212121212121212\n' ;;
+  *) exec "$(dirname "$0")/gh.real" "$@" ;;
+esac
+SH
+  chmod +x "$case_dir/fakebin/gh"
+  : > "$case_dir/gh-axi.log"
+
+  set +e
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/9 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "release-hook-next-step: the merge should succeed"
+  assert_grep 'bin/fm-shortcut-ticket.sh release-done https://github.com/example/repo/pull/9' \
+    "$case_dir/stdout" "release-hook-next-step: the merge did not print the release-done step"
+  pass "fm-pr-merge prints the Shortcut release-done step after a merge into the release base"
+}
+
 test_github_merged_outcome_is_verified() {
   local case_dir rc
   case_dir=$(make_case github-verified-merged)
@@ -2388,6 +2418,7 @@ test_github_failed_merge_names_an_observed_landed_state
 test_github_without_gh_still_uses_gh_axi_merge
 test_github_without_gh_failed_read_keeps_bookkeeping
 test_github_merged_outcome_is_verified
+test_release_merge_prints_the_shortcut_release_step
 test_github_verified_merge_requires_poll_recording
 test_github_queued_outcome_is_verified
 test_github_queue_required_refusal_names_retry_flags
