@@ -373,7 +373,7 @@ The credential is `SHORTCUT_API_TOKEN` in the environment, else `op read <token_
 | `fm-shortcut-ticket.sh link <item> sc-NNNN` | An existing story becomes the item's own: refused when it is the parent (umbrella) story in the item's title or carries another item's marker, else this item's marker is added and the body line recorded. |
 | Dispatch (`fm-spawn.sh`) | Refused unless the item's body names its own story and a GET shows that story's marker for this item (including a missing setting, token, or failed `op read`); otherwise moved to In Progress. |
 | Second mate `done` or `ready` (`fm-secondmate-report.sh`, including `--doc`) | With `--item <id>`, refused unless `fm-shortcut-ticket.sh --check <id>` passes. A `--doc` report without `--item` is refused. A plain report without `--item` answers its corr_id as a pure acknowledgement and closes the pending reply with no story check. |
-| PR registered (`fm-pr-check.sh`) | Moved to In Review, PR linked. |
+| PR registered (`fm-pr-check.sh`) | Moved to In Review, PR linked; an item with no story line gets a warning that its PR is not linked. |
 | Scout teardown | Moved to In Review, `report.md` uploaded. |
 | Ship teardown | Moved to In Review if the PR has not already done so (a local-only or no-PR landing). |
 | Release merge (`fm-pr-merge.sh` into `release_base`, default main) | `release-hook` finishes the release (below), or prints the `release-done` command to run. |
@@ -385,7 +385,9 @@ The credential is `SHORTCUT_API_TOKEN` in the environment, else `op read <token_
 A release is a merge into `release_base`.
 [`bin/fm-shortcut-release-lib.sh`](../bin/fm-shortcut-release-lib.sh) owns what follows.
 `fm-shortcut-ticket.sh release-done <release-pr-url>` moves every story linked to a PR the release carries to Done with a comment naming the PR, the release PR, and the deploy evidence, and closes the backlog item that owns the story.
+It also finds a story named as a whole `sc-NNNN` token in a carried PR's title, body, or branch name, but moves such a story only when it is already In Review.
 It touches only stories assigned to `owner_id`, or unassigned stories carrying a firstmate marker, and leaves a story with another open PR, or with no marker, In Review with a comment.
+Any story it finds but may not move (someone else's, or named only in PR text and not In Review) stays untouched and appears under "move by hand" in the output with its id, URL, and state; a story with no marker also appears there.
 For a repo in `vercel_repos` the merge path runs it once a READY Vercel production deployment covers the merge commit (read as a GitHub `Production` deployment). Until then it keeps a pending record and appends one keyed `blocked` line that names the `release-done` command to run once production is READY.
 For the other repos, which deploy from the captain's terminal, the merge path prints the command and firstmate runs it after confirming the prod deploy.
 A call that fails on the token or the Shortcut API leaves a pending record in `state/shortcut-pending/` and one keyed `blocked` line in the task's status file; the next run of any `fm-shortcut-ticket.sh` operation, or `fm-shortcut-ticket.sh pending`, replays it and appends the matching `resolved` line.
