@@ -1,0 +1,9 @@
+$ fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_backend/pull/707 --evidence 'prod deploy 38a93bf'
+fm-shortcut-ticket: release https://github.com/applypass/apply_pass_backend/pull/707: Done: none; left In Review: none
+exit=0
+sc-6838 state after: 500000009
+sc-6861 state after: 500000009
+sc-5521 state after: 500000009
+backlog st-6838: in_flight  st-6861: in_flight
+Shortcut writes:
+(none)

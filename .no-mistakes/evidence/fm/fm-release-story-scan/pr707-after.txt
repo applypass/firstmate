@@ -1,0 +1,15 @@
+$ fm-shortcut-ticket.sh release-done https://github.com/applypass/apply_pass_backend/pull/707 --evidence 'prod deploy 38a93bf'
+fm-shortcut-ticket: warning: sc-5158 is named in a carried PR but is not a Shortcut story; skipped
+fm-shortcut-ticket: warning: sc-6620 is named in a carried PR but is not a Shortcut story; skipped
+fm-shortcut-ticket: release https://github.com/applypass/apply_pass_backend/pull/707: Done: sc-6838 sc-6861; left In Review: none; move by hand: sc-5521
+fm-shortcut-ticket: move by hand: sc-5521 https://app.shortcut.com/applypass/story/5521 state review (500000009) (owned by someone else, or unassigned without a firstmate marker)
+exit=0
+sc-6838 state after: 500000010
+sc-6861 state after: 500000010
+sc-5521 state after: 500000009
+backlog st-6838: done  st-6861: done
+Shortcut writes:
+PUT https://api.app.shortcut.com/api/v3/stories/6838
+POST https://api.app.shortcut.com/api/v3/stories/6838/comments
+PUT https://api.app.shortcut.com/api/v3/stories/6861
+POST https://api.app.shortcut.com/api/v3/stories/6861/comments

@@ -1,0 +1,6 @@
+$ fm-shortcut-ticket.sh review rn-1 --pr https://github.com/o/r/pull/9
+fm-shortcut-ticket: backlog item rn-1 names no Shortcut ticket (sc-NNNN)
+exit=1
+$ fm-shortcut-ticket.sh review rn-1 --best-effort   (teardown style, no --pr)
+exit=0 (no output expected)
+Shortcut calls: 0
