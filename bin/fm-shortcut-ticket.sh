@@ -230,6 +230,8 @@ elif [ "$OP" = link ]; then
 elif [ "$OP" = chore ]; then
   require_home_settings
 elif [ "$RELEASE" = 0 ] && [ -z "$SC" ]; then
+  # A review with no story line cannot link its PR, so release-done will not find it by link.
+  [ "$OP" != review ] || { printf 'fm-shortcut-ticket: warning: backlog item %s has no Shortcut story line (Shortcut: sc-NNNN); its PR is not linked to a story\n' "$ID" >&2; exit 0; }
   [ "$BEST_EFFORT" = 1 ] && exit 0
   die "backlog item $ID names no Shortcut ticket (sc-NNNN)"
 fi

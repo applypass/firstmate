@@ -49,6 +49,7 @@ case "$method $url" in
     awk -F'\t' -v l="$link" '$1 == l {print $2}' "$D/extlinks.tsv" | jq -Rn '[inputs | tonumber | {id: .}]' > "$out"
     printf 200 ;;
   "GET "*/api/v3/stories/*)
+    [ -f "$D/stories/$id.json" ] || { printf '{}' > "$out"; printf 404; exit 0; }
     if [ -f "$D/comments/$id" ]; then
       jq --rawfile c "$D/comments/$id" '.comments = [$c | split("\n")[] | select(. != "") | {text: .}]' "$D/stories/$id.json" > "$out"
     else
@@ -77,6 +78,7 @@ fake_gh() {  # <fakebin>
 G=$FAKE_GH_DIR
 echo "gh $*" >> "$G/gh.log"
 case "$*" in
+  "pr view "*headRefName*) cat "$G/pr/${3##*/}.json" ;;
   "pr view "*baseRefName*) cat "$G/pr/${3##*/}.tsv" ;;
   "pr view "*"--json state"*) cat "$G/pr/${3##*/}.state" ;;
   "api repos/"*/commits*) n=${2#*/pulls/}; n=${n%%/*}; cat "$G/commits/$n" 2>/dev/null ;;
@@ -210,6 +212,74 @@ test_release_done_finishes_only_complete_stories() {
   assert_equals "done" "$(item_state "$dir" st-101)" "the firstmate backlog item did not close with its story"
   assert_not_contains "$out" "$TOKEN" "the token was printed"
   pass "release-done moves finished stories to Done with evidence, closes their backlog item, and leaves open-work stories in review, and never touches another person's story"
+}
+
+pr_text() {  # <case> <number> <title> <body> <branch>: the PR's title, body and branch as the forge reports them
+  jq -n --arg t "$3" --arg b "$4" --arg h "$5" '{title: $t, body: $b, headRefName: $h}' > "$1/gh/pr/$2.json"
+}
+
+test_release_done_finds_stories_named_in_pr_text() {
+  local dir out
+  dir=$(make_case release-text)
+  pr_info "$dir" 200 main MERGED abc1234abc1234abc1234abc1234abc1234abc12 \
+    "Title (#201)" "Branch (#202)" "Body (#203)" "Noise (#204)" "Theirs (#205)" "Bare (#206)" "Both (#207)"
+  tasks_add "$dir" st-301 "Title"
+  tasks_add "$dir" st-302 "Branch"
+  tasks_add "$dir" st-303 "Body"
+  tasks_add "$dir" st-307 "Both"
+  tasks_add "$dir" st-304 "Noise"
+  story "$dir" 31 "$REVIEW_STATE" "T
+${OWNED}st-301"
+  story "$dir" 32 "$REVIEW_STATE" "B
+${OWNED}st-302"
+  story "$dir" 33 "$REVIEW_STATE" "Bo
+${OWNED}st-303"
+  story "$dir" 34 "$REVIEW_STATE" "N
+${OWNED}st-304"
+  story "$dir" 35 "$REVIEW_STATE" "N
+${OWNED}st-304"
+  story "$dir" 36 "$REVIEW_STATE" "N
+${OWNED}st-304"
+  story "$dir" 37 "$REVIEW_STATE" "Both
+${OWNED}st-307" https://github.com/applypass/apply_pass_frontend/pull/207
+  STORY_OWNERS='["99999999-8888-4777-8666-555555555555"]' story "$dir" 38 "$REVIEW_STATE" "Theirs
+${OWNED}st-305"
+  STORY_OWNERS='[]' story "$dir" 39 "$REVIEW_STATE" "Unmarked"
+  pr_text "$dir" 201 "sc-31 add the thing" "" "feature/x"
+  pr_text "$dir" 202 "Branch only" "" "fm/sc-32-branch-work"
+  pr_text "$dir" 203 "Body only" "Fixes SC-33." "x"
+  pr_text "$dir" 204 "misc-34 sc-3x abc-sc-36 sc-999" "see https://example.com/sc-35 and sc-1234567x" "fix/sc34"
+  pr_text "$dir" 205 "sc-38 theirs" "" "x"
+  pr_text "$dir" 206 "" "Part of sc-39, and sc-39 again" "sc-39/foo"
+  pr_text "$dir" 207 "sc-37 also linked" "" "x"
+  out=$(ticket "$dir" release-done "$RELEASE" --evidence "prod runs abc1234") || fail "release-done failed: $out"
+  assert_equals "$DONE_STATE" "$(state_of "$dir" 31)" "a story named in a PR title was not found"
+  assert_equals "$DONE_STATE" "$(state_of "$dir" 32)" "a story named in a PR branch was not found"
+  assert_equals "$DONE_STATE" "$(state_of "$dir" 33)" "a story named in a PR body (upper case) was not found"
+  assert_equals "$DONE_STATE" "$(state_of "$dir" 37)" "a story both linked and named was not finished"
+  assert_equals 1 "$(grep -c '^Done:' "$dir/sc/comments/37")" "a story found by link and by text was handled twice"
+  for n in 34 35 36; do
+    assert_equals "$REVIEW_STATE" "$(state_of "$dir" "$n")" "sc-$n matched inside a longer word, URL, or token"
+  done
+  assert_equals "$REVIEW_STATE" "$(state_of "$dir" 38)" "another person's story was moved"
+  assert_equals "$REVIEW_STATE" "$(state_of "$dir" 39)" "an unmarked story was moved"
+  assert_contains "$out" "move by hand: sc-38 https://app.shortcut.com/applypass/story/38" "the foreign story was not listed to move by hand"
+  assert_contains "$out" "sc-39 https://app.shortcut.com/applypass/story/39" "the unmarked story was not listed to move by hand"
+  assert_equals 1 "$(printf '%s\n' "$out" | grep -o 'sc-39 https' | wc -l | tr -d ' ')" "a story named twice was listed twice"
+  pass "release-done finds stories named in a carried PR's title, body, or branch, lists unowned ones to move by hand, and matches whole tokens only"
+}
+
+test_release_done_lists_an_unmarked_story_to_move_by_hand() {
+  local dir out
+  dir=$(make_case release-by-hand)
+  seed_release "$dir"
+  out=$(ticket "$dir" release-done "$RELEASE") || fail "release-done failed: $out"
+  assert_contains "$out" "move by hand:" "stories release-done skipped were dropped silently"
+  assert_contains "$out" "sc-15 https://app.shortcut.com/applypass/story/15" "another person's story was not listed"
+  assert_contains "$out" "sc-17 https://app.shortcut.com/applypass/story/17" "an unmarked unassigned story was not listed"
+  assert_contains "$out" "sc-13 https://app.shortcut.com/applypass/story/13" "an umbrella story was not listed"
+  assert_not_contains "$out" "sc-11 https" "a finished story was listed to move by hand"
+  pass "release-done lists every story it will not move under 'move by hand'"
 }
 
 test_release_done_is_idempotent() {
@@ -407,6 +477,8 @@ test_feature_off_makes_no_release_calls() {
 }
 
 test_release_done_finishes_only_complete_stories
+test_release_done_finds_stories_named_in_pr_text
+test_release_done_lists_an_unmarked_story_to_move_by_hand
 test_release_done_is_idempotent
 test_failure_is_loud_and_retried
 test_best_effort_hook_failure_is_loud_and_replayed_by_any_run

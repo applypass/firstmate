@@ -432,6 +432,18 @@ test_review_links_pr_and_uploads_report() {
   pass "review moves to In Review, links the PR, and uploads the report"
 }
 
+test_review_warns_when_the_item_has_no_story() {
+  local dir out
+  dir=$(make_case review-nostory)
+  FAKE_CURL_FAIL=1 run_tasks "$dir" add rn-1 "No story here" --kind ship >/dev/null 2>&1
+  : > "$dir/curl.log"
+  out=$(ticket "$dir" review rn-1 --pr https://github.com/o/r/pull/9) || fail "review failed on an item with no story: $out"
+  assert_contains "$out" "no Shortcut story" "review --pr did not warn about the missing story"
+  assert_contains "$out" "rn-1" "the warning did not name the item"
+  [ ! -s "$dir/curl.log" ] || fail "review called Shortcut for an item with no story"
+  pass "review --pr warns, without failing, when the item has no story line"
+}
+
 test_md_upload_adds_a_rendered_html_copy() {
   local dir out
   dir=$(make_ticketed mdhtml)
@@ -641,6 +653,7 @@ test_feature_off_makes_no_calls
 test_handoff_carries_the_sc_id
 test_state_moves_the_story
 test_review_links_pr_and_uploads_report
+test_review_warns_when_the_item_has_no_story
 test_comment_attach_outcome
 test_md_upload_adds_a_rendered_html_copy
 test_md_render_failure_still_uploads_the_md
