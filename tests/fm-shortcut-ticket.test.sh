@@ -444,6 +444,17 @@ test_review_warns_when_the_item_has_no_story() {
   pass "review --pr warns, without failing, when the item has no story line"
 }
 
+test_review_without_pr_is_silent_when_the_item_has_no_story() {
+  local dir out
+  dir=$(make_case review-nostory-nopr)
+  FAKE_CURL_FAIL=1 run_tasks "$dir" add rq-1 "No story here" --kind ship >/dev/null 2>&1
+  : > "$dir/curl.log"
+  out=$(ticket "$dir" review rq-1 --best-effort) || fail "review failed on an item with no story: $out"
+  assert_equals "" "$out" "review without --pr printed output for an item with no story"
+  [ ! -s "$dir/curl.log" ] || fail "review called Shortcut for an item with no story"
+  pass "review without --pr stays silent when the item has no story line"
+}
+
 test_md_upload_adds_a_rendered_html_copy() {
   local dir out
   dir=$(make_ticketed mdhtml)
@@ -654,6 +665,7 @@ test_handoff_carries_the_sc_id
 test_state_moves_the_story
 test_review_links_pr_and_uploads_report
 test_review_warns_when_the_item_has_no_story
+test_review_without_pr_is_silent_when_the_item_has_no_story
 test_comment_attach_outcome
 test_md_upload_adds_a_rendered_html_copy
 test_md_render_failure_still_uploads_the_md

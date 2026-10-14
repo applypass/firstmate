@@ -69,7 +69,7 @@ SH
 }
 
 # The fake forge reads fixtures from $FAKE_GH_DIR: pr/<n>.tsv (base, state, merge
-# sha), pr/<n>.state, commits/<n> (one subject per line), deployments (id sha),
+# sha), pr/<n>.json (title, body, branch; pr/<n>.fail makes it fail), pr/<n>.state, commits/<n> (one subject per line), deployments (id sha),
 # dstatus/<id>, durl/<id>, compare (status word).
 fake_gh() {  # <fakebin>
   mkdir -p "$1"
@@ -78,7 +78,7 @@ fake_gh() {  # <fakebin>
 G=$FAKE_GH_DIR
 echo "gh $*" >> "$G/gh.log"
 case "$*" in
-  "pr view "*headRefName*) cat "$G/pr/${3##*/}.json" ;;
+  "pr view "*headRefName*) [ ! -e "$G/pr/${3##*/}.fail" ] || exit 1; cat "$G/pr/${3##*/}.json" 2>/dev/null || printf '{}\n' ;;
   "pr view "*baseRefName*) cat "$G/pr/${3##*/}.tsv" ;;
   "pr view "*"--json state"*) cat "$G/pr/${3##*/}.state" ;;
   "api repos/"*/commits*) n=${2#*/pulls/}; n=${n%%/*}; cat "$G/commits/$n" 2>/dev/null ;;
@@ -267,6 +267,43 @@ ${OWNED}st-305"
   assert_contains "$out" "sc-39 https://app.shortcut.com/applypass/story/39" "the unmarked story was not listed to move by hand"
   assert_equals 1 "$(printf '%s\n' "$out" | grep -o 'sc-39 https' | wc -l | tr -d ' ')" "a story named twice was listed twice"
   pass "release-done finds stories named in a carried PR's title, body, or branch, lists unowned ones to move by hand, and matches whole tokens only"
+}
+
+test_release_done_leaves_a_text_only_story_not_in_review() {
+  local dir out
+  dir=$(make_case release-text-progress)
+  pr_info "$dir" 200 main MERGED abc1234abc1234abc1234abc1234abc1234abc12 "Follow-up (#201)"
+  tasks_add "$dir" st-100 "Earlier work"
+  story "$dir" 100 500000008 "Earlier
+${OWNED}st-100"
+  pr_text "$dir" 201 "Tidy the widget" "Follow-up to sc-100" "x"
+  out=$(ticket "$dir" release-done "$RELEASE" --evidence "prod runs abc1234") || fail "release-done failed: $out"
+  assert_equals 500000008 "$(state_of "$dir" 100)" "a story only named in a PR's text moved although it was not In Review"
+  [ ! -e "$dir/sc/comments/100" ] || fail "a story only named in a PR's text was commented on"
+  assert_no_grep "PUT https://api.app.shortcut.com/api/v3/stories/100" "$dir/sc/curl.log" "a story only named in a PR's text was written"
+  assert_equals "in_flight" "$(item_state "$dir" st-100)" "the backlog item of a story only named in a PR's text closed"
+  assert_contains "$out" "move by hand: sc-100 https://app.shortcut.com/applypass/story/100 state progress (500000008)" \
+    "the story was not listed to move by hand with its state"
+  pass "release-done leaves a story only a PR's text names, and that is not In Review, for a person to move"
+}
+
+test_release_done_retries_when_a_pr_text_cannot_be_read() {
+  local dir out
+  dir=$(make_case release-text-gh-fail)
+  pr_info "$dir" 200 main MERGED abc1234abc1234abc1234abc1234abc1234abc12 "Title (#201)"
+  tasks_add "$dir" st-301 "Title"
+  story "$dir" 31 "$REVIEW_STATE" "T
+${OWNED}st-301"
+  pr_text "$dir" 201 "sc-31 add the thing" "" "x"
+  touch "$dir/gh/pr/201.fail"
+  out=$(ticket "$dir" release-done "$RELEASE") && fail "release-done succeeded although a PR's text could not be read: $out"
+  assert_contains "$out" "queued for retry" "the failure did not say it was queued"
+  ls "$dir"/home/state/shortcut-pending/sc-*.args >/dev/null 2>&1 || fail "no pending record was left"
+  rm "$dir/gh/pr/201.fail"
+  out=$(ticket "$dir" pending) || fail "pending failed: $out"
+  assert_equals "$DONE_STATE" "$(state_of "$dir" 31)" "the retry did not finish the story the PR's text names"
+  assert_contains "$out" "0 pending record(s) remain" "the record survived a successful retry"
+  pass "a PR whose text cannot be read leaves a pending record, and the next run finishes the story"
 }
 
 test_release_done_lists_an_unmarked_story_to_move_by_hand() {
@@ -478,6 +515,8 @@ test_feature_off_makes_no_release_calls() {
 
 test_release_done_finishes_only_complete_stories
 test_release_done_finds_stories_named_in_pr_text
+test_release_done_leaves_a_text_only_story_not_in_review
+test_release_done_retries_when_a_pr_text_cannot_be_read
 test_release_done_lists_an_unmarked_story_to_move_by_hand
 test_release_done_is_idempotent
 test_failure_is_loud_and_retried

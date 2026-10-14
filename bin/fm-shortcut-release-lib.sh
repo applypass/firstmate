@@ -10,7 +10,8 @@
 # owner_id stories, or unassigned stories carrying a firstmate marker, are ever
 # touched; any other story is left untouched and listed under "move by hand"
 # (with its sc id and URL) in the output. A story is found by a PR external
-# link or by a whole-token sc-N in a carried PR's title, body, or branch. A story with open
+# link or by a whole-token sc-N in a carried PR's title, body, or branch; one
+# found only by that text moves only when it is already In Review. A story with open
 # work (another open PR, or no firstmate ownership marker because it is an
 # umbrella or shared story) stays where it is and gets a comment instead.
 #   release-hook <pr-url>  run by bin/fm-pr-merge.sh after a verified merge: for
@@ -138,11 +139,19 @@ story_urls() {  # the story's linked PR urls from $WORK/resp
 
 pr_text_story_ids() {  # <pr-url>: story numbers its title, body, and branch name carry as whole sc-N tokens
   local json
-  json=$(gh pr view "$1" --json title,body,headRefName 2>/dev/null) || return 0
+  json=$(gh pr view "$1" --json title,body,headRefName 2>/dev/null) || die_retry "could not read the title, body, and branch of $1"
   {
     jq -r '.title // "", .body // ""' <<<"$json" | sed -E 's#https?://[^[:space:])>]*##g'
     jq -r '.headRefName // ""' <<<"$json"
   } | tr -c 'A-Za-z0-9_\n-' ' ' | tr ' ' '\n' | sed -nE 's/^[sS][cC]-([0-9]+)(-.*)?$/\1/p'
+}
+
+state_label() {  # <workflow-state-id>: its name when it is one of the configured states
+  local k
+  for k in backlog progress review done; do
+    [ "$1" != "$(setting "state_$k")" ] || { printf '%s (%s)' "$k" "$1"; return; }
+  done
+  printf '%s' "${1:-unknown}"
 }
 
 story_is_ours() {  # <marker-owners>; the story in $WORK/resp is the home owner's, or unassigned and firstmate's
@@ -153,7 +162,7 @@ story_is_ours() {  # <marker-owners>; the story in $WORK/resp is the home owner'
 }
 
 release_done() {  # <release-pr-url> <evidence>
-  local release=$1 evidence=$2 carried pr ids id owner prs p state held note done_list='' held_list='' hand_list='' hand_lines='' url
+  local release=$1 evidence=$2 carried pr ids id owner prs p state held note done_list='' held_list='' hand_list='' hand_lines='' url sstate why skip
   carried=$(carried_prs "$release") || true
   : >"$WORK/ids"
   : >"$WORK/linked"
@@ -176,18 +185,25 @@ release_done() {  # <release-pr-url> <evidence>
       fi
       die_retry "$SC is not a readable Shortcut story (HTTP $HTTP_CODE)"
     fi
-    [ "$(jq -r '.workflow_state_id // empty' "$WORK/resp")" != "$(setting state_done)" ] || continue
+    sstate=$(jq -r '.workflow_state_id // empty' "$WORK/resp")
+    [ "$sstate" != "$(setting state_done)" ] || continue
     owner=$(story_owners)
     url=$(jq -r '.app_url // empty' "$WORK/resp")
+    why='' skip=1
     if ! story_is_ours "$owner"; then
-      hand_list="$hand_list $SC"
-      hand_lines="$hand_lines$(printf 'fm-shortcut-ticket: move by hand: %s %s (owned by someone else, or unassigned without a firstmate marker)\n' "$SC" "$url")"$'\n'
-      continue
+      why='owned by someone else, or unassigned without a firstmate marker'
+    elif ! grep -Fxq "$id" "$WORK/linked" && [ "$sstate" != "$(setting state_review)" ]; then
+      why='named only in a carried PR'"'"'s text and not In Review'
+    elif [ -z "$owner" ]; then
+      why='no firstmate ownership marker: umbrella or shared story' skip=''
+    else
+      skip=''
     fi
-    if [ -z "$owner" ]; then
+    if [ -n "$why" ]; then
       hand_list="$hand_list $SC"
-      hand_lines="$hand_lines$(printf 'fm-shortcut-ticket: move by hand: %s %s (no firstmate ownership marker: umbrella or shared story)\n' "$SC" "$url")"$'\n'
+      hand_lines="$hand_lines$(printf 'fm-shortcut-ticket: move by hand: %s %s state %s (%s)\n' "$SC" "$url" "$(state_label "$sstate")" "$why")"$'\n'
     fi
+    [ -z "$skip" ] || continue
     prs=$(story_urls)
     held=''
     [ -n "$owner" ] || held="it carries no firstmate ownership marker (umbrella or shared story)"
