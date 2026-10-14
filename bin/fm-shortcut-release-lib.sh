@@ -148,7 +148,7 @@ pr_text_story_ids() {  # <pr-url>: story numbers its title, body, and branch nam
 
 state_label() {  # <workflow-state-id>: its name when it is one of the configured states
   local k
-  for k in backlog progress review done; do
+  for k in backlog progress review "done"; do
     [ "$1" != "$(setting "state_$k")" ] || { printf '%s (%s)' "$k" "$1"; return; }
   done
   printf '%s' "${1:-unknown}"
