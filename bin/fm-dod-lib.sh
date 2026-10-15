@@ -340,7 +340,8 @@ EOF
 
 # Fork-only: PR description rule (applypass). Every PR-opening ship brief carries it.
 # The no-mistakes PR step drafts the body from the repo's pr.template, which a brief cannot
-# change, so the rule also has the worker read the finished body back and add what is missing.
+# change, so the rule also has the worker read the finished body back (`gh-axi pr view --full`,
+# since the plain view truncates long bodies) and rewrite it whole with what is missing.
 fm_dod_pr_description_block() {  # <direct-PR|no-mistakes>
   cat <<'EOF'
 ## PR description
@@ -350,8 +351,8 @@ EOF
   if [ "$1" = no-mistakes ]; then
     cat <<'EOF'
 The pipeline writes the first PR body from the project's own template, which may lack these parts.
-After /no-mistakes reports CI green, read the body back with `gh-axi pr view <number>`.
-If the worked example or the before/after block is missing, add them with `gh-axi pr edit`, keeping every existing section, including the Pipeline section the pipeline appended.
+After /no-mistakes reports CI green, read the body back with `gh-axi pr view <number> --full`; the plain view truncates long bodies and would hide these sections at the end.
+If the worked example or the before/after block is missing, write the complete body (every existing section, including the Pipeline section the pipeline appended, plus the additions) to a file and apply it with `gh-axi pr edit <number> --body-file <file>`, which replaces the whole body.
 A PR body edit is not a commit, so it does not break the pushed-head check.
 EOF
   fi
