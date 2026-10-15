@@ -12,6 +12,28 @@ SCRIPT="$ROOT/bin/fm-team-skills.sh"
 SKILLS=$(cd -P "$ROOT/team-skills" && pwd -P)
 TMP_ROOT=$(fm_test_tmproot fm-team-skills)
 
+# Agent guard: fake codex and claude first on PATH. A real agent started under a
+# throwaway HOME still reads the user's MCP config and can open sign-in pages in
+# a real browser, so any launch that does not turn user MCP servers off is a
+# failure, and every launch is logged for the final assertion.
+AGENT_SHIMS="$TMP_ROOT/agent-shims"
+AGENT_LOG="$TMP_ROOT/agent-launches.log"
+mkdir -p "$AGENT_SHIMS"
+: > "$AGENT_LOG"
+for agent in codex claude; do
+  cat > "$AGENT_SHIMS/$agent" <<SH
+#!/usr/bin/env bash
+printf '%s %s\n' "$agent" "\$*" >> "$AGENT_LOG"
+case "$agent:\$*" in
+  codex:*"mcp_servers={}"*|claude:*"--strict-mcp-config"*) exit 0 ;;
+esac
+echo "$agent launched without disabling user MCP servers" >&2
+exit 97
+SH
+  chmod +x "$AGENT_SHIMS/$agent"
+done
+export PATH="$AGENT_SHIMS:$PATH"
+
 new_home() {
   local h="$TMP_ROOT/$1"
   mkdir -p "$h"
@@ -112,6 +134,24 @@ test_failed_link_or_removal_exits_1() {
   pass "a link the script could not create or remove exits 1"
 }
 
+test_installed_links_resolve_to_loadable_skills() {
+  # Inspect the links instead of launching an agent: each installed skill must
+  # resolve to a SKILL.md whose frontmatter name matches its folder.
+  local h name f; h=$(new_home loadable)
+  run "$h" install
+  for f in "$h"/.claude/skills/* "$h"/.agents/skills/*; do
+    name=$(basename "$f")
+    assert_present "$f/SKILL.md" "$name does not resolve to a SKILL.md"
+    assert_equals "name: $name" "$(sed -n '2,6p' "$f/SKILL.md" | grep -m1 '^name:')" "$name frontmatter name differs from its folder"
+  done
+  pass "installed links resolve to skills whose name matches the folder"
+}
+
+test_no_agent_was_launched() {
+  assert_equals 0 "$(wc -l < "$AGENT_LOG" | tr -d ' ')" "a test launched a real agent: $(cat "$AGENT_LOG")"
+  pass "no test launches codex or claude"
+}
+
 test_bad_usage_exits_2() {
   local h; h=$(new_home usage)
   run "$h"; assert_equals 2 "$RC" "no command must exit 2"
@@ -141,4 +181,5 @@ else
   test_failed_link_or_removal_exits_1
   test_bad_usage_exits_2
   test_every_skill_carries_license_or_credit
+  test_no_agent_was_launched
 fi
