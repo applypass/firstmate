@@ -1,0 +1,5 @@
+Upstream: https://github.com/mattpocock/skills (MIT)
+Path: skills/engineering/grill-with-docs
+Commit: aaf2453fbdfe7a15c07f11d861224f34ab4b53cb
+Copied: 2026-10-15, verbatim except one change: the three example links in CONTEXT-FORMAT.md are plain code text, because the repo link check treats them as real links
+Updating: deliberate PR that re-copies from a newer upstream commit and updates this note.

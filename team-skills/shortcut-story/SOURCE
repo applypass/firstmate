@@ -1,0 +1,3 @@
+Credit: ApplyPass internal skill; no third-party source or license.
+Checked 2026-10-15: no hard-coded user ids, emails, personal paths, or tokens; user and workflow ids are looked up through the Shortcut MCP at run time.
+Copied: 2026-10-15

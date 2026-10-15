@@ -595,6 +595,150 @@
     {
       "path": ".agents/skills/validation-supervision/SKILL.md",
       "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/README.md",
+      "audience": "operator-current"
+    },
+    {
+      "path": "team-skills/diagnose/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/git-feature-branch/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/git-guardrails-claude-code/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/grill-with-docs/ADR-FORMAT.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/grill-with-docs/CONTEXT-FORMAT.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/grill-with-docs/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/handoff/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/improve-codebase-architecture/DEEPENING.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/improve-codebase-architecture/HTML-REPORT.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/improve-codebase-architecture/INTERFACE-DESIGN.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/improve-codebase-architecture/LANGUAGE.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/improve-codebase-architecture/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/prototype/LOGIC.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/prototype/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/prototype/UI.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/retro/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/setup-pre-commit/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/shortcut-story/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/show-me/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/software-factory/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/tdd/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/tdd/deep-modules.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/tdd/interface-design.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/tdd/mocking.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/tdd/refactoring.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/tdd/tests.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/to-issues/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/to-prd/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/triage/AGENT-BRIEF.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/triage/OUT-OF-SCOPE.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/triage/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/write-a-skill/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/writing-for-agents/SKILL-MECHANICS.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/writing-for-agents/SKILL.md",
+      "audience": "agent-runtime"
+    },
+    {
+      "path": "team-skills/zoom-out/SKILL.md",
+      "audience": "agent-runtime"
     }
   ]
 }
