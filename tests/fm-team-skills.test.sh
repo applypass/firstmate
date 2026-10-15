@@ -5,6 +5,9 @@
 # --dry-run changes nothing, and a link it cannot create or remove exits 1.
 # The opt-in `hooks enable|disable|status` edits only its two entries in settings.json.
 set -u
+# The real home and settings location, captured before anything is overridden.
+REAL_HOME=$(cd -P -- "$HOME" && pwd -P)
+REAL_SETTINGS_RAW=${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json
 unset CLAUDE_CONFIG_DIR  # never let a test reach the real settings file
 
 # shellcheck source=tests/lib.sh
@@ -42,8 +45,37 @@ new_home() {
   printf '%s\n' "$h"
 }
 
+# resolve_path <path>: physical path with directory and file symlinks followed,
+# even when the tail does not exist yet.
+resolve_path() {
+  local p=$1 dir base link i=0
+  while [ -L "$p" ] && [ "$i" -lt 20 ]; do
+    link=$(readlink "$p")
+    case "$link" in /*) p=$link ;; *) p=$(dirname "$p")/$link ;; esac
+    i=$((i + 1))
+  done
+  dir=$(dirname "$p"); base=$(basename "$p")
+  while [ ! -d "$dir" ] && [ "$dir" != / ]; do base=$(basename "$dir")/$base; dir=$(dirname "$dir"); done
+  printf '%s/%s\n' "$(cd -P -- "$dir" && pwd -P)" "$base"
+}
+
+# guard_not_real <real-home> <real-settings> <home> [config-dir]: fail the test at
+# once when HOME or the settings file the script would use (following symlinks) is
+# the real home, inside it, or the real settings file.
+guard_not_real() {
+  local real=$1 real_settings=$2 h=$3 cfg=${4:-} rh settings
+  rh=$(resolve_path "$h")
+  settings=$(resolve_path "${cfg:-$h/.claude}/settings.json")
+  case "$rh/" in "$real"/*) fail "test HOME $rh is inside the real home $real" ;; esac
+  case "$settings" in "$real"/*) fail "settings path $settings resolves inside the real home $real" ;; esac
+  [ "$settings" != "$(resolve_path "$real_settings")" ] || fail "settings path $settings is the real settings file"
+}
+
+REAL_SETTINGS=$(resolve_path "$REAL_SETTINGS_RAW")
+
 run() {  # <home> <args...>: sets OUT and RC
   local h=$1; shift
+  guard_not_real "$REAL_HOME" "$REAL_SETTINGS" "$h"
   OUT=$(env -u CLAUDE_CONFIG_DIR HOME="$h" "$SCRIPT" "$@" 2>&1)
   RC=$?
 }
@@ -284,6 +316,7 @@ test_hooks_dry_run_and_config_dir() {
   run "$h" --dry-run hooks enable
   assert_contains "$OUT" "[dry-run] enable hooks" "dry run printed no plan"
   assert_equals "$OTHER" "$(cat "$(settings_of "$h")")" "dry run changed settings"
+  guard_not_real "$REAL_HOME" "$REAL_SETTINGS" "$h" "$h/cfg"
   OUT=$(env HOME="$h" CLAUDE_CONFIG_DIR="$h/cfg" "$SCRIPT" hooks enable 2>&1); RC=$?
   assert_equals 0 "$RC" "enable with CLAUDE_CONFIG_DIR failed: $OUT"
   assert_present "$h/cfg/settings.json" "CLAUDE_CONFIG_DIR was ignored"
@@ -308,6 +341,27 @@ test_hook_scripts_behave() {
   pass "the two hook scripts fire only when they should"
 }
 
+test_guard_trips_on_the_real_home() {
+  # A fake "real home" in temp stands in for the actual one; nothing real is touched.
+  local fake out; fake=$(new_home guard-fake-real); fake=$(cd -P -- "$fake" && pwd -P)
+  mkdir -p "$fake/.claude" "$fake/sub" "$TMP_ROOT/guard-safe" "$TMP_ROOT/guard-link/.claude"
+  : > "$fake/.claude/settings.json"
+  ln -s "$fake/.claude/settings.json" "$TMP_ROOT/guard-link/.claude/settings.json"
+  ( guard_not_real "$fake" "$fake/.claude/settings.json" "$fake" ) >/dev/null 2>&1 && fail "guard passed HOME equal to the real home"
+  ( guard_not_real "$fake" "$fake/.claude/settings.json" "$fake/sub" ) >/dev/null 2>&1 && fail "guard passed a HOME inside the real home"
+  ( guard_not_real "$fake" "$fake/.claude/settings.json" "$TMP_ROOT/guard-safe" "$fake/.claude" ) >/dev/null 2>&1 && fail "guard passed a config dir inside the real home"
+  out=$( ( guard_not_real "$fake" "$fake/.claude/settings.json" "$TMP_ROOT/guard-link" ) 2>&1 ) && fail "guard passed a symlink into the real settings"
+  assert_contains "$out" "resolves inside the real home" "symlink refusal gave the wrong reason"
+  ( guard_not_real "$fake" "$fake/.claude/settings.json" "$TMP_ROOT/guard-safe" ) >/dev/null 2>&1 || fail "guard refused a safe temp HOME"
+  # The real settings file outside the real home (CLAUDE_CONFIG_DIR plus a symlink).
+  mkdir -p "$TMP_ROOT/guard-elsewhere" "$TMP_ROOT/guard-cfg"
+  : > "$TMP_ROOT/guard-elsewhere/settings.json"
+  ln -s "$TMP_ROOT/guard-elsewhere/settings.json" "$TMP_ROOT/guard-cfg/settings.json"
+  out=$( ( guard_not_real "$fake" "$TMP_ROOT/guard-elsewhere/settings.json" "$TMP_ROOT/guard-safe" "$TMP_ROOT/guard-cfg" ) 2>&1 ) && fail "guard passed a link to the real settings file"
+  assert_contains "$out" "is the real settings file" "real-settings refusal gave the wrong reason"
+  pass "the real-home guard trips on the real HOME, config dir and symlinks, and passes a temp HOME"
+}
+
 if [ -n "${FM_TEST_ONLY:-}" ]; then
   "$FM_TEST_ONLY"
 else
@@ -320,6 +374,7 @@ else
   test_installed_links_resolve_to_loadable_skills
   test_bad_usage_exits_2
   test_every_skill_carries_license_or_credit
+  test_guard_trips_on_the_real_home
   test_install_never_touches_settings
   test_hooks_enable_adds_exactly_our_entries
   test_hooks_enable_is_idempotent
