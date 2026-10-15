@@ -4510,6 +4510,9 @@ if [ "$KIND" != secondmate ]; then
 {"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"$j_submit"}]}],"Stop":[{"hooks":[{"type":"command","command":"$j_stop"}]}],"StopFailure":[{"hooks":[{"type":"command","command":"$j_stopfail"}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"$j_sessionend"}]}]}}
 EOF
     exclude_path '.claude/settings.local.json'
+    # Fork-only: refuse a bare 1Password `op` call from every Claude worker and secondmate.
+    "$SCRIPT_DIR/fm-op-guard-install.sh" "$WT" || echo "warning: could not register the op guard in $WT/.claude/settings.local.json" >&2
+    # Fork-only end
     ;;
   devin)
     if [ "$RAW_LAUNCH" -eq 0 ]; then
