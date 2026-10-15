@@ -1,0 +1,5 @@
+Upstream: https://github.com/mattpocock/skills (MIT)
+Path: skills/engineering/grill-with-docs
+Commit: aaf2453fbdfe7a15c07f11d861224f34ab4b53cb
+Copied: verbatim, 2026-10-15
+Updating: deliberate PR that re-copies from a newer upstream commit and updates this note.

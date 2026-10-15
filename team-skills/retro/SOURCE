@@ -1,0 +1,5 @@
+Upstream: https://github.com/mattpocock/skills (MIT)
+Path: skills/engineering/retro
+Commit: 7a030a8b0dcaa601bb0dda9aaf174affb3d61145
+Copied: verbatim, 2026-10-15
+Updating: deliberate PR that re-copies from a newer upstream commit and updates this note.
