@@ -211,6 +211,8 @@ Firstmate's skills live in two separate places with different audiences:
   Today that is `skills/stow`, a generic session-knowledge-sweep skill that routes findings by explicit instruction first, then existing local conventions, then a private `.stow-notes.md` fallback, and curates tiered entries through decay, local archival, and user-approved on-demand offload proposals.
   It intentionally shares no code with the firstmate-internal `.agents/skills/stow` it is named after, so the two can evolve independently.
 
+<!-- Fork-only (applypass) --> The applypass fork adds a third place, `team-skills/`: skills every ApplyPass engineer links into `~/.claude/skills` and `~/.agents/skills` with `bin/fm-team-skills.sh`; [`team-skills/README.md`](team-skills/README.md) owns that set.
+
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md) - maintainer architecture for the crew, supervision, worktrees, secondmates, and project modes.
