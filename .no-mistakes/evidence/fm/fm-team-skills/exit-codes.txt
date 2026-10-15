@@ -1,0 +1,8 @@
+install with read-only ~/.agents: exit=1
+install after chmod 755: exit=0
+uninstall with read-only ~/.claude/skills: exit=1
+uninstall after chmod 755: exit=0  links left: 1
+install with a conflict only: exit=0
+no command: exit=2
+unknown argument: exit=2
+--help: exit=0

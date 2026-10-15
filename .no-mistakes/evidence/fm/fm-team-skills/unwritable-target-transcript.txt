@@ -1,0 +1,101 @@
+## adversarial: ~/.agents is read-only (HOME=/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd)
+$ bin/fm-team-skills.sh install
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+mkdir: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills: Permission denied
+Installed: 19 new link(s), 0 already in place.
+Failed: 19
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/diagnose
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/git-feature-branch
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/git-guardrails-claude-code
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/grill-with-docs
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/handoff
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/improve-codebase-architecture
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/prototype
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/retro
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/setup-pre-commit
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/shortcut-story
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/show-me
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/software-factory
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/tdd
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/to-issues
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/to-prd
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/triage
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/write-a-skill
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/writing-for-agents
+  - link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.agents/skills/zoom-out
+exit=
+~/.claude/skills link count: 19
+~/.agents/skills exists? no
+
+## retry after chmod 755 ~/.agents
+Installed: 19 new link(s), 19 already in place.
+exit=
+
+## adversarial: uninstall with read-only ~/.claude/skills
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/diagnose: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/git-feature-branch: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/git-guardrails-claude-code: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/grill-with-docs: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/handoff: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/improve-codebase-architecture: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/prototype: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/retro: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/setup-pre-commit: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/shortcut-story: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/show-me: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/software-factory: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/tdd: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/to-issues: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/to-prd: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/triage: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/write-a-skill: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/writing-for-agents: Permission denied
+rm: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/zoom-out: Permission denied
+Removed: 19 link(s). Links not created by this script were left alone.
+Failed: 19
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/diagnose
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/git-feature-branch
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/git-guardrails-claude-code
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/grill-with-docs
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/handoff
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/improve-codebase-architecture
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/prototype
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/retro
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/setup-pre-commit
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/shortcut-story
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/show-me
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/software-factory
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/tdd
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/to-issues
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/to-prd
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/triage
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/write-a-skill
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/writing-for-agents
+  - remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-ro.ytSNSd/.claude/skills/zoom-out
+exit=
+links left in ~/.claude/skills: 19 ; in ~/.agents/skills: 0
+
+## bad usage
+Fork-only: fm-team-skills.sh - links the team-skills/ set into the skills folders agent tools read.
+
+usage: fm-team-skills.sh [--dry-run] install|uninstall
+exit=
+fm-team-skills: unknown argument 'frobnicate'
+exit=

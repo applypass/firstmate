@@ -1,0 +1,7 @@
+## Fork footprint vs upstream main
+
+- Upstream files touched by this change: 2 (+166/-0 lines vs upstream)
+  - AGENTS.md (+2/-0): Fork-only block
+  - docs/documentation-audiences.json (+164/-0): on the fork ledger
+- Upstream files the fork already modifies on origin/main: 56 of 85 changed files (+7530/-270 lines, includes fork-only files)
+- Result: ok

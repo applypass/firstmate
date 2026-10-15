@@ -1,0 +1,14 @@
+humanlayer/skills @ 653b6411c1f70c275a18e37673b042ff99f67ceb
+## diff upstream plugins/show-me/skills/show-me vs team-skills/show-me (SOURCE excluded, LICENSE compared to repo root LICENSE)
+show-me: identical to upstream
+show-me LICENSE: identical to upstream repo LICENSE
+Upstream: https://github.com/humanlayer/skills (MIT)
+Path: plugins/show-me/skills/show-me
+Commit: 653b6411c1f70c275a18e37673b042ff99f67ceb
+Copied: verbatim, 2026-10-15
+Updating: deliberate PR that re-copies from a newer upstream commit and updates this note.
+mattpocock/skills cloned
+retro @ 7a030a8b0dcaa601bb0dda9aaf174affb3d61145 (./skills/engineering/retro): identical to upstream
+writing-for-agents @ 7a030a8b0dcaa601bb0dda9aaf174affb3d61145 (./skills/productivity/writing-for-agents): identical to upstream
+tdd @ aaf2453fbdfe7a15c07f11d861224f34ab4b53cb (./skills/engineering/tdd): identical to upstream
+diagnose @ aaf2453fbdfe7a15c07f11d861224f34ab4b53cb (./skills/engineering/diagnose): identical to upstream

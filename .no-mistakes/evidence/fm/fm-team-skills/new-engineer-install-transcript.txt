@@ -1,0 +1,249 @@
+## new engineer: dry-run then install (HOME=/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY)
+$ bin/fm-team-skills.sh --dry-run install
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/diagnose -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/diagnose
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/diagnose -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/diagnose
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/git-feature-branch -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-feature-branch
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/git-feature-branch -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-feature-branch
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/git-guardrails-claude-code -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-guardrails-claude-code
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/git-guardrails-claude-code -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-guardrails-claude-code
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/grill-with-docs -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/grill-with-docs
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/grill-with-docs -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/grill-with-docs
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/handoff -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/handoff
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/handoff -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/handoff
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/improve-codebase-architecture -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/improve-codebase-architecture
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/improve-codebase-architecture -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/improve-codebase-architecture
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/prototype -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/prototype
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/prototype -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/prototype
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/retro -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/retro
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/retro -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/retro
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/setup-pre-commit -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/setup-pre-commit
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/setup-pre-commit -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/setup-pre-commit
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/shortcut-story -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/shortcut-story
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/shortcut-story -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/shortcut-story
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/show-me -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/show-me
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/show-me -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/show-me
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/software-factory -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/software-factory
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/software-factory -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/software-factory
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/tdd -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/tdd
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/tdd -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/tdd
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/to-issues -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-issues
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/to-issues -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-issues
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/to-prd -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-prd
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/to-prd -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-prd
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/triage -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/triage
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/triage -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/triage
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/write-a-skill -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/write-a-skill
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/write-a-skill -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/write-a-skill
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/writing-for-agents -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/writing-for-agents
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/writing-for-agents -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/writing-for-agents
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/zoom-out -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/zoom-out
+[dry-run] link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/zoom-out -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/zoom-out
+Would install: 38 new link(s), 0 already in place.
+exit=0
+ls ~/.claude ~/.agents after dry-run:
+drwx------@    2 uayyagari  staff     64 Oct 15 14:39 .
+drwx------@ 3008 uayyagari  staff  96256 Oct 15 14:39 ..
+
+$ bin/fm-team-skills.sh install
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/diagnose -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/diagnose
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/diagnose -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/diagnose
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/git-feature-branch -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-feature-branch
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/git-feature-branch -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-feature-branch
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/git-guardrails-claude-code -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-guardrails-claude-code
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/git-guardrails-claude-code -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-guardrails-claude-code
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/grill-with-docs -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/grill-with-docs
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/grill-with-docs -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/grill-with-docs
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/handoff -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/handoff
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/handoff -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/handoff
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/improve-codebase-architecture -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/improve-codebase-architecture
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/improve-codebase-architecture -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/improve-codebase-architecture
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/prototype -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/prototype
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/prototype -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/prototype
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/retro -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/retro
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/retro -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/retro
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/setup-pre-commit -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/setup-pre-commit
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/setup-pre-commit -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/setup-pre-commit
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/shortcut-story -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/shortcut-story
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/shortcut-story -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/shortcut-story
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/show-me -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/show-me
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/show-me -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/show-me
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/software-factory -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/software-factory
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/software-factory -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/software-factory
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/tdd -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/tdd
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/tdd -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/tdd
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/to-issues -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-issues
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/to-issues -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-issues
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/to-prd -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-prd
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/to-prd -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-prd
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/triage -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/triage
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/triage -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/triage
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/write-a-skill -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/write-a-skill
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/write-a-skill -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/write-a-skill
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/writing-for-agents -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/writing-for-agents
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/writing-for-agents -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/writing-for-agents
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/zoom-out -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/zoom-out
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/zoom-out -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/zoom-out
+Installed: 38 new link(s), 0 already in place.
+exit=0
+
+$ ls -l ~/.claude/skills
+total 0
+lrwxr-xr-x@ 1 uayyagari  staff  100 Oct 15 14:39 diagnose -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/diagnose
+lrwxr-xr-x@ 1 uayyagari  staff  110 Oct 15 14:39 git-feature-branch -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-feature-branch
+lrwxr-xr-x@ 1 uayyagari  staff  118 Oct 15 14:39 git-guardrails-claude-code -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-guardrails-claude-code
+lrwxr-xr-x@ 1 uayyagari  staff  107 Oct 15 14:39 grill-with-docs -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/grill-with-docs
+lrwxr-xr-x@ 1 uayyagari  staff   99 Oct 15 14:39 handoff -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/handoff
+lrwxr-xr-x@ 1 uayyagari  staff  121 Oct 15 14:39 improve-codebase-architecture -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/improve-codebase-architecture
+lrwxr-xr-x@ 1 uayyagari  staff  101 Oct 15 14:39 prototype -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/prototype
+lrwxr-xr-x@ 1 uayyagari  staff   97 Oct 15 14:39 retro -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/retro
+lrwxr-xr-x@ 1 uayyagari  staff  108 Oct 15 14:39 setup-pre-commit -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/setup-pre-commit
+lrwxr-xr-x@ 1 uayyagari  staff  106 Oct 15 14:39 shortcut-story -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/shortcut-story
+lrwxr-xr-x@ 1 uayyagari  staff   99 Oct 15 14:39 show-me -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/show-me
+lrwxr-xr-x@ 1 uayyagari  staff  108 Oct 15 14:39 software-factory -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/software-factory
+lrwxr-xr-x@ 1 uayyagari  staff   95 Oct 15 14:39 tdd -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/tdd
+lrwxr-xr-x@ 1 uayyagari  staff  101 Oct 15 14:39 to-issues -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-issues
+lrwxr-xr-x@ 1 uayyagari  staff   98 Oct 15 14:39 to-prd -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-prd
+lrwxr-xr-x@ 1 uayyagari  staff   98 Oct 15 14:39 triage -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/triage
+lrwxr-xr-x@ 1 uayyagari  staff  105 Oct 15 14:39 write-a-skill -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/write-a-skill
+lrwxr-xr-x@ 1 uayyagari  staff  110 Oct 15 14:39 writing-for-agents -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/writing-for-agents
+lrwxr-xr-x@ 1 uayyagari  staff  100 Oct 15 14:39 zoom-out -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/zoom-out
+
+$ ls -l ~/.agents/skills
+total 0
+lrwxr-xr-x@ 1 uayyagari  staff  100 Oct 15 14:39 diagnose -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/diagnose
+lrwxr-xr-x@ 1 uayyagari  staff  110 Oct 15 14:39 git-feature-branch -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-feature-branch
+lrwxr-xr-x@ 1 uayyagari  staff  118 Oct 15 14:39 git-guardrails-claude-code -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-guardrails-claude-code
+lrwxr-xr-x@ 1 uayyagari  staff  107 Oct 15 14:39 grill-with-docs -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/grill-with-docs
+lrwxr-xr-x@ 1 uayyagari  staff   99 Oct 15 14:39 handoff -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/handoff
+lrwxr-xr-x@ 1 uayyagari  staff  121 Oct 15 14:39 improve-codebase-architecture -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/improve-codebase-architecture
+lrwxr-xr-x@ 1 uayyagari  staff  101 Oct 15 14:39 prototype -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/prototype
+lrwxr-xr-x@ 1 uayyagari  staff   97 Oct 15 14:39 retro -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/retro
+lrwxr-xr-x@ 1 uayyagari  staff  108 Oct 15 14:39 setup-pre-commit -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/setup-pre-commit
+lrwxr-xr-x@ 1 uayyagari  staff  106 Oct 15 14:39 shortcut-story -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/shortcut-story
+lrwxr-xr-x@ 1 uayyagari  staff   99 Oct 15 14:39 show-me -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/show-me
+lrwxr-xr-x@ 1 uayyagari  staff  108 Oct 15 14:39 software-factory -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/software-factory
+lrwxr-xr-x@ 1 uayyagari  staff   95 Oct 15 14:39 tdd -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/tdd
+lrwxr-xr-x@ 1 uayyagari  staff  101 Oct 15 14:39 to-issues -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-issues
+lrwxr-xr-x@ 1 uayyagari  staff   98 Oct 15 14:39 to-prd -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-prd
+lrwxr-xr-x@ 1 uayyagari  staff   98 Oct 15 14:39 triage -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/triage
+lrwxr-xr-x@ 1 uayyagari  staff  105 Oct 15 14:39 write-a-skill -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/write-a-skill
+lrwxr-xr-x@ 1 uayyagari  staff  110 Oct 15 14:39 writing-for-agents -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/writing-for-agents
+lrwxr-xr-x@ 1 uayyagari  staff  100 Oct 15 14:39 zoom-out -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/zoom-out
+
+## frontmatter name of every installed skill (via the link)
+diagnose                         name: diagnose
+git-feature-branch               name: git-feature-branch
+git-guardrails-claude-code       name: git-guardrails-claude-code
+grill-with-docs                  name: grill-with-docs
+handoff                          name: handoff
+improve-codebase-architecture    name: improve-codebase-architecture
+prototype                        name: prototype
+retro                            name: retro
+setup-pre-commit                 name: setup-pre-commit
+shortcut-story                   name: shortcut-story
+show-me                          name: show-me
+software-factory                 name: software-factory
+tdd                              name: tdd
+to-issues                        name: to-issues
+to-prd                           name: to-prd
+triage                           name: triage
+write-a-skill                    name: write-a-skill
+writing-for-agents               name: writing-for-agents
+zoom-out                         name: zoom-out
+
+## second install (idempotent)
+Installed: 0 new link(s), 38 already in place.
+exit=0
+
+## conflict: real dir at ~/.claude/skills/tdd and foreign link at ~/.agents/skills/diagnose
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/diagnose -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/diagnose
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/git-feature-branch -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-feature-branch
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/git-feature-branch -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-feature-branch
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/git-guardrails-claude-code -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-guardrails-claude-code
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/git-guardrails-claude-code -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/git-guardrails-claude-code
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/grill-with-docs -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/grill-with-docs
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/grill-with-docs -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/grill-with-docs
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/handoff -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/handoff
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/handoff -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/handoff
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/improve-codebase-architecture -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/improve-codebase-architecture
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/improve-codebase-architecture -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/improve-codebase-architecture
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/prototype -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/prototype
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/prototype -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/prototype
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/retro -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/retro
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/retro -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/retro
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/setup-pre-commit -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/setup-pre-commit
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/setup-pre-commit -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/setup-pre-commit
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/shortcut-story -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/shortcut-story
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/shortcut-story -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/shortcut-story
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/show-me -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/show-me
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/show-me -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/show-me
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/software-factory -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/software-factory
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/software-factory -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/software-factory
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/tdd -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/tdd
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/to-issues -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-issues
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/to-issues -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-issues
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/to-prd -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-prd
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/to-prd -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/to-prd
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/triage -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/triage
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/triage -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/triage
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/write-a-skill -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/write-a-skill
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/write-a-skill -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/write-a-skill
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/writing-for-agents -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/writing-for-agents
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/writing-for-agents -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/writing-for-agents
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/zoom-out -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/zoom-out
+link /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/zoom-out -> /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/zoom-out
+Installed: 36 new link(s), 0 already in place.
+Conflicts (skipped, left untouched): 2
+  - /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/diagnose (link to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/elsewhere)
+  - /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/tdd (existing file or directory)
+Move or remove those paths yourself, then run install again.
+exit=0
+tdd/SKILL.md content: mine; diagnose -> /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/elsewhere
+
+## uninstall leaves the conflict paths alone
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/diagnose
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/git-feature-branch
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/git-feature-branch
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/git-guardrails-claude-code
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/git-guardrails-claude-code
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/grill-with-docs
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/grill-with-docs
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/handoff
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/handoff
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/improve-codebase-architecture
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/improve-codebase-architecture
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/prototype
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/prototype
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/retro
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/retro
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/setup-pre-commit
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/setup-pre-commit
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/shortcut-story
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/shortcut-story
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/show-me
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/show-me
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/software-factory
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/software-factory
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/tdd
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/to-issues
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/to-issues
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/to-prd
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/to-prd
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/triage
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/triage
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/write-a-skill
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/write-a-skill
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/writing-for-agents
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/writing-for-agents
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.claude/skills/zoom-out
+remove /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-team-skills-home.E0VKUY/.agents/skills/zoom-out
+Removed: 36 link(s). Links not created by this script were left alone.
+exit=0
+remaining in ~/.claude/skills: tdd
+remaining in ~/.agents/skills: diagnose
+
+## git pull updates in place: edit the clone copy, the link sees it
+tdd link now resolves to: /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M4ZCV20NJ217A6RXKZVM75WB/team-skills/tdd ; head -3 via link:
+---
+name: tdd
+description: Test-driven development with red-green-refactor loop. Use when user wants to build features or fix bugs using TDD, mentions "red-green-refactor", wants integration tests, or asks for test-first development.
