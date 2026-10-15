@@ -382,6 +382,30 @@ test_pr_based_dod_draft_check_uses_gh_axi() {
   pass "PR-based DoD draft check uses gh-axi"
 }
 
+# Every PR-opening ship DoD carries the PR description rule; local-only and the
+# Gerrit forms open no PR and stay without it.
+test_pr_description_rule_reaches_pr_opening_modes() {
+  local mode out
+  for mode in direct-PR no-mistakes; do
+    out="$TMP_ROOT/pr-rule-$mode.md"
+    fm_dod_block "$mode" pr-rule-task > "$out"
+    assert_grep 'Problem / Fix / Proof as tight bullets' "$out" "$mode: DoD lacks the PR description rule"
+    assert_grep 'one real worked example' "$out" "$mode: DoD lacks the worked example rule"
+    assert_grep 'before/after flow in a ```text block' "$out" "$mode: DoD lacks the before/after rule"
+  done
+  assert_grep 'gh-axi pr edit' "$TMP_ROOT/pr-rule-no-mistakes.md" "no-mistakes DoD must tell the worker to fix a pipeline-written body"
+  assert_no_grep 'gh-axi pr edit' "$TMP_ROOT/pr-rule-direct-PR.md" "direct-PR writes its own body and needs no read-back edit"
+  out="$TMP_ROOT/pr-rule-local-only.md"
+  fm_dod_block local-only pr-rule-task > "$out"
+  assert_no_grep 'worked example' "$out" "local-only: DoD must not carry the PR description rule"
+  for mode in direct-PR no-mistakes; do
+    out="$TMP_ROOT/pr-rule-gerrit-$mode.md"
+    fm_dod_block "$mode" pr-rule-task fm/pr-rule-task gerrit > "$out"
+    assert_no_grep 'worked example' "$out" "gerrit $mode: DoD opens no PR and must not carry the rule"
+  done
+  pass "PR description rule reaches direct-PR and no-mistakes DoD only"
+}
+
 test_scout_done_is_not_gated
 test_unpushed_ship_done_is_refused
 test_no_mistakes_prevalidation_done_is_not_gated
@@ -400,5 +424,6 @@ test_standalone_local_only_needs_project_ref
 test_non_done_lines_are_not_gated
 test_fenced_and_indented_captain_lines_are_not_intent
 test_pr_based_dod_draft_check_uses_gh_axi
+test_pr_description_rule_reaches_pr_opening_modes
 
 echo "all fm-dod-lib tests passed"

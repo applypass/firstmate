@@ -338,6 +338,26 @@ There is no pull request, no \`gh-axi\` call, and no forge CI result to report: 
 EOF
 }
 
+# Fork-only: PR description rule (applypass). Every PR-opening ship brief carries it.
+# The no-mistakes PR step drafts the body from the repo's pr.template, which a brief cannot
+# change, so the rule also has the worker read the finished body back and add what is missing.
+fm_dod_pr_description_block() {  # <direct-PR|no-mistakes>
+  cat <<'EOF'
+## PR description
+Keep Problem / Fix / Proof as tight bullets, never prose blobs.
+For each change add one real worked example, walked step by step with real names, ids and values from this task, then a plain-text before/after flow in a ```text block.
+EOF
+  if [ "$1" = no-mistakes ]; then
+    cat <<'EOF'
+The pipeline writes the first PR body from the project's own template, which may lack these parts.
+After /no-mistakes reports CI green, read the body back with `gh-axi pr view <number>`.
+If the worked example or the before/after block is missing, add them with `gh-axi pr edit`, keeping every existing section, including the Pipeline section the pipeline appended.
+A PR body edit is not a commit, so it does not break the pushed-head check.
+EOF
+  fi
+}
+# Fork-only end
+
 fm_dod_block() {  # <mode> <task-id> [branch] [<forge>]
   local mode=$1 id=$2 forge=${4:-none}
   local branch=${3:-fm/$id}
@@ -403,6 +423,9 @@ A draft cannot be merged, so a done report on one leaves the merge unasked.
 Then append \`done [at=<epoch>]: PR {url}\` to the status file and stop.
 That \`done:\` is accepted only when this copy's HEAD - your latest commit - is pushed to your PR branch; the check tests that commit, not merely that a branch moved.
 If you deliberately keep the PR a draft, append \`paused [at=<epoch>]: {why the draft is held}\` instead of done.
+EOF
+      fm_dod_pr_description_block direct-PR  # Fork-only
+      cat <<EOF
 Do NOT run /no-mistakes. The configured merge authority decides whether to merge the PR; firstmate relays the outcome.
 EOF
       ;;
@@ -442,6 +465,8 @@ That first \`done:\` is the handoff that starts the pipeline, which owns the pus
 EOF
       fi
       fm_nm_driving_block "$forge"
+      echo  # Fork-only
+      fm_dod_pr_description_block no-mistakes  # Fork-only
       cat <<EOF
 
 After /no-mistakes reports CI green (the CI-ready return point - do not wait for it to keep monitoring in the background until merge), read the PR back from the forge and confirm it is not a draft (\`gh-axi pr view <number>\` must print \`draft: no\`, where <number> is the PR number from your PR URL); if it is a draft, mark it ready with \`gh-axi pr ready <number>\`.
