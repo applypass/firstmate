@@ -179,6 +179,7 @@ else
   test_uninstall_removes_only_own_links
   test_dry_run_changes_nothing
   test_failed_link_or_removal_exits_1
+  test_installed_links_resolve_to_loadable_skills
   test_bad_usage_exits_2
   test_every_skill_carries_license_or_credit
   test_no_agent_was_launched
