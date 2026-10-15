@@ -394,7 +394,7 @@ test_pr_description_rule_reaches_pr_opening_modes() {
     assert_grep 'before/after flow in a ```text block' "$out" "$mode: DoD lacks the before/after rule"
   done
   assert_grep 'gh-axi pr view <number> --full' "$TMP_ROOT/pr-rule-no-mistakes.md" "no-mistakes DoD must read the full body back, not the truncated view"
-  assert_grep 'gh-axi pr edit' "$TMP_ROOT/pr-rule-no-mistakes.md" "no-mistakes DoD must tell the worker to fix a pipeline-written body"
+  assert_grep 'gh-axi pr edit' "$TMP_ROOT/pr-rule-no-mistakes.md" "no-mistakes DoD must tell the worker to fix a body that lacks the rule"
   assert_no_grep 'gh-axi pr edit' "$TMP_ROOT/pr-rule-direct-PR.md" "direct-PR writes its own body and needs no read-back edit"
   out="$TMP_ROOT/pr-rule-local-only.md"
   fm_dod_block local-only pr-rule-task > "$out"

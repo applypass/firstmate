@@ -684,7 +684,7 @@ The [`firstmate-coding-guidelines` skill](../.agents/skills/firstmate-coding-gui
 `commands.test` executes code, so no-mistakes honors it only from the default-branch copy of `.no-mistakes.yaml`; a pushed branch cannot change what the gate runs.
 
 `pr.template` points the PR step at [`.github/pull_request_template.md`](../.github/pull_request_template.md), so every gated PR description uses its Problem, Fix, and Proof headings and no-mistakes appends its own Pipeline section after them.
-Generated ship briefs for PR-opening modes also carry the PR description rule (a worked example and a before/after flow); in no-mistakes mode the worker adds them to the pipeline-written body, since a brief cannot change the template.
+Generated ship briefs for PR-opening modes also carry the PR description rule (a worked example and a before/after flow); in no-mistakes mode the worker reads the finished body back and adds them if missing, whether the worker or the pipeline wrote it, since a brief cannot change the template.
 no-mistakes reads the template only from the default branch, so a branch that edits the template takes effect for later PRs once it merges.
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for the firstmate-specific local test policy and entry points.
