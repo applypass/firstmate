@@ -1,0 +1,9 @@
+## Fork footprint vs upstream main
+
+- Upstream files touched by this change: 3 (+53/-0 lines vs upstream)
+  - bin/fm-dod-lib.sh (+26/-0): on the fork ledger
+  - docs/configuration.md (+1/-0): on the fork ledger
+  - tests/fm-dod-lib.test.sh (+26/-0): Fork-only block
+- Upstream files the fork already modifies on 1e366ed: 0 of 0 changed files (+0/-0 lines, includes fork-only files)
+- Result: ok
+fork-footprint rc=0
