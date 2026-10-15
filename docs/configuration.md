@@ -351,6 +351,13 @@ It covers only our own unflagged PRs whose base is `dev`, and `bin/fm-pr-merge.s
 `bin/fm-pr-merge.sh` refuses any merge whose live base is `main` unless the caller passes `--release-main`, which a caller passes only on the captain's explicit word for that merge; [`bin/fm-main-merge-guard.sh`](../bin/fm-main-merge-guard.sh)'s header owns the check.
 Set `FM_AUTO_DEV_MERGE=off` to get upstream behaviour.
 [`bin/fm-auto-dev-merge.sh`](../bin/fm-auto-dev-merge.sh)'s header owns the exact conditions and the quiet and `paused` skip outcomes.
+<!-- Fork-only: review fix-round cap config; bin/fm-review-round-cap.sh owns the contract. -->
+
+### Review fix-round cap (applypass fork)
+
+A no-mistakes worker's `fix` answers at a review gate are capped per run and step, and an agent timeout is reported to firstmate at once.
+The cap is the `FM_REVIEW_FIX_CAP` environment variable, else the first line of a local, gitignored `config/review-fix-cap` (a non-negative integer), else 2.
+[`bin/fm-review-round-cap.sh`](../bin/fm-review-round-cap.sh)'s header owns the round log, the needs-decision keys, and the snapshot file; firstmate answers a capped gate with approve, skip, or a steer.
 
 ## Backlog backend (.tasks.toml / config/backlog-backend)
 
