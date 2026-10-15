@@ -28,7 +28,7 @@ Updating one is a deliberate PR that re-copies from a newer commit and edits the
 |---|---|---|
 | grill-with-docs, diagnose, tdd, zoom-out, to-prd, to-issues, triage, handoff, improve-codebase-architecture, prototype, write-a-skill, setup-pre-commit, git-guardrails-claude-code | [mattpocock/skills](https://github.com/mattpocock/skills) at `aaf2453fbdfe7a15c07f11d861224f34ab4b53cb` | MIT |
 | retro, writing-for-agents | [mattpocock/skills](https://github.com/mattpocock/skills) at `7a030a8b0dcaa601bb0dda9aaf174affb3d61145` (not present at the older commit) | MIT |
-| show-me | [humanlayer/skills](https://github.com/humanlayer/skills) at `653b6411c1f70c275a18e37673b042ff99f67ceb`, with local changes listed in its `SOURCE` | MIT |
+| show-me | [humanlayer/skills](https://github.com/humanlayer/skills) at `653b6411c1f70c275a18e37673b042ff99f67ceb`, verbatim copy, no local changes | MIT |
 | software-factory | ApplyPass write-up, based on Dex Horthy's 4-gate workflow (HumanLayer); no upstream file found | none |
 | shortcut-story, git-feature-branch | ApplyPass internal | none |
 

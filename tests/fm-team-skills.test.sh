@@ -2,13 +2,14 @@
 # tests/fm-team-skills.test.sh - bin/fm-team-skills.sh links team-skills/ into the
 # skills folders of a temp HOME: install is idempotent, never overwrites a real
 # directory or a link pointing elsewhere, uninstall removes only its own links,
-# and --dry-run changes nothing.
+# --dry-run changes nothing, and a link it cannot create or remove exits 1.
 set -u
 
 # shellcheck source=tests/lib.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 SCRIPT="$ROOT/bin/fm-team-skills.sh"
+SKILLS=$(cd -P "$ROOT/team-skills" && pwd -P)
 TMP_ROOT=$(fm_test_tmproot fm-team-skills)
 
 new_home() {
@@ -27,7 +28,7 @@ test_install_links_every_skill_into_both_folders() {
   local h name n=0; h=$(new_home fresh)
   run "$h" install
   assert_equals 0 "$RC" "install failed: $OUT"
-  for src in "$ROOT"/team-skills/*/; do
+  for src in "$SKILLS"/*/; do
     [ -f "$src/SKILL.md" ] || continue
     name=$(basename "$src"); n=$((n + 1))
     for dir in .claude/skills .agents/skills; do
@@ -89,6 +90,28 @@ test_dry_run_changes_nothing() {
   pass "--dry-run changes nothing"
 }
 
+test_failed_link_or_removal_exits_1() {
+  local h; h=$(new_home failing)
+  mkdir -p "$h/.agents" && chmod 555 "$h/.agents"
+  run "$h" install
+  chmod 755 "$h/.agents"
+  assert_equals 1 "$RC" "install with an unwritable ~/.agents must exit 1: $OUT"
+  assert_contains "$OUT" "Failed:" "failed links not reported"
+  assert_contains "$OUT" "link $h/.agents/skills/zoom-out" "failed link not listed"
+  [ -L "$h/.claude/skills/zoom-out" ] || fail "writable folder was not linked"
+  assert_absent "$h/.agents/skills" "unwritable folder gained a skills dir"
+  run "$h" install
+  assert_equals 0 "$RC" "install after fixing permissions failed: $OUT"
+  chmod 555 "$h/.claude/skills"
+  run "$h" uninstall
+  chmod 755 "$h/.claude/skills"
+  assert_equals 1 "$RC" "uninstall with an unwritable folder must exit 1: $OUT"
+  assert_contains "$OUT" "remove $h/.claude/skills/zoom-out" "failed removal not listed"
+  [ -L "$h/.claude/skills/zoom-out" ] || fail "link vanished despite failed removal"
+  assert_absent "$h/.agents/skills/zoom-out" "writable folder link survived uninstall"
+  pass "a link the script could not create or remove exits 1"
+}
+
 test_bad_usage_exits_2() {
   local h; h=$(new_home usage)
   run "$h"; assert_equals 2 "$RC" "no command must exit 2"
@@ -115,6 +138,7 @@ else
   test_install_never_overwrites_conflicts
   test_uninstall_removes_only_own_links
   test_dry_run_changes_nothing
+  test_failed_link_or_removal_exits_1
   test_bad_usage_exits_2
   test_every_skill_carries_license_or_credit
 fi

@@ -1,9 +1,5 @@
 Upstream: https://github.com/humanlayer/skills (MIT)
 Path: plugins/show-me/skills/show-me
 Commit: 653b6411c1f70c275a18e37673b042ff99f67ceb
-Copied: 2026-10-15, with ApplyPass changes
-Local changes vs upstream:
-- SKILL.md: dropped the upstream "disable-model-invocation: true" line; added a paragraph that terminal chat does not render Mermaid or HTML, so flows go in plain text blocks there.
-- scripts/render.sh: added (lints Mermaid labels, renders a PNG).
-- agents/openai.yaml: not copied.
-Updating: deliberate PR that re-copies from a newer upstream commit, re-applies the local changes, and updates this note.
+Copied: verbatim, 2026-10-15
+Updating: deliberate PR that re-copies from a newer upstream commit and updates this note.

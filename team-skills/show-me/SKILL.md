@@ -1,6 +1,7 @@
 ---
 name: show-me
 description: Help the user understand the current topic visually with concise diagrams, code-shape sketches, and focused HTML artifacts.
+disable-model-invocation: true
 ---
 
 Help the user understand the current topic of conversation visually. Skip the preamble and keep prose brief. Pick the smallest view that makes the key point clear.
@@ -43,9 +44,7 @@ src/
 └── transport/      # sends API requests
 ```
 
-- Terminal chat does not render Mermaid or HTML: there, draw flows as plain text in a `text` block (arrows or box-drawing, one step per line, no `<br/>`). Use Mermaid only where it is rendered (a PNG you produce with `mmdc` and view before sharing, an HTML page, a doc). In Mermaid labels, `#` cuts the text and `;` splits the line, so write `PR 705`, not `#705`. Render with `scripts/render.sh <file.mmd>` (in this skill's folder): it refuses those label mistakes, renders the PNG, and you then Read the PNG before sharing it. A Stop hook blocks any chat reply that contains a ```mermaid block or `<br/>`.
-
-- Show component interaction, control flow, or data flow with Mermaid (rendered surfaces only):
+- Show component interaction, control flow, or data flow with Mermaid:
 
 ```mermaid
 sequenceDiagram

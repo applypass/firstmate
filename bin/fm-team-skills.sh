@@ -14,7 +14,9 @@
 # uninstall removes only links that point at this clone's team-skills/<name>;
 # anything else at that path stays.
 # --dry-run prints what would happen and changes nothing.
-# Exit status: 0 when done (conflicts are reported, not an error), 2 on bad usage.
+# Exit status: 0 when done (conflicts are reported, not an error), 1 when a link
+# could not be created or removed (listed under "Failed" after the summary), 2 on
+# bad usage.
 set -u
 
 DRY=0
@@ -38,6 +40,7 @@ SRC_ROOT=$(cd -P "$(dirname "${BASH_SOURCE[0]}")/../team-skills" 2>/dev/null && 
 
 TARGETS=("$HOME/.claude/skills" "$HOME/.agents/skills")
 conflicts=()
+failures=()
 linked=0 kept=0 removed=0
 
 say() { if [ "$DRY" = 1 ]; then echo "[dry-run] $*"; else echo "$*"; fi; }
@@ -68,15 +71,18 @@ for src in "$SRC_ROOT"/*/; do
       say "link $dest -> $src"
       if [ "$DRY" = 0 ]; then
         if ! mkdir -p "$tdir" || ! ln -s "$src" "$dest"; then
-          echo "fm-team-skills: could not link $dest" >&2; continue
+          failures+=("link $dest"); continue
         fi
       fi
       linked=$((linked + 1))
     else
       if [ "$owned" = 1 ]; then
         say "remove $dest"
-        [ "$DRY" = 1 ] || rm "$dest"
-        removed=$((removed + 1))
+        if [ "$DRY" = 1 ] || rm "$dest"; then
+          removed=$((removed + 1))
+        else
+          failures+=("remove $dest")
+        fi
       fi
     fi
   done
@@ -93,5 +99,10 @@ if [ "$CMD" = install ]; then
 else
   if [ "$DRY" = 1 ]; then verb="Would remove"; else verb="Removed"; fi
   echo "$verb: $removed link(s). Links not created by this script were left alone."
+fi
+if [ "${#failures[@]}" -gt 0 ]; then
+  echo "Failed: ${#failures[@]}" >&2
+  for f in "${failures[@]}"; do echo "  - $f" >&2; done
+  exit 1
 fi
 exit 0
