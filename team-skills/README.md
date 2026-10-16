@@ -34,6 +34,7 @@ bin/fm-team-skills.sh hooks disable   # remove them again
 ```
 
 `enable` adds exactly those two entries, pointing at this clone, and keeps every other key and hook.
+An entry that already runs one of these scripts from another clone is re-pointed at this clone instead of duplicated.
 `disable` removes only entries that run these two scripts.
 Both are safe to repeat: a run that changes nothing writes nothing.
 Before a change the script copies the file to `settings.json.bak-<time>`, and it refuses without writing when the file is not valid JSON of the expected shape.
