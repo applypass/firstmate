@@ -75,11 +75,10 @@ hooks_main() {
     echo "fm-team-skills: $settings is not a JSON object with an object \"hooks\" of arrays; refusing to touch it" >&2
     exit 1
   fi
-  local spec name event timeout cmd next="$cur" present total=0 on=0
+  local spec name event timeout cmd next="$cur" present
   for spec in "${HOOK_SPECS[@]}"; do
     IFS=: read -r name event timeout <<<"$spec"
     present=$(printf '%s' "$cur" | jq -r --arg n "$name" --arg e "$event" "$JQ_OURS"' [(.hooks[$e] // [])[].hooks[]? | select(ours($n))] | length')
-    total=$((total + 1)); [ "$present" -gt 0 ] && on=$((on + 1))
     case "$SUB" in
       status) if [ "$present" -gt 0 ]; then echo "$name ($event): on"; else echo "$name ($event): off"; fi ;;
       enable)
