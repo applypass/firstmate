@@ -1,0 +1,91 @@
+# Claude PreToolUse stdin payloads piped through bin/fm-op-pretool-check.sh --claude (OP_SERVICE_ACCOUNT_TOKEN unset unless noted)
+[MUST-DENY] command: op whoami
+  exit=2 stdout=''
+  stderr={"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: export OP_SERVICE_ACCOUNT_TOKEN=\"$(. \"$FM_ROOT/bin/fm-op-service-account-lib.sh\" && fm_op_service_account_token \"$FM_HOME\")\" && op ... (bin/fm-op-service-account-lib.sh reads the token from the environment, then the home .env files). If no token is found, ask for one instead of using the desktop app."}
+
+[MUST-DENY] command: op read op://vault/item/field
+  exit=2 stdout=''
+  stderr={"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: export OP_SERVICE_ACCOUNT_TOKEN=\"$(. \"$FM_ROOT/bin/fm-op-service-account-lib.sh\" && fm_op_service_account_token \"$FM_HOME\")\" && op ... (bin/fm-op-service-account-lib.sh reads the token from the environment, then the home .env files). If no token is found, ask for one instead of using the desktop app."}
+
+[MUST-DENY] command: bash -c "op read $ITEM"
+  exit=2 stdout=''
+  stderr={"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: export OP_SERVICE_ACCOUNT_TOKEN=\"$(. \"$FM_ROOT/bin/fm-op-service-account-lib.sh\" && fm_op_service_account_token \"$FM_HOME\")\" && op ... (bin/fm-op-service-account-lib.sh reads the token from the environment, then the home .env files). If no token is found, ask for one instead of using the desktop app."}
+
+[MUST-DENY] command: bash -c "ls; op read $X"
+  exit=2 stdout=''
+  stderr={"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: export OP_SERVICE_ACCOUNT_TOKEN=\"$(. \"$FM_ROOT/bin/fm-op-service-account-lib.sh\" && fm_op_service_account_token \"$FM_HOME\")\" && op ... (bin/fm-op-service-account-lib.sh reads the token from the environment, then the home .env files). If no token is found, ask for one instead of using the desktop app."}
+
+[MUST-DENY] command: eval "ls; op read $X"
+  exit=2 stdout=''
+  stderr={"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: export OP_SERVICE_ACCOUNT_TOKEN=\"$(. \"$FM_ROOT/bin/fm-op-service-account-lib.sh\" && fm_op_service_account_token \"$FM_HOME\")\" && op ... (bin/fm-op-service-account-lib.sh reads the token from the environment, then the home .env files). If no token is found, ask for one instead of using the desktop app."}
+
+[MUST-DENY] command: nice -n 10 op read x
+  exit=2 stdout=''
+  stderr={"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: export OP_SERVICE_ACCOUNT_TOKEN=\"$(. \"$FM_ROOT/bin/fm-op-service-account-lib.sh\" && fm_op_service_account_token \"$FM_HOME\")\" && op ... (bin/fm-op-service-account-lib.sh reads the token from the environment, then the home .env files). If no token is found, ask for one instead of using the desktop app."}
+
+[MUST-DENY] command: for f in a b; do op read "op://v/$f"; done
+  exit=2 stdout=''
+  stderr={"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: export OP_SERVICE_ACCOUNT_TOKEN=\"$(. \"$FM_ROOT/bin/fm-op-service-account-lib.sh\" && fm_op_service_account_token \"$FM_HOME\")\" && op ... (bin/fm-op-service-account-lib.sh reads the token from the environment, then the home .env files). If no token is found, ask for one instead of using the desktop app."}
+
+[MUST-DENY] command: if op read x; then echo ok; fi
+  exit=2 stdout=''
+  stderr={"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: export OP_SERVICE_ACCOUNT_TOKEN=\"$(. \"$FM_ROOT/bin/fm-op-service-account-lib.sh\" && fm_op_service_account_token \"$FM_HOME\")\" && op ... (bin/fm-op-service-account-lib.sh reads the token from the environment, then the home .env files). If no token is found, ask for one instead of using the desktop app."}
+
+[MUST-DENY] command: while true; do op read x; done
+  exit=2 stdout=''
+  stderr={"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: export OP_SERVICE_ACCOUNT_TOKEN=\"$(. \"$FM_ROOT/bin/fm-op-service-account-lib.sh\" && fm_op_service_account_token \"$FM_HOME\")\" && op ... (bin/fm-op-service-account-lib.sh reads the token from the environment, then the home .env files). If no token is found, ask for one instead of using the desktop app."}
+
+[MUST-DENY] command: export OP_SERVICE_ACCOUNT_TOKEN; op read x
+  exit=2 stdout=''
+  stderr={"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: export OP_SERVICE_ACCOUNT_TOKEN=\"$(. \"$FM_ROOT/bin/fm-op-service-account-lib.sh\" && fm_op_service_account_token \"$FM_HOME\")\" && op ... (bin/fm-op-service-account-lib.sh reads the token from the environment, then the home .env files). If no token is found, ask for one instead of using the desktop app."}
+
+[MUST-DENY] command: export -n OP_SERVICE_ACCOUNT_TOKEN; op read x
+  exit=2 stdout=''
+  stderr={"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: export OP_SERVICE_ACCOUNT_TOKEN=\"$(. \"$FM_ROOT/bin/fm-op-service-account-lib.sh\" && fm_op_service_account_token \"$FM_HOME\")\" && op ... (bin/fm-op-service-account-lib.sh reads the token from the environment, then the home .env files). If no token is found, ask for one instead of using the desktop app."}
+
+[MUST-DENY] command: OP_SERVICE_ACCOUNT_TOKEN=abc; op read x
+  exit=2 stdout=''
+  stderr={"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: export OP_SERVICE_ACCOUNT_TOKEN=\"$(. \"$FM_ROOT/bin/fm-op-service-account-lib.sh\" && fm_op_service_account_token \"$FM_HOME\")\" && op ... (bin/fm-op-service-account-lib.sh reads the token from the environment, then the home .env files). If no token is found, ask for one instead of using the desktop app."}
+
+[MUST-DENY] command: env -u OP_SERVICE_ACCOUNT_TOKEN op read x
+  exit=2 stdout=''
+  stderr={"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: export OP_SERVICE_ACCOUNT_TOKEN=\"$(. \"$FM_ROOT/bin/fm-op-service-account-lib.sh\" && fm_op_service_account_token \"$FM_HOME\")\" && op ... (bin/fm-op-service-account-lib.sh reads the token from the environment, then the home .env files). If no token is found, ask for one instead of using the desktop app."}
+
+[MUST-DENY] command: OP_SERVICE_ACCOUNT_TOKEN= op read x
+  exit=2 stdout=''
+  stderr={"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: export OP_SERVICE_ACCOUNT_TOKEN=\"$(. \"$FM_ROOT/bin/fm-op-service-account-lib.sh\" && fm_op_service_account_token \"$FM_HOME\")\" && op ... (bin/fm-op-service-account-lib.sh reads the token from the environment, then the home .env files). If no token is found, ask for one instead of using the desktop app."}
+
+[MUST-ALLOW] command: OP_SERVICE_ACCOUNT_TOKEN=abc op read x
+  exit=0 stdout=''
+  stderr=<empty>
+
+[MUST-ALLOW] command: export OP_SERVICE_ACCOUNT_TOKEN=abc && op read x
+  exit=0 stdout=''
+  stderr=<empty>
+
+[MUST-ALLOW] command: OP_SERVICE_ACCOUNT_TOKEN=abc; export OP_SERVICE_ACCOUNT_TOKEN; op read x
+  exit=0 stdout=''
+  stderr=<empty>
+
+[MUST-ALLOW] command: export OP_SERVICE_ACCOUNT_TOKEN="$(. "$FM_ROOT/bin/fm-op-service-account-lib.sh" && fm_op_service_account_token "$FM_HOME")" && op read x
+  exit=0 stdout=''
+  stderr=<empty>
+
+[MUST-ALLOW] command: echo "run op later"
+  exit=0 stdout=''
+  stderr=<empty>
+
+[MUST-ALLOW] command: ls /opt
+  exit=0 stdout=''
+  stderr=<empty>
+
+[MUST-ALLOW] command: git log --oneline
+  exit=0 stdout=''
+  stderr=<empty>
+
+[MUST-ALLOW (token in hook env)] command: op whoami
+  exit=0 stdout=''
+  stderr=<empty>
+
+# token-leak check: grep the transcript for the fake token value
+0

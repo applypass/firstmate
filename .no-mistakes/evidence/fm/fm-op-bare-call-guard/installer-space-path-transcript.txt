@@ -1,0 +1,8 @@
+# installer run from a bin copy under a path containing a space
+installer exit=0
+registered command: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-oplab.5mTeGR/with\ space/bin/fm-op-pretool-check.sh --claude
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused
+registered command exit=
+# idempotence: run installer again, count hooks
+1
+registered command exit=2

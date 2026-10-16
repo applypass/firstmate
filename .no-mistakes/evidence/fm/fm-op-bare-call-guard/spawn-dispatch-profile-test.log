@@ -1,0 +1,6 @@
+=== rerun with real node first on PATH
+cat: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-spawn-dispatch-profile.C5Ttbz/profile-lavish-ambient/pane.log: No such file or directory
+# all fm-spawn-dispatch-profile tests passed
+exit=
+
+[killed]
