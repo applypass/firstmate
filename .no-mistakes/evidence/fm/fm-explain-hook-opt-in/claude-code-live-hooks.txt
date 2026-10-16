@@ -1,0 +1,38 @@
+# Live Claude Code 2.1.301 runs, hooks loaded from the settings.json that 'hooks enable' wrote (via --settings), isolated project dir, MCP off
+
+## 1. Explanation prompt with hooks enabled -> model quotes the injected TEAM RULE context
+prompt: Please explain briefly: did you receive any TEAM RULE context injected by a hook on this prompt? ...
+Yes.
+
+First eight words: "TEAM RULE (enforced by hook): every explanation - in"
+
+An identical rule labeled "CAPTAIN RULE" arrived with it.
+
+## 2. Mermaid reply with hooks enabled -> Stop hook from this clone blocks, model resends as plain text
+prompt: Reply with exactly one fenced code block whose language tag is mermaid containing the line A-->B ...
+<<< assistant turn
+```mermaid
+A-->B
+```
+>>>
+<<< assistant turn
+```text
+A-->B
+```
+>>>
+debug log (this clone's hooks only):
+2026-10-16T04:33:49.324Z [DEBUG] Hooks: UserPromptSubmit [<clone>/team-skills/hooks/explain-with-example.sh] finished with status 0 (54ms)
+2026-10-16T04:33:53.851Z [DEBUG] Hooks: Stop [<clone>/team-skills/hooks/no-raw-diagrams.py] finished with status 0 (249ms)
+2026-10-16T04:33:53.856Z [DEBUG] Hook Stop (<clone>/team-skills/hooks/no-raw-diagrams.py) returned permissionDecision: deny (reason: Your reply contains a ```mermaid block. The terminal sh
+2026-10-16T04:33:57.630Z [DEBUG] Hooks: Stop [<clone>/team-skills/hooks/no-raw-diagrams.py] finished with status 0 (472ms)
+
+## 3. Non-explanation prompt with hooks enabled -> hook runs but adds nothing
+prompt: Mentally rename the variable x to y, then answer only: was any context beginning with the words TEAM RULE attached ...
+No. Nothing in the context attached to this prompt began with the words "TEAM RULE".
+debug log (this clone's hooks only):
+2026-10-16T04:34:18.897Z [DEBUG] Hooks: UserPromptSubmit [<clone>/team-skills/hooks/explain-with-example.sh] finished with statu
+2026-10-16T04:34:20.963Z [DEBUG] Hooks: Stop [<clone>/team-skills/hooks/no-raw-diagrams.py] finished with status 0 (120ms)
+
+## 4. Control: hooks never enabled (no --settings) -> nothing from this clone runs
+No. Nothing I received began with "TEAM RULE". The closest was a hook-supplied note beginning "CAPTAIN RULE", which asks for worked examples and visual diagrams in explanations. This question is a plain yes/no, so neither applies.
+invocations of <clone>/team-skills/hooks in debug log: 0

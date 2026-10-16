@@ -1,0 +1,25 @@
+$ printf '{"prompt":"summarize this"}' | team-skills/hooks/explain-with-example.sh
+[exit 0] bytes=963
+{"event":"UserPromptSubmit","context_head":"TEAM RULE (enforced by hook): every explanation - in chat, t"}
+
+$ printf '{"prompt":"please explain the flow"}' | team-skills/hooks/explain-with-example.sh
+[exit 0] bytes=963
+{"event":"UserPromptSubmit","context_head":"TEAM RULE (enforced by hook): every explanation - in chat, t"}
+
+$ printf '{"prompt":"docs for tickets"}' | team-skills/hooks/explain-with-example.sh
+[exit 0] bytes=963
+{"event":"UserPromptSubmit","context_head":"TEAM RULE (enforced by hook): every explanation - in chat, t"}
+
+$ printf '{"prompt":"rename the variable"}' | team-skills/hooks/explain-with-example.sh
+[exit 0] bytes=0
+
+$ printf '{"prompt":"git commit it"}' | team-skills/hooks/explain-with-example.sh
+[exit 0] bytes=0
+
+== Stop hook on a transcript whose last assistant text has a mermaid block ==
+{"decision": "block", "reason": "Your reply contains a ```mermaid block and an HTML <br/> tag. The terminal shows these as raw code, so the diagram is unreadable. Resend the same answer with every diagram redrawn as plain text in a ```text block (arrows or box-drawing, one step per line, no tags). If a picture is truly needed, render it to PNG with mmdc, Read the PNG to check every label, and send the file instead."}
+[exit 0]
+== same transcript with stop_hook_active (no loop) ==
+[exit 0] (no output expected)
+== clean plain-text reply with <br/> only inside an inline code mention ==
+[exit 0] (no output expected)

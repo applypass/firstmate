@@ -1,0 +1,218 @@
+== seeded settings.json ==
+{"theme":"dark","hooks":{"Stop":[{"hooks":[{"type":"command","command":"mine-stop"}]}]}}
+
+$ HOME=$LAB/home bin/fm-team-skills.sh hooks status
+explain-with-example.sh (UserPromptSubmit): off
+no-raw-diagrams.py (Stop): off
+Settings file: $LAB/home/.claude/settings.json
+[exit 0]
+
+$ HOME=$LAB/home bin/fm-team-skills.sh --dry-run hooks enable
+[dry-run] enable hooks in $LAB/home/.claude/settings.json
+[exit 0]
+
+== settings.json after dry-run (unchanged) ==
+{"theme":"dark","hooks":{"Stop":[{"hooks":[{"type":"command","command":"mine-stop"}]}]}}
+
+$ HOME=$LAB/home bin/fm-team-skills.sh hooks enable
+Backup: $LAB/home/.claude/settings.json.bak-20261016100158-17121
+Hooks enabled in $LAB/home/.claude/settings.json.
+[exit 0]
+
+== settings.json after enable ==
+{
+  "theme": "dark",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mine-stop"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M51F2NBBBZHBHGSW7HESF5JN/team-skills/hooks/no-raw-diagrams.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M51F2NBBBZHBHGSW7HESF5JN/team-skills/hooks/explain-with-example.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+
+$ HOME=$LAB/home bin/fm-team-skills.sh hooks status
+explain-with-example.sh (UserPromptSubmit): on
+no-raw-diagrams.py (Stop): on
+Settings file: $LAB/home/.claude/settings.json
+[exit 0]
+
+$ HOME=$LAB/home bin/fm-team-skills.sh hooks enable
+Hooks already enabled in $LAB/home/.claude/settings.json; nothing to change.
+[exit 0]
+
+$ HOME=$LAB/home bin/fm-team-skills.sh hooks disable
+Backup: $LAB/home/.claude/settings.json.bak-20261016100158-17403
+Hooks disabled in $LAB/home/.claude/settings.json.
+[exit 0]
+
+== settings.json after disable ==
+{
+  "theme": "dark",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "mine-stop"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+$ HOME=$LAB/home bin/fm-team-skills.sh hooks disable
+Hooks already disabled in $LAB/home/.claude/settings.json; nothing to change.
+[exit 0]
+
+== backups ==
+settings.json
+settings.json.bak-20261016100158-17121
+settings.json.bak-20261016100158-17403
+
+== adversarial: malformed settings ==
+$ HOME=$LAB/home bin/fm-team-skills.sh hooks enable
+fm-team-skills: $LAB/home/.claude/settings.json is not a JSON object with an object "hooks" of arrays; refusing to touch it
+[exit 1]
+
+== file after refusal ==
+{"hooks":[1]}
+$ HOME=$LAB/home bin/fm-team-skills.sh hooks enable
+fm-team-skills: $LAB/home/.claude/settings.json is not a JSON object with an object "hooks" of arrays; refusing to touch it
+[exit 1]
+
+== file after refusal ==
+not json {
+
+== adversarial: bad usage ==
+$ HOME=$LAB/home bin/fm-team-skills.sh hooks
+Fork-only: fm-team-skills.sh - links the team-skills/ set into the skills folders agent tools read.
+
+usage: fm-team-skills.sh [--dry-run] install|uninstall
+       fm-team-skills.sh [--dry-run] hooks enable|disable|status
+
+For each team-skills/<name> directory that holds a SKILL.md, install creates a
+symlink "<name>" in both $HOME/.claude/skills and $HOME/.agents/skills (made if
+missing) pointing at this clone's directory. Because the links point into the
+clone, a git pull updates every skill in place.
+install never overwrites anything: a path that already exists as a real file or
+directory, or as a link pointing elsewhere, is skipped and listed under
+"Conflicts" at the end. A link that already points at this clone is left alone,
+so install is idempotent.
+uninstall removes only links that point at this clone's team-skills/<name>;
+anything else at that path stays.
+--dry-run prints what would happen and changes nothing.
+
+hooks enable|disable|status manages the opt-in explain-with-example hooks from
+team-skills/hooks/ (a UserPromptSubmit reminder and the Stop hook that backs it).
+They are off by default and install/uninstall never touch settings. enable adds
+exactly those two entries to $CLAUDE_CONFIG_DIR/settings.json (default
+$HOME/.claude/settings.json), pointing at this clone; disable removes only entries
+whose command is one of those two scripts; every other key and hook is kept.
+Both are idempotent (no write when nothing changes), copy the file to
+settings.json.bak-<time> before a change, write through a symlinked settings file
+without replacing the link, and refuse (exit 1, file untouched) when the file is
+not a JSON object with an object "hooks" of arrays. Needs jq (the hook uses it too).
+status prints whether each hook is on. --dry-run reports without writing.
+Exit status: 0 when done (conflicts are reported, not an error), 1 when a link
+could not be created or removed (listed under "Failed" after the summary), 2 on
+bad usage.
+[exit 2]
+
+$ HOME=$LAB/home bin/fm-team-skills.sh enable
+fm-team-skills: unknown argument 'enable'
+Fork-only: fm-team-skills.sh - links the team-skills/ set into the skills folders agent tools read.
+
+usage: fm-team-skills.sh [--dry-run] install|uninstall
+       fm-team-skills.sh [--dry-run] hooks enable|disable|status
+
+For each team-skills/<name> directory that holds a SKILL.md, install creates a
+symlink "<name>" in both $HOME/.claude/skills and $HOME/.agents/skills (made if
+missing) pointing at this clone's directory. Because the links point into the
+clone, a git pull updates every skill in place.
+install never overwrites anything: a path that already exists as a real file or
+directory, or as a link pointing elsewhere, is skipped and listed under
+"Conflicts" at the end. A link that already points at this clone is left alone,
+so install is idempotent.
+uninstall removes only links that point at this clone's team-skills/<name>;
+anything else at that path stays.
+--dry-run prints what would happen and changes nothing.
+
+hooks enable|disable|status manages the opt-in explain-with-example hooks from
+team-skills/hooks/ (a UserPromptSubmit reminder and the Stop hook that backs it).
+They are off by default and install/uninstall never touch settings. enable adds
+exactly those two entries to $CLAUDE_CONFIG_DIR/settings.json (default
+$HOME/.claude/settings.json), pointing at this clone; disable removes only entries
+whose command is one of those two scripts; every other key and hook is kept.
+Both are idempotent (no write when nothing changes), copy the file to
+settings.json.bak-<time> before a change, write through a symlinked settings file
+without replacing the link, and refuse (exit 1, file untouched) when the file is
+not a JSON object with an object "hooks" of arrays. Needs jq (the hook uses it too).
+status prints whether each hook is on. --dry-run reports without writing.
+Exit status: 0 when done (conflicts are reported, not an error), 1 when a link
+could not be created or removed (listed under "Failed" after the summary), 2 on
+bad usage.
+[exit 2]
+
+$ HOME=$LAB/home bin/fm-team-skills.sh hooks frobnicate
+fm-team-skills: unknown argument 'frobnicate'
+Fork-only: fm-team-skills.sh - links the team-skills/ set into the skills folders agent tools read.
+
+usage: fm-team-skills.sh [--dry-run] install|uninstall
+       fm-team-skills.sh [--dry-run] hooks enable|disable|status
+
+For each team-skills/<name> directory that holds a SKILL.md, install creates a
+symlink "<name>" in both $HOME/.claude/skills and $HOME/.agents/skills (made if
+missing) pointing at this clone's directory. Because the links point into the
+clone, a git pull updates every skill in place.
+install never overwrites anything: a path that already exists as a real file or
+directory, or as a link pointing elsewhere, is skipped and listed under
+"Conflicts" at the end. A link that already points at this clone is left alone,
+so install is idempotent.
+uninstall removes only links that point at this clone's team-skills/<name>;
+anything else at that path stays.
+--dry-run prints what would happen and changes nothing.
+
+hooks enable|disable|status manages the opt-in explain-with-example hooks from
+team-skills/hooks/ (a UserPromptSubmit reminder and the Stop hook that backs it).
+They are off by default and install/uninstall never touch settings. enable adds
+exactly those two entries to $CLAUDE_CONFIG_DIR/settings.json (default
+$HOME/.claude/settings.json), pointing at this clone; disable removes only entries
+whose command is one of those two scripts; every other key and hook is kept.
+Both are idempotent (no write when nothing changes), copy the file to
+settings.json.bak-<time> before a change, write through a symlinked settings file
+without replacing the link, and refuse (exit 1, file untouched) when the file is
+not a JSON object with an object "hooks" of arrays. Needs jq (the hook uses it too).
+status prints whether each hook is on. --dry-run reports without writing.
+Exit status: 0 when done (conflicts are reported, not an error), 1 when a link
+could not be created or removed (listed under "Failed" after the summary), 2 on
+bad usage.
+[exit 2]
+
