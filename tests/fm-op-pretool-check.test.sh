@@ -16,6 +16,24 @@ set -u
 TMP_ROOT=$(fm_test_tmproot fm-op-pretool-check)
 CHECK="$ROOT/bin/fm-op-pretool-check.sh"
 
+# No test may write the real ~/.claude or ~/.claude-work. Capture the real HOME
+# before any override, run the installer with HOME pointed at a scratch dir (the
+# classifier keeps the real HOME so the asdf node shim still resolves), and fail
+# at once if that HOME or any directory the installer is aimed at resolves
+# inside the real HOME.
+REAL_HOME=$(CDPATH='' cd -- "${HOME:?HOME must be set}" 2>/dev/null && pwd -P) || fail "cannot resolve the real HOME"
+assert_outside_real_home() {  # <path>
+  local resolved
+  resolved=$(CDPATH='' cd -- "$1" 2>/dev/null && pwd -P) || fail "cannot resolve '$1'"
+  case "$resolved/" in
+    "$REAL_HOME"/*) fail "'$1' resolves inside the real HOME ($REAL_HOME); tests must never write there" ;;
+  esac
+}
+assert_outside_real_home "$TMP_ROOT"
+SCRATCH_HOME="$TMP_ROOT/home"
+mkdir -p "$SCRATCH_HOME"
+assert_outside_real_home "$SCRATCH_HOME"
+
 # run_check <command> [env assignments...]: prints "<exit>" and leaves the
 # output in CHECK_OUT, with OP_SERVICE_ACCOUNT_TOKEN unset unless supplied.
 run_check() {
@@ -177,14 +195,15 @@ test_fail_open() {
 test_installer() {
   local dir="$TMP_ROOT/inst" file n
   mkdir -p "$dir/.claude"
+  assert_outside_real_home "$dir"
   printf '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"touch x"}]}]},"env":{"A":"1"}}\n' > "$dir/.claude/settings.local.json"
-  "$ROOT/bin/fm-op-guard-install.sh" "$dir" || fail "installer failed"
+  HOME="$SCRATCH_HOME" "$ROOT/bin/fm-op-guard-install.sh" "$dir" || fail "installer failed"
   file="$dir/.claude/settings.local.json"
   jq -e '.env.A == "1" and (.hooks.Stop | length == 1)' "$file" >/dev/null || fail "installer dropped existing settings"
   jq -e --arg c "$ROOT/bin/fm-op-pretool-check.sh --claude" \
     '.hooks.PreToolUse[0].matcher == "Bash" and .hooks.PreToolUse[0].hooks[0].command == $c' "$file" >/dev/null \
     || fail "installer did not register the Bash PreToolUse hook"
-  "$ROOT/bin/fm-op-guard-install.sh" "$dir" || fail "second install failed"
+  HOME="$SCRATCH_HOME" "$ROOT/bin/fm-op-guard-install.sh" "$dir" || fail "second install failed"
   n=$(jq '.hooks.PreToolUse | length' "$file")
   [ "$n" = 1 ] || fail "installer is not idempotent: $n hook entries"
   # The registered command, run as the harness would, refuses a bare op call.
@@ -194,7 +213,8 @@ test_installer() {
   expect_code 2 $? "registered hook refuses a bare op call"
   # A fresh directory with no settings file gets one.
   mkdir -p "$TMP_ROOT/fresh"
-  "$ROOT/bin/fm-op-guard-install.sh" "$TMP_ROOT/fresh" || fail "fresh install failed"
+  assert_outside_real_home "$TMP_ROOT/fresh"
+  HOME="$SCRATCH_HOME" "$ROOT/bin/fm-op-guard-install.sh" "$TMP_ROOT/fresh" || fail "fresh install failed"
   jq -e '.hooks.PreToolUse | length == 1' "$TMP_ROOT/fresh/.claude/settings.local.json" >/dev/null || fail "fresh install wrote no hook"
   pass "installer merges, is idempotent, and registers a working hook"
 }
