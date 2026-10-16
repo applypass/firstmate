@@ -16,21 +16,21 @@
 # disabled and other harnesses have no registration, so they are not covered.
 #
 # Usage:
-#   <PreToolUse JSON on stdin> | bin/fm-op-pretool-check.sh [--claude|--cursor]
-#   bin/fm-op-pretool-check.sh --command '<cmd>' [--claude|--cursor]
+#   <PreToolUse JSON on stdin> | bin/fm-op-pretool-check.sh [--claude]
+#   bin/fm-op-pretool-check.sh --command '<cmd>' [--claude]
 #
-# Exit/output contract (same shape as bin/fm-cd-pretool-check.sh):
+# --claude marks the Claude PreToolUse registration; it is the only harness
+# this guard is registered in, so the output shape is the same with or
+# without it.
+#
+# Exit/output contract:
 #   ALLOW - exit 0 and no output.
-#   DENY - exit 2, a Claude-shaped deny object on stderr, and a Grok-shaped
-#          deny object on stdout unless --claude was supplied.
-#   DENY, --cursor - exit 0 and Cursor's decision object on stdout.
+#   DENY - exit 2 and a Claude-shaped deny object on stderr; stdout stays empty.
 #   FAIL OPEN - malformed or empty stdin, missing jq or Node, missing policy.
 set -u
 
 CMD=""
 CMD_SET=0
-CLAUDE_MODE=0
-CURSOR_MODE=0
 
 usage() {
   sed -n '2,/^set -u/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'
@@ -49,8 +49,7 @@ while [ "$#" -gt 0 ]; do
       CMD_SET=1
       shift
       ;;
-    --claude) CLAUDE_MODE=1; shift ;;
-    --cursor) CURSOR_MODE=1; shift ;;
+    --claude) shift ;;
     -h|--help) usage; exit 0 ;;
     *)
       echo "error: unknown argument: $1" >&2
@@ -69,7 +68,7 @@ if [ "$CMD_SET" -eq 0 ]; then
   command -v jq >/dev/null 2>&1 || exit 0
   # shellcheck source=bin/fm-hook-host-lib.sh
   . "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/fm-hook-host-lib.sh"
-  if [ "$CURSOR_MODE" -eq 0 ] && fm_hook_payload_is_foreign_host "$PAYLOAD"; then
+  if fm_hook_payload_is_foreign_host "$PAYLOAD"; then
     exit 0
   fi
   CMD=$(printf '%s' "$PAYLOAD" | jq -r '(.toolInput.command // .tool_input.command // empty)' 2>/dev/null) || exit 0
@@ -118,10 +117,5 @@ json_escape() {
 }
 
 ESCAPED=$(json_escape "[$CODE] $REASON")
-if [ "$CURSOR_MODE" -eq 1 ]; then
-  printf '{"permission":"deny","user_message":"%s"}\n' "$ESCAPED"
-  exit 0
-fi
 printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"%s"}\n' "$ESCAPED" >&2
-[ "$CLAUDE_MODE" -eq 1 ] || printf '{"decision":"deny","reason":"%s"}\n' "$ESCAPED"
 exit 2

@@ -15,7 +15,7 @@ set -u
 command -v jq >/dev/null 2>&1 || { echo "fm-op-guard-install: jq is required" >&2; exit 1; }
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P) || exit 1
-HOOK_CMD="$SCRIPT_DIR/fm-op-pretool-check.sh --claude"
+HOOK_CMD="$(printf %q "$SCRIPT_DIR/fm-op-pretool-check.sh") --claude"
 DIR=$(CDPATH='' cd -- "$1" && pwd -P) || exit 1
 FILE="$DIR/.claude/settings.local.json"
 

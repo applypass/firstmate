@@ -4423,6 +4423,7 @@ exclude_path() {
   local rel=$1 EXCL
   EXCL=$(git -C "$WT" rev-parse --git-path info/exclude 2>/dev/null || true)
   [ -n "$EXCL" ] || return 0
+  case "$EXCL" in /*) ;; *) EXCL="$WT/$EXCL" ;; esac
   mkdir -p "$(dirname "$EXCL")"
   grep -qxF "$rel" "$EXCL" 2>/dev/null || echo "$rel" >>"$EXCL"
 }
@@ -4510,9 +4511,6 @@ if [ "$KIND" != secondmate ]; then
 {"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"$j_submit"}]}],"Stop":[{"hooks":[{"type":"command","command":"$j_stop"}]}],"StopFailure":[{"hooks":[{"type":"command","command":"$j_stopfail"}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"$j_sessionend"}]}]}}
 EOF
     exclude_path '.claude/settings.local.json'
-    # Fork-only: refuse a bare 1Password `op` call from every Claude worker and secondmate.
-    "$SCRIPT_DIR/fm-op-guard-install.sh" "$WT" || echo "warning: could not register the op guard in $WT/.claude/settings.local.json" >&2
-    # Fork-only end
     ;;
   devin)
     if [ "$RAW_LAUNCH" -eq 0 ]; then
@@ -4814,6 +4812,17 @@ EOF
     ;;
   esac
 fi
+
+# Fork-only: refuse a bare 1Password `op` call from every Claude worker and
+# secondmate (bin/fm-op-guard-install.sh merges the hook into the untracked
+# .claude/settings.local.json the busy hooks above may have written).
+case "$HARNESS" in
+claude*)
+  "$SCRIPT_DIR/fm-op-guard-install.sh" "$WT" || echo "warning: could not register the op guard in $WT/.claude/settings.local.json" >&2
+  exclude_path '.claude/settings.local.json'
+  ;;
+esac
+# Fork-only end
 
 # Per-task git hooksPath that strips AI commit trailers at the commit object.
 # Installed for every kind, including secondmate, unless the home opts in to
