@@ -6,7 +6,7 @@
 # OP_SERVICE_ACCOUNT_TOKEN is set. Commands are only classified, never run, so
 # no real op, codex, or claude is launched. The suite proves the refused
 # matrix, the allowed matrix (token supplied, non-op words), that a token value
-# is never echoed, the harness payload shapes, fail-open transport, and the
+# is never echoed, the Claude payload shape, fail-open transport, and the
 # installer that registers the hook in a directory's untracked Claude settings.
 set -u
 
@@ -80,7 +80,21 @@ test_refused_cases() {
     'xargs op read' \
     'bash -c "op read z"' \
     "sh -c 'ls && op read z'" \
+    'bash -c "op read $ITEM"' \
+    'bash -c "ls; op read $X"' \
     'eval "op read z"' \
+    'eval "ls; op read $X"' \
+    'nice -n 10 op read x' \
+    'xargs -n 1 op read' \
+    'xargs -I {} op read {}' \
+    'for f in a b; do op read "op://v/$f"; done' \
+    'if op read x; then echo ok; fi' \
+    'if true; then op read x; fi' \
+    'if false; then echo no; else op read x; fi' \
+    'while true; do op read x; done' \
+    'until false; do op read x; done' \
+    '! op read x' \
+    'then sudo op read x' \
     'OP_SERVICE_ACCOUNT_TOKEN= op read y' \
     'env -u OP_SERVICE_ACCOUNT_TOKEN op read y' \
     'echo hi
@@ -125,11 +139,28 @@ test_token_supplied_cases() {
     'export OP_SERVICE_ACCOUNT_TOKEN=abc && echo $(op read x)' \
     'export OP_SERVICE_ACCOUNT_TOKEN=abc && bash -c "op read x"' \
     'declare -x OP_SERVICE_ACCOUNT_TOKEN=abc; op read x' \
-    'OP_SERVICE_ACCOUNT_TOKEN=abc bash -c "op read x"'; do
+    'OP_SERVICE_ACCOUNT_TOKEN=abc bash -c "op read x"' \
+    'OP_SERVICE_ACCOUNT_TOKEN=abc; export OP_SERVICE_ACCOUNT_TOKEN; op read x' \
+    'OP_SERVICE_ACCOUNT_TOKEN=abc; declare -x OP_SERVICE_ACCOUNT_TOKEN; op read x' \
+    'export OP_SERVICE_ACCOUNT_TOKEN=abc; bash -c "op read $ITEM"' \
+    'export OP_SERVICE_ACCOUNT_TOKEN=abc; for f in a b; do op read "op://v/$f"; done' \
+    'export OP_SERVICE_ACCOUNT_TOKEN=abc; nice -n 10 op read x'; do
     assert_allowed "$c"
   done
   # An export that comes after the call does not cover it.
   assert_refused 'op read x && export OP_SERVICE_ACCOUNT_TOKEN=abc'
+  # A name-only export loads nothing the line did not assign, and an unexport
+  # or an empty reassignment unloads it.
+  for c in \
+    'export OP_SERVICE_ACCOUNT_TOKEN; op read x' \
+    'export -n OP_SERVICE_ACCOUNT_TOKEN; op read x' \
+    'declare -x OP_SERVICE_ACCOUNT_TOKEN; op read x' \
+    'OP_SERVICE_ACCOUNT_TOKEN=abc; export -n OP_SERVICE_ACCOUNT_TOKEN; op read x' \
+    'OP_SERVICE_ACCOUNT_TOKEN=abc; declare +x OP_SERVICE_ACCOUNT_TOKEN; op read x' \
+    'OP_SERVICE_ACCOUNT_TOKEN=; export OP_SERVICE_ACCOUNT_TOKEN; op read x' \
+    'export OP_SERVICE_ACCOUNT_TOKEN=abc; OP_SERVICE_ACCOUNT_TOKEN=; op read x'; do
+    assert_refused "$c"
+  done
   # A token in the hook's own environment covers every call.
   run_check 'op read x' OP_SERVICE_ACCOUNT_TOKEN=abc
   expect_code 0 "$CHECK_RC" "token in the environment allows op"
@@ -155,22 +186,16 @@ test_token_never_echoed() {
 }
 
 test_harness_payloads() {
-  local out rc
-  out=$(printf '{"tool_input":{"command":"op whoami"}}' | env -u OP_SERVICE_ACCOUNT_TOKEN "$CHECK" --claude 2>/dev/null)
+  local out err rc
+  out=$(printf '{"tool_input":{"command":"op whoami"}}' | env -u OP_SERVICE_ACCOUNT_TOKEN "$CHECK" --claude 2>"$TMP_ROOT/claude.err")
   rc=$?
   expect_code 2 "$rc" "Claude payload refused"
   [ -z "$out" ] || fail "Claude deny must leave stdout empty, got: $out"
-  out=$(printf '{"toolInput":{"command":"op whoami"}}' | env -u OP_SERVICE_ACCOUNT_TOKEN "$CHECK" 2>/dev/null)
-  rc=$?
-  expect_code 2 "$rc" "Grok payload refused"
-  assert_contains "$out" '"decision":"deny"' "Grok deny object on stdout"
-  out=$(printf '{"tool_input":{"command":"op whoami"}}' | env -u OP_SERVICE_ACCOUNT_TOKEN "$CHECK" --cursor 2>/dev/null)
-  rc=$?
-  expect_code 0 "$rc" "Cursor deny exits 0"
-  assert_contains "$out" '"permission":"deny"' "Cursor decision object"
+  err=$(cat "$TMP_ROOT/claude.err")
+  assert_contains "$err" '"permissionDecision":"deny"' "Claude deny object on stderr"
   out=$(printf '{"tool_input":{"command":"ls"}}' | env -u OP_SERVICE_ACCOUNT_TOKEN "$CHECK" --claude 2>&1)
   expect_code 0 $? "non-op payload allowed"
-  pass "all harness payload shapes render the deny"
+  pass "the Claude stdin payload renders the deny"
 }
 
 test_fail_open() {
@@ -200,7 +225,7 @@ test_installer() {
   HOME="$SCRATCH_HOME" "$ROOT/bin/fm-op-guard-install.sh" "$dir" || fail "installer failed"
   file="$dir/.claude/settings.local.json"
   jq -e '.env.A == "1" and (.hooks.Stop | length == 1)' "$file" >/dev/null || fail "installer dropped existing settings"
-  jq -e --arg c "$ROOT/bin/fm-op-pretool-check.sh --claude" \
+  jq -e --arg c "$(printf %q "$ROOT/bin/fm-op-pretool-check.sh") --claude" \
     '.hooks.PreToolUse[0].matcher == "Bash" and .hooks.PreToolUse[0].hooks[0].command == $c' "$file" >/dev/null \
     || fail "installer did not register the Bash PreToolUse hook"
   HOME="$SCRATCH_HOME" "$ROOT/bin/fm-op-guard-install.sh" "$dir" || fail "second install failed"
@@ -216,6 +241,17 @@ test_installer() {
   assert_outside_real_home "$TMP_ROOT/fresh"
   HOME="$SCRATCH_HOME" "$ROOT/bin/fm-op-guard-install.sh" "$TMP_ROOT/fresh" || fail "fresh install failed"
   jq -e '.hooks.PreToolUse | length == 1' "$TMP_ROOT/fresh/.claude/settings.local.json" >/dev/null || fail "fresh install wrote no hook"
+  # A checkout under a path with a space registers a hook that still launches.
+  local spaced="$TMP_ROOT/with space/bin" target="$TMP_ROOT/spaced-target"
+  mkdir -p "$spaced" "$target"
+  assert_outside_real_home "$target"
+  cp "$ROOT/bin/fm-op-guard-install.sh" "$ROOT/bin/fm-op-pretool-check.sh" \
+    "$ROOT/bin/fm-op-command-policy.mjs" "$ROOT/bin/fm-arm-command-policy.mjs" "$ROOT/bin/fm-hook-host-lib.sh" "$spaced/"
+  HOME="$SCRATCH_HOME" "$spaced/fm-op-guard-install.sh" "$target" || fail "spaced-path install failed"
+  cmd=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$target/.claude/settings.local.json")
+  out=$(printf '{"tool_input":{"command":"op whoami"}}' | env -u OP_SERVICE_ACCOUNT_TOKEN bash -c "$cmd" 2>&1)
+  expect_code 2 $? "hook registered from a path with a space refuses a bare op call: $out"
+  assert_contains "$out" '"permissionDecision":"deny"' "spaced-path hook renders the deny"
   pass "installer merges, is idempotent, and registers a working hook"
 }
 

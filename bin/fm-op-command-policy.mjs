@@ -30,8 +30,18 @@ const REASONS = {
 
 const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
 // Words that run their next non-option word as a command but that
-// commandPosition does not unwrap.
-const PASSTHROUGH = new Set(["builtin", "time", "nice", "xargs", "stdbuf", "ionice"]);
+// commandPosition does not unwrap, each with the options that take a
+// separate argument.
+const PASSTHROUGH = new Map([
+  ["builtin", []],
+  ["time", ["-f", "-o"]],
+  ["nice", ["-n", "--adjustment"]],
+  ["xargs", ["-n", "-I", "-P", "-L", "-s", "-d", "-a", "-E"]],
+  ["stdbuf", ["-i", "-o", "-e"]],
+  ["ionice", ["-c", "-n", "-p"]],
+]);
+// Shell reserved words that may lead a node without being its command.
+const RESERVED = new Set(["if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "select", "!"]);
 
 // True for a `TOKEN=value` word whose value is non-empty, counting a value that
 // is only a substitution such as "$(cat file)".
@@ -71,50 +81,78 @@ function isCommandQuery(position) {
   return false;
 }
 
-function exportsToken(name, args) {
-  if (name === "export") {
-    return args.some((word) => word.value === TOKEN || setsToken(word));
-  }
-  if (name === "declare" || name === "typeset") {
-    const exporting = args.some((word) => /^-[A-Za-z]*x/.test(word.value));
-    return exporting && args.some((word) => word.value === TOKEN || setsToken(word));
-  }
-  return false;
+// Applies an `export`/`declare` node to `state` and returns true when it named
+// the token. A name-only export loads the token only when an earlier
+// assignment in this walk set it; `export -n` and `declare +x` unload it.
+function applyExport(name, args, state) {
+  let exporting;
+  if (name === "export") exporting = !args.some((word) => /^-[A-Za-z]*n/.test(word.value));
+  else if (name === "declare" || name === "typeset") {
+    exporting = args.some((word) => /^-[A-Za-z]*x/.test(word.value)) && !args.some((word) => /^\+[A-Za-z]*x/.test(word.value));
+  } else return false;
+  const named = args.find((word) => word.value === TOKEN || word.value.startsWith(`${TOKEN}=`));
+  if (!named) return false;
+  if (named.value !== TOKEN) state.assigned = setsToken(named);
+  state.loaded = exporting && state.assigned;
+  return true;
+}
+
+function fork(state) {
+  return { loaded: state.loaded, assigned: state.assigned };
+}
+
+function stripReserved(node) {
+  let start = 0;
+  while (node[start]?.type === "word" && RESERVED.has(node[start].value)) start += 1;
+  return start === 0 ? node : node.slice(start);
 }
 
 // Returns true when `command` calls op without the token. `state.loaded` is the
-// token's presence entering the command and is updated by an `export`.
+// token's exported presence entering the command and `state.assigned` its
+// shell-variable value; an assignment or `export` node updates them.
 function violates(command, state, depth) {
   if (depth > MAX_DEPTH) return false;
   const lexed = new Lexer(command).tokenize();
   if (lexed.error) return false;
   const { nodes } = splitProgram(lexed.tokens);
-  for (const node of nodes) {
-    for (const token of node) {
-      if (token.type === "group" && violates(token.content, { loaded: state.loaded }, depth + 1)) return true;
+  for (const rawNode of nodes) {
+    for (const token of rawNode) {
+      if (token.type === "group" && violates(token.content, fork(state), depth + 1)) return true;
       if (token.type === "word") {
         for (const sub of token.subs) {
-          if (violates(sub.content, { loaded: state.loaded }, depth + 1)) return true;
+          if (violates(sub.content, fork(state), depth + 1)) return true;
         }
       }
     }
+    const node = stripReserved(rawNode);
+    if (node.length === 0) continue;
     const position = commandPosition(node);
     if (isCommandQuery(position)) continue;
+    if (position.index === position.words.length) {
+      for (const word of position.words) {
+        if (!word.value.startsWith(`${TOKEN}=`)) continue;
+        state.assigned = setsToken(word);
+        state.loaded = state.loaded && state.assigned;
+      }
+      continue;
+    }
     const loaded = tokenAfterPrefix(position.words.slice(0, position.index), state.loaded);
     let index = position.index;
     let word = position.words[index];
     while (word && PASSTHROUGH.has(base(word.value))) {
+      const valued = PASSTHROUGH.get(base(word.value));
       index += 1;
-      while (position.words[index] && /^-/.test(position.words[index].value)) index += 1;
+      while (position.words[index] && /^-/.test(position.words[index].value)) {
+        const option = position.words[index];
+        index += 1;
+        if (valued.includes(option.value) && node[node.indexOf(option) + 1]?.type === "word") index += 1;
+      }
       word = position.words[index];
     }
     if (!word) continue;
     const name = base(word.value);
     const args = position.words.slice(index + 1);
-    if (exportsToken(name, args)) {
-      state.loaded = true;
-      continue;
-    }
+    if (applyExport(name, args, state)) continue;
     if (name === "op") {
       if (!loaded) return true;
       continue;
@@ -123,22 +161,21 @@ function violates(command, state, depth) {
       for (let i = 0; i < args.length; i += 1) {
         if (!/^-[A-Za-z]*c[A-Za-z]*$/.test(args[i].value)) continue;
         const payload = args[i + 1];
-        if (payload?.literal && violates(payload.value, { loaded }, depth + 1)) return true;
+        if (payload && payload.subs.length === 0 && violates(payload.value, { loaded, assigned: loaded }, depth + 1)) return true;
         break;
       }
     } else if (name === "eval") {
-      const payloads = args.filter((arg) => arg.literal);
-      if (payloads.length === args.length && args.length > 0 && violates(payloads.map((arg) => arg.value).join(" "), { loaded }, depth + 1)) return true;
+      if (args.length > 0 && args.every((arg) => arg.subs.length === 0) && violates(args.map((arg) => arg.value).join(" "), { loaded, assigned: state.assigned }, depth + 1)) return true;
     }
     for (const payload of position.wrapperPayloads) {
-      if (violates(payload, { loaded }, depth + 1)) return true;
+      if (violates(payload, { loaded, assigned: state.assigned }, depth + 1)) return true;
     }
   }
   return false;
 }
 
 function decision(command) {
-  if (violates(command, { loaded: false }, 0)) return { decision: "deny", code: "op-bare-call", reason: REASONS["op-bare-call"] };
+  if (violates(command, { loaded: false, assigned: false }, 0)) return { decision: "deny", code: "op-bare-call", reason: REASONS["op-bare-call"] };
   return { decision: "allow" };
 }
 

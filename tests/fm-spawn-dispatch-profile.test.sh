@@ -147,6 +147,18 @@ test_no_profile_keeps_claude_profile_defaults() {
   pass "no --model/--effort records defaults and types the claude launch instructions"
 }
 
+# Fork-only: the op guard (bin/fm-op-guard-install.sh) must be registered in the
+# directory a Claude pane runs in, worker worktree and secondmate home alike,
+# and the registered command must refuse a bare op call.
+assert_op_guard_registered() {  # <dir> <label>
+  local settings="$1/.claude/settings.local.json" cmd out
+  assert_present "$settings" "$2: no untracked Claude settings were written"
+  cmd=$(jq -r '[.hooks.PreToolUse[]? | select(.matcher == "Bash") | .hooks[]?.command] | first // empty' "$settings")
+  [ -n "$cmd" ] || fail "$2: no Bash PreToolUse hook is registered in $settings"
+  out=$(printf '{"tool_input":{"command":"op whoami"}}' | env -u OP_SERVICE_ACCOUNT_TOKEN bash -c "$cmd" 2>&1)
+  expect_code 2 $? "$2: the registered op guard must refuse a bare op call: $out"
+}
+
 # Claude Code strips U+2063 from the launch-prompt argument, so a claude launch
 # publishes the launch-brief envelope as a record in the receiving home's
 # operational inbox and passes only a printable doorbell naming it. Parsing the
@@ -179,6 +191,7 @@ test_claude_launch_brief_publishes_record_doorbell() {
   [ "$(printf '%s' "$doorbell" | FM_STATE_OVERRIDE="$HOME_DIR/state" "$ROOT/bin/fm-operational-input.sh" open "$record")" \
     = "$(cat "$HOME_DIR/data/$id/launch-brief.md")" ] \
     || fail "open did not return the launch brief body"
+  assert_op_guard_registered "$WT_DIR" "claude worker"
   pass "a claude launch publishes the brief as an operational-inbox record and passes only the doorbell"
 }
 
@@ -206,6 +219,7 @@ test_claude_secondmate_launch_brief_publishes_into_its_own_home() {
     || fail "the secondmate launch record did not publish into its own home: $record"
   [ -z "$(find "$HOME_DIR/state/operational-inbox" -name '*.msg' -print -quit 2>/dev/null)" ] \
     || fail "the secondmate launch record leaked into the primary's operational inbox"
+  assert_op_guard_registered "$sm" "claude secondmate"
   pass "a secondmate claude launch publishes its brief record into the secondmate's own home"
 }
 
