@@ -329,6 +329,11 @@ test_hook_scripts_behave() {
   out=$(printf '%s' '{"prompt":"please explain the flow"}' | "$EXPLAIN_CMD")
   assert_contains "$out" "TEAM RULE" "explain hook silent on an explain prompt"
   assert_not_contains "$out" "CAPTAIN" "explain hook kept a personal label"
+  local p
+  for p in "summarize this" "summary please" "write the docs" "update the tickets" "explaining the stories"; do
+    out=$(printf '%s' "{\"prompt\":\"$p\"}" | "$EXPLAIN_CMD")
+    assert_contains "$out" "TEAM RULE" "explain hook silent on: $p"
+  done
   out=$(printf '%s' '{"prompt":"rename the variable"}' | "$EXPLAIN_CMD")
   assert_equals "" "$out" "explain hook fired on an unrelated prompt"
   local tr="$TMP_ROOT/transcript.jsonl"

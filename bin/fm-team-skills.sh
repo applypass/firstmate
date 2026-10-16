@@ -113,7 +113,8 @@ hooks_main() {
   fi
   # Write through the path so a symlinked settings file stays a symlink.
   [ -n "$next" ] || { echo "fm-team-skills: internal error, empty result; $settings untouched" >&2; exit 1; }
-  printf '%s\n' "$next" | jq . > "$settings" || { echo "fm-team-skills: write to $settings failed; restore from the backup" >&2; exit 1; }
+  local out; out=$(printf '%s\n' "$next" | jq .) || { echo "fm-team-skills: internal error, invalid result; $settings untouched" >&2; exit 1; }
+  printf '%s\n' "$out" > "$settings" || { echo "fm-team-skills: write to $settings failed; restore from the backup" >&2; exit 1; }
   if [ "$SUB" = enable ]; then
     chmod +x "$SRC_ROOT"/hooks/* 2>/dev/null
     command -v python3 >/dev/null 2>&1 || echo "Warning: python3 not found; the Stop hook needs it." >&2
