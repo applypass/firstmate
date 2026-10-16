@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Fork-only: UserPromptSubmit hook. When a prompt asks for an explanation or a write-up,
+# remind the agent of the team's explain-with-example rule before it answers.
+# Opt-in: turn it on with `bin/fm-team-skills.sh hooks enable`. Needs jq.
+prompt="$(jq -r '.prompt // empty' 2>/dev/null)"
+printf '%s' "$prompt" | grep -qiE '\b(explain[a-z]*|explanation|why|how (does|do|did|is|are|will|would)|walk me|what (is|are|happened|went)|understand[a-z]*|clarif[a-z]*|flows?|tickets?|stor(y|ies)|docs?|documentation|write[- ]?ups?|summar[a-z]*|tell me)\b' || exit 0
+jq -n '{hookSpecificOutput:{hookEventName:"UserPromptSubmit",additionalContext:"TEAM RULE (enforced by hook): every explanation - in chat, tickets, docs, PRs - must (1) use a concrete worked example with real names/PRs/values, walked step by step as a flow of events (user flow and/or code path), never an abstract claim like \"every fix lands twice\" without showing the case; and (2) show any flow, sequence, state or structure visually using the show-me skill (Skill tool, skill: show-me): IN CHAT the terminal does NOT render mermaid or HTML tags: draw plain-text diagrams (box-drawing or arrows) in a ```text block, one step per line, no <br/>, no mermaid source; for anything too big, render a PNG and send it. IN TICKETS/DOCS render mermaid to PNG, Read the PNG yourself to check every label shows (# truncates mermaid text, ; splits it) before attaching. Before sending, check each claim has its example and each flow has its visual."}}'

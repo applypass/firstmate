@@ -18,6 +18,31 @@ Each skill becomes a symlink into this clone, so `git pull` updates every skill 
 Install never overwrites: a path that already exists, or a link pointing elsewhere, is skipped and listed under "Conflicts".
 Move that path yourself, then run install again.
 
+## Opt-in hooks
+
+Two hooks in `team-skills/hooks/` make agents follow the explain-with-example rule: every explanation gets a worked example and every flow gets a visual, drawn as plain text in chat because the terminal does not render Mermaid or HTML.
+They are off by default, and `install` and `uninstall` never touch your settings.
+
+- `explain-with-example.sh` (UserPromptSubmit) adds the rule to the prompt when it asks for an explanation, a write-up, a ticket, or a flow.
+- `no-raw-diagrams.py` (Stop) blocks a reply that contains a Mermaid block or a `<br/>` tag and asks the agent to resend it as plain text.
+  It belongs with the first hook because it enforces the plain-text half of the same rule.
+
+```bash
+bin/fm-team-skills.sh hooks status    # show which hooks are on
+bin/fm-team-skills.sh hooks enable    # add both to ~/.claude/settings.json
+bin/fm-team-skills.sh hooks disable   # remove them again
+```
+
+`enable` adds exactly those two entries, pointing at this clone, and keeps every other key and hook.
+An entry that already runs one of these scripts from another clone is re-pointed at this clone instead of duplicated.
+`disable` removes only entries that run these two scripts.
+Both are safe to repeat: a run that changes nothing writes nothing.
+Before a change the script copies the file to `settings.json.bak-<time>`, and it refuses without writing when the file is not valid JSON of the expected shape.
+A symlinked `settings.json` stays a link.
+Set `CLAUDE_CONFIG_DIR` to use `$CLAUDE_CONFIG_DIR/settings.json` instead of `~/.claude/settings.json`.
+The hooks need `jq` and `python3` on your PATH, and the rule points agents at the `show-me` skill from this set.
+Restart Claude Code after enabling or disabling so it reloads settings.
+
 ## Skills
 
 Third-party skills are copied in, not pinned.
