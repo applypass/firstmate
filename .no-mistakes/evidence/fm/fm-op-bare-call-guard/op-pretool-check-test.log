@@ -1,0 +1,9 @@
+ok - bare op calls are refused in every command position
+ok - non-op words and quoted op text are allowed
+ok - a token in the command or environment allows op
+ok - the deny reason's remedy loads the token or stops before op (bash zsh)
+ok - no token value is ever echoed
+ok - the Claude stdin payload renders the deny
+ok - malformed input and a missing runtime fail open
+ok - installer merges, is idempotent, and registers a working hook
+ok - op guard scripts are clean under bin/fm-lint.sh
