@@ -48,7 +48,7 @@ assert_refused() {
   expect_code 2 "$CHECK_RC" "refused: $1"
   assert_contains "$CHECK_OUT" '"permissionDecision":"deny"' "deny object for: $1"
   assert_contains "$CHECK_OUT" "OP_SERVICE_ACCOUNT_TOKEN" "reason names the fix for: $1"
-  assert_contains "$CHECK_OUT" "fm-op-service-account-lib.sh" "reason names the loader for: $1"
+  assert_contains "$CHECK_OUT" "fm-op-service-account-token.sh" "reason names the loader for: $1"
 }
 
 assert_allowed() {
@@ -186,19 +186,26 @@ test_deny_reason_remedy() {
   printf '#!/usr/bin/env bash\nprintf "%%s" "${OP_SERVICE_ACCOUNT_TOKEN:-}" > %s\n' "$marker" > "$bin/op"
   chmod +x "$bin/op"
 
-  rm -f "$marker"
-  env -u OP_SERVICE_ACCOUNT_TOKEN FM_HOME="$home" PATH="$bin:$PATH" bash -c "$example" >/dev/null 2>&1
-  rc=$?
-  [ "$rc" -ne 0 ] || fail "remedy succeeded with no token to load"
-  [ ! -e "$marker" ] || fail "remedy ran op with no token loaded"
+  # Claude Code's Bash tool runs the user's $SHELL, so the remedy must work
+  # under zsh as well as bash (sourcing the bash library from zsh used to fail).
+  local shells=(bash)
+  command -v zsh >/dev/null 2>&1 && shells+=(zsh)
+  local shell
+  for shell in "${shells[@]}"; do
+    rm -f "$marker" "$home/.env"
+    env -u OP_SERVICE_ACCOUNT_TOKEN FM_HOME="$home" PATH="$bin:$PATH" "$shell" -c "$example" >/dev/null 2>&1
+    rc=$?
+    [ "$rc" -ne 0 ] || fail "remedy under $shell succeeded with no token to load"
+    [ ! -e "$marker" ] || fail "remedy under $shell ran op with no token loaded"
 
-  printf 'OP_SERVICE_ACCOUNT_TOKEN=abc123\n' > "$home/.env"
-  env -u OP_SERVICE_ACCOUNT_TOKEN FM_HOME="$home" PATH="$bin:$PATH" bash -c "$example" >/dev/null 2>&1
-  rc=$?
-  expect_code 0 "$rc" "remedy runs op once the home .env supplies a token"
-  [ -e "$marker" ] || fail "remedy did not run op after loading the token"
-  [ "$(cat "$marker")" = "abc123" ] || fail "op did not receive the loaded token"
-  pass "the deny reason's remedy loads the token or stops before op"
+    printf 'OP_SERVICE_ACCOUNT_TOKEN=abc123\n' > "$home/.env"
+    env -u OP_SERVICE_ACCOUNT_TOKEN FM_HOME="$home" PATH="$bin:$PATH" "$shell" -c "$example" >/dev/null 2>&1
+    rc=$?
+    expect_code 0 "$rc" "remedy under $shell runs op once the home .env supplies a token"
+    [ -e "$marker" ] || fail "remedy under $shell did not run op after loading the token"
+    [ "$(cat "$marker")" = "abc123" ] || fail "op under $shell did not receive the loaded token"
+  done
+  pass "the deny reason's remedy loads the token or stops before op (${shells[*]})"
 }
 
 test_token_never_echoed() {
@@ -291,7 +298,7 @@ test_installer() {
 test_scripts_are_shellcheck_clean() {
   local out f
   command -v shellcheck >/dev/null 2>&1 || { pass "shellcheck not installed, skipping"; return; }
-  for f in fm-op-pretool-check.sh fm-op-guard-install.sh; do
+  for f in fm-op-pretool-check.sh fm-op-guard-install.sh fm-op-service-account-token.sh; do
     out=$("$ROOT/bin/fm-lint.sh" "$ROOT/bin/$f" 2>&1) || fail "bin/$f is not lint-clean: $out"
   done
   pass "op guard scripts are clean under bin/fm-lint.sh"

@@ -57,6 +57,7 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-arm-pretool-check.sh` | Stable PreToolUse transport for the watcher-arm command policy (docs/arm-pretool-check.md) |
 | `fm-op-pretool-check.sh` | Fork-only: PreToolUse transport that refuses a bare 1Password `op` call unless OP_SERVICE_ACCOUNT_TOKEN is loaded (decision in `fm-op-command-policy.mjs`) |
 | `fm-op-guard-install.sh` | Fork-only: register the op guard in a directory's untracked `.claude/settings.local.json`; `fm-spawn.sh` runs it for every Claude worker and secondmate |
+| `fm-op-service-account-token.sh` | Fork-only: print the 1Password service account token for a home (bash entry point over `fm-op-service-account-lib.sh`, named by the op guard's deny reason so the remedy works from any shell) |
 | `fm-arm-command-policy.mjs` | Semantic owner of the watcher-arm PreToolUse policy (docs/arm-pretool-check.md)   |
 | `fm-subagent-pretool-check.sh` | Primary-home delegation-shape PreToolUse guard (docs/subagent-guard.md) |
 | `fm-supervision-instructions.sh` | Render the session-start primary-harness supervision block or the one-line repair instruction |

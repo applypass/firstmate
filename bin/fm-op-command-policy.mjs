@@ -26,12 +26,14 @@ const MAX_DEPTH = 8;
 
 const BIN_DIR = dirname(fileURLToPath(import.meta.url));
 const FM_ROOT = dirname(BIN_DIR);
-const LOADER = `${BIN_DIR}/fm-op-service-account-lib.sh`;
-const LOAD_EXAMPLE = `OP_SERVICE_ACCOUNT_TOKEN=$(. "${LOADER}" && fm_op_service_account_token "\${FM_HOME:-${FM_ROOT}}") && export OP_SERVICE_ACCOUNT_TOKEN && op ...`;
+// A bash script, not a sourced library: the agent's shell may be zsh, where
+// sourcing bin/fm-op-service-account-lib.sh fails to find its siblings.
+const LOADER = `${BIN_DIR}/fm-op-service-account-token.sh`;
+const LOAD_EXAMPLE = `OP_SERVICE_ACCOUNT_TOKEN=$("${LOADER}" "\${FM_HOME:-${FM_ROOT}}") && export OP_SERVICE_ACCOUNT_TOKEN && op ...`;
 
 const REASONS = {
   "op-bare-call":
-    `a bare \`op\` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: ${LOAD_EXAMPLE} (fm-op-service-account-lib.sh reads the token from the environment, then the home .env files, and the line stops before op when no token is found). If no token is found, ask for one instead of using the desktop app.`,
+    `a bare \`op\` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: ${LOAD_EXAMPLE} (fm-op-service-account-token.sh prints the token from the environment, then the home .env files, and the line stops before op when no token is found). If no token is found, ask for one instead of using the desktop app.`,
 };
 
 const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
