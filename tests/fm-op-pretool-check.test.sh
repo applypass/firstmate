@@ -168,6 +168,39 @@ test_token_supplied_cases() {
   pass "a token in the command or environment allows op"
 }
 
+# The deny reason's example must itself pass the guard, run op only once a
+# token is loaded, and stop before op when no token can be found.
+test_deny_reason_remedy() {
+  local example home bin marker rc
+  run_check 'op read x'
+  expect_code 2 "$CHECK_RC" "bare op is refused before reading its remedy"
+  example=$(printf '%s' "$CHECK_OUT" | jq -r '.systemMessage' | sed -n 's/.*for example: \(.*&& op \.\.\.\).*/\1/p')
+  [ -n "$example" ] || fail "deny reason carries no example command: $CHECK_OUT"
+  example="${example% ...} read x"
+  assert_allowed "$example"
+
+  home="$TMP_ROOT/remedy-home"
+  bin="$TMP_ROOT/remedy-bin"
+  marker="$TMP_ROOT/remedy-op-ran"
+  mkdir -p "$home" "$bin"
+  printf '#!/usr/bin/env bash\nprintf "%%s" "${OP_SERVICE_ACCOUNT_TOKEN:-}" > %s\n' "$marker" > "$bin/op"
+  chmod +x "$bin/op"
+
+  rm -f "$marker"
+  env -u OP_SERVICE_ACCOUNT_TOKEN FM_HOME="$home" PATH="$bin:$PATH" bash -c "$example" >/dev/null 2>&1
+  rc=$?
+  [ "$rc" -ne 0 ] || fail "remedy succeeded with no token to load"
+  [ ! -e "$marker" ] || fail "remedy ran op with no token loaded"
+
+  printf 'OP_SERVICE_ACCOUNT_TOKEN=abc123\n' > "$home/.env"
+  env -u OP_SERVICE_ACCOUNT_TOKEN FM_HOME="$home" PATH="$bin:$PATH" bash -c "$example" >/dev/null 2>&1
+  rc=$?
+  expect_code 0 "$rc" "remedy runs op once the home .env supplies a token"
+  [ -e "$marker" ] || fail "remedy did not run op after loading the token"
+  [ "$(cat "$marker")" = "abc123" ] || fail "op did not receive the loaded token"
+  pass "the deny reason's remedy loads the token or stops before op"
+}
+
 test_token_never_echoed() {
   local secret='ops_SECRETVALUE123456' out
   # Refused call that carries a (later) token in the command line.
@@ -267,6 +300,7 @@ test_scripts_are_shellcheck_clean() {
 test_refused_cases
 test_allowed_cases
 test_token_supplied_cases
+test_deny_reason_remedy
 test_token_never_echoed
 test_harness_payloads
 test_fail_open

@@ -12,20 +12,26 @@
 // The shell tokenizer and command-position analysis come from
 // bin/fm-arm-command-policy.mjs, so this guard never duplicates shell lexing.
 // It never evaluates, expands, sources, or runs any byte of the command, and the
-// deny reason is a fixed string that never contains a token value.
+// deny reason names only this checkout's loader path, never a token value.
 // Untokenizable syntax fails open: the threat model is an agent mistake, which
 // always tokenizes.
 
 import { Lexer, splitProgram, commandPosition } from "./fm-arm-command-policy.mjs";
 import { realpathSync } from "node:fs";
+import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const TOKEN = "OP_SERVICE_ACCOUNT_TOKEN";
 const MAX_DEPTH = 8;
 
+const BIN_DIR = dirname(fileURLToPath(import.meta.url));
+const FM_ROOT = dirname(BIN_DIR);
+const LOADER = `${BIN_DIR}/fm-op-service-account-lib.sh`;
+const LOAD_EXAMPLE = `OP_SERVICE_ACCOUNT_TOKEN=$(. "${LOADER}" && fm_op_service_account_token "\${FM_HOME:-${FM_ROOT}}") && export OP_SERVICE_ACCOUNT_TOKEN && op ...`;
+
 const REASONS = {
   "op-bare-call":
-    "a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: export OP_SERVICE_ACCOUNT_TOKEN=\"$(. \"$FM_ROOT/bin/fm-op-service-account-lib.sh\" && fm_op_service_account_token \"$FM_HOME\")\" && op ... (bin/fm-op-service-account-lib.sh reads the token from the environment, then the home .env files). If no token is found, ask for one instead of using the desktop app.",
+    `a bare \`op\` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: ${LOAD_EXAMPLE} (fm-op-service-account-lib.sh reads the token from the environment, then the home .env files, and the line stops before op when no token is found). If no token is found, ask for one instead of using the desktop app.`,
 };
 
 const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
