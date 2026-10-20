@@ -1,0 +1,48 @@
+===== MAIN HOME (no secondmate markers) =====
+--- ledger ---
+start	gen=host-41973-1792481190	primary=claude
+failed	turn=host-41973-1792481190.1	posture=attended	rc=0	reports=0	unacked=1 2	error=0 cost=0.024986 conversation_cost=0.024986 input=10 cache_read=64775 cache_write=2312 output=924 turns=5		signal: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.B1pv39/main-real/state/demo.status
+to-main	the supervision session could not take this wake: the engine turn recorded no outcome for its wake; this wake is yours
+--- host.out (printed to the primary session) ---
+watcher: started pid=42511 (beacon fresh)
+signal: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.B1pv39/main-real/state/demo.status
+supervision-host: the supervision session could not take this wake: the engine turn recorded no outcome for its wake; this wake is yours
+--- host.rc ---
+0
+
+--- engine model arg ---
+--model
+sonnet
+--- engine result ---
+I couldn't handle this wake, and nothing has been reported or acknowledged for it.
+
+This home has no `bin/` directory. Without it I have no `bin/fm-wake-drain.sh`, `bin/fm-branch-report.sh` or `bin/fm-lease.sh`, and no `fm_branch_report` tool is available either. So I couldn't drain the wake, claim a lease, report or acknowledge. I didn't invent a workaround.
+
+What I could see:
+- **Status line:** `state/demo.status` has one line, "working: step one of the export finished; starting step two".
+- **Current state:** the only state script here, a stub in `fakebin/`, returns "unknown · fake default".
+
+If I had been able to report, this would have been a routine, silent "still working" outcome for task `demo`. The wake should be re-presented once the home's `bin/` is in place.
+===== SECONDMATE HOME =====
+--- ledger ---
+start	gen=host-70229-1792481213	primary=claude
+failed	turn=host-70229-1792481213.1	posture=attended	rc=0	reports=0	unacked=1 2	error=0 cost=0.024655 conversation_cost=0.024655 input=10 cache_read=64746 cache_write=2345 output=878 turns=5		signal: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.B1pv39/mate-real/state/demo.status
+to-main	the supervision session could not take this wake: the engine turn recorded no outcome for its wake; this wake is yours
+--- host.out (printed to the primary session) ---
+watcher: started pid=70453 (beacon fresh)
+signal: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.B1pv39/mate-real/state/demo.status
+supervision-host: the supervision session could not take this wake: the engine turn recorded no outcome for its wake; this wake is yours
+--- host.rc ---
+0
+
+--- engine model arg ---
+--model
+sonnet
+--- engine result ---
+I couldn't handle this wake, and nothing has been reported or acknowledged. The supervision scripts aren't present in this environment.
+
+- **Missing scripts:** `bin/fm-wake-drain.sh` and `bin/fm-branch-report.sh` don't exist in the home (`mate-real`) or in the other working directory, and neither is on PATH. The home's only `fakebin` contents are `fm-crew-state.sh` and `tmux`.
+- **What I saw:** `state/demo.status` has one line: `working [at=1792481213]: step one of the export finished; starting step two`. That looks like a routine still-working update.
+- **What I didn't do:** I didn't claim a lease, run the drain, report, or ack. I haven't verified the demo task's state, and a report built on a guess would be worse than none.
+
+The wake will need to be retried once the `bin/` scripts are installed.

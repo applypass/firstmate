@@ -1,0 +1,36 @@
+/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-wake-tangle-root.cPJjOE
+TOOL: cd /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.lAm2EU/mate-dbg && bin/fm-wake-drain.sh
+RESULT: Exit code 127
+(eval):1: no such file or directory: bin/fm-wake-drain.sh
+TOOL: cd /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.lAm2EU/mate-dbg && ls; ls bin | head; pwd
+RESULT: claude-pids
+claude.err
+config
+engine-62607.args
+engine-62607.cwd
+engine-62607.stream
+fakebin
+host.out
+mirror-seed.0
+state
+stub-mode
+ls: bin: No such file or directory
+/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.lAm2EU/mate-dbg
+TOOL: ls state fakebin; cat state/demo.status; cat stub-mode; which fm-wake-drain.sh fm-branch-report.sh
+RESULT: Exit code 1
+fakebin:
+fm-crew-state.sh
+tmux
+
+state:
+demo.meta
+demo.status
+home-summary.json
+terminal-outcomes
+working [at=1792481269]: step one of the export finished; starting step two
+handle
+fm-wake-drain.sh not found
+fm-branch-report.sh not found
+TEXT: I couldn't handle this wake. The `bin/` scripts it depends on, including `fm-wake-drain.sh` and `fm-branch-report.sh`, don't exist in this home. The directory has only `fakebin/` (with `fm-crew-state.sh` and `tmux`), `state/`, and a few stub files. I didn't try to work around that.
+
+The only evidenc

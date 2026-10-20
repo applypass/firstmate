@@ -1,0 +1,24 @@
+--- ledger ---
+start	gen=host-8037-1792481376	primary=claude
+handled	turn=host-8037-1792481376.1	posture=attended	rc=0	reports=1	error=0 cost=0.023731 conversation_cost=0.023731 input=10 cache_read=66271 cache_write=2581 output=676 turns=5	signal: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.c5N6Jk/mate-cap2/state/demo.status
+published	secondmate	store rows 1 reached the parent channel
+--- host.out: what the mate session was shown ---
+--- host exit code ---
+(none: still parked)
+--- watcher live: yes
+--- parent channel ---
+done [key=child-outcome-demo-done-8ac05026] [at=1792481376]: child demo done: PR #12 is open and CI is green; it is ready for the captain to review and merge
+done [key=branch-outcome-1] [at=1792481390]: captain outcome for demo: PR 12 for the demo project is open with CI green and ready for your review and merge. No PR URL is on record yet, so none is given.
+--- engine tool calls ---
+  $ cd /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.c5N6Jk/mate-cap2 && bin/fm-wake-drain.sh
+  $ cat state/demo.meta | grep -i pr; bin/fm-crew-state.sh demo | head -20
+  $ bin/fm-branch-report.sh --help 2>&1 | head -20
+  $ bin/fm-branch-report.sh --task demo --verdict captain --kind result --summary "PR 12 for the demo project is open with CI green and ready for your review and merge. No PR URL is on record yet, so none is given." && bin/fm-wake-drain.sh --ack-through 2 --recove
+--- engine final text ---
+The demo task's PR 12 is open with CI green and ready for the captain to review and merge. I reported it to MAIN as a captain result.
+
+No PR URL is recorded for the task, so the report names only "PR 12" and no PR check is armed. The crew state also says the demo worktree is gone, so the worker may already have been torn down. I did not run a teardown, because the PR hasn't landed.
+
+The report went through and I ran the acknowledgement for the wake. I claimed no leases, so there was nothing to release.
+--- outcome store (what the mate's next drain will present) ---
+{"seq":1,"epoch":1792481390,"task":"demo","wake":"signal: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.c5N6Jk/mate-cap2/state/demo.status","verdict":"captain","summary":"PR 12 for the demo project is open with CI green and ready for your review and merge. No PR URL is on record yet, so none is given.","silent":false,"statusEndpoint":102,"statusIdent":"strong:16777228:187015865:1792481376.307969262","unread":true,"recordedAgo":"0m"}

@@ -1,0 +1,5 @@
+ok - host: an attended wake the branch may take is handled on the engine, and its routine outcome never wakes main
+ok - host: a routine wake in a secondmate home is handled on the engine and never wakes the mate session
+ok - host: a captain outcome the script published to the parent channel waits for the mate's drain without waking the mate, and an unpublished one wakes it
+ok - host: a decision close and a non-routine check close still wake the mate session
+ok - host: a resurface over an empty queue in a secondmate home is absorbed, and the host keeps handling wakes

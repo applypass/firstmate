@@ -1,0 +1,30 @@
+--- ledger ---
+start	gen=host-55031-1792481338	primary=claude
+failed	turn=host-55031-1792481338.1	posture=attended	rc=0	reports=0	unacked=1 2	error=0 cost=0.02587 conversation_cost=0.02587 input=10 cache_read=65702 cache_write=2645 output=870 turns=5		signal: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.yO9VOT/mate-cap/state/demo.status
+to-main	the supervision session could not take this wake: the engine turn recorded no outcome for its wake; this wake is yours
+--- host.out: what the mate session was shown ---
+watcher: started pid=55521 (beacon fresh)
+signal: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.yO9VOT/mate-cap/state/demo.status
+supervision-host: the supervision session could not take this wake: the engine turn recorded no outcome for its wake; this wake is yours
+--- host exit code ---
+0
+--- parent channel (/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.yO9VOT/mate-cap-parent/state/mate-mate-cap.status) ---
+done [key=child-outcome-demo-done-626ecc30] [at=1792481340]: child demo done: PR #12 is open and CI is green; it is ready for the captain to review and merge
+--- engine tool calls ---
+  $ cd /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.yO9VOT/mate-cap && bin/fm-wake-drain.sh
+  $ cd /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.yO9VOT/mate-cap && ls; ls bin | head; pwd
+  $ ls fakebin state; cat state/demo.status; cat stub-mode; which fm-wake-drain.sh fm-branch-report.sh
+  $ cat state/demo.meta; cat fakebin/fm-crew-state.sh | head -20; ls state/terminal-outcomes
+--- engine final text ---
+I can't run the supervision procedure here. The fleet scripts (`bin/fm-wake-drain.sh`, `bin/fm-branch-report.sh` and the others) aren't in this home. It holds only stub state and a fake crew-state helper. So I can't drain the wake, claim a lease, release the validation gate, or file the report.
+
+What I can see for task `demo`:
+- **Status line:** "PR #12 is open and CI is green; it is ready for the captain to review and merge". The line carries no PR URL.
+- **Metadata:** no `pr=` field, so I have no full URL to give.
+- **Report marker:** `state/terminal-outcomes` already holds a `.reported` marker, which suggests an outcome may already be recorded.
+- **Validation gate:** the line doesn't say "ready for final validation", so it isn't the gate-release case.
+
+If this were a real fleet, I'd report verdict captain, kind result: "PR #12 is open with green CI and ready for review and merge." I'd give the identifier only, because no URL is recorded.
+
+I haven't sent that report or acknowledged the wake, and I haven't touched any state. To go further, I need the real firstmate home path, where `bin/` exists.
+--- outcome store ---

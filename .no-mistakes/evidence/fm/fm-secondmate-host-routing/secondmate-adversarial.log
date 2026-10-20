@@ -1,0 +1,15 @@
+--- host.out (what the mate session sees) ---
+check: rearm-resurface
+--- ledger ---
+start	gen=host-25258-1792481113	primary=claude
+start	gen=host-29047-1792481115	primary=claude
+pass-through	attended	main-only	check: rearm-resurface
+ok - adversarial: a resurface over a non-empty queue in a secondmate home still wakes the mate
+--- ledger ---
+start	gen=host-33912-1792481118	primary=claude
+start	gen=host-39684-1792481121	primary=claude
+pass-through	attended	main-only	check: rearm-resurface
+--- host.out ---
+watcher: started pid=40475 (beacon fresh)
+check: rearm-resurface
+ok - adversarial: a main (non-secondmate) home never takes the secondmate absorb path

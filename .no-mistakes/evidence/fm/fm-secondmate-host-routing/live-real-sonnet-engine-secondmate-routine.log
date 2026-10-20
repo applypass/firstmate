@@ -1,0 +1,21 @@
+===== SECONDMATE HOME, routine status wake, real Sonnet engine =====
+--- ledger (.supervision-host.log) ---
+start	gen=host-4582-1792481301	primary=claude
+handled	turn=host-4582-1792481301.1	posture=attended	rc=0	reports=1	error=0 cost=0.032991 conversation_cost=0.032991 input=12 cache_read=81972 cache_write=3590 output=1041 turns=6	signal: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.RT2wQ0/mate-real/state/demo.status
+--- host.out: everything the primary (mate) session was shown ---
+--- host exit code (absent = host still parked, primary not woken) ---
+(none: still parked)
+--- watcher live: yes
+--- engine model: sonnet
+--- engine tool calls ---
+  $ cd /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.RT2wQ0/mate-real && bin/fm-wake-drain.sh
+  $ cd /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.RT2wQ0/mate-real && pwd && ls; ls bin | head; cd /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M5C1WWVV61AEZHN9
+  $ export FM_HOME=/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.RT2wQ0/mate-real; bin/fm-wake-drain.sh; ls $FM_HOME/state
+  $ export FM_HOME=/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.RT2wQ0/mate-real; bin/fm-branch-report.sh --help 2>&1 | head -20
+  $ export FM_HOME=/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.RT2wQ0/mate-real; bin/fm-branch-report.sh --task demo --verdict routine --silent true --summary "Demo export
+--- engine final text ---
+The demo export worker sent a routine progress update: step one is finished and step two has started. I took no action and reported it as a routine outcome, marked silent. The wake is acknowledged.
+
+I ran the scripts from the worktree's `bin/` with the mate home set as `FM_HOME`, because the mate home has no `bin/` of its own. I didn't claim a lease, since I changed nothing on the task. The acknowledge command printed no output, so I assume it went through.
+--- outcome store (present) ---
+{"seq":1,"epoch":1792481318,"task":"demo","wake":"signal: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.RT2wQ0/mate-real/state/demo.status","verdict":"routine","summary":"Demo export worker is still busy: step one finished, step two started. No action needed.","silent":true,"statusEndpoint":76,"statusIdent":"strong:16777228:187012554:1792481302.019135844","unread":true}
