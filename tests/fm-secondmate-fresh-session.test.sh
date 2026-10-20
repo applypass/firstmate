@@ -13,15 +13,15 @@
 #      an unread steering message, an unacknowledged wake row, or a busy agent
 #      each defer the restart and leave every durable record untouched.
 #   3. An unread steering message survives the restart and a deferral.
-#   4. A child whose work landed (merged PR or landed cleanup record) asks for
+#   4. A child whose work landed (merged PR) asks for
 #      the same fresh session; a child's PR-ready line, a pure acknowledgement
 #      without --item, a main home, a remote route, and
 #      FM_SECONDMATE_FRESH_SESSION=off ask for nothing.
 #   5. A corr with no pending-reply record does not defer forever, and a failed
 #      relaunch leaves fm-control's error in state/fresh-session.log.
-#   6. The real ledger pass asks for a fresh session for a done child, and one
-#      child's landed work (merged PR, then its done ledger line) restarts the
-#      mate once.
+#   6. The real ledger pass reports a child's done line (its PR-ready report)
+#      and asks for nothing; a merged PR or a local-only fast-forward
+#      (bin/fm-merge-local.sh) asks for one, and one child restarts the mate once.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -397,32 +397,41 @@ ledger_scan() {  # <case-dir>
   FM_HOME="$1/sm1-home" "$ROOT/bin/fm-inactive-reconcile.sh" scan >/dev/null 2>&1 || true
 }
 
-# --- T8: the ledger pass requests; one landed child restarts the mate once ---
-test_ledger_pass_and_one_restart_per_child() {
-  local dir out
-  dir=$(new_case ledger)
+# --- T8: a done ledger line asks for nothing; a landing restarts once --------
+test_landing_restarts_once_per_child() {
+  local dir out proj
+  dir=$(new_case landing)
   add_local_mate "$dir" sm1
   bind_mate "$dir" sm1
-
-  add_done_child "$dir" child2
-  ledger_scan "$dir"
-  assert_present "$dir/sm1-home/state/fresh-session.request" "the ledger pass must request a fresh session for a done child"
-  assert_contains "$(cat "$dir/sm1-home/data/fresh-session-handover.md")" "child child2 done" "the note must name the landed child"
-  rm -f "$dir/sm1-home/state/fresh-session.request"
-
-  FM_HOME="$dir/sm1-home" bash -c '. "$1/bin/fm-merge-outcome-lib.sh"; fm_merge_outcome_report "$2" "$2/state" child1 https://github.com/o/r/pull/7 self attended' \
-    _ "$ROOT" "$dir/sm1-home" || true
-  assert_present "$dir/sm1-home/state/fresh-session.request" "a merged child PR must request a fresh session"
-  out=$(sweep "$dir")
-  assert_contains "$out" "restarted sm1" "the merged child must restart the mate"$'\n'"$out"
 
   add_done_child "$dir" child1
   ledger_scan "$dir"
   grep -q 'child child1 done' "$dir/home/state/sm1.status" || fail "the ledger pass did not report child1"
-  assert_absent "$dir/sm1-home/state/fresh-session.request" "child1's done line must not request a second restart"
+  assert_absent "$dir/sm1-home/state/fresh-session.request" "a child's done ledger line is PR-ready, not a landing"
+
+  FM_HOME="$dir/sm1-home" bash -c '. "$1/bin/fm-merge-outcome-lib.sh"; fm_merge_outcome_report "$2" "$2/state" child1 https://github.com/o/r/pull/7 self attended' \
+    _ "$ROOT" "$dir/sm1-home" || true
+  assert_present "$dir/sm1-home/state/fresh-session.request" "a merged child PR must request a fresh session"
+  assert_contains "$(cat "$dir/sm1-home/data/fresh-session-handover.md")" "pull/7" "the note must name the landed PR"
   out=$(sweep "$dir")
-  case "$out" in *restarted*) fail "one landed child restarted the mate twice"$'\n'"$out" ;; esac
-  pass "T8 the ledger pass requests a fresh session, and one landed child restarts the mate once"
+  assert_contains "$out" "restarted sm1" "the merged child must restart the mate"$'\n'"$out"
+
+  FM_HOME="$dir/sm1-home" bash -c '. "$1/bin/fm-merge-outcome-lib.sh"; fm_merge_outcome_report "$2" "$2/state" child1 https://github.com/o/r/pull/8 self attended' \
+    _ "$ROOT" "$dir/sm1-home" || true
+  assert_absent "$dir/sm1-home/state/fresh-session.request" "a second landing for child1 must not request a second restart"
+
+  proj="$dir/sm1-home/projects/child3"
+  mkdir -p "$proj"
+  git -C "$proj" init -q -b main
+  git -C "$proj" commit -q --allow-empty -m init
+  git -C "$proj" checkout -q -b fm/child3
+  git -C "$proj" commit -q --allow-empty -m slice
+  git -C "$proj" checkout -q main
+  printf 'window=fmses:fm-child3\nworktree=%s\nproject=%s\nharness=codex\nkind=ship\nmode=local-only\nyolo=off\n' \
+    "$proj" "$proj" > "$dir/sm1-home/state/child3.meta"
+  FM_HOME="$dir/sm1-home" "$ROOT/bin/fm-merge-local.sh" child3 >/dev/null 2>&1 || fail "the local-only merge refused"
+  assert_present "$dir/sm1-home/state/fresh-session.request" "a local-only landing must request a fresh session"
+  pass "T8 a done ledger line asks for nothing; a merged PR or local-only landing restarts once per child"
 }
 
 # --- T6: the watcher's own poll applies the request -----------------------
@@ -457,7 +466,7 @@ test_unread_work_and_busy_agent_defer
 test_child_landed_requests
 test_no_record_corr_and_failed_relaunch
 test_no_request_where_not_applicable
-test_ledger_pass_and_one_restart_per_child
+test_landing_restarts_once_per_child
 test_watcher_poll_applies_request
 
 echo "# all fm-secondmate-fresh-session tests passed"

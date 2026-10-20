@@ -13,16 +13,18 @@
 #   fm-secondmate-fresh-session.sh sweep
 #
 # request - run inside the second mate's home (FM_HOME is that home). Called by
-#   bin/fm-secondmate-report.sh after a done/ready/failed report with --item and by
-#   bin/fm-merge-outcome-lib.sh and bin/fm-inactive-reconcile.sh after a child's work landed. It writes two
+#   bin/fm-secondmate-report.sh after a done/ready/failed report with --item, and
+#   after a child's work landed by bin/fm-merge-outcome-lib.sh (a merged PR) and
+#   bin/fm-merge-local.sh (a local-only fast-forward). A child's done ledger line
+#   is its PR-ready report, not a landing, and asks for nothing. It writes two
 #   durable files and nothing else: the handover note, data/fresh-session-handover.md
 #   (under 40 lines: what finished, the child tasks still in flight, the unread
 #   instruction count, where the open work lives), and the request marker,
 #   state/fresh-session.request. It never touches the running agent. A remote
 #   route and a main home are ignored: a remote mate's restart is not covered.
-#   --child names the child whose work landed. Both child hooks name it, so the
-#   id goes into state/fresh-session.landed and a later request for the same
-#   child asks for nothing: one landed slice restarts the mate once.
+#   --child names the child whose work landed. The id goes into
+#   state/fresh-session.landed and a later request for the same child asks for
+#   nothing: one landed slice restarts the mate once.
 # apply - run in the parent home (FM_HOME is the parent). Restarts one mate with
 #   bin/fm-control.sh <id> relaunch, the same path /updatefirstmate uses, only
 #   when every check below passes; otherwise it prints "deferred" and leaves the

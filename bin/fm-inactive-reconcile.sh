@@ -452,9 +452,6 @@ report_child_ledger_locked() { # <id> <meta>
     line="$line report=data/$id/report.md"
   fi
   if fm_parent_channel_report "$FM_HOME" "$STATE" "$line"; then
-    # Fork-only (applypass): a child whose work landed ends a piece of work, so ask for a fresh session.
-    [ "$state" != "done" ] || FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
-      "$(dirname "${BASH_SOURCE[0]}")/fm-secondmate-fresh-session.sh" request --source child --verb "done" --child "$id" "$line" >/dev/null 2>&1 || true
     mark_reported "$RECORD_PENDING" || return 1
     return 0
   fi
