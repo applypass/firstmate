@@ -8,15 +8,13 @@
 # hour or more and fails at the push step with "refusing to reconcile private
 # mirror ref ... at-risk commit(s) contain content absent from live head", and
 # each retry repeats the whole review. This check compares the mirror branch
-# and the forge branch (origin/<branch>) with the local HEAD in a few git calls
-# and refuses before the run starts.
+# with the local HEAD in a few git calls and refuses before the run starts.
 #
-# Refused, naming every SHA and the safe fix:
-#   - the mirror branch is not an ancestor of HEAD and holds a commit whose
-#     patch is not already in HEAD (`git cherry`), or
-#   - origin/<branch> exists and has commits that HEAD lacks.
-# Allowed: no mirror branch yet, no origin/<branch> yet, mirror equal to or
-# behind HEAD, mirror commits that HEAD carries as rebased copies.
+# Refused, naming both SHAs and the safe fix: the mirror branch is not an
+# ancestor of HEAD and holds a commit whose patch is not already in HEAD
+# (`git cherry`).
+# Allowed: no mirror branch yet, mirror equal to or behind HEAD, mirror commits
+# that HEAD carries as rebased copies.
 #
 # Intercept point: a PreToolUse Bash hook on the worker side, the same point as
 # the op guard (bin/fm-op-guard-install.sh registers it with that guard). Only
@@ -100,7 +98,6 @@ OBJECTS=$(g rev-parse --path-format=absolute --git-path objects) || exit 0
 gate_git() { GIT_ALTERNATE_OBJECT_DIRECTORIES=$OBJECTS git --git-dir="$GATE" "$@" 2>/dev/null; }
 
 MIRROR_SHA=$(gate_git rev-parse --verify -q "refs/heads/$BRANCH^{commit}") || MIRROR_SHA=""
-FORGE_SHA=$(g rev-parse --verify -q "refs/remotes/origin/$BRANCH^{commit}") || FORGE_SHA=""
 
 PROBLEMS=""
 if [ -n "$MIRROR_SHA" ] && [ "$MIRROR_SHA" != "$HEAD_SHA" ] \
@@ -113,17 +110,10 @@ if [ -n "$MIRROR_SHA" ] && [ "$MIRROR_SHA" != "$HEAD_SHA" ] \
 "
   fi
 fi
-if [ -n "$FORGE_SHA" ] && [ "$FORGE_SHA" != "$HEAD_SHA" ]; then
-  AHEAD=$(g rev-list --count "$HEAD_SHA..$FORGE_SHA") || AHEAD=0
-  if [ "${AHEAD:-0}" -gt 0 ]; then
-    PROBLEMS="${PROBLEMS}- the forge branch (origin/$BRANCH, $FORGE_SHA) has $AHEAD commit(s) that local HEAD ($HEAD_SHA) does not contain.
-"
-  fi
-fi
 [ -n "$PROBLEMS" ] || exit 0
 
 REASON="Refusing to start a no-mistakes run for branch $BRANCH: the run would review for a long time and then fail at the push step.
-${PROBLEMS}Safe fix: run 'no-mistakes sync --check' to see the proof, then 'no-mistakes sync' (or 'no-mistakes sync --recover') to bring the branch to the pipeline head, or merge/rebase origin/$BRANCH into the branch and retry. Never force-push, reset or delete the mirror branch yourself; report blocked to firstmate if sync refuses."
+${PROBLEMS}Safe fix: run 'no-mistakes sync --check' to see the proof, then 'no-mistakes sync' (or 'no-mistakes sync --recover') to bring the branch to the pipeline head, then retry. Never force-push, reset or delete the mirror branch yourself; report blocked to firstmate if sync refuses."
 
 json_escape() {
   printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr '\n' ' '

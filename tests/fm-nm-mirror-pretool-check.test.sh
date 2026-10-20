@@ -51,27 +51,26 @@ assert_allowed() {  # <label> <command>
 test_clean_fast_forward_allowed() {
   new_case ff
   echo two > "$W/c"; git -C "$W" add c; git -C "$W" commit -qm two
-  assert_allowed "mirror and forge behind HEAD (fast-forward)" "$RUN"
+  assert_allowed "mirror behind HEAD (fast-forward)" "$RUN"
   pass "clean fast-forward is allowed"
 }
 
-test_no_forge_branch_allowed() {
-  new_case noforge
-  git -C "$W" update-ref -d refs/remotes/origin/feat
-  assert_allowed "no forge branch yet" "$RUN"
+test_no_mirror_branch_allowed() {
+  new_case nomirror
   git -C "$GATE" update-ref -d refs/heads/feat
-  assert_allowed "no mirror branch and no forge branch" "$RUN"
-  pass "missing forge or mirror branch is allowed"
+  assert_allowed "no mirror branch yet" "$RUN"
+  pass "missing mirror branch is allowed"
 }
 
 test_rebased_copy_allowed() {
   new_case rebased
   # Rebase the feature commit onto a new main commit: same patch, new SHA.
+  # origin/feat and the mirror both keep the pre-rebase commit; the run
+  # pushes the rebased branch itself.
   git -C "$W" checkout -q main
   echo m2 > "$W/m"; git -C "$W" add m; git -C "$W" commit -qm m2
   git -C "$W" checkout -q feat
   git -C "$W" rebase -q main
-  git -C "$W" push -q -f origin feat
   assert_allowed "mirror holds only an equivalent pre-rebase copy" "$RUN"
   pass "a pre-rebase mirror whose patches HEAD already carries is allowed"
 }
@@ -79,7 +78,7 @@ test_rebased_copy_allowed() {
 test_diverged_mirror_refused_fast() {
   new_case div
   # The pipeline's fix commit exists only in the mirror; the worker then
-  # rewrites the branch locally and on the forge.
+  # moves on locally without syncing it back.
   git -C "$W" checkout -q -b scratch
   echo fix > "$W/fix"; git -C "$W" add fix; git -C "$W" commit -qm "no-mistakes(review): fix"
   git -C "$W" push -q -f no-mistakes scratch:feat
@@ -87,7 +86,6 @@ test_diverged_mirror_refused_fast() {
   mirror=$(git -C "$GATE" rev-parse refs/heads/feat)
   git -C "$W" checkout -q feat
   echo two > "$W/c"; git -C "$W" add c; git -C "$W" commit -qm two
-  git -C "$W" push -q origin feat
   local head
   head=$(git -C "$W" rev-parse HEAD)
   before=$(git -C "$GATE" for-each-ref)
@@ -107,20 +105,6 @@ test_diverged_mirror_refused_fast() {
     *) [ $(( (end - start) / 1000000 )) -lt 1000 ] || fail "refusal took $(( (end - start) / 1000000 )) ms" ;;
   esac
   pass "diverged mirror is refused in under a second, naming both SHAs, without touching the gate"
-}
-
-test_forge_ahead_refused() {
-  new_case forge
-  local other="$TMP_ROOT/forge/other"
-  git clone -q -b feat "$FORGE" "$other"
-  echo remote > "$other/r"; git -C "$other" add r; git -C "$other" commit -qm remote
-  git -C "$other" push -q origin feat
-  git -C "$W" fetch -q origin
-  run_check "$RUN"
-  expect_code 2 "$CHECK_RC" "forge ahead of HEAD is refused"
-  assert_contains "$CHECK_OUT" "$(git -C "$W" rev-parse refs/remotes/origin/feat)" "message names the forge SHA"
-  assert_contains "$CHECK_OUT" "$(git -C "$W" rev-parse HEAD)" "message names HEAD"
-  pass "forge branch with commits HEAD lacks is refused"
 }
 
 test_only_new_runs_checked() {
@@ -184,10 +168,9 @@ test_scripts_are_shellcheck_clean() {
 }
 
 test_clean_fast_forward_allowed
-test_no_forge_branch_allowed
+test_no_mirror_branch_allowed
 test_rebased_copy_allowed
 test_diverged_mirror_refused_fast
-test_forge_ahead_refused
 test_only_new_runs_checked
 test_fail_open
 test_hook_payload
