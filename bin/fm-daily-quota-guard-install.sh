@@ -7,7 +7,8 @@
 # into <dir>/.claude/settings.local.json, keeping every other setting.
 # --home names the firstmate home that launched the worker and --status-file the worker's status file, so a
 # refusal reports into the right channel. Idempotent: a hook already pointing
-# at this script is left alone. bin/fm-spawn.sh runs it for every Claude worker.
+# at this script is left alone. bin/fm-spawn.sh runs it for every Claude worker
+# and secondmate.
 set -u
 
 [ "$#" -ge 1 ] && [ -d "$1" ] || { echo "usage: fm-daily-quota-guard-install.sh <dir> [--home DIR] [--status-file FILE]" >&2; exit 2; }

@@ -20,7 +20,8 @@
 # Callers: bin/fm-spawn.sh (every fresh launch, never --relaunch), the
 # no-mistakes pre-receive companion (bin/fm-validation-gate-pre-receive.sh,
 # every new run start from any harness or home), and
-# bin/fm-daily-quota-pretool-check.sh (`no-mistakes rerun` in a Claude worker).
+# bin/fm-daily-quota-pretool-check.sh (a run start in a Claude worker or secondmate:
+# `axi run --intent`, `rerun`, or `git push no-mistakes`).
 # The library header owns the files and the day-start rule; docs/configuration.md
 # "Daily quota stop" owns the operator view.
 set -u

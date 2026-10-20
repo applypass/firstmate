@@ -63,7 +63,7 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-daily-quota-stop.sh` | Fork-only: daily Claude quota stop gate (`check`); refuses new launches and no-mistakes runs at 20% of the weekly quota used today and holds them at 25% (docs/configuration.md) |
 | `fm-daily-quota-lib.sh` | Fork-only: quota-axi read, day-start baseline, and verdict logic sourced by `fm-daily-quota-stop.sh` |
 | `fm-daily-quota-pretool-check.sh` | Fork-only: PreToolUse second layer that refuses `no-mistakes axi run --intent`, `no-mistakes rerun`, and `git push no-mistakes` while the daily quota stop is in force |
-| `fm-daily-quota-guard-install.sh` | Fork-only: register the daily quota hook in a worktree's untracked `.claude/settings.local.json`; `fm-spawn.sh` runs it for every Claude worker |
+| `fm-daily-quota-guard-install.sh` | Fork-only: register the daily quota hook in a worktree's untracked `.claude/settings.local.json`; `fm-spawn.sh` runs it for every Claude worker and secondmate |
 | `fm-arm-command-policy.mjs` | Semantic owner of the watcher-arm PreToolUse policy (docs/arm-pretool-check.md)   |
 | `fm-subagent-pretool-check.sh` | Primary-home delegation-shape PreToolUse guard (docs/subagent-guard.md) |
 | `fm-supervision-instructions.sh` | Render the session-start primary-harness supervision block or the one-line repair instruction |
