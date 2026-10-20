@@ -4813,8 +4813,9 @@ EOF
   esac
 fi
 
-# Fork-only: refuse a bare 1Password `op` call from every Claude worker and
-# secondmate (bin/fm-op-guard-install.sh merges the hook into the untracked
+# Fork-only: refuse a bare 1Password `op` call, and a new no-mistakes run on a
+# diverged private mirror branch, from every Claude worker and secondmate
+# (bin/fm-op-guard-install.sh merges the hooks into the untracked
 # .claude/settings.local.json the busy hooks above may have written).
 case "$HARNESS" in
 claude*)
