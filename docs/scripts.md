@@ -57,6 +57,7 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-kimi-turnend-hook.sh` | Surgically install or remove Kimi's guarded global crew turn-end hook                |
 | `fm-arm-pretool-check.sh` | Stable PreToolUse transport for the watcher-arm command policy (docs/arm-pretool-check.md) |
 | `fm-final-run-handover.sh` | Fork-only: hand-over note a ship writes before its final no-mistakes run; `fm-validation-gate.sh release` relaunches a fresh worker from it instead of steering the long implementation conversation |
+| `fm-secondmate-fresh-session.sh` | Fork-only: restart an idle local second mate with a handover note after it reports finished work or a child's work lands; the watcher poll runs its sweep |
 | `fm-op-pretool-check.sh` | Fork-only: PreToolUse transport that refuses a bare 1Password `op` call unless OP_SERVICE_ACCOUNT_TOKEN is loaded (decision in `fm-op-command-policy.mjs`) |
 | `fm-op-guard-install.sh` | Fork-only: register the op guard and the no-mistakes mirror check in a directory's untracked `.claude/settings.local.json`; `fm-spawn.sh` runs it for every Claude worker and secondmate |
 | `fm-nm-mirror-pretool-check.sh` | Fork-only: PreToolUse check that refuses a new `no-mistakes axi run --intent` when the private mirror branch holds commits whose patches local HEAD lacks |
