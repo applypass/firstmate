@@ -111,7 +111,9 @@ case "${1:-}" in
       prev=$a
     done
     printf 'fakepane\n'; exit 0 ;;
-  capture-pane) printf '╭────╮\n│    │\n╰────╯\n'; exit 0 ;;
+  capture-pane)
+    if [ -f "$D/pane" ]; then cat "$D/pane"; else printf '╭────╮\n│    │\n╰────╯\n'; fi
+    exit 0 ;;
   list-windows) [ -f "$D/windows" ] && cat "$D/windows"; exit 0 ;;
 esac
 exit 0
@@ -181,8 +183,9 @@ assert_not_stopped() {  # <case-dir> <msg>
   ! grep -qx '/exit' "$1/fake/literal" || fail "$2"
 }
 
-# bind_mate <case-dir> <id>: the parent binding a seeded home carries, plus the
-# semantic idle record the harness's own hook would have written.
+# bind_mate <case-dir> <id>: the parent binding a seeded home carries. Like a
+# real second mate it has no semantic busy-state record; the parent reads its
+# pane.
 bind_mate() {
   local dir=$1 id=$2 smhome
   smhome="$dir/$id-home"
@@ -191,14 +194,14 @@ schema=fm-secondmate-parent.v1
 route=local
 parent_home=$dir/home
 EOT
-  set_agent_state "$dir" "$id" idle
 }
 
-# set_agent_state <case-dir> <id> <idle|busy>
+# set_agent_state <case-dir> <idle|busy>: what the mate's pane shows.
 set_agent_state() {
-  local dir=$1 id=$2 state=$3 st="$1/home/state"
-  printf 'g1\n' > "$st/$id.busy-gen"
-  printf 'v1 gen=g1 seq=1 state=%s source=claude-hook event=Stop ts=%s\n' "$state" "$(date +%s)" > "$st/$id.busy-state"
+  case "$2" in
+    busy) printf '✻ Working… (3s · esc to interrupt)\n' > "$1/fake/pane" ;;
+    *) rm -f "$1/fake/pane" ;;
+  esac
 }
 
 # open_request <case-dir> <id> -> corr: a reply-bearing request to the mate,
@@ -217,9 +220,10 @@ mate_report() {  # <case-dir> <id> <verb> <corr> <note>
   FM_HOME="$dir/$id-home" "$REPORT" --item work-1 "$3" "$4" "$5" || fail "the report helper refused"
 }
 
-sweep() {  # <case-dir>
+sweep() {  # <case-dir> [reply-grace-secs]
   local dir=$1
   env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
+    FM_PENDING_REPLY_GRACE_SECS="${2:-0}" \
     FM_SPAWN_NO_GUARD=1 FM_CONTROL_POLL=0.01 FM_CONTROL_EXIT_WAIT=0.05 \
     FM_CONTROL_LAUNCH_WAIT=0.05 "$FRESH" sweep 2>&1
 }
@@ -309,12 +313,17 @@ test_unread_work_and_busy_agent_defer() {
   assert_not_stopped "$dir" "the agent was stopped with an unacknowledged wake"
 
   : > "$dir/sm1-home/state/.wake-queue"
-  set_agent_state "$dir" sm1 busy
+  set_agent_state "$dir" busy
   out=$(sweep "$dir")
-  assert_contains "$out" "not provably idle" "a busy agent must defer"
+  assert_contains "$out" "not provably idle (busy)" "a busy agent must defer"
   assert_not_stopped "$dir" "a busy agent was stopped"
 
-  set_agent_state "$dir" sm1 idle
+  # An idle-looking pane right after the report may still be mid-turn.
+  set_agent_state "$dir" idle
+  out=$(sweep "$dir" 9999)
+  assert_contains "$out" "grace window" "an idle pane inside the grace window must defer"
+  assert_not_stopped "$dir" "a mate inside the grace window was stopped"
+
   out=$(sweep "$dir")
   assert_contains "$out" "restarted sm1" "every check clear must restart"$'\n'"$out"
   assert_present "$dir/home/state/sm1.inbox/handled/0001.msg" "the handled message record was lost in the restart"
@@ -370,9 +379,10 @@ test_no_record_corr_and_failed_relaunch() {
   # A relaunch that cannot start leaves a trace the parent can read.
   mkdir -p "$dir/home/state/sm1.inbox/handled"
   mv "$dir/home/state/sm1.inbox/"*.msg "$dir/home/state/sm1.inbox/handled/" 2>/dev/null || true
-  set_agent_state "$dir" sm1 idle
+  set_agent_state "$dir" idle
   mate_report "$dir" sm1 "done" "abcdef0123456789" "second"
-  printf '#!/usr/bin/env bash\nexit 1\n' > "$dir/fakebin/tmux"
+  # The pane still reads idle, but every session command fails.
+  printf '#!/usr/bin/env bash\n[ "${1:-}" = capture-pane ] || exit 1\n' > "$dir/fakebin/tmux"
   if out=$(sweep "$dir"); then
     fail "a failed relaunch must make the sweep exit non-zero"$'\n'"$out"
   fi
@@ -448,7 +458,7 @@ test_watcher_poll_applies_request() {
   mate_report "$dir" sm1 "done" "$corr" "audit clean"
   PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
     FM_SPAWN_NO_GUARD=1 FM_CONTROL_POLL=0.01 FM_CONTROL_EXIT_WAIT=0.05 FM_CONTROL_LAUNCH_WAIT=0.05 \
-    FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
+    FM_PENDING_REPLY_GRACE_SECS=0 FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
     FM_SECONDMATE_LIVENESS_SECS=99999999 "$ROOT/bin/fm-watch.sh" > "$dir/watch.out" 2>&1 &
   pid=$!
   while [ "$i" -lt 300 ] && [ -e "$dir/sm1-home/state/fresh-session.request" ]; do

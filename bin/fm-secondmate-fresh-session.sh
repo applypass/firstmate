@@ -41,7 +41,10 @@
 #   - no steering message to that mate is unread (state/<id>.inbox/*.msg);
 #   - the mate's own wake queue (state/.wake-queue) holds no row, so no wake
 #     is left unacknowledged;
-#   - its agent is provably idle (bin/fm-busy-lib.sh says idle);
+#   - its agent is idle: the backend says idle, or its rendered tail shows no
+#     busy signature and the marker is older than the pending-reply grace
+#     window (fm_pending_reply_backend_observation; second mates carry no
+#     semantic busy-state hooks);
 #   - the runtime can prove a restart (fm_secondmate_restart_capable).
 # Child crew work in flight is fine: it runs in its own endpoints and the fresh
 # mate reconciles it from the home's records.
@@ -171,7 +174,7 @@ defer() {  # <id> <reason>
 
 # 0 and prints nothing when every check passes, else prints the reason and returns 1.
 blocked_reason() {  # <id> <meta> <home> <marker>
-  local id=$1 meta=$2 home=$3 marker=$4 corr rec open verdict row
+  local id=$1 meta=$2 home=$3 marker=$4 corr rec open verdict row epoch
   corr=$(marker_get "$marker" corr)
   case "$corr" in
     '') ;;
@@ -202,9 +205,22 @@ blocked_reason() {  # <id> <meta> <home> <marker>
       return 1
     fi
   fi
-  verdict=$(fm_busy_classify_meta "$meta" "$id" "$STATE")
+  # A second mate has no semantic busy-state hooks (fm-spawn arms them only for
+  # task workers), so read the same backend observation the pending-reply
+  # tracker uses. A rendered-tail idle counts only once the mate's report turn
+  # has had the reply grace window to finish.
+  verdict=$(fm_pending_reply_backend_observation "$(fm_backend_of_meta "$meta")" \
+    "$(fm_backend_target_of_meta "$meta")" "fm-$id" "$(fm_meta_get "$meta" harness)")
   case "$verdict" in
-    idle*) ;;
+    idle) ;;
+    fallback-idle)
+      epoch=$(marker_get "$marker" epoch)
+      case "$epoch" in ''|*[!0-9]*) epoch=0 ;; esac
+      if [ $(($(date +%s) - epoch)) -lt "$(fm_pending_reply_grace_secs)" ]; then
+        printf 'its agent is not provably idle (fallback-idle within the grace window)'
+        return 1
+      fi
+      ;;
     *)
       printf 'its agent is not provably idle (%s)' "$verdict"
       return 1
@@ -233,8 +249,6 @@ do_apply() {
   . "$SCRIPT_DIR/fm-secondmate-restart-lib.sh"
   # shellcheck source=bin/fm-pending-reply-lib.sh
   . "$SCRIPT_DIR/fm-pending-reply-lib.sh"
-  # shellcheck source=bin/fm-busy-lib.sh
-  . "$SCRIPT_DIR/fm-busy-lib.sh"
   # shellcheck source=bin/fm-secondmate-liveness-lib.sh
   . "$SCRIPT_DIR/fm-secondmate-liveness-lib.sh"
 
