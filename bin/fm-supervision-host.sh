@@ -1144,8 +1144,6 @@ while :; do
     # shellcheck disable=SC2086 # the store rows are space-free numbers
     if [ -n "$CAPTAIN_SEQS" ] && fm_secondmate_host_outcomes_published "$FM_HOME" "$STATE" ${CAPTAIN_SEQS//,/}; then
       log_line "published	secondmate	store rows $CAPTAIN_SEQS reached the parent channel"
-      fm_secondmate_host_acknowledge_published "$FM_HOME" "$STATE" \
-        || log_line "published	secondmate	presented captain rows were left unacknowledged"
       CAPTAIN_SEQS=
     fi
     # Fork-only end

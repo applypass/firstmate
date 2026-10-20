@@ -2006,17 +2006,6 @@ test_secondmate_captain_outcome_is_published_without_waking_the_mate() {
   [ "$(printf '%s\n' "$presented" | jq -r 'select(.unread) | "\(.seq) \(.verdict)"' | tr '\n' ' ')" = '1 routine 2 captain ' ] \
     || fail "mate captain: the mate's next drain must still present the unread routine row and the new captain row once: $presented"
 
-  # The mate's drain presents both rows; the next published outcome acknowledges
-  # the presented captain row, and the drain never presents it again.
-  FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" mark-read --through 2 || fail "mate captain: the drain's mark-read was refused"
-  append_status "$home" 'ready for review again'
-  wait_until 250 handled_at_least "$home" 2 || fail "mate captain: the second wake was not handled: $(cat "$home/state/.supervision-host.log")"
-  wait_until 100 grep -qs '	published	secondmate	store rows 3 ' "$home/state/.supervision-host.log" \
-    || fail "mate captain: the second outcome was not published: $(cat "$home/state/.supervision-host.log")"
-  [ ! -s "$home/host.rc" ] || fail "mate captain: the second published outcome woke the mate session: $(cat "$home/host.out")"
-  presented=$(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" present)
-  [ "$(printf '%s\n' "$presented" | jq -r '.seq' | tr '\n' ' ')" = '3 ' ] \
-    || fail "mate captain: the drain must present only the unpresented captain row after the acknowledgement: $presented"
   stop_home_processes "$home"
 
   # A parent channel that cannot take the line leaves the outcome to the mate.
@@ -2030,7 +2019,7 @@ test_secondmate_captain_outcome_is_published_without_waking_the_mate() {
   wait_until 250 host_exited "$home" || fail "mate unpublished: an unpublished captain outcome did not wake the mate: $(cat "$home/state/.supervision-host.log")"
   assert_re '^supervision-host: branch-outcome: .*\(store rows 1\); run bin/fm-wake-drain.sh' "$home/host.out" \
     "an outcome that never reached the parent channel must wake the mate session"
-  pass "host: a captain outcome the script published to the parent channel is acknowledged without waking the mate, and an unpublished one wakes it"
+  pass "host: a captain outcome the script published to the parent channel waits for the mate's drain without waking the mate, and an unpublished one wakes it"
 }
 
 test_secondmate_decision_close_and_non_routine_check_still_wake_the_mate() {

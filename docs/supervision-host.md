@@ -206,8 +206,7 @@ The engine runs the Claude engine's default model (`sonnet`) there, as in every 
   A `check: rearm-resurface` close over an empty wake queue announces nothing, so the host starts the successor cycle and parks on it (ledger kind `absorbed`).
 - **Captain outcomes.** `bin/fm-branch-report.sh` puts each captain outcome on the parent channel when it records it ([secondmate-parent-channel.md](secondmate-parent-channel.md)).
   When every store row the turn recorded is on that channel, the host parks (ledger kind `published`) instead of exiting with `branch-outcome:`.
-  It then marks processed (`bin/fm-branch-outcome.sh mark-processed`) the captain rows the mate's drain already presented, when all of them are on the channel, so the drain does not present them again.
-  It never moves the read cursor: the processed marker may not pass it, so a captain row the drain has not presented yet, and every unread routine row, still reach the mate's next drain once.
+  The host never marks a row read or processed: the rows stay unacknowledged until the mate's next drain, which presents them with every unread routine row, and the mate acknowledges each one it finds settled.
   A row the turn recorded that is missing from the channel keeps the `branch-outcome:` exit.
 - **Checks first.** The absorb path makes the same checks as a handled wake: the home must still run the host and this session must still own supervision, and a successor that fails to start or confirm its handoff is retired and the close goes to the mate.
 
