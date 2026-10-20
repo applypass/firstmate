@@ -10,9 +10,11 @@
 #
 #   - fm_secondmate_host_routine_check: a close that only asks the session to
 #     re-read its queue, which the host absorbs when the queue holds no row.
-#   - fm_secondmate_host_acknowledge_published: a captain outcome the engine
+#   - fm_secondmate_host_outcomes_published: a captain outcome the engine
 #     recorded is already on the parent channel (bin/fm-branch-report.sh), so
-#     the host acknowledges it and the mate session is not woken for it.
+#     the mate session is not woken for it, and
+#     fm_secondmate_host_acknowledge_published stops the drain presenting one
+#     again once the mate has seen it.
 #
 # Everything else the host passes to the session stays as it is: decision and
 # blocker closes, a close the engine cannot take, a failed engine turn, and a
@@ -55,22 +57,20 @@ fm_secondmate_host_outcomes_published() {
   done
 }
 
-# fm_secondmate_host_acknowledge_published <home> <state> <seq>...: when every
-# captain row the store presents at or below the highest seq named, and every
-# seq named, is on the parent channel, mark the store read and processed
-# through that seq (bin/fm-branch-outcome.sh) so the mate's drain does not
-# present them again. Fails, changing nothing, when any of them is missing.
+# fm_secondmate_host_acknowledge_published <home> <state>: when every captain
+# row the mate's drain already presented but nobody acknowledged is on the
+# parent channel, mark the store processed through the newest of them
+# (bin/fm-branch-outcome.sh mark-processed) so the drain does not present them
+# again. The read cursor never moves here: the processed marker may not pass
+# it, so a row the drain has not presented yet, and every unread routine row,
+# still reaches the mate's next drain. Fails, changing nothing, when any of
+# them is missing from the channel.
 fm_secondmate_host_acknowledge_published() {
-  local home=$1 state=$2 top=0 seq presented
-  shift 2
-  for seq in "$@"; do
-    case "$seq" in ''|*[!0-9]*) return 1 ;; esac
-    [ "$seq" -le "$top" ] || top=$seq
-  done
-  presented=$("$_FM_SECONDMATE_HOST_LIB_DIR/fm-branch-outcome.sh" present 2>/dev/null \
-    | jq -r --argjson top "$top" 'select(.verdict == "captain" and .seq <= $top) | .seq') || return 1
+  local home=$1 state=$2 rows top
+  rows=$("$_FM_SECONDMATE_HOST_LIB_DIR/fm-branch-outcome.sh" unprocessed 2>/dev/null | jq -r '.seq') || return 1
+  [ -n "$rows" ] || return 0
+  top=$(printf '%s\n' "$rows" | tail -n 1)
   # shellcheck disable=SC2086 # the store rows are space-free numbers
-  fm_secondmate_host_outcomes_published "$home" "$state" "$@" $presented || return 1
-  "$_FM_SECONDMATE_HOST_LIB_DIR/fm-branch-outcome.sh" mark-read --through "$top" >/dev/null 2>&1 || return 1
+  fm_secondmate_host_outcomes_published "$home" "$state" $rows || return 1
   "$_FM_SECONDMATE_HOST_LIB_DIR/fm-branch-outcome.sh" mark-processed --through "$top" >/dev/null 2>&1
 }

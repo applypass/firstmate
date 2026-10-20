@@ -1986,22 +1986,37 @@ test_secondmate_routine_wake_never_wakes_the_mate_session() {
 }
 
 test_secondmate_captain_outcome_is_published_without_waking_the_mate() {
-  local home channel
+  local home channel presented
   home=$(make_mate_home mate-captain)
   channel=$(mate_channel mate-captain)
+  FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" append --task demo --verdict routine --summary 'PR #12 merged' >/dev/null \
+    || fail "mate captain: the routine fixture row could not be stored"
   echo captain > "$home/stub-mode"
   start_host "$home"
   wait_until 150 watcher_live "$home" || fail "mate captain: the host never started a watcher cycle"
   append_status "$home" 'ready for review'
   wait_until 250 handled_at_least "$home" 1 || fail "mate captain: the wake was not handled: $(cat "$home/state/.supervision-host.log")"
-  assert_re '^needs-decision \[key=branch-outcome-1\] \[at=[0-9]+\]: captain outcome for demo' "$channel" \
+  assert_re '^needs-decision \[key=branch-outcome-2\] \[at=[0-9]+\]: captain outcome for demo' "$channel" \
     "the script must put the captain outcome on the parent channel"
   [ ! -s "$home/host.rc" ] || fail "mate captain: a published captain outcome woke the mate session: $(cat "$home/host.out")"
-  wait_until 100 grep -qs '	published	secondmate	store rows 1 ' "$home/state/.supervision-host.log" \
+  wait_until 100 grep -qs '	published	secondmate	store rows 2 ' "$home/state/.supervision-host.log" \
     || fail "the ledger must record that the parent channel has the outcome: $(cat "$home/state/.supervision-host.log")"
   watcher_live "$home" || fail "mate captain: the host is not parked after the published outcome"
-  [ -z "$(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" present)" ] \
-    || fail "mate captain: the mate's drain still presents the published outcome: $(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" present)"
+  presented=$(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" present)
+  [ "$(printf '%s\n' "$presented" | jq -r 'select(.unread) | "\(.seq) \(.verdict)"' | tr '\n' ' ')" = '1 routine 2 captain ' ] \
+    || fail "mate captain: the mate's next drain must still present the unread routine row and the new captain row once: $presented"
+
+  # The mate's drain presents both rows; the next published outcome acknowledges
+  # the presented captain row, and the drain never presents it again.
+  FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" mark-read --through 2 || fail "mate captain: the drain's mark-read was refused"
+  append_status "$home" 'ready for review again'
+  wait_until 250 handled_at_least "$home" 2 || fail "mate captain: the second wake was not handled: $(cat "$home/state/.supervision-host.log")"
+  wait_until 100 grep -qs '	published	secondmate	store rows 3 ' "$home/state/.supervision-host.log" \
+    || fail "mate captain: the second outcome was not published: $(cat "$home/state/.supervision-host.log")"
+  [ ! -s "$home/host.rc" ] || fail "mate captain: the second published outcome woke the mate session: $(cat "$home/host.out")"
+  presented=$(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" present)
+  [ "$(printf '%s\n' "$presented" | jq -r '.seq' | tr '\n' ' ')" = '3 ' ] \
+    || fail "mate captain: the drain must present only the unpresented captain row after the acknowledgement: $presented"
   stop_home_processes "$home"
 
   # A parent channel that cannot take the line leaves the outcome to the mate.

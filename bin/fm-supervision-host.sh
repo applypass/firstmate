@@ -1140,11 +1140,12 @@ while :; do
   if [ -n "$LAST_TURN" ] && ! fm_afk_contract_away_present "$STATE"; then
     CAPTAIN_SEQS=$(turn_captain_seqs "$LAST_TURN")
     # Fork-only: a secondmate home's script already put each captain outcome on
-    # the parent channel, so the host acknowledges it for the mate session.
+    # the parent channel, so the mate session has nothing to publish.
     # shellcheck disable=SC2086 # the store rows are space-free numbers
-    if [ -n "$CAPTAIN_SEQS" ] && fm_secondmate_host_home "$FM_HOME" \
-      && fm_secondmate_host_acknowledge_published "$FM_HOME" "$STATE" ${CAPTAIN_SEQS//,/}; then
-      log_line "published	secondmate	store rows $CAPTAIN_SEQS reached the parent channel and were acknowledged"
+    if [ -n "$CAPTAIN_SEQS" ] && fm_secondmate_host_outcomes_published "$FM_HOME" "$STATE" ${CAPTAIN_SEQS//,/}; then
+      log_line "published	secondmate	store rows $CAPTAIN_SEQS reached the parent channel"
+      fm_secondmate_host_acknowledge_published "$FM_HOME" "$STATE" \
+        || log_line "published	secondmate	presented captain rows were left unacknowledged"
       CAPTAIN_SEQS=
     fi
     # Fork-only end
