@@ -18,7 +18,10 @@
 #      without --item, a main home, a remote route, and
 #      FM_SECONDMATE_FRESH_SESSION=off ask for nothing.
 #   5. A corr with no pending-reply record does not defer forever, and a failed
-#      relaunch leaves a line in state/fresh-session.log.
+#      relaunch leaves fm-control's error in state/fresh-session.log.
+#   6. The real ledger pass asks for a fresh session for a done child, and one
+#      child's landed work (merged PR, then its done ledger line) restarts the
+#      mate once.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -356,7 +359,7 @@ test_no_request_where_not_applicable() {
 
 # --- T7: a corr with no record does not defer; a failed relaunch is logged ----
 test_no_record_corr_and_failed_relaunch() {
-  local dir out
+  local dir out log
   dir=$(new_case norec)
   add_local_mate "$dir" sm1
   bind_mate "$dir" sm1
@@ -370,10 +373,56 @@ test_no_record_corr_and_failed_relaunch() {
   set_agent_state "$dir" sm1 idle
   mate_report "$dir" sm1 "done" "abcdef0123456789" "second"
   printf '#!/usr/bin/env bash\nexit 1\n' > "$dir/fakebin/tmux"
-  out=$(sweep "$dir")
+  if out=$(sweep "$dir"); then
+    fail "a failed relaunch must make the sweep exit non-zero"$'\n'"$out"
+  fi
   assert_present "$dir/sm1-home/state/fresh-session.request.failed" "a failed relaunch must keep its marker as .failed"$'\n'"$out"
-  assert_present "$dir/home/state/fresh-session.log" "a failed relaunch must leave a line in the parent log"$'\n'"$out"
+  log=$(cat "$dir/home/state/fresh-session.log")
+  assert_contains "$log" "$(printf '%s\n' "$out" | grep '^failed sm1: .')" "the parent log must carry fm-control's error"$'\n'"$out"
   pass "T7 a corr with no record restarts, and a failed relaunch is logged"
+}
+
+# add_done_child <case-dir> <child-id>: a ship child in sm1's home whose ledger ends in done.
+add_done_child() {
+  local dir=$1 cid=$2 st="$1/sm1-home/state"
+  mkdir -p "$dir/sm1-home/projects/$cid"
+  git -C "$dir/sm1-home/projects/$cid" init -q
+  git -C "$dir/sm1-home/projects/$cid" commit -q --allow-empty -m init
+  printf 'window=fmses:fm-%s\nworktree=%s\nproject=%s\nharness=codex\nkind=ship\nmode=no-mistakes\nyolo=off\n' \
+    "$cid" "$dir/sm1-home/projects/$cid" "$dir/sm1-home/projects/$cid" > "$st/$cid.meta"
+  printf 'done: %s handed to no-mistakes\n' "$cid" > "$st/$cid.status"
+}
+
+ledger_scan() {  # <case-dir>
+  FM_HOME="$1/sm1-home" "$ROOT/bin/fm-inactive-reconcile.sh" scan >/dev/null 2>&1 || true
+}
+
+# --- T8: the ledger pass requests; one landed child restarts the mate once ---
+test_ledger_pass_and_one_restart_per_child() {
+  local dir out
+  dir=$(new_case ledger)
+  add_local_mate "$dir" sm1
+  bind_mate "$dir" sm1
+
+  add_done_child "$dir" child2
+  ledger_scan "$dir"
+  assert_present "$dir/sm1-home/state/fresh-session.request" "the ledger pass must request a fresh session for a done child"
+  assert_contains "$(cat "$dir/sm1-home/data/fresh-session-handover.md")" "child child2 done" "the note must name the landed child"
+  rm -f "$dir/sm1-home/state/fresh-session.request"
+
+  FM_HOME="$dir/sm1-home" bash -c '. "$1/bin/fm-merge-outcome-lib.sh"; fm_merge_outcome_report "$2" "$2/state" child1 https://github.com/o/r/pull/7 self attended' \
+    _ "$ROOT" "$dir/sm1-home" || true
+  assert_present "$dir/sm1-home/state/fresh-session.request" "a merged child PR must request a fresh session"
+  out=$(sweep "$dir")
+  assert_contains "$out" "restarted sm1" "the merged child must restart the mate"$'\n'"$out"
+
+  add_done_child "$dir" child1
+  ledger_scan "$dir"
+  grep -q 'child child1 done' "$dir/home/state/sm1.status" || fail "the ledger pass did not report child1"
+  assert_absent "$dir/sm1-home/state/fresh-session.request" "child1's done line must not request a second restart"
+  out=$(sweep "$dir")
+  case "$out" in *restarted*) fail "one landed child restarted the mate twice"$'\n'"$out" ;; esac
+  pass "T8 the ledger pass requests a fresh session, and one landed child restarts the mate once"
 }
 
 # --- T6: the watcher's own poll applies the request -----------------------
@@ -408,6 +457,7 @@ test_unread_work_and_busy_agent_defer
 test_child_landed_requests
 test_no_record_corr_and_failed_relaunch
 test_no_request_where_not_applicable
+test_ledger_pass_and_one_restart_per_child
 test_watcher_poll_applies_request
 
 echo "# all fm-secondmate-fresh-session tests passed"

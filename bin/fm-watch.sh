@@ -2682,7 +2682,8 @@ while :; do
   # Fork-only (applypass): restart a second mate that finished a piece of work
   # (bin/fm-secondmate-fresh-session.sh); detached so a relaunch never stalls the poll.
   if [ -z "$FRESH_SESSION_PID" ] || ! kill -0 "$FRESH_SESSION_PID" 2>/dev/null; then
-    [ -z "$FRESH_SESSION_PID" ] || wait "$FRESH_SESSION_PID" 2>/dev/null || true
+    [ -z "$FRESH_SESSION_PID" ] || wait "$FRESH_SESSION_PID" 2>/dev/null \
+      || triage_log "secondmate fresh-session relaunch failed (see state/fresh-session.log)"
     FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
       "$SCRIPT_DIR/fm-secondmate-fresh-session.sh" sweep </dev/null >/dev/null 2>&1 &
     FRESH_SESSION_PID=$!

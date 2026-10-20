@@ -8,7 +8,7 @@
 # dropped at each completed piece of work without losing anything.
 #
 # Usage:
-#   fm-secondmate-fresh-session.sh request --source <report|child> --verb <done|ready|failed> [--corr <id>] [note...]
+#   fm-secondmate-fresh-session.sh request --source <report|child> --verb <done|ready|failed> [--corr <id>] [--child <id>] [note...]
 #   fm-secondmate-fresh-session.sh apply <secondmate-id>
 #   fm-secondmate-fresh-session.sh sweep
 #
@@ -20,6 +20,9 @@
 #   instruction count, where the open work lives), and the request marker,
 #   state/fresh-session.request. It never touches the running agent. A remote
 #   route and a main home are ignored: a remote mate's restart is not covered.
+#   --child names the child whose work landed. Both child hooks name it, so the
+#   id goes into state/fresh-session.landed and a later request for the same
+#   child asks for nothing: one landed slice restarts the mate once.
 # apply - run in the parent home (FM_HOME is the parent). Restarts one mate with
 #   bin/fm-control.sh <id> relaunch, the same path /updatefirstmate uses, only
 #   when every check below passes; otherwise it prints "deferred" and leaves the
@@ -44,15 +47,16 @@
 # Child crew work in flight is fine: it runs in its own endpoints and the fresh
 # mate reconciles it from the home's records.
 # A failed relaunch moves the marker to state/fresh-session.request.failed so a
-# broken restart is not retried on every poll.
+# broken restart is not retried on every poll, and sweep appends the failure
+# with fm-control's error text to the parent's state/fresh-session.log.
 #
 # FM_SECONDMATE_FRESH_SESSION=off disables request and sweep.
 #
-# Exit status: 0 restarted, deferred, or nothing to do; 1 the relaunch failed; 2 usage.
+# Exit status: 0 restarted, deferred, or nothing to do; 1 a relaunch failed; 2 usage.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MARKER_NAME=fresh-session.request
+MARKER_NAME='fresh-session.request'
 NOTE_REL=data/fresh-session-handover.md
 
 usage() {
@@ -85,18 +89,20 @@ marker_get() {  # <marker> <key>
 # --- request ---------------------------------------------------------------
 
 do_request() {
-  local source='' verb='' corr='' note home state parent_home id inbox_dir unread child cid last children body
+  local source='' verb='' corr='' landed='' note home state parent_home id inbox_dir unread child cid last children body
   while [ $# -gt 0 ]; do
     case "$1" in
       --source) source=${2:-}; shift 2 ;;
       --verb) verb=${2:-}; shift 2 ;;
       --corr) corr=${2:-}; shift 2 ;;
+      --child) landed=${2:-}; shift 2 ;;
       *) break ;;
     esac
   done
   note=$*
   case "$source" in report | child) ;; *) usage >&2; return 2 ;; esac
   case "$verb" in done | ready | failed) ;; *) usage >&2; return 2 ;; esac
+  case "$landed" in *[!A-Za-z0-9._-]*) usage >&2; return 2 ;; esac
   fresh_session_off && return 0
   home=${FM_HOME:-}
   [ -n "$home" ] || return 0
@@ -107,6 +113,9 @@ do_request() {
   [ "$FM_PARENT_CHANNEL_ROUTE" = local ] || return 0
   id=$FM_PARENT_CHANNEL_ID
   parent_home=$FM_SECONDMATE_PARENT_HOME
+  if [ -n "$landed" ] && grep -qxF "$landed" "$state/fresh-session.landed" 2>/dev/null; then
+    return 0
+  fi
 
   children=''
   for child in "$state"/*.meta; do
@@ -157,6 +166,7 @@ verb=$verb
 corr=$corr
 epoch=$(date +%s)
 note=$NOTE_REL" || return 0
+  [ -z "$landed" ] || printf '%s\n' "$landed" >> "$state/fresh-session.landed" || true
   return 0
 }
 
@@ -273,7 +283,7 @@ do_apply() {
 # --- sweep -----------------------------------------------------------------
 
 do_sweep() {
-  local state meta id home found=''
+  local state meta id home out found='' rc=0
   fresh_session_off && return 0
   [ -n "${FM_HOME:-}" ] || { echo "error: FM_HOME is not set" >&2; return 2; }
   state="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
@@ -287,9 +297,15 @@ do_sweep() {
     found="$found $id"
   done
   for id in $found; do
-    do_apply "$id" || printf '%s fresh-session relaunch failed for %s (see its fresh-session.request.failed)\n' "$(date +%s)" "$id" >> "$state/fresh-session.log"
+    if out=$(do_apply "$id"); then
+      [ -z "$out" ] || printf '%s\n' "$out"
+    else
+      rc=1
+      printf '%s\n' "$out"
+      printf '%s %s\n' "$(date +%s)" "$out" >> "$state/fresh-session.log"
+    fi
   done
-  return 0
+  return "$rc"
 }
 
 case "${1:-}" in
