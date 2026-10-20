@@ -390,6 +390,7 @@ test_no_record_corr_and_failed_relaunch() {
   set_agent_state "$dir" idle
   mate_report "$dir" sm1 "done" "abcdef0123456789" "second"
   # The pane still reads idle, but every session command fails.
+  # shellcheck disable=SC2016 # ${1:-} expands when the fake tmux runs.
   printf '#!/usr/bin/env bash\n[ "${1:-}" = capture-pane ] || exit 1\n' > "$dir/fakebin/tmux"
   if out=$(sweep "$dir"); then
     fail "a failed relaunch must make the sweep exit non-zero"$'\n'"$out"
