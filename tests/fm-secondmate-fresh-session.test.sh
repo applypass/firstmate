@@ -177,7 +177,8 @@ assert_not_stopped() {  # <case-dir> <msg>
 # bind_mate <case-dir> <id>: the parent binding a seeded home carries, plus the
 # semantic idle record the harness's own hook would have written.
 bind_mate() {
-  local dir=$1 id=$2 smhome="$dir/$2-home"
+  local dir=$1 id=$2 smhome
+  smhome="$dir/$id-home"
   cat > "$smhome/.fm-secondmate-parent" <<EOT
 schema=fm-secondmate-parent.v1
 route=local
@@ -219,7 +220,7 @@ sweep() {  # <case-dir>
 # --- T1: report done -> restart requested -> fresh session gets the note ------
 test_report_done_restarts_with_handover_note() {
   local dir corr out note msg
-  dir=$(new_case done)
+  dir=$(new_case "done")
   add_local_mate "$dir" sm1
   bind_mate "$dir" sm1
   corr=$(open_request "$dir" sm1)
@@ -227,7 +228,7 @@ test_report_done_restarts_with_handover_note() {
   printf 'working [at=1]: slice 2 under way\n' > "$dir/sm1-home/state/child1.status"
   printf 'kind=ship\n' > "$dir/sm1-home/state/child1.meta"
 
-  mate_report "$dir" sm1 done "$corr" "audit clean"
+  mate_report "$dir" sm1 "done" "$corr" "audit clean"
 
   assert_present "$dir/sm1-home/state/fresh-session.request" "a done report must request a fresh session"
   assert_present "$dir/sm1-home/data/fresh-session-handover.md" "the handover note must be written in the mate's home"
@@ -258,7 +259,7 @@ test_mid_request_is_not_restarted() {
   bind_mate "$dir" sm1
   corr=$(open_request "$dir" sm1)
   other=$(open_request "$dir" sm1)
-  mate_report "$dir" sm1 done "$corr" "first piece done"
+  mate_report "$dir" sm1 "done" "$corr" "first piece done"
 
   out=$(sweep "$dir")
   assert_contains "$out" "deferred sm1" "a second open request must defer the restart"
@@ -269,7 +270,7 @@ test_mid_request_is_not_restarted() {
     || fail "the open request's record was changed by the deferral"
 
   # The same mate restarts once that request is answered.
-  mate_report "$dir" sm1 done "$other" "second piece done"
+  mate_report "$dir" sm1 "done" "$other" "second piece done"
   out=$(sweep "$dir")
   assert_contains "$out" "restarted sm1" "the mate must restart once no request is open"$'\n'"$out"
   pass "T2 an open request defers the restart and is left untouched"
@@ -282,7 +283,7 @@ test_unread_work_and_busy_agent_defer() {
   add_local_mate "$dir" sm1
   bind_mate "$dir" sm1
   corr=$(open_request "$dir" sm1)
-  mate_report "$dir" sm1 done "$corr" "done"
+  mate_report "$dir" sm1 "done" "$corr" "done"
 
   mkdir -p "$dir/home/state/sm1.inbox"
   printf 'please also check the ledger\n' > "$dir/home/state/sm1.inbox/0001.msg"
@@ -337,12 +338,12 @@ test_no_request_where_not_applicable() {
   dir=$(new_case n/a)
   add_local_mate "$dir" sm1
   bind_mate "$dir" sm1
-  FM_SECONDMATE_FRESH_SESSION=off FM_HOME="$dir/sm1-home" "$FRESH" request --source report --verb done "x"
+  FM_SECONDMATE_FRESH_SESSION=off FM_HOME="$dir/sm1-home" "$FRESH" request --source report --verb "done" "x"
   assert_absent "$dir/sm1-home/state/fresh-session.request" "the kill switch must stop requests"
-  FM_HOME="$dir/home" "$FRESH" request --source report --verb done "x"
+  FM_HOME="$dir/home" "$FRESH" request --source report --verb "done" "x"
   assert_absent "$dir/home/state/fresh-session.request" "a main home has nobody to restart it"
   printf 'schema=fm-secondmate-parent.v1\nroute=remote\n' > "$dir/sm1-home/.fm-secondmate-parent"
-  FM_HOME="$dir/sm1-home" "$FRESH" request --source report --verb done "x"
+  FM_HOME="$dir/sm1-home" "$FRESH" request --source report --verb "done" "x"
   assert_absent "$dir/sm1-home/state/fresh-session.request" "a remote mate is not covered"
   pass "T5 no request for the kill switch, a main home, or a remote route"
 }
@@ -354,7 +355,7 @@ test_watcher_poll_applies_request() {
   add_local_mate "$dir" sm1
   bind_mate "$dir" sm1
   corr=$(open_request "$dir" sm1)
-  mate_report "$dir" sm1 done "$corr" "audit clean"
+  mate_report "$dir" sm1 "done" "$corr" "audit clean"
   PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
     FM_SPAWN_NO_GUARD=1 FM_CONTROL_POLL=0.01 FM_CONTROL_EXIT_WAIT=0.05 FM_CONTROL_LAUNCH_WAIT=0.05 \
     FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 FM_HEARTBEAT=999999 \
