@@ -31,6 +31,11 @@ FM_TEST_LIB_SOURCED=1
 # test the gate set FM_SHORTCUT_TICKETS themselves.
 export FM_SHORTCUT_TICKETS=off
 
+# Fork-only: the daily Claude quota stop reads quota-axi on every launch, which
+# fixtures must never call. The cases that test the gate unset this themselves.
+export FM_DAILY_QUOTA_STOP=off
+# Fork-only end
+
 # Pin the fixture umask. Firstmate's state-root and process-event contracts
 # refuse group- or world-writable state directories, and a permissive ambient
 # umask (e.g. 0002) makes every `mkdir state` fixture fail that contract before

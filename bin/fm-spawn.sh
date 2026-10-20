@@ -810,6 +810,14 @@ case "$EFFORT" in
   ;;
 esac
 
+# Fork-only: daily quota stop. A fresh launch (ship, scout, or secondmate) is
+# refused once the fleet has used its daily share of the weekly Claude quota;
+# --relaunch is running work and is never gated (bin/fm-daily-quota-stop.sh).
+if [ "$RELAUNCH" -eq 0 ]; then
+  "$SCRIPT_DIR/fm-daily-quota-stop.sh" check spawn --home "$FM_HOME" || exit 1
+fi
+# Fork-only end
+
 # --relaunch reuses an existing task's endpoint, worktree, project, and kind,
 # so every axis this block resolves for a fresh spawn instead comes from that
 # task's own durable record below. Contradicting it on the command line is a
@@ -4821,6 +4829,11 @@ case "$HARNESS" in
 claude*)
   "$SCRIPT_DIR/fm-op-guard-install.sh" "$WT" || echo "warning: could not register the op guard in $WT/.claude/settings.local.json" >&2
   exclude_path '.claude/settings.local.json'
+  # Fork-only: also refuse a new no-mistakes run in this worker once the daily
+  # quota stop is in force (bin/fm-daily-quota-pretool-check.sh).
+  "$SCRIPT_DIR/fm-daily-quota-guard-install.sh" "$WT" --home "$FM_HOME" \
+    --fleet-home "${FM_DAILY_QUOTA_HOME:-${FM_PUBLIC_FOLLOWUP_PRIMARY_HOME:-$FM_HOME}}" \
+    --status-file "$STATE/$ID.status" || echo "warning: could not register the daily quota guard in $WT/.claude/settings.local.json" >&2
   ;;
 esac
 # Fork-only end
