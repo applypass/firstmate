@@ -2,9 +2,7 @@
 # Fork-only: daily Claude quota stop gate (applypass fork).
 #
 # usage:
-#   fm-daily-quota-stop.sh check <spawn|nm-run> [--home DIR] [--fleet-home DIR] [--status-file FILE]
-#   fm-daily-quota-stop.sh status [--home DIR]
-#   fm-daily-quota-stop.sh allow-unreadable [--home DIR]
+#   fm-daily-quota-stop.sh check <spawn|nm-run> [--home DIR] [--status-file FILE]
 #
 # check  exits 0 when new work may start and 3 when it is refused, printing the
 #        reason on stderr. The fleet shares one daily budget measured against
@@ -15,19 +13,16 @@
 #        gate given --status-file (a worker's own status file) appends one
 #        there, and a main home's caller (firstmate) reads the stderr message.
 #        When quota-axi cannot read Claude quota the check refuses and says
-#        why; it never guesses. FM_DAILY_QUOTA_ALLOW_UNREADABLE=1 on one
-#        command, or a one-shot grant from `allow-unreadable`, lets a single
-#        launch through when the quota is unreadable.
-# --fleet-home overrides the shared-budget home (default: FM_DAILY_QUOTA_HOME,
-#        then FM_PUBLIC_FOLLOWUP_PRIMARY_HOME, then --home).
-# status prints today's numbers and the verdict; exit code mirrors check.
-# allow-unreadable records the one-shot grant in the fleet home (the captain's
-#        decision; consumed by the next unreadable-quota check).
+#        why; it never guesses and has no override.
+#        The shared budget lives in the main home, reached through each home's
+#        durable parent binding.
 #
-# Callers: bin/fm-spawn.sh (every fresh launch, never --relaunch) and
-# bin/fm-daily-quota-pretool-check.sh (a new no-mistakes run in a Claude
-# worker). The library header owns the files, the day-start rule, and the
-# thresholds; docs/configuration.md "Daily quota stop" owns the operator view.
+# Callers: bin/fm-spawn.sh (every fresh launch, never --relaunch), the
+# no-mistakes pre-receive companion (bin/fm-validation-gate-pre-receive.sh,
+# every new run start from any harness or home), and
+# bin/fm-daily-quota-pretool-check.sh (`no-mistakes rerun` in a Claude worker).
+# The library header owns the files and the day-start rule; docs/configuration.md
+# "Daily quota stop" owns the operator view.
 set -u
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P) || exit 1
@@ -42,17 +37,15 @@ CMD=${1:-}
 [ -n "$CMD" ] || { usage >&2; exit 2; }
 shift
 case "$CMD" in -h|--help) usage; exit 0 ;; esac
+[ "$CMD" = check ] || { usage >&2; exit 2; }
 
-WHAT=
-if [ "$CMD" = check ]; then
-  WHAT=${1:-}
-  case "$WHAT" in
-    spawn) WHAT=worker\ launch ;;
-    nm-run) WHAT=no-mistakes\ run ;;
-    *) echo "error: check needs spawn or nm-run" >&2; exit 2 ;;
-  esac
-  shift
-fi
+WHAT=${1:-}
+case "$WHAT" in
+  spawn) WHAT=worker\ launch ;;
+  nm-run) WHAT=no-mistakes\ run ;;
+  *) echo "error: check needs spawn or nm-run" >&2; exit 2 ;;
+esac
+shift
 
 # FM_DAILY_QUOTA_STOP=off disables the gate; tests/lib.sh sets it so fixtures
 # never read quota-axi. Operators leave it unset.
@@ -63,7 +56,6 @@ STATUS_FILE=
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --home) [ "$#" -gt 1 ] || { echo "error: --home needs a value" >&2; exit 2; }; HOME_DIR=$2; shift 2 ;;
-    --fleet-home) [ "$#" -gt 1 ] || { echo "error: --fleet-home needs a value" >&2; exit 2; }; export FM_DAILY_QUOTA_HOME=$2; shift 2 ;;
     --status-file) [ "$#" -gt 1 ] || { echo "error: --status-file needs a value" >&2; exit 2; }; STATUS_FILE=$2; shift 2 ;;
     *) echo "error: unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -93,30 +85,7 @@ report_once() {  # <level>
   fi
 }
 
-case "$CMD" in
-  allow-unreadable)
-    mkdir -p "$FLEET/state" && : > "$FLEET/state/daily-quota-allow-unreadable" || exit 1
-    echo "granted one launch while Claude quota is unreadable ($FLEET/state/daily-quota-allow-unreadable)"
-    exit 0
-    ;;
-  status)
-    WHAT=work
-    fm_dq_evaluate "$HOME_DIR"
-    printf 'verdict=%s used_now=%s used_today=%s refuse_at=%s hold_at=%s\n' \
-      "$FM_DQ_VERDICT" "${FM_DQ_USED_NOW:-unknown}" "${FM_DQ_USED_TODAY:-unknown}" "$FM_DQ_REFUSE_PCT" "$FM_DQ_HOLD_PCT"
-    [ "$FM_DQ_VERDICT" != ok ] && fm_dq_message "$WHAT" >&2
-    [ "$FM_DQ_VERDICT" = ok ]
-    exit $?
-    ;;
-  check)
-    if fm_dq_evaluate "$HOME_DIR"; then exit 0; fi
-    if [ "$FM_DQ_VERDICT" = unreadable ] && fm_dq_consume_unreadable_grant "$FLEET"; then
-      echo "daily quota stop: Claude quota is unreadable ($FM_DQ_REASON); proceeding on the captain's one-shot grant" >&2
-      exit 0
-    fi
-    fm_dq_message "$WHAT" >&2
-    report_once "$FM_DQ_VERDICT"
-    exit 3
-    ;;
-  *) usage >&2; exit 2 ;;
-esac
+if fm_dq_evaluate "$HOME_DIR"; then exit 0; fi
+fm_dq_message "$WHAT" >&2
+report_once "$FM_DQ_VERDICT"
+exit 3

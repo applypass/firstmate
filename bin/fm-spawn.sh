@@ -4829,10 +4829,9 @@ case "$HARNESS" in
 claude*)
   "$SCRIPT_DIR/fm-op-guard-install.sh" "$WT" || echo "warning: could not register the op guard in $WT/.claude/settings.local.json" >&2
   exclude_path '.claude/settings.local.json'
-  # Fork-only: also refuse a new no-mistakes run in this worker once the daily
+  # Fork-only: also refuse `no-mistakes rerun` in this worker once the daily
   # quota stop is in force (bin/fm-daily-quota-pretool-check.sh).
   "$SCRIPT_DIR/fm-daily-quota-guard-install.sh" "$WT" --home "$FM_HOME" \
-    --fleet-home "${FM_DAILY_QUOTA_HOME:-${FM_PUBLIC_FOLLOWUP_PRIMARY_HOME:-$FM_HOME}}" \
     --status-file "$STATE/$ID.status" || echo "warning: could not register the daily quota guard in $WT/.claude/settings.local.json" >&2
   ;;
 esac
@@ -5216,6 +5215,12 @@ if [ "$KEEP_AI_TRAILERS" = 0 ]; then
   LAUNCH="export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=$(shell_quote "$GIT_HOOKS_DIR"); $LAUNCH"
 fi
 [ -z "$VALIDATION_GATE_FILE" ] || LAUNCH="export FM_VALIDATION_GATE=$(shell_quote "$VALIDATION_GATE_FILE"); $LAUNCH"
+# Fork-only: tell the no-mistakes pre-receive companion how to run the daily
+# quota stop for any push this worker makes (bin/fm-validation-gate-pre-receive.sh).
+if [ "$KIND" != secondmate ] && [ "${FM_DAILY_QUOTA_STOP:-}" != off ]; then
+  LAUNCH="export FM_DAILY_QUOTA_CHECK=$(shell_quote "$SCRIPT_DIR/fm-daily-quota-stop.sh") FM_DAILY_QUOTA_CHECK_HOME=$(shell_quote "$FM_HOME") FM_DAILY_QUOTA_CHECK_STATUS=$(shell_quote "$STATE/$ID.status"); $LAUNCH"
+fi
+# Fork-only end
 # A task worker names its own chrome-devtools-axi session after the task, so teardown
 # can stop exactly the bridge and Chrome this task started.
 [ "$KIND" = secondmate ] || LAUNCH="export CHROME_DEVTOOLS_AXI_SESSION=$(shell_quote "$ID"); $LAUNCH"
