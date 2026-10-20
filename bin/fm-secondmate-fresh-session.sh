@@ -13,8 +13,8 @@
 #   fm-secondmate-fresh-session.sh sweep
 #
 # request - run inside the second mate's home (FM_HOME is that home). Called by
-#   bin/fm-secondmate-report.sh after a terminal done/ready/failed report and by
-#   bin/fm-parent-channel-lib.sh after a child's done/failed line. It writes two
+#   bin/fm-secondmate-report.sh after a done/ready/failed report with --item and by
+#   bin/fm-merge-outcome-lib.sh and bin/fm-inactive-reconcile.sh after a child's work landed. It writes two
 #   durable files and nothing else: the handover note, data/fresh-session-handover.md
 #   (under 40 lines: what finished, the child tasks still in flight, the unread
 #   instruction count, where the open work lives), and the request marker,
@@ -173,7 +173,8 @@ blocked_reason() {  # <id> <meta> <home> <marker>
   case "$corr" in
     '') ;;
     *)
-      if ! fm_pending_reply_try_resolve "$STATE" "$corr"; then
+      # A corr with no pending-reply record (fire-and-forget or close-ack) has nothing to wait for.
+      if [ -f "$(fm_pending_reply_path "$STATE" "$corr")" ] && ! fm_pending_reply_try_resolve "$STATE" "$corr"; then
         printf 'its correlated request %s is not resolved yet' "$corr"
         return 1
       fi
@@ -286,7 +287,7 @@ do_sweep() {
     found="$found $id"
   done
   for id in $found; do
-    do_apply "$id" || true
+    do_apply "$id" || printf '%s fresh-session relaunch failed for %s (see its fresh-session.request.failed)\n' "$(date +%s)" "$id" >> "$state/fresh-session.log"
   done
   return 0
 }
