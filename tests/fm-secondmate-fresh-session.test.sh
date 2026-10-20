@@ -18,7 +18,8 @@
 #      without --item, a main home, a remote route, and
 #      FM_SECONDMATE_FRESH_SESSION=off ask for nothing.
 #   5. A corr with no pending-reply record does not defer forever, and a failed
-#      relaunch leaves fm-control's error in state/fresh-session.log.
+#      relaunch leaves fm-control's error in state/fresh-session.log; one that
+#      Claude's background-work exit dialog blocked closes that dialog.
 #   6. The real ledger pass reports a child's done line (its PR-ready report)
 #      and asks for nothing; a merged PR or a local-only fast-forward
 #      (bin/fm-merge-local.sh) asks for one, once per landing.
@@ -70,7 +71,12 @@ case "${1:-}" in
           if [ -e "$D/remote-relaunch-start" ] && [ ! -e "$D/remote-relaunch-end" ]; then
             : > "$D/local-relaunch-during-remote"
           fi
-          printf 'zsh' > "$D/command.$target"
+          if [ -f "$D/background-work" ]; then
+            # Claude keeps running and asks what to do with its background task.
+            cp "$D/background-work" "$D/pane"
+          else
+            printf 'zsh' > "$D/command.$target"
+          fi
           ;;
         *'encode launch-brief'* | *'Firstmate operational input waiting: read'*) cat "$D/becomes" > "$D/command.$target" ;;
         ': Firstmate instruction waiting: list '*)
@@ -94,6 +100,8 @@ case "${1:-}" in
       esac
     else
       printf '%s\n' "$payload" >> "$D/keys"
+      # Esc picks "Stay" in Claude's exit dialog.
+      [ "$payload" != Escape ] || [ ! -f "$D/background-work" ] || rm -f "$D/pane"
     fi
     exit 0 ;;
   display-message)
@@ -392,6 +400,26 @@ test_no_record_corr_and_failed_relaunch() {
   pass "T7 a corr with no record restarts, and a failed relaunch is logged"
 }
 
+# --- T9: a failed relaunch does not leave Claude's exit dialog open ----------
+test_background_work_dialog_is_dismissed() {
+  local dir out
+  dir=$(new_case bgwork)
+  add_local_mate "$dir" sm1
+  bind_mate "$dir" sm1
+  printf '%s\n' '   Background work is running' \
+    '   The following will stop when you exit:' '' '   shell · sleep 45' '' \
+    '   ❯ 1. Exit and stop tasks' '     2. Move to background and exit' '     3. Stay' '' \
+    '   Enter to confirm · Esc to cancel' > "$dir/fake/background-work"
+  mate_report "$dir" sm1 "done" "abcdef0123456789" "finished while a background task runs"
+  if out=$(sweep "$dir"); then
+    fail "a relaunch the dialog blocked must make the sweep exit non-zero"$'\n'"$out"
+  fi
+  assert_present "$dir/sm1-home/state/fresh-session.request.failed" "a blocked relaunch must keep its marker as .failed"$'\n'"$out"
+  grep -qx Escape "$dir/fake/keys" || fail "the sweep must close the exit dialog with Escape"$'\n'"$out"
+  assert_absent "$dir/fake/pane" "the mate was left in Claude's exit dialog"$'\n'"$out"
+  pass "T9 a relaunch blocked by background work leaves the mate usable"
+}
+
 # add_done_child <case-dir> <child-id>: a ship child in sm1's home whose ledger ends in done.
 add_done_child() {
   local dir=$1 cid=$2 st="$1/sm1-home/state"
@@ -482,5 +510,6 @@ test_no_record_corr_and_failed_relaunch
 test_no_request_where_not_applicable
 test_each_landing_requests_once
 test_watcher_poll_applies_request
+test_background_work_dialog_is_dismissed
 
 echo "# all fm-secondmate-fresh-session tests passed"

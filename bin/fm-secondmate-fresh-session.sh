@@ -50,7 +50,9 @@
 # mate reconciles it from the home's records.
 # A failed relaunch moves the marker to state/fresh-session.request.failed so a
 # broken restart is not retried on every poll, and sweep appends the failure
-# with fm-control's error text to the parent's state/fresh-session.log.
+# with fm-control's error text to the parent's state/fresh-session.log. If the
+# failure left Claude's "Background work is running" exit dialog open, apply
+# closes it with Esc so the mate keeps taking input.
 #
 # FM_SECONDMATE_FRESH_SESSION=off disables request and sweep.
 #
@@ -229,6 +231,19 @@ blocked_reason() {  # <id> <meta> <home> <marker>
   return 0
 }
 
+# A Claude mate holding a background task answers /exit with a "Background
+# work is running" dialog, so the relaunch fails and the dialog would hold the
+# pane until someone presses Esc. Esc picks "Stay": the task keeps running and
+# the mate takes input again.
+dismiss_exit_dialog() {  # <id> <meta>
+  local backend target screen
+  backend=$(fm_backend_of_meta "$2")
+  target=$(fm_backend_target_of_meta "$2")
+  screen=$(fm_backend_visible_capture "$backend" "$target" "fm-$1" 2>/dev/null) || return 0
+  printf '%s\n' "$screen" | grep -q 'Background work is running' || return 0
+  fm_backend_send_key "$backend" "$target" Escape "fm-$1" >/dev/null 2>&1 || true
+}
+
 do_apply() {
   local id=${1:-} meta home marker reason out rc delivery note_path
   case "$id" in '' | *[!A-Za-z0-9._-]*) usage >&2; return 2 ;; esac
@@ -271,6 +286,7 @@ do_apply() {
     "$SCRIPT_DIR/fm-control.sh" "$id" relaunch \
     --note "Fresh session after finished work. Handover note: $note_path" 2>&1) || rc=$?
   if [ "$rc" -ne 0 ]; then
+    dismiss_exit_dialog "$id" "$meta"
     mv -f "$marker" "$marker.failed" 2>/dev/null || true
     printf 'failed %s: %s\n' "$id" "$(one_line "$out" 300)"
     return 1
