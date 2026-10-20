@@ -273,10 +273,34 @@ cmd_release() {
     return 0
   fi
   write_atomic "$file" "released $full" || die "could not write $file"
+  if relaunch_with_handover "$id" "$full"; then
+    write_atomic "$file" "released $full"$'\n'"steered $full" || die "could not write $file"
+    echo "released $id at $full and relaunched a fresh worker from the hand-over note to run /no-mistakes on that head"
+    return 0
+  fi
   FM_HOME=$(home_dir) "$SCRIPT_DIR/fm-send.sh" "$id" "$(start_steer "$full")" >/dev/null ||
     die "released $id at $full, but the start instruction could not be sent; rerun release to retry"
   write_atomic "$file" "released $full"$'\n'"steered $full" || die "could not write $file"
   echo "released $id at $full and told the worker to run /no-mistakes on that head"
+}
+
+# The final run goes to a fresh worker when the worker left a hand-over note for
+# this exact head; bin/fm-final-run-handover.sh owns the note. Returns 1 to fall
+# back to steering the live worker, dies when the relaunch itself fails.
+relaunch_with_handover() {  # <id> <sha>
+  local id=$1 sha=$2 handover="$SCRIPT_DIR/fm-final-run-handover.sh" control="$SCRIPT_DIR/fm-control.sh" note
+  [ "${FM_TEST_SEAM:-}" != 1 ] || control=${FM_TEST_CONTROL:-$control}
+  note=$(mktemp "${TMPDIR:-/tmp}/fm-handover-note.XXXXXX") || return 1
+  if ! FM_HOME=$(home_dir) "$handover" relaunch-note "$id" "$sha" >"$note" 2>/dev/null; then
+    rm -f "$note"
+    return 1
+  fi
+  if ! FM_HOME=$(home_dir) "$control" "$id" relaunch --note-file "$note" >/dev/null; then
+    rm -f "$note"
+    die "released $id at $sha, but relaunching a fresh worker from the hand-over note failed; rerun release to retry"
+  fi
+  rm -f "$note"
+  FM_HOME=$(home_dir) "$handover" mark-relaunched "$id" "$sha"
 }
 
 start_steer() {  # <sha>

@@ -665,4 +665,145 @@ test_release_steers_the_worker_exactly_once
 test_away_ready_report_is_released_then_told_to_captain
 test_failed_release_can_still_escalate
 
+# --- fresh worker for the final run (bin/fm-final-run-handover.sh) ---
+
+HANDOVER="$ROOT/bin/fm-final-run-handover.sh"
+
+# A fake fm-control.sh: logs its arguments and keeps the note it was handed.
+make_fake_control() {  # <dir> <exit-code>
+  mkdir -p "$1"
+  cat >"$1/fm-control.sh" <<FAKE
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >>"$1/control.log"
+while [ \$# -gt 0 ]; do
+  [ "\$1" != --note-file ] || cp "\$2" "$1/note.copy"
+  shift
+done
+exit $2
+FAKE
+  chmod +x "$1/fm-control.sh"
+}
+
+write_handover() {  # <id>
+  FM_HOME="$HOME_DIR" "$HANDOVER" write "$1" --pr https://example.test/o/r/pull/9 \
+    --changed 'added the widget' --tests 'widget.test.sh passed' >/dev/null
+}
+
+release_with_control() {  # <control-dir> <id>
+  FM_TEST_SEAM=1 FM_TEST_CONTROL="$1/fm-control.sh" release_task "$2"
+}
+
+test_gated_brief_carries_the_handover_step() {
+  local home="$TMP_ROOT/handover-brief-home" brief
+  mkdir -p "$home/data" "$home/config"
+  with_gate_on env FM_HOME="$home" "$BRIEF" brief-fresh some-proj --mode no-mistakes >/dev/null 2>&1 \
+    || fail "a gated brief should scaffold"
+  brief="$home/data/brief-fresh/brief.md"
+  assert_grep 'Fresh worker for the final run' "$brief" "the gated brief names the hand-off"
+  assert_grep 'fm-final-run-handover.sh' "$brief" "the gated brief names the hand-over command"
+  assert_grep 'brief-fresh --pr' "$brief" "the command carries the task id"
+  with_gate_off env FM_HOME="$home" "$BRIEF" brief-nofresh some-proj --mode no-mistakes >/dev/null 2>&1 \
+    || fail "an ungated brief should scaffold"
+  assert_no_grep 'Fresh worker for the final run' "$home/data/brief-nofresh/brief.md" "an ungated brief has no hand-off"
+  pass "only the gated brief tells the worker to hand the final run to a fresh worker"
+}
+
+test_handover_write_records_head_and_requires_fields() {
+  local note head
+  make_world hand-write
+  write_task_meta hand-write
+  commit_in "$WT_DIR" 'feat: done'
+  head=$(git -C "$WT_DIR" rev-parse HEAD)
+  FM_HOME="$HOME_DIR" "$HANDOVER" write hand-write --pr https://example.test/o/r/pull/9 --changed x >/dev/null 2>&1 \
+    && fail "a note without --tests must be refused"
+  write_handover hand-write || fail "write should succeed"
+  note="$HOME_DIR/data/hand-write/final-run-handover.md"
+  assert_grep "- Head: $head" "$note" "the note records the head commit"
+  assert_grep '- Branch: fm/hand-write' "$note" "the note records the branch"
+  assert_grep '- PR: https://example.test/o/r/pull/9' "$note" "the note records the PR URL"
+  assert_grep '- Open review answers: none' "$note" "open answers default to none"
+  pass "write records branch, head, PR, changes, tests and open answers"
+}
+
+test_release_relaunches_a_fresh_worker_from_the_note() {
+  local out head ctl="$TMP_ROOT/ctl-ok"
+  make_world hand-ok
+  write_task_meta hand-ok
+  prepare_ship hand-ok >/dev/null || fail "prepare should succeed"
+  commit_in "$WT_DIR" 'feat: final version'
+  head=$(git -C "$WT_DIR" rev-parse HEAD)
+  write_handover hand-ok
+  make_fake_control "$ctl" 0
+  out=$(release_with_control "$ctl" hand-ok 2>&1) || fail "release should succeed: $out"
+  assert_grep 'hand-ok relaunch --note-file' "$ctl/control.log" "release relaunches the same task with a note file"
+  assert_grep "- Head: $head" "$ctl/note.copy" "the note carries the hand-over"
+  assert_grep "Run /no-mistakes now on that exact head" "$ctl/note.copy" "the note tells the fresh worker to start the run"
+  assert_grep 'do not redo' "$ctl/note.copy" "the note forbids redoing the implementation"
+  assert_equals 0 "$(steer_count hand-ok)" "a relaunch replaces the steer to the old worker"
+  assert_equals "released $head" "$(gate_verdict hand-ok)" "the gate is released on the head"
+  out=$(release_with_control "$ctl" hand-ok 2>&1) || fail "a repeated release should succeed: $out"
+  assert_equals 1 "$(wc -l <"$ctl/control.log" | tr -d ' ')" "a repeated release must not relaunch again"
+  commit_in "$WT_DIR" 'fix: after the run'
+  write_handover hand-ok
+  out=$(release_with_control "$ctl" hand-ok 2>&1) || fail "release of a new head should succeed: $out"
+  assert_equals 1 "$(wc -l <"$ctl/control.log" | tr -d ' ')" "a new head must not relaunch the fresh worker"
+  assert_equals 1 "$(steer_count hand-ok)" "a new head steers the fresh worker"
+  pass "release hands the final run to a fresh worker once, then steers it"
+}
+
+test_stale_or_absent_note_falls_back_to_the_steer() {
+  local out ctl="$TMP_ROOT/ctl-stale"
+  make_world hand-stale
+  write_task_meta hand-stale
+  prepare_ship hand-stale >/dev/null || fail "prepare should succeed"
+  make_fake_control "$ctl" 0
+  out=$(release_with_control "$ctl" hand-stale 2>&1) || fail "release without a note should succeed: $out"
+  [ ! -e "$ctl/control.log" ] || fail "no note must not relaunch"
+  assert_equals 1 "$(steer_count hand-stale)" "no note steers the live worker"
+  write_handover hand-stale
+  commit_in "$WT_DIR" 'feat: changed after the note'
+  out=$(release_with_control "$ctl" hand-stale 2>&1) || fail "release with a stale note should succeed: $out"
+  [ ! -e "$ctl/control.log" ] || fail "a note for an older head must not relaunch"
+  assert_equals 2 "$(steer_count hand-stale)" "a stale note steers the live worker"
+  pass "an absent or stale note leaves today's steer in place"
+}
+
+test_failed_relaunch_fails_release_and_retries() {
+  local out ctl="$TMP_ROOT/ctl-fail"
+  make_world hand-fail
+  write_task_meta hand-fail
+  prepare_ship hand-fail >/dev/null || fail "prepare should succeed"
+  commit_in "$WT_DIR" 'feat: final version'
+  write_handover hand-fail
+  make_fake_control "$ctl" 1
+  out=$(release_with_control "$ctl" hand-fail 2>&1) && fail "a failed relaunch must fail release: $out"
+  assert_contains "$out" "rerun release to retry" "the error says how to recover"
+  assert_equals 0 "$(steer_count hand-fail)" "a failed relaunch must not also steer"
+  make_fake_control "$ctl" 0
+  out=$(release_with_control "$ctl" hand-fail 2>&1) || fail "the retry should succeed: $out"
+  assert_equals 2 "$(wc -l <"$ctl/control.log" | tr -d ' ')" "the retry relaunches again"
+  pass "a failed relaunch fails the release and the retry relaunches"
+}
+
+test_fresh_workers_ci_ready_done_passes_custody() {
+  local head
+  make_world hand-custody
+  commit_in "$WT_DIR" 'feat: final version'
+  head=$(git -C "$WT_DIR" rev-parse HEAD)
+  git -C "$WT_DIR" update-ref refs/remotes/origin/fm/hand-custody "$head"
+  # shellcheck source=bin/fm-dod-lib.sh
+  . "$ROOT/bin/fm-dod-lib.sh"
+  fm_dod_accept_ship_done ship no-mistakes "$WT_DIR" "$PROJ_DIR" \
+    "done: PR https://example.test/o/r/pull/9 checks green" \
+    || fail "the fresh worker's CI-ready done was refused"
+  pass "a fresh worker's CI-ready done passes the existing custody check"
+}
+
+test_gated_brief_carries_the_handover_step
+test_handover_write_records_head_and_requires_fields
+test_release_relaunches_a_fresh_worker_from_the_note
+test_stale_or_absent_note_falls_back_to_the_steer
+test_failed_relaunch_fails_release_and_retries
+test_fresh_workers_ci_ready_done_passes_custody
+
 echo "# all fm-validation-gate tests passed"

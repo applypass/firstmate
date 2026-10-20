@@ -453,6 +453,8 @@ EOF
       fi
       if [ "$gated" = 0 ]; then
         "$gate_dir/fm-validation-gate.sh" dod "$branch" || return 1
+        # Fork-only: the final run goes to a fresh worker; bin/fm-final-run-handover.sh owns the rule.
+        FM_HOME="${FM_HOME:-}" "$gate_dir/fm-final-run-handover.sh" brief-rule "$id" || return 1
       else
       cat <<EOF
 # Definition of done
