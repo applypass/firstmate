@@ -239,6 +239,13 @@ The main firstmate reconciles only direct reports.
 Each secondmate is a firstmate in its own home, so it runs recovery on startup and reconciles its own crewmates.
 A secondmate's recovery reconciles only work that is already its own and then idles.
 It never initiates a survey or audit during recovery.
+<!-- Fork-only (applypass): fresh session after finished work -->
+A local mate also restarts itself after each finished piece of work, so later turns stop re-reading finished history.
+Its `done`, `ready`, or `failed` report (and a child's `done` or `failed` line) leaves a request and a handover note in its home, and the watcher poll then relaunches it with `bin/fm-control.sh <id> relaunch`, on the same Opus pin.
+The relaunch waits until no other request to that mate is open, no steering message is unread, no wake row is unacknowledged, and its agent is idle; `bin/fm-secondmate-fresh-session.sh` owns those checks and the `FM_SECONDMATE_FRESH_SESSION=off` switch.
+The fresh agent finds a steer pointing at `data/fresh-session-handover.md` in its home, runs `bin/fm-session-start.sh`, and reconciles from durable records like on any restart.
+A failed relaunch parks the request as `state/fresh-session.request.failed`; look there before assuming a mate skipped its restart.
+<!-- Fork-only end -->
 
 ## Retirement and teardown
 

@@ -2498,6 +2498,8 @@ reconcile_requests_detached() {
 
 PR_POLL_CONTROL_LOCK=
 PR_POLL_PUBLISH_LOCK=
+# Fork-only (applypass): pid of the detached fresh-session sweep.
+FRESH_SESSION_PID=
 
 pr_poll_control_release() {
   [ -z "$PR_POLL_CONTROL_LOCK" ] || fm_lock_release "$PR_POLL_CONTROL_LOCK" || return 1
@@ -2676,6 +2678,15 @@ while :; do
     echo "watcher: secondmate liveness check failed" >&2
     exit 1
   }
+
+  # Fork-only (applypass): restart a second mate that finished a piece of work
+  # (bin/fm-secondmate-fresh-session.sh); detached so a relaunch never stalls the poll.
+  if [ -z "$FRESH_SESSION_PID" ] || ! kill -0 "$FRESH_SESSION_PID" 2>/dev/null; then
+    [ -z "$FRESH_SESSION_PID" ] || wait "$FRESH_SESSION_PID" 2>/dev/null || true
+    FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+      "$SCRIPT_DIR/fm-secondmate-fresh-session.sh" sweep </dev/null >/dev/null 2>&1 &
+    FRESH_SESSION_PID=$!
+  fi
 
   # A live secondmate endpoint does not prove that its own wake loop is alive.
   # Observe the foreign queue before the rest of this cycle so an aged row wakes
