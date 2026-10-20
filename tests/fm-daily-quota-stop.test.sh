@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC1091,SC2016
 # Fork-only: behavior tests for the daily Claude quota stop
-# (bin/fm-daily-quota-stop.sh, its rerun PreToolUse transport, its installer, the
+# (bin/fm-daily-quota-stop.sh, its run-start PreToolUse transport, its installer, the
 # no-mistakes pre-receive companion check, and the launch gate in bin/fm-spawn.sh). A fake quota-axi on PATH answers every read:
 # no real quota-axi, claude, codex, op, or network is touched.
 set -u
@@ -121,6 +121,36 @@ test_weekly_reset_mid_day() {
   set_used 22 "2026-10-27T09:00:00.000000+00:00"; run_check spawn
   expect_code 3 "$CHECK_RC" "first read of the day after a reset today counts everything since the reset"
   pass "weekly reset mid-day counts from the reset"
+}
+
+test_reading_drop_without_reset_keeps_baseline() {
+  reset_fleet
+  set_used 40; run_check spawn
+  set_used 43; run_check spawn
+  # One lower reading with no weekly reset since the last check is a wobble.
+  set_used 39; run_check spawn
+  expect_code 0 "$CHECK_RC" "a lower reading with no reset does not count the whole week as today's"
+  set_used 59; run_check spawn
+  expect_code 0 "$CHECK_RC" "the baseline is still 40, 19% used today allows"
+  set_used 60; run_check spawn
+  expect_code 3 "$CHECK_RC" "20% over the kept baseline refuses"
+  assert_contains "$CHECK_OUT" "used 20%" "counts from the kept baseline"
+  # Without resetsAt a drop is the only sign of a reset.
+  reset_fleet
+  set_used 40; run_check spawn
+  jq 'del(.providers[0].windows[1].resetsAt) | .providers[0].windows[1].percentRemaining = 79' "$FAKE_QUOTA_JSON" > "$FAKE_QUOTA_JSON.tmp" && mv "$FAKE_QUOTA_JSON.tmp" "$FAKE_QUOTA_JSON"
+  run_check spawn
+  expect_code 3 "$CHECK_RC" "a drop with no resetsAt counts from zero"
+  assert_contains "$CHECK_OUT" "used 21%" "everything since the drop counts"
+  # A reset after the previous day's last reading confirms the drop.
+  reset_fleet
+  export FM_DAILY_QUOTA_NOW=$((DAY1 + 10 * 3600))
+  set_used 80; run_check spawn
+  export FM_DAILY_QUOTA_NOW=$((DAY2 - 6 * 3600))
+  set_used 21 "2026-10-27T23:00:00.000000+00:00"; run_check spawn
+  expect_code 3 "$CHECK_RC" "a reset after the last reading counts from zero"
+  assert_contains "$CHECK_OUT" "used 21%" "counts from the reset"
+  pass "a lower reading resets the baseline only when a reset is confirmed"
 }
 
 test_unreadable_refuses_plainly() {
@@ -259,15 +289,18 @@ test_pretool_gate() {
     hook_out=$("$CHECK" --claude --home "$HOME_DIR" --command "$1" 2>&1)
     rc=$?
   }
-  nm 'no-mistakes rerun'
-  expect_code 2 "$rc" "a rerun is refused over the line"
-  assert_contains "$hook_out" '"permissionDecision":"deny"' "deny object"
-  assert_contains "$hook_out" "no-mistakes run" "reason names the refused work"
-  nm 'cd x && no-mistakes rerun > /tmp/o 2>&1 &'
-  expect_code 2 "$rc" "a rerun behind other words is refused"
-  for c in 'no-mistakes axi run' 'no-mistakes axi run --wait 5m' 'no-mistakes axi run --intent "x"' \
+  for c in 'no-mistakes rerun' 'cd x && no-mistakes rerun > /tmp/o 2>&1 &' \
+    'no-mistakes axi run --intent "x"' 'no-mistakes axi run --wait 5m --intent=x' \
+    'git push no-mistakes' 'git push -u no-mistakes HEAD' 'cd x; git push --force no-mistakes fm/x'; do
+    nm "$c"
+    expect_code 2 "$rc" "a new run start is refused over the line: $c"
+    assert_contains "$hook_out" '"permissionDecision":"deny"' "deny object: $c"
+    assert_contains "$hook_out" "no-mistakes run" "reason names the refused work: $c"
+  done
+  for c in 'no-mistakes axi run' 'no-mistakes axi run --wait 5m' \
     'no-mistakes axi respond --action approve' 'no-mistakes axi status' \
-    'echo "no-mistakes rerun"' 'git status'; do
+    'echo "no-mistakes rerun"' 'echo "no-mistakes axi run --intent x"' 'git push origin HEAD' \
+    'git push origin no-mistakes-branch' 'git status'; do
     nm "$c"
     expect_code 0 "$rc" "never blocked by the hook: $c"
     [ -z "$hook_out" ] || fail "allowed command produced output: $c: $hook_out"
@@ -280,7 +313,7 @@ test_pretool_gate() {
   set_used 90
   rc=$(printf '{"tool_input":{"command":"no-mistakes rerun"}}' | "$CHECK" --claude --home "$HOME_DIR" >/dev/null 2>&1; echo $?)
   expect_code 2 "$rc" "claude payload over the line is refused"
-  pass "the hook gates only no-mistakes rerun"
+  pass "the hook gates new run starts and never an existing run"
 }
 
 # The pre-receive companion is the run-start boundary for every harness and
@@ -336,8 +369,12 @@ test_installer() {
   set_used 40; run_check spawn
   set_used 70
   cmd=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$f")
-  out=$(printf '{"tool_input":{"command":"no-mistakes rerun"}}' | bash -c "$cmd" 2>&1)
-  expect_code 2 $? "the registered hook refuses: $out"
+  for c in 'no-mistakes rerun' 'no-mistakes axi run --intent x' 'git push no-mistakes'; do
+    out=$(jq -n --arg c "$c" '{tool_input:{command:$c}}' | bash -c "$cmd" 2>&1)
+    expect_code 2 $? "the registered hook refuses $c: $out"
+  done
+  out=$(printf '{"tool_input":{"command":"no-mistakes axi run"}}' | bash -c "$cmd" 2>&1)
+  expect_code 0 $? "the registered hook lets a reattach through: $out"
   pass "installer merges, is idempotent, and registers a working hook"
 }
 
@@ -374,6 +411,7 @@ test_refuse_at_20
 test_hold_at_25_until_next_day
 test_day_rollover_resets
 test_weekly_reset_mid_day
+test_reading_drop_without_reset_keeps_baseline
 test_unreadable_refuses_plainly
 test_unreadable_has_no_override
 test_thresholds_are_fixed

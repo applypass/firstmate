@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 # Fork-only: PreToolUse transport for the daily quota stop (applypass fork).
 #
-# Refuses `no-mistakes rerun` while the fleet's daily Claude quota stop is in
-# force (bin/fm-daily-quota-stop.sh owns the decision). A new run started by a
-# push to the no-mistakes gate is checked at the shared pre-receive companion
-# (bin/fm-validation-gate-pre-receive.sh), which covers every harness and home;
-# `no-mistakes rerun` asks the daemon directly and never reaches that boundary,
-# so this Claude PreToolUse hook is its gate. Reattaching (`axi run` with no
-# flags), `axi respond`, and `axi status` never match, so an existing run is
-# never blocked. Registered per Claude worker by bin/fm-spawn.sh through
-# bin/fm-daily-quota-guard-install.sh.
+# Refuses a new no-mistakes run while the fleet's daily Claude quota stop is in
+# force (bin/fm-daily-quota-stop.sh owns the decision): `no-mistakes axi run`
+# with --intent, `no-mistakes rerun`, and `git push no-mistakes`. The shared
+# pre-receive companion (bin/fm-validation-gate-pre-receive.sh) checks a push
+# only where the validation gate installed it, and a run on a head already in
+# the gate or a rerun asks the daemon directly without a push, so this Claude
+# PreToolUse hook is the second layer. Reattaching (`axi run` without
+# --intent), `axi respond`, and `axi status` never match, so an existing run is
+# never blocked. Registered per Claude worker and secondmate by bin/fm-spawn.sh
+# through bin/fm-daily-quota-guard-install.sh.
 #
 # Usage:
 #   <PreToolUse JSON on stdin> | bin/fm-daily-quota-pretool-check.sh [--claude] [--home DIR] [--status-file FILE]
@@ -41,10 +42,13 @@ if [ "$CMD_SET" -eq 0 ]; then
 fi
 [ -n "$CMD" ] || exit 0
 
-# A rerun: `no-mistakes rerun` at a command position. A word preceded by a
-# quote, slash, dot, dash, or alphanumeric is not a command.
-RERUN_RE='(^|[^A-Za-z0-9_./"'"'"'-])no-mistakes[[:space:]]+rerun([[:space:]]|$)'
-[[ "$CMD" =~ $RERUN_RE ]] || exit 0
+# A run start at a command position. A word preceded by a quote, slash, dot,
+# dash, or alphanumeric is not a command.
+CMD_POS='(^|[^A-Za-z0-9_./"'"'"'-])'
+RERUN_RE="${CMD_POS}"'no-mistakes[[:space:]]+rerun([[:space:]]|$)'
+AXI_RUN_RE="${CMD_POS}"'no-mistakes[[:space:]]+axi[[:space:]]+run([[:space:]]+[^;&|]*)?[[:space:]]--intent([[:space:]=]|$)'
+PUSH_RE="${CMD_POS}"'git[[:space:]]+push([[:space:]]+-[^;&|[:space:]]*)*[[:space:]]+no-mistakes([[:space:]]|$)'
+[[ "$CMD" =~ $RERUN_RE ]] || [[ "$CMD" =~ $AXI_RUN_RE ]] || [[ "$CMD" =~ $PUSH_RE ]] || exit 0
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P) || exit 0
 GATE="$SCRIPT_DIR/fm-daily-quota-stop.sh"

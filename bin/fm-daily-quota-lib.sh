@@ -183,8 +183,13 @@ fm_dq_evaluate() {  # <this-home>
     fi
   fi
   # Usage that fell below the baseline, or a weekly reset today, means the week
-  # restarted: everything used since the reset counts as today's.
-  if [ "$FM_DQ_USED_NOW" -lt "$baseline" ]; then baseline=0; fi
+  # restarted: everything used since the reset counts as today's. A drop counts
+  # as a reset only when resetsAt is missing or puts the reset after the last
+  # recorded reading; otherwise it is a reading wobble and used today clamps to 0.
+  if [ "$FM_DQ_USED_NOW" -lt "$baseline" ] &&
+    { [ -z "$FM_DQ_LAST_RESET" ] || [ "$FM_DQ_LAST_RESET" -gt "${FM_DQ_B_LAST_AT:-0}" ]; }; then
+    baseline=0
+  fi
   if [ -n "$FM_DQ_LAST_RESET" ] && [ "$FM_DQ_LAST_RESET" -ge "$midnight" ] && [ "$FM_DQ_LAST_RESET" -le "$now" ]; then
     baseline=0
   fi

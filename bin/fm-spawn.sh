@@ -4829,8 +4829,8 @@ case "$HARNESS" in
 claude*)
   "$SCRIPT_DIR/fm-op-guard-install.sh" "$WT" || echo "warning: could not register the op guard in $WT/.claude/settings.local.json" >&2
   exclude_path '.claude/settings.local.json'
-  # Fork-only: also refuse `no-mistakes rerun` in this worker once the daily
-  # quota stop is in force (bin/fm-daily-quota-pretool-check.sh).
+  # Fork-only: also refuse a new no-mistakes run start in this worker once the
+  # daily quota stop is in force (bin/fm-daily-quota-pretool-check.sh).
   "$SCRIPT_DIR/fm-daily-quota-guard-install.sh" "$WT" --home "$FM_HOME" \
     --status-file "$STATE/$ID.status" || echo "warning: could not register the daily quota guard in $WT/.claude/settings.local.json" >&2
   ;;

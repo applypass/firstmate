@@ -367,7 +367,7 @@ The whole fleet shares one daily budget of the weekly Claude quota.
 "Used today" is the weekly percentage now minus the percentage at local midnight, read from `quota-axi --provider claude --json`.
 Every check records the last weekly percentage it saw.
 On a new day, the previous day's last reading is the baseline when it was taken yesterday; otherwise the current reading is the baseline.
-A weekly reset today makes the baseline zero.
+A weekly reset today makes the baseline zero, and so does a reading below the baseline when `resetsAt` is missing or puts the reset after the last recorded reading; any other lower reading keeps the baseline and counts as 0% used today.
 At 20% used today, a fresh worker launch (`bin/fm-spawn.sh`, ship, scout, or secondmate) and a new no-mistakes run are refused with the number and the threshold.
 At 25% they are held until the next local day, and the hold persists for the rest of the day even if usage later reads lower.
 The 20 and 25 lines are fixed constants in `bin/fm-daily-quota-lib.sh`.
@@ -381,7 +381,11 @@ Where each gate sits:
   `fm-spawn.sh` exports the check's location, the home, and the worker's status file into the worker, and the companion rejects the push when the stop is in force.
   A push that deletes a ref is checked too.
   The companion is installed only for the ship tasks and projects that use the validation gate.
-- `no-mistakes rerun` bypasses that push, so `bin/fm-daily-quota-pretool-check.sh` refuses it in every Claude worker; `fm-spawn.sh` registers it through `bin/fm-daily-quota-guard-install.sh`.
+- `bin/fm-daily-quota-pretool-check.sh` is a second layer in every Claude worker and secondmate: it refuses `no-mistakes axi run` with `--intent`, `no-mistakes rerun`, and `git push no-mistakes`.
+  It covers a push where the companion is not installed and a run that asks the daemon directly without a push.
+  `fm-spawn.sh` registers it through `bin/fm-daily-quota-guard-install.sh`.
+  `no-mistakes axi run` without `--intent` (reattach), `axi respond`, and `axi status` stay allowed.
+- One gap remains: a non-Claude worker in a project without the validation gate starts a run unchecked.
 
 The fleet home is found by walking each home's `.fm-secondmate-parent` binding up to the main home, so a secondmate spends the main home's budget even after a restart.
 Its files are `state/daily-quota-day-start` and `state/daily-quota-reported/`.
