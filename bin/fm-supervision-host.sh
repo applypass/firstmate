@@ -177,6 +177,10 @@ CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
 . "$SCRIPT_DIR/fm-supervision-engine-lib.sh"
 # shellcheck source=bin/fm-afk-contract.sh
 . "$SCRIPT_DIR/fm-afk-contract.sh"
+# Fork-only: secondmate-home routing (bin/fm-secondmate-host-lib.sh).
+# shellcheck source=bin/fm-secondmate-host-lib.sh
+. "$SCRIPT_DIR/fm-secondmate-host-lib.sh"
+# Fork-only end
 
 FIRST_ARM_RESTART=0
 case "${1:-}" in
@@ -1025,6 +1029,30 @@ while :; do
     emit
     exit 0
   fi
+  # Fork-only: a secondmate home absorbs a routine check close over an empty
+  # queue on the host, so the Opus mate session is never woken for it
+  # (bin/fm-secondmate-host-lib.sh, docs/supervision-host.md "Secondmate homes").
+  if fm_secondmate_host_routine_check "$REASON" && fm_secondmate_host_home "$FM_HOME" \
+    && ! fm_afk_contract_away_present "$STATE" \
+    && ! grep -q . "$STATE/.wake-queue" 2>/dev/null \
+    && fm_supervision_host_config "$CONFIG" "$PRIMARY"; then
+    host_still_owner || stand_down "this session no longer owns supervision"
+    if ! start_successor "$CLOSED_ARM_PID"; then
+      exit_to_main "the successor watcher cycle could not be verified before handling; this wake is yours"
+    fi
+    if [ -n "$SUCCESSOR_GENERATION" ] \
+      && ! "$SCRIPT_DIR/fm-watch-arm.sh" --handling-delivered "$SUCCESSOR_GENERATION" --watcher-pid "$SUCCESSOR_WATCHER" >/dev/null 2>&1; then
+      exit_to_main "the handling handoff to the successor watcher could not be confirmed; this wake is yours"
+    fi
+    log_line "absorbed	secondmate	$(printf '%s\n' "$REASON" | head -n 1)"
+    ARM_PID=$SUCCESSOR_PID
+    ARM_OUT=$SUCCESSOR_OUT
+    SUCCESSOR_PID=
+    SUCCESSOR_OUT=
+    ARM_TEXT=
+    continue
+  fi
+  # Fork-only end
   # Attended: the close reaches main exactly as the plain arm delivers it,
   # unless the supervision session may take it (attended_acceptor).
   if ! fm_afk_contract_away_present "$STATE"; then
@@ -1111,6 +1139,14 @@ while :; do
   # itself was handled, so only the host's lines reach main.
   if [ -n "$LAST_TURN" ] && ! fm_afk_contract_away_present "$STATE"; then
     CAPTAIN_SEQS=$(turn_captain_seqs "$LAST_TURN")
+    # Fork-only: a secondmate home's script already put each captain outcome on
+    # the parent channel, so the mate session has nothing to publish.
+    # shellcheck disable=SC2086 # the store rows are space-free numbers
+    if [ -n "$CAPTAIN_SEQS" ] && fm_secondmate_host_outcomes_published "$FM_HOME" "$STATE" ${CAPTAIN_SEQS//,/}; then
+      log_line "published	secondmate	store rows $CAPTAIN_SEQS reached the parent channel"
+      CAPTAIN_SEQS=
+    fi
+    # Fork-only end
     if [ -n "$CAPTAIN_SEQS" ]; then
       ARM_TEXT=
       exit_to_main "branch-outcome: the supervision session handled this wake and recorded captain outcomes for you (store rows $CAPTAIN_SEQS); run bin/fm-wake-drain.sh, act on its BRANCH OUTCOMES section, and acknowledge them as it prints" \

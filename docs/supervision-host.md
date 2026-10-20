@@ -195,6 +195,24 @@ So a visible outcome remains available to main even when the handoff is lost.
 Silent outcomes remain in the store but are neither queued nor relayed as notes.
 One example is a Cursor park superseded by the return turn's own end, which stops its host as the engine turn finishes.
 
+## Secondmate homes
+
+A secondmate home runs the host the same way a main home does: its mate session is the primary, and the mate's own Opus context is what every wake it takes re-reads.
+So the host takes everything it can on a cheaper engine session and wakes the mate only for work that is the mate's own.
+`bin/fm-secondmate-host-lib.sh` owns the rules below, and `bin/fm-supervision-host.sh` reaches them through `# Fork-only:` blocks.
+The engine runs the Claude engine's default model (`sonnet`) there, as in every home, unless `config/supervision-host` names one.
+
+- **Routine closes.** Stale rechecks of a paused worker, routine signals, and acknowledged fire-and-forget inbox notes already reach the engine through the ordinary attended rules.
+  A `check: rearm-resurface` close over an empty wake queue announces nothing, so the host starts the successor cycle and parks on it (ledger kind `absorbed`).
+- **Captain outcomes.** `bin/fm-branch-report.sh` puts each captain outcome on the parent channel when it records it ([secondmate-parent-channel.md](secondmate-parent-channel.md)).
+  When every store row the turn recorded is on that channel, the host parks (ledger kind `published`) instead of exiting with `branch-outcome:`.
+  The host never marks a row read or processed: the rows stay unacknowledged until the mate's next drain, which presents them with every unread routine row, and the mate acknowledges each one it finds settled.
+  A row the turn recorded that is missing from the channel keeps the `branch-outcome:` exit.
+- **Checks first.** The absorb path makes the same checks as a handled wake: the home must still run the host and this session must still own supervision, and a successor that fails to start or confirm its handoff is retired and the close goes to the mate.
+
+The mate session still wakes for a decision or blocker close, a close the engine cannot take, a failed engine turn, a non-empty resurface, and every request in its steering inbox, whose doorbell the host never sees.
+The park boundary still ends the park with a `cycle boundary` line: Claude drops the exit 2 of a hook it timed out, so only a turn end re-arms the next park, and that turn is the mate's.
+
 ## Captain outcomes
 
 A captain outcome the attended engine records while the captain remains attended wakes main once, through the owner's ordinary wake path, with one `supervision-host: branch-outcome:` line naming its store rows.
