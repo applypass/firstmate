@@ -8,8 +8,9 @@
 # done. When the worker reports the PR ready for final validation, firstmate
 # runs `release` in that same turn, in both postures, and tells the captain the
 # PR is ready to merge to dev and that final validation is now running; release
-# also tells the worker to start the run, which proceeds without the captain's
-# merge word.
+# also starts the run, which proceeds without the captain's merge word: it
+# relaunches the task as a fresh worker when the worker left a hand-over note
+# for that head (bin/fm-final-run-handover.sh), and otherwise steers the worker.
 #
 # MECHANISM. no-mistakes starts a run when its per-repo bare gate
 # (~/.no-mistakes/repos/<id>.git) receives a push, and `no-mistakes axi run`
