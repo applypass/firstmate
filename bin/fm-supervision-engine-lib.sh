@@ -129,14 +129,6 @@ EOF
       fi
       ;;
   esac
-  # Fork-only: a secondmate home pins its host engine model
-  # (bin/fm-secondmate-host-lib.sh).
-  if [ -z "$model" ]; then
-    command -v fm_secondmate_host_default_model >/dev/null 2>&1 \
-      || . "$(dirname "${BASH_SOURCE[0]}")/fm-secondmate-host-lib.sh"
-    model=$(fm_secondmate_host_default_model "$(dirname "$config")" "$engine") || model=
-  fi
-  # Fork-only end
   case "$model" in
     '') model=$(fm_supervision_engine_default_model "$engine") || model= ;;
     *[!A-Za-z0-9._:/@-]*)

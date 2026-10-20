@@ -199,15 +199,15 @@ One example is a Cursor park superseded by the return turn's own end, which stop
 
 A secondmate home runs the host the same way a main home does: its mate session is the primary, and the mate's own Opus context is what every wake it takes re-reads.
 So the host takes everything it can on a cheaper engine session and wakes the mate only for work that is the mate's own.
-`bin/fm-secondmate-host-lib.sh` owns the three rules below, and `bin/fm-supervision-host.sh` and `bin/fm-supervision-engine-lib.sh` reach them through `# Fork-only:` blocks.
+`bin/fm-secondmate-host-lib.sh` owns the rules below, and `bin/fm-supervision-host.sh` reaches them through `# Fork-only:` blocks.
+The engine runs the Claude engine's default model (`sonnet`) there, as in every home, unless `config/supervision-host` names one.
 
-- **Model.** The engine runs `claude-sonnet-5-5` in a secondmate home unless `config/supervision-host` names a model (`fm_secondmate_host_default_model`, the only place the model is pinned).
-  A main home keeps the engine's own default.
 - **Routine closes.** Stale rechecks of a paused worker, routine signals, and acknowledged fire-and-forget inbox notes already reach the engine through the ordinary attended rules.
   A `check: rearm-resurface` close over an empty wake queue announces nothing, so the host starts the successor cycle and parks on it (ledger kind `absorbed`).
 - **Captain outcomes.** `bin/fm-branch-report.sh` puts each captain outcome on the parent channel when it records it ([secondmate-parent-channel.md](secondmate-parent-channel.md)).
-  When every store row the turn recorded is on that channel, the host parks (ledger kind `published`) instead of exiting with `branch-outcome:`; the rows stay in the mate's drain until acknowledged.
-  A row missing from the channel keeps the `branch-outcome:` exit.
+  When every store row the turn recorded, and every captain row the store still presents up to the newest of them, is on that channel, the host marks the store read and processed through that row (`bin/fm-branch-outcome.sh mark-read` and `mark-processed`) and parks (ledger kind `published`) instead of exiting with `branch-outcome:`, so the mate's next drain does not present them again.
+  A row missing from the channel, or an acknowledgement the store refuses, keeps the `branch-outcome:` exit.
+- **Checks first.** The absorb path makes the same checks as a handled wake: the home must still run the host and this session must still own supervision, and a successor that fails to start or confirm its handoff is retired and the close goes to the mate.
 
 The mate session still wakes for a decision or blocker close, a close the engine cannot take, a failed engine turn, a non-empty resurface, and every request in its steering inbox, whose doorbell the host never sees.
 The park boundary still ends the park with a `cycle boundary` line: Claude drops the exit 2 of a hook it timed out, so only a turn end re-arms the next park, and that turn is the mate's.

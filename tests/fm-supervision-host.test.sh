@@ -1957,7 +1957,7 @@ test_next_host_clears_a_turn_its_killed_predecessor_left() {
 
 # --- secondmate homes -----------------------------------------------------------
 # A marked secondmate home runs an Opus session, so the host takes what it can
-# on Sonnet and wakes the session only for what is its own (bin/fm-secondmate-host-lib.sh).
+# on its engine and wakes the session only for what is its own (bin/fm-secondmate-host-lib.sh).
 
 # A secondmate home whose parent channel is <name>-parent/state/<id>.status.
 make_mate_home() {  # <name> [config line]
@@ -1970,34 +1970,6 @@ make_mate_home() {  # <name> [config line]
   printf '%s\n' "$home"
 }
 mate_channel() { printf '%s/%s-parent/state/mate-%s.status\n' "$TMP_ROOT" "$1" "$1"; }
-
-test_secondmate_host_engine_runs_sonnet_5_5_unless_configured() {
-  local home
-  home=$(make_mate_home mate-model)
-  start_host "$home"
-  wait_until 150 watcher_live "$home" || fail "mate model: the host never started a watcher cycle"
-  append_status "$home" 'step one'
-  wait_until 250 handled_at_least "$home" 1 || fail "mate model: the wake was not handled: $(cat "$home/state/.supervision-host.log")"
-  assert_grep 'arg=claude-sonnet-5-5' "$home/engine-call.1" "a secondmate home's host engine must run Sonnet 5.5 by default"
-  stop_home_processes "$home"
-
-  home=$(make_mate_home mate-model-pinned 'claude claude-haiku-5-5')
-  start_host "$home"
-  wait_until 150 watcher_live "$home" || fail "mate model pinned: the host never started a watcher cycle"
-  append_status "$home" 'step one'
-  wait_until 250 handled_at_least "$home" 1 || fail "mate model pinned: the wake was not handled"
-  assert_grep 'arg=claude-haiku-5-5' "$home/engine-call.1" "a model named in config/supervision-host must win in a secondmate home"
-  assert_no_grep 'arg=claude-sonnet-5-5' "$home/engine-call.1" "the secondmate default overrode a configured model"
-  stop_home_processes "$home"
-
-  home=$(make_home main-model attended)
-  start_host "$home"
-  wait_until 150 watcher_live "$home" || fail "main model: the host never started a watcher cycle"
-  append_status "$home" 'step one'
-  wait_until 250 handled_at_least "$home" 1 || fail "main model: the wake was not handled"
-  assert_no_grep 'claude-sonnet-5-5' "$home/engine-call.1" "a main home must keep the engine's own default model"
-  pass "host: a secondmate home's engine runs Sonnet 5.5 unless the home names a model, and a main home is unchanged"
-}
 
 test_secondmate_routine_wake_never_wakes_the_mate_session() {
   local home
@@ -2028,6 +2000,8 @@ test_secondmate_captain_outcome_is_published_without_waking_the_mate() {
   wait_until 100 grep -qs '	published	secondmate	store rows 1 ' "$home/state/.supervision-host.log" \
     || fail "the ledger must record that the parent channel has the outcome: $(cat "$home/state/.supervision-host.log")"
   watcher_live "$home" || fail "mate captain: the host is not parked after the published outcome"
+  [ -z "$(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" present)" ] \
+    || fail "mate captain: the mate's drain still presents the published outcome: $(FM_HOME="$home" "$ROOT/bin/fm-branch-outcome.sh" present)"
   stop_home_processes "$home"
 
   # A parent channel that cannot take the line leaves the outcome to the mate.
@@ -2041,7 +2015,7 @@ test_secondmate_captain_outcome_is_published_without_waking_the_mate() {
   wait_until 250 host_exited "$home" || fail "mate unpublished: an unpublished captain outcome did not wake the mate: $(cat "$home/state/.supervision-host.log")"
   assert_re '^supervision-host: branch-outcome: .*\(store rows 1\); run bin/fm-wake-drain.sh' "$home/host.out" \
     "an outcome that never reached the parent channel must wake the mate session"
-  pass "host: a captain outcome the script published to the parent channel does not wake the mate, and an unpublished one does"
+  pass "host: a captain outcome the script published to the parent channel is acknowledged without waking the mate, and an unpublished one wakes it"
 }
 
 test_secondmate_decision_close_and_non_routine_check_still_wake_the_mate() {
@@ -2755,7 +2729,6 @@ test_branch_outcomes_keep_an_unshown_outcome_until_acknowledged
 test_branch_outcomes_keep_a_drain_presented_outcome_across_a_switch_to_pi
 test_branch_outcomes_keep_a_drain_presented_outcome_across_an_index_repair
 test_attended_routine_wake_is_handled_on_the_engine_and_stays_off_main
-test_secondmate_host_engine_runs_sonnet_5_5_unless_configured
 test_secondmate_routine_wake_never_wakes_the_mate_session
 test_secondmate_captain_outcome_is_published_without_waking_the_mate
 test_secondmate_decision_close_and_non_routine_check_still_wake_the_mate
