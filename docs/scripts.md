@@ -56,7 +56,8 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-kimi-turnend-hook.sh` | Surgically install or remove Kimi's guarded global crew turn-end hook                |
 | `fm-arm-pretool-check.sh` | Stable PreToolUse transport for the watcher-arm command policy (docs/arm-pretool-check.md) |
 | `fm-op-pretool-check.sh` | Fork-only: PreToolUse transport that refuses a bare 1Password `op` call unless OP_SERVICE_ACCOUNT_TOKEN is loaded (decision in `fm-op-command-policy.mjs`) |
-| `fm-op-guard-install.sh` | Fork-only: register the op guard in a directory's untracked `.claude/settings.local.json`; `fm-spawn.sh` runs it for every Claude worker and secondmate |
+| `fm-op-guard-install.sh` | Fork-only: register the op guard and the no-mistakes mirror check in a directory's untracked `.claude/settings.local.json`; `fm-spawn.sh` runs it for every Claude worker and secondmate |
+| `fm-nm-mirror-pretool-check.sh` | Fork-only: PreToolUse check that refuses a new `no-mistakes axi run --intent` when the private mirror branch holds commits whose patches local HEAD lacks |
 | `fm-op-service-account-token.sh` | Fork-only: print the 1Password service account token for a home (bash entry point over `fm-op-service-account-lib.sh`, named by the op guard's deny reason so the remedy works from any shell) |
 | `fm-arm-command-policy.mjs` | Semantic owner of the watcher-arm PreToolUse policy (docs/arm-pretool-check.md)   |
 | `fm-subagent-pretool-check.sh` | Primary-home delegation-shape PreToolUse guard (docs/subagent-guard.md) |
