@@ -6,9 +6,9 @@
 # since the start of the current local day. Running work is never affected.
 #
 # Reads quota through quota-axi only (never another harness CLI), as the
-# quota-axi --provider claude --json snapshot. The weekly window's
-# percentRemaining gives "used now"; the day-start baseline is persisted once
-# per local day in the fleet home so every home shares one budget.
+# quota-axi --provider claude --json snapshot (reused up to 60s old). The
+# weekly window's percentRemaining gives "used now"; the day-start baseline is
+# persisted once per local day in the fleet home so every home shares one budget.
 #
 # Fleet home: the home reached by following each home's durable
 # .fm-secondmate-parent binding (local route) up to the main home, so a
@@ -72,7 +72,11 @@ fm_dq_read_quota() {
     return 1
   fi
   command -v jq >/dev/null 2>&1 || { FM_DQ_REASON="jq is not installed"; return 1; }
-  out=$(quota-axi --provider claude --json 2>&1 </dev/null) || rc=$?
+  # Reuse a reading up to 60s old: every spawn, hook, and push check reads, and
+  # back-to-back vendor reads rate-limit Claude's quota endpoint for minutes.
+  # quota-axi still marks a reused reading fresh, and one read serves checks
+  # that start together.
+  out=$(quota-axi --provider claude --json --max-age 60s 2>&1 </dev/null) || rc=$?
   if [ "$rc" -ne 0 ] && ! printf '%s' "$out" | jq -e . >/dev/null 2>&1; then
     FM_DQ_REASON="quota-axi exited $rc: $(printf '%s' "$out" | tr '\n' ' ' | cut -c1-200)"
     return 1
@@ -85,7 +89,8 @@ fm_dq_read_quota() {
          then (([$rows[] | select(.accountKey == "default")] | first) // null)
          else ($rows | first) // null end) as $row
     | if $row == null then "ERR\tno Claude row in the quota-axi snapshot (the Claude account is not set up or not readable)"
-      elif ($row.state.stale // false) == true then "ERR\tthe Claude quota reading is stale"
+      elif ($row.state.stale // false) == true then "ERR\tthe Claude quota reading is stale" +
+        (if ($row.state.error // "") != "" then ": " + $row.state.error else "" end)
       else
         ([$row.windows[]? | select(.kind == "weekly")] | first) as $w
         | if $w == null then

@@ -28,7 +28,20 @@ export FM_DAILY_QUOTA_NOW=$DAY1
 cat > "$FAKEBIN/quota-axi" <<'SH'
 #!/usr/bin/env bash
 # Fake quota-axi: prints $FAKE_QUOTA_JSON, or fails when $FAKE_QUOTA_FAIL is set.
+# With $FAKE_QUOTA_RATE_LIMIT (a file path) set, it acts like the vendor rate
+# limit: only the first vendor read succeeds and is kept in that file; a later
+# read with --max-age reuses it, and one without gets a stale rate-limited row.
 [ -z "${FAKE_QUOTA_FAIL:-}" ] || { echo "$FAKE_QUOTA_FAIL" >&2; exit 1; }
+if [ -n "${FAKE_QUOTA_RATE_LIMIT:-}" ]; then
+  if [ -f "$FAKE_QUOTA_RATE_LIMIT" ]; then
+    case " $* " in
+      *" --max-age "*) jq '.providers[0].state.reused = true' "$FAKE_QUOTA_RATE_LIMIT" ;;
+      *) jq '.providers[0].state = {status: "stale", stale: true, error: "Claude quota endpoint rate limited"}' "$FAKE_QUOTA_RATE_LIMIT" ;;
+    esac
+    exit 0
+  fi
+  cp "$FAKE_QUOTA_JSON" "$FAKE_QUOTA_RATE_LIMIT"
+fi
 cat "$FAKE_QUOTA_JSON"
 SH
 chmod +x "$FAKEBIN/quota-axi"
@@ -170,6 +183,28 @@ test_unreadable_refuses_plainly() {
   run_check spawn
   expect_code 3 "$CHECK_RC" "garbage output refuses"
   pass "unreadable quota refuses and says why"
+}
+
+test_quick_checks_do_not_rate_limit() {
+  reset_fleet
+  local n
+  export FAKE_QUOTA_RATE_LIMIT="$TMP_ROOT/vendor-reading.json"
+  rm -f "$FAKE_QUOTA_RATE_LIMIT"
+  set_used 40
+  for n in 1 2 3 4 5; do
+    run_check spawn
+    expect_code 0 "$CHECK_RC" "quick check $n under 20% allows"
+    run_check nm-run
+    expect_code 0 "$CHECK_RC" "quick run-start check $n under 20% allows"
+  done
+  # A stale reading still refuses, and says why quota-axi could not read it.
+  rm -f "$FAKE_QUOTA_RATE_LIMIT"
+  echo '{"schemaVersion":5,"providers":[{"provider":"claude","state":{"status":"stale","stale":true,"error":"Claude quota endpoint rate limited"}}]}' > "$FAKE_QUOTA_JSON"
+  unset FAKE_QUOTA_RATE_LIMIT
+  run_check spawn
+  expect_code 3 "$CHECK_RC" "a stale reading refuses"
+  assert_contains "$CHECK_OUT" "Claude quota endpoint rate limited" "reason carries quota-axi's error"
+  pass "checks in quick succession reuse a recent reading"
 }
 
 test_unreadable_has_no_override() {
@@ -413,6 +448,7 @@ test_day_rollover_resets
 test_weekly_reset_mid_day
 test_reading_drop_without_reset_keeps_baseline
 test_unreadable_refuses_plainly
+test_quick_checks_do_not_rate_limit
 test_unreadable_has_no_override
 test_thresholds_are_fixed
 test_spend_counts_from_midnight

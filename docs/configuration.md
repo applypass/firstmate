@@ -364,7 +364,7 @@ The cap is the `FM_REVIEW_FIX_CAP` environment variable, else the first line of 
 ### Daily quota stop (applypass fork)
 
 The whole fleet shares one daily budget of the weekly Claude quota.
-"Used today" is the weekly percentage now minus the percentage at local midnight, read from `quota-axi --provider claude --json`.
+"Used today" is the weekly percentage now minus the percentage at local midnight, read from `quota-axi --provider claude --json --max-age 60s`, so checks that start together share one vendor read instead of rate-limiting the quota endpoint.
 Every check records the last weekly percentage it saw.
 On a new day, the previous day's last reading is the baseline when it was taken yesterday; otherwise the current reading is the baseline.
 A weekly reset today makes the baseline zero, and so does a reading below the baseline when `resetsAt` is missing or puts the reset after the last recorded reading; any other lower reading keeps the baseline and counts as 0% used today.
