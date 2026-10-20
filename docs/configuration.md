@@ -359,6 +359,40 @@ A no-mistakes worker's `fix` answers at a review gate are capped per run and ste
 The cap is the `FM_REVIEW_FIX_CAP` environment variable, else the first line of a local, gitignored `config/review-fix-cap` (a non-negative integer), else 2.
 [`bin/fm-review-round-cap.sh`](../bin/fm-review-round-cap.sh)'s header owns the round log, the needs-decision keys, and the snapshot file; firstmate answers a capped gate with approve, skip, or a steer.
 
+<!-- Fork-only: daily Claude quota stop config; bin/fm-daily-quota-stop.sh owns the contract. -->
+
+### Daily quota stop (applypass fork)
+
+The whole fleet shares one daily budget of the weekly Claude quota.
+"Used today" is the weekly percentage now minus the percentage at the start of the current local day (or zero when the weekly reset happened today), read from `quota-axi --provider claude --json`.
+At 20% used today, a fresh worker launch (`bin/fm-spawn.sh`, ship, scout, or secondmate) and a new no-mistakes run are refused with the number and the threshold.
+At 25% they are held until the next local day, and the hold persists for the rest of the day even if usage later reads lower.
+Running work always finishes: `fm-spawn.sh --relaunch`, reattaching to a run, and answering a gate are never blocked.
+The stop applies in every home and in away and quiet mode.
+
+Where each gate sits:
+
+- A launch is checked at the top of `bin/fm-spawn.sh`, so every harness is covered.
+- A new no-mistakes run is the Bash command `no-mistakes axi run ... --intent ...` (no-mistakes requires `--intent` only when it creates a run).
+  A PreToolUse hook, `bin/fm-daily-quota-pretool-check.sh`, refuses it in every Claude worker; `fm-spawn.sh` registers it through `bin/fm-daily-quota-guard-install.sh`.
+  A worker on another harness has no hook, so the launch check is its only gate.
+
+The day-start snapshot lives in the fleet home, `FM_DAILY_QUOTA_HOME`, else `FM_PUBLIC_FOLLOWUP_PRIMARY_HOME` (set in a secondmate's launch environment), else the home itself.
+Its files are `state/daily-quota-day-start`, `state/daily-quota-reported/`, and `state/daily-quota-allow-unreadable`, so a secondmate home spends the main home's budget.
+The first check of a local day records that day's baseline, so on a day with no earlier launch the baseline is the quota at the first check.
+
+Thresholds default to 20 and 25.
+A local, gitignored `config/daily-quota-stop` in the fleet home holds `refuse=<percent>` and `hold=<percent>` lines; `FM_DAILY_QUOTA_REFUSE_PCT` and `FM_DAILY_QUOTA_HOLD_PCT` override it.
+
+A refusal is reported once per home, day, and level.
+A secondmate home appends one line to its parent channel, a worker's hook appends one line to its own status file, and the main home's caller reads the refusal on stderr.
+
+When quota-axi cannot read Claude quota (for example a Keychain approval is pending, quota-axi is missing, or the snapshot has no weekly Claude window), the gate refuses and says why; it never guesses.
+Whether to proceed is the captain's call.
+`FM_DAILY_QUOTA_ALLOW_UNREADABLE=1` on one command lets that one launch through, and `bin/fm-daily-quota-stop.sh allow-unreadable` records a one-shot grant for a hook-gated run.
+`FM_DAILY_QUOTA_STOP=off` disables the gate; `tests/lib.sh` sets it so fixtures never read quota-axi.
+<!-- Fork-only end -->
+
 ## Backlog backend (.tasks.toml / config/backlog-backend)
 
 The tracked `.tasks.toml` pins the default `tasks-axi` markdown backend to `data/backlog.md`, with `done_keep = 10` and an archive at `data/done-archive.md`.
