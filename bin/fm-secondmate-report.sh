@@ -131,3 +131,10 @@ else
   printf -v line '%s [%s]: %s (via-helper)' "$VERB" "$token" "$NOTE"
 fi
 printf '%s\n' "$(status_stamp_line "$line")" >> "$DESTINATION"
+# Fork-only (applypass): a finished piece of work asks for a fresh session; the
+# parent restarts this mate when it is idle with no open request.
+case "$VERB" in
+  done | ready | failed)
+    "$SCRIPT_DIR/fm-secondmate-fresh-session.sh" request --source report --verb "$VERB" --corr "$CORR" "$NOTE" >/dev/null || true
+    ;;
+esac
