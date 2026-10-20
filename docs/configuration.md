@@ -359,6 +359,45 @@ A no-mistakes worker's `fix` answers at a review gate are capped per run and ste
 The cap is the `FM_REVIEW_FIX_CAP` environment variable, else the first line of a local, gitignored `config/review-fix-cap` (a non-negative integer), else 2.
 [`bin/fm-review-round-cap.sh`](../bin/fm-review-round-cap.sh)'s header owns the round log, the needs-decision keys, and the snapshot file; firstmate answers a capped gate with approve, skip, or a steer.
 
+<!-- Fork-only: daily Claude quota stop config; bin/fm-daily-quota-stop.sh owns the contract. -->
+
+### Daily quota stop (applypass fork)
+
+The whole fleet shares one daily budget of the weekly Claude quota.
+"Used today" is the weekly percentage now minus the percentage at local midnight, read from `quota-axi --provider claude --json --max-age 60s`, so checks that start together share one vendor read instead of rate-limiting the quota endpoint.
+Every check records the last weekly percentage it saw.
+On a new day, the previous day's last reading is the baseline when it was taken yesterday; otherwise the current reading is the baseline.
+A weekly reset today makes the baseline zero, and so does a reading below the baseline when `resetsAt` is missing or puts the reset after the last recorded reading; any other lower reading keeps the baseline and counts as 0% used today.
+At 20% used today, a fresh worker launch (`bin/fm-spawn.sh`, ship, scout, or secondmate) and a new no-mistakes run are refused with the number and the threshold.
+At 25% they are held until the next local day, and the hold persists for the rest of the day even if usage later reads lower.
+The 20 and 25 lines are fixed constants in `bin/fm-daily-quota-lib.sh`.
+Running work always finishes: `fm-spawn.sh --relaunch`, reattaching to a run, and answering a gate are never blocked.
+The stop applies in every home and in away and quiet mode.
+
+Where each gate sits:
+
+- A launch is checked at the top of `bin/fm-spawn.sh`, so every harness is covered.
+- A new no-mistakes run starts with a push to the validation gate, so `bin/fm-validation-gate-pre-receive.sh` runs the check for every harness and home.
+  `fm-spawn.sh` exports the check's location, the home, and the worker's status file into the worker, and the companion rejects the push when the stop is in force.
+  A push that deletes a ref is checked too.
+  The companion is installed only for the ship tasks and projects that use the validation gate.
+- `bin/fm-daily-quota-pretool-check.sh` is a second layer in every Claude worker and secondmate: it refuses `no-mistakes axi run` with `--intent`, `no-mistakes rerun`, and `git push no-mistakes`.
+  It covers a push where the companion is not installed and a run that asks the daemon directly without a push.
+  `fm-spawn.sh` registers it through `bin/fm-daily-quota-guard-install.sh`.
+  `no-mistakes axi run` without `--intent` (reattach), `axi respond`, and `axi status` stay allowed.
+- One gap remains: a non-Claude worker in a project without the validation gate starts a run unchecked.
+
+The fleet home is found by walking each home's `.fm-secondmate-parent` binding up to the main home, so a secondmate spends the main home's budget even after a restart.
+Its files are `state/daily-quota-day-start` and `state/daily-quota-reported/`.
+
+A refusal is reported once per home, day, and level.
+A secondmate home appends one line to its parent channel, a worker appends one line to its own status file, and the main home's caller reads the refusal on stderr.
+
+When quota-axi cannot read Claude quota (for example a Keychain approval is pending, quota-axi is missing, or the snapshot has no weekly Claude window), the gate refuses and says why; it never guesses and has no override.
+A budget record that cannot be written refuses too, with its own message.
+`FM_DAILY_QUOTA_STOP=off` disables the gate; `tests/lib.sh` sets it so fixtures never read quota-axi.
+<!-- Fork-only end -->
+
 ## Backlog backend (.tasks.toml / config/backlog-backend)
 
 The tracked `.tasks.toml` pins the default `tasks-axi` markdown backend to `data/backlog.md`, with `done_keep = 10` and an archive at `data/done-archive.md`.

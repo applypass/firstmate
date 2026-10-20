@@ -12,6 +12,9 @@ set -u
 # tests/lib.sh and bin/fm-gate-refuse-lib.sh for why firstmate's own suite,
 # which the no-mistakes gate runs from a gate worktree, must be exempt).
 export FM_GATE_REFUSE_BYPASS=1
+# Fork-only: likewise keep the daily quota stop from reading quota-axi (tests/lib.sh).
+export FM_DAILY_QUOTA_STOP=off
+# Fork-only end
 
 HERDR_TEST_SAFETY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=/dev/null

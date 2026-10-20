@@ -810,6 +810,16 @@ case "$EFFORT" in
   ;;
 esac
 
+# Fork-only: daily quota stop. A fresh launch (ship, scout, or secondmate) is
+# refused once the fleet has used its daily share of the weekly Claude quota;
+# --relaunch is running work and is never gated (bin/fm-daily-quota-stop.sh).
+# The remote host-local secondmate leg (FM_SKIP_SECONDMATE_SYNC=1, from
+# bin/fm-remote-secondmate-control.sh) skips it: the parent already checked.
+if [ "$RELAUNCH" -eq 0 ] && [ "${FM_SKIP_SECONDMATE_SYNC:-0}" != 1 ]; then
+  "$SCRIPT_DIR/fm-daily-quota-stop.sh" check spawn --home "$FM_HOME" || exit 1
+fi
+# Fork-only end
+
 # --relaunch reuses an existing task's endpoint, worktree, project, and kind,
 # so every axis this block resolves for a fresh spawn instead comes from that
 # task's own durable record below. Contradicting it on the command line is a
@@ -4821,6 +4831,10 @@ case "$HARNESS" in
 claude*)
   "$SCRIPT_DIR/fm-op-guard-install.sh" "$WT" || echo "warning: could not register the op guard in $WT/.claude/settings.local.json" >&2
   exclude_path '.claude/settings.local.json'
+  # Fork-only: also refuse a new no-mistakes run start in this worker once the
+  # daily quota stop is in force (bin/fm-daily-quota-pretool-check.sh).
+  "$SCRIPT_DIR/fm-daily-quota-guard-install.sh" "$WT" --home "$FM_HOME" \
+    --status-file "$STATE/$ID.status" || echo "warning: could not register the daily quota guard in $WT/.claude/settings.local.json" >&2
   ;;
 esac
 # Fork-only end
@@ -5203,6 +5217,12 @@ if [ "$KEEP_AI_TRAILERS" = 0 ]; then
   LAUNCH="export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath GIT_CONFIG_VALUE_0=$(shell_quote "$GIT_HOOKS_DIR"); $LAUNCH"
 fi
 [ -z "$VALIDATION_GATE_FILE" ] || LAUNCH="export FM_VALIDATION_GATE=$(shell_quote "$VALIDATION_GATE_FILE"); $LAUNCH"
+# Fork-only: tell the no-mistakes pre-receive companion how to run the daily
+# quota stop for any push this worker makes (bin/fm-validation-gate-pre-receive.sh).
+if [ "$KIND" != secondmate ] && [ "${FM_DAILY_QUOTA_STOP:-}" != off ]; then
+  LAUNCH="export FM_DAILY_QUOTA_CHECK=$(shell_quote "$SCRIPT_DIR/fm-daily-quota-stop.sh") FM_DAILY_QUOTA_CHECK_HOME=$(shell_quote "$FM_HOME") FM_DAILY_QUOTA_CHECK_STATUS=$(shell_quote "$STATE/$ID.status"); $LAUNCH"
+fi
+# Fork-only end
 # A task worker names its own chrome-devtools-axi session after the task, so teardown
 # can stop exactly the bridge and Chrome this task started.
 [ "$KIND" = secondmate ] || LAUNCH="export CHROME_DEVTOOLS_AXI_SESSION=$(shell_quote "$ID"); $LAUNCH"
