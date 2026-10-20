@@ -1,0 +1,4 @@
+$ FM_HOME=$P bin/fm-secondmate-fresh-session.sh sweep   # marker parked as .failed
+exit=0
+/private/tmp/fmfs2.eBwQYc/mate/state/fresh-session.request.failed
+claude transcripts: 2

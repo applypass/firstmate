@@ -1,0 +1,50 @@
+=== mate idle with '1 shell still running' (Claude background task sleep 120); herdr agent: idle
+=== $ FM_HOME=$P bin/fm-secondmate-fresh-session.sh sweep
+15:09:32
+failed fsm2: error: exit-delivered fsm2 interrupt=not-needed exit-command=delivered agent-state=alive exit=unconfirmed; the agent did not stop within 30s error: relaunch of fsm2 failed while stopping the old agent, which is still running; its original instructions were restored
+exit=1
+15:10:26
+=== marker after
+/private/tmp/fmfs2.eBwQYc/mate/state/fresh-session.request.failed
+=== parent state/fresh-session.log
+1792489226 failed fsm2: error: exit-delivered fsm2 interrupt=not-needed exit-command=delivered agent-state=alive exit=unconfirmed; the agent did not stop within 30s error: relaunch of fsm2 failed while stopping the old agent, which is still running; its original instructions were restored
+=== herdr agent status right after sweep: blocked
+=== mate pane right after sweep
+  - Background command: I started sleep 120 in the background and did not wait for it. It may still be running for up to
+    two minutes.
+  - Report: I sent "lab slice 2 finished (synthetic)" for lab-slice-2 with the request's tracking code,
+    3352ed18d2702571. The report command gave no error.
+  - Message: marked as handled.
+  I'm stopping here as the test asked.
+✻ Cooked for 9s · done 3:08 PM · 1 shell still running
+❯ /exit
+                                                                                                       ○ low · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx 8% | main | : Firstmate instruction waiting: list '/private/tm...
+  ⏵⏵ bypass permissions on · 1 shell · ← 5 agents
+=== herdr agent status 5s later: idle
+=== $ fm-send fsm2 --fire-and-forget 'Lab check after failed relaunch: reply with the word pong in chat only.'
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+=== /tmp/fm-fsm2/pong.txt: pong
+(eval):1: no matches found: /private/tmp/fmfs2.eBwQYc/home/state/fsm2.inbox/*.msg
+=== inbox unread: 0
+=== herdr agent status: idle
+=== mate pane
+❯ /exit
+❯ : Firstmate instruction waiting: list '/private/tmp/fmfs2.eBwQYc/home/state/fsm2.inbox'/*.msg and, in numeric order,
+  read and act on each, then mv each handled file to '/private/tmp/fmfs2.eBwQYc/home/state/fsm2.inbox'/handled/.
+  Ran 2 shell commands
+⏺ pong
+  Captain, I wrote "pong" to /tmp/fm-fsm2/pong.txt and marked the message as handled. This check asked for no report, so
+  I sent none.
+✻ Sautéed for 5s · done 3:10 PM
+⏺ Background command "sleep 120" completed (exit code 0)
+⏺ Captain, shipshape.
+✻ Baked for 1s · done 3:10 PM
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx 8% | main | <task-notification>
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents

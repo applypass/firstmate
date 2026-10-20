@@ -1,0 +1,15 @@
+# (earlier attempt also deferred: 'request dea2453e065c85fb is still open' until the resolve pass closed it)
+$ ls state/fsm2.inbox/*.msg   # an unread steering message is waiting
+/private/tmp/fmfs2.eBwQYc/home/state/fsm2.inbox/9999999999-adversarial.msg
+$ herdr agent status: idle
+$ FM_HOME=$P bin/fm-secondmate-fresh-session.sh sweep
+deferred fsm2: a steering message to it is unread
+exit=0
+$ cat mate/state/fresh-session.request (still present)
+source=report
+verb=done
+corr=29a9ef9199ba203d
+epoch=1792488815
+note=data/fresh-session-handover.md
+$ claude transcripts for mate (unchanged, one session)
+/Users/uayyagari/.claude-work/projects/-private-tmp-fmfs2-eBwQYc-mate/e2e507c1-0575-419f-816e-419026692e11.jsonl

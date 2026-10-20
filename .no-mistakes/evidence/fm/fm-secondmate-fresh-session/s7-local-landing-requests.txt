@@ -1,0 +1,52 @@
+$ # child labchild writes its PR-ready done line; the mate ledger pass reports it
+done: labchild ready for local merge
+parent channel tail: done [key=child-outcome-labchild-done-6e1c33c4] [at=1792488164]: child labchild done: labchild ready for local merge mode=local-only yolo=off
+fresh-session.request after done line: absent
+$ FM_HOME=$MATE bin/fm-merge-local.sh labchild   # the mate lands the child locally
+●  watcher supervision needs Stop-owned automatic recovery; inspect the hook registration and startup status before ending the turn.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+merged fm/labchild into local main (3ef8e7f -> 58ca096) in /private/tmp/fmfs.Ch2Ofj/mate/projects/labchild
+exit=0
+main now: 58ca096 lab child slice
+fresh-session.request after landing:
+source=child
+verb=done
+corr=
+epoch=1792488166
+note=data/fresh-session-handover.md
+handover note 'Just finished':
+## Just finished
+done (child): merged fm/labchild into local main (3ef8e7f -> 58ca096)
+
+## Still open
+$ FM_HOME=$LAB bin/fm-secondmate-fresh-session.sh sweep
+restarted fsmate6010dd: handover note /private/tmp/fmfs.Ch2Ofj/mate/data/fresh-session-handover.md
+=== claude transcripts for the mate home ===
+-rw-------@ 1 uayyagari  staff  727623 Oct 20 14:53 /Users/uayyagari/.claude-work/projects/-private-tmp-fmfs-Ch2Ofj-mate/12039ee3-3638-4018-8b55-cc8af74ed4a4.jsonl
+-rw-------@ 1 uayyagari  staff  706874 Oct 20 14:52 /Users/uayyagari/.claude-work/projects/-private-tmp-fmfs-Ch2Ofj-mate/a27055f4-3193-47b4-b97a-624f51bfed47.jsonl
+-rw-------@ 1 uayyagari  staff  762150 Oct 20 14:51 /Users/uayyagari/.claude-work/projects/-private-tmp-fmfs-Ch2Ofj-mate/e67502f8-2499-4e11-a527-9c379fe21d09.jsonl
+(eval):5: no matches found: /private/tmp/fmfs.Ch2Ofj/mate/state/fresh-session.request*
+marker: consumed
+=== mate pane ===
+  Firstmate operational input.
+  Read 2 files, ran 3 shell commands
+⏺ Reading the handover note; the merge already landed, so I'm acknowledging the restart message and clearing the stale
+  queue entry.
+  Ran 1 shell command
+⏺ Captain, shipshape. This second mate restarted with a fresh session as planned. It acknowledged the restart message
+  and confirmed from its own records that the last task is finished: the lab change was already merged into the local
+  main branch (3ef8e7f -> 58ca096). Nothing else is in progress and the queue is empty, so it is idle until it gets new
+  work.
+✻ Sautéed for 39s · done 2:53 PM
+❯ : Firstmate instruction waiting: list '/private/tmp/fmfs.Ch2Ofj/home/state/fsmate6010dd.inbox'/*.msg and, in numeric
+  order, read and act on each, then mv each handled file to
+  '/private/tmp/fmfs.Ch2Ofj/home/state/fsmate6010dd.inbox'/handled/.
+  Ran 1 shell command
+⏺ Captain, shipshape. The instruction inbox is empty: the one waiting message was the restart notice, and I already
+  handled it and moved it to handled/. This second mate is idle until it gets new work.
+✻ Churned for 7s · done 2:53 PM
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx 8% | main | : Firstmate instruction waiting: list '/private/tm...
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 5 agents

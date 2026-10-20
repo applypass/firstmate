@@ -1,0 +1,66 @@
+$ # child labchild (mode=local-only) writes its PR-ready done line in the mate home
+done: labchild ready for local merge
+$ FM_HOME=$M bin/fm-inactive-reconcile.sh scan   # the mate watcher's ledger pass
+parent channel tail: done [key=child-outcome-labchild-done-45decafa] [at=1792489391]: child labchild done: labchild ready for local merge mode=local-only yolo=off
+fresh-session.request after done line: absent
+$ FM_HOME=$M bin/fm-merge-local.sh labchild   # the mate lands the child locally
+merged fm/labchild into local main (1247bfe -> 0bdcc8a) in /private/tmp/fmfs2.eBwQYc/mate/projects/labchild
+exit=0
+main now: 0bdcc8a lab child slice
+fresh-session.request after landing:
+source=child
+verb=done
+corr=
+epoch=1792489397
+note=data/fresh-session-handover.md
+handover note 'Just finished':
+## Just finished
+done (child): merged fm/labchild into local main (1247bfe -> 0bdcc8a)
+
+## Still open
+=== transcripts before sweep
+/Users/uayyagari/.claude-work/projects/-private-tmp-fmfs2-eBwQYc-mate/821262d9-b9b3-4db8-8982-8c3b0a2b2783.jsonl
+/Users/uayyagari/.claude-work/projects/-private-tmp-fmfs2-eBwQYc-mate/e2e507c1-0575-419f-816e-419026692e11.jsonl
+$ FM_HOME=$P bin/fm-secondmate-fresh-session.sh sweep  (agent: idle; unread: 0)
+failed fsm2: error: exit-delivered fsm2 interrupt=not-needed exit-command=delivered agent-state=alive exit=unconfirmed; the agent did not stop within 30s error: relaunch of fsm2 failed while stopping the old agent, which is still running; its original instructions were restored
+exit=1
+(slice 3's Claude background task 'sleep 150' was still running, so this relaunch hit the exit dialog again)
+herdr agent status after sweep: idle
+✻ Sautéed for 2s · done 3:14 PM
+                                                                                                       ○ low · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx 8% | main | <task-notification>
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents
+=== 15:14: background task finished; operator moves the parked marker back (fresh-session.request.failed -> fresh-session.request) and the next sweep runs
+$ FM_HOME=$P bin/fm-secondmate-fresh-session.sh sweep  (agent: idle)
+restarted fsm2: handover note /private/tmp/fmfs2.eBwQYc/mate/data/fresh-session-handover.md
+exit=0
+=== transcripts after
+/Users/uayyagari/.claude-work/projects/-private-tmp-fmfs2-eBwQYc-mate/0a2b0a3c-c020-4dc8-8340-a129b6980bc2.jsonl
+/Users/uayyagari/.claude-work/projects/-private-tmp-fmfs2-eBwQYc-mate/44e4f261-66de-4c42-92f6-c274b582b75b.jsonl
+/Users/uayyagari/.claude-work/projects/-private-tmp-fmfs2-eBwQYc-mate/821262d9-b9b3-4db8-8982-8c3b0a2b2783.jsonl
+/Users/uayyagari/.claude-work/projects/-private-tmp-fmfs2-eBwQYc-mate/e2e507c1-0575-419f-816e-419026692e11.jsonl
+(eval):1: no matches found: /private/tmp/fmfs2.eBwQYc/mate/state/fresh-session.request*
+marker: consumed
+model=opus
+effort=low
+spawn_gen=s1792489482.6988.1503
+=== mate pane
+    the previous session's last task.
+  - Startup: no problems found and no work still running.
+  - Messages: the one waiting message said to restart and catch up, with no reply needed. I handled it and moved it to
+    the handled folder.
+  Nothing is open, so I'm waiting for the main first mate to send the next lab test. I sent no reply to the main first
+  mate, as the message asked.
+✻ Churned for 20s · done 3:15 PM
+⏺ Stop hook feedback
+  Ran 2 shell commands
+⏺ Captain, shipshape.
+✻ Churned for 7s · done 3:15 PM
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx 7% | main | <task-notification>
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents

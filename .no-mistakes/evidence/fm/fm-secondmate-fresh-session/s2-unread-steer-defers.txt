@@ -1,0 +1,9 @@
+$ ls state/fsmate6010dd.inbox/*.msg  # an unread steering message is waiting
+/private/tmp/fmfs.Ch2Ofj/home/state/fsmate6010dd.inbox/9999999999-adversarial.msg
+$ FM_HOME=$LAB bin/fm-secondmate-fresh-session.sh sweep
+deferred fsmate6010dd: a steering message to it is unread
+exit=0
+$ ls mate/state/fresh-session.request
+/private/tmp/fmfs.Ch2Ofj/mate/state/fresh-session.request
+$ claude transcripts for the mate
+/Users/uayyagari/.claude-work/projects/-private-tmp-fmfs-Ch2Ofj-mate/e67502f8-2499-4e11-a527-9c379fe21d09.jsonl

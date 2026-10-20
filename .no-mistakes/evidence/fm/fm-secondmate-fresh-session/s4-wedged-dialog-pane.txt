@@ -1,0 +1,25 @@
+
+  This home is idle again and waiting for the next routed test.
+
+✻ Crunched for 21s · done 2:46 PM
+
+❯ Lab test: run the shell command 'sleep 45' once, then say ok. Nothing else.
+
+  Ran 2 shell commands
+
+⏺ Captain, sleep 45 is running in the background. This tool blocks foreground sleeps, so it couldn't run in the
+  foreground. I'll say ok when it finishes.
+
+✻ Worked for 11s · done 2:47 PM
+Background task update waiting while this panel is open
+▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
+   Background work is running
+   The following will stop when you exit:
+
+   shell · sleep 45
+
+   ❯ 1. Exit and stop tasks
+     2. Move to background and exit
+     3. Stay
+
+   Enter to confirm · Esc to cancel

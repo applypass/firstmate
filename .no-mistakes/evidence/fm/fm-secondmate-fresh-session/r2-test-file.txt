@@ -1,0 +1,10 @@
+ok - T1 report done -> restart -> fresh session pointed at the handover note
+ok - T2 an open request defers the restart and is left untouched
+ok - T3 unread steering, an unacknowledged wake, and a busy agent each defer; nothing is lost
+ok - T4 a landed child requests a fresh session; PR-ready, decision and ack lines do not
+ok - T7 a corr with no record restarts, and a failed relaunch is logged
+ok - T5 no request for the kill switch, a main home, or a remote route
+ok - T8 a done ledger line asks for nothing; a merged PR or local-only landing each request a fresh session once per landing
+ok - T6 the watcher poll restarts a mate that finished its work
+ok - T9 a relaunch blocked by background work leaves the mate usable
+# all fm-secondmate-fresh-session tests passed
