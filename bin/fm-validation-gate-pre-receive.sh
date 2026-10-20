@@ -16,6 +16,22 @@
 #
 # git strips GIT_CONFIG_* and -c core.hooksPath from a local receive-pack, and
 # --no-verify only skips the pusher's own hooks, so neither reaches this file.
+# Fork-only: daily Claude quota stop (bin/fm-daily-quota-stop.sh). Every push to
+# this gate starts a new no-mistakes run, so one check here covers a run
+# started by any harness or home. fm-spawn exports the variables below into each
+# worker pane; a push without them (non-fleet) is never checked. A refusal
+# (exit 3) rejects the push; any other check failure lets it through.
+if [ -n "${FM_DAILY_QUOTA_CHECK:-}" ] && [ -x "$FM_DAILY_QUOTA_CHECK" ]; then
+  set -- check nm-run
+  [ -z "${FM_DAILY_QUOTA_CHECK_HOME:-}" ] || set -- "$@" --home "$FM_DAILY_QUOTA_CHECK_HOME"
+  [ -z "${FM_DAILY_QUOTA_CHECK_STATUS:-}" ] || set -- "$@" --status-file "$FM_DAILY_QUOTA_CHECK_STATUS"
+  "$FM_DAILY_QUOTA_CHECK" "$@" >&2
+  if [ "$?" = 3 ]; then
+    cat >/dev/null
+    exit 1
+  fi
+fi
+# Fork-only end
 gate_file=${FM_VALIDATION_GATE:-}
 if [ -z "$gate_file" ] || [ ! -e "$gate_file" ]; then
   cat >/dev/null

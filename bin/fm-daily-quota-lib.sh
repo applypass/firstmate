@@ -10,26 +10,27 @@
 # percentRemaining gives "used now"; the day-start baseline is persisted once
 # per local day in the fleet home so every home shares one budget.
 #
-# Fleet home: ${FM_DAILY_QUOTA_HOME:-${FM_PUBLIC_FOLLOWUP_PRIMARY_HOME:-$FM_HOME}}.
-# A secondmate home launches with FM_PUBLIC_FOLLOWUP_PRIMARY_HOME naming the
-# main home, so its checks land on the main home's state. Files there:
+# Fleet home: the home reached by following each home's durable
+# .fm-secondmate-parent binding (local route) up to the main home, so a
+# secondmate restart that loses its launch environment still spends the main
+# home's budget. A home with no local binding is its own fleet home. Files there:
 #   state/daily-quota-day-start      key=value baseline (see fm_dq_baseline_write)
 #   state/daily-quota-reported/      one marker per home, day, and level
-#   state/daily-quota-allow-unreadable  one-shot captain grant (consumed on use)
-#   config/daily-quota-stop          optional thresholds, see docs/configuration.md
+# Thresholds are the fixed constants below: 20% refuses, 25% holds.
 #
 # Test hooks: FM_DAILY_QUOTA_NOW (epoch seconds) replaces the clock.
 
-FM_DQ_DEFAULT_REFUSE=20
-FM_DQ_DEFAULT_HOLD=25
+# shellcheck source=bin/fm-secondmate-parent-lib.sh
+. "${BASH_SOURCE[0]%/*}/fm-secondmate-parent-lib.sh"
+
+FM_DQ_REFUSE_PCT=20
+FM_DQ_HOLD_PCT=25
 
 # Result globals set by fm_dq_evaluate.
-FM_DQ_VERDICT=      # ok | refuse | hold | unreadable
+FM_DQ_VERDICT=      # ok | refuse | hold | unreadable | error
 FM_DQ_USED_NOW=
 FM_DQ_USED_TODAY=
-FM_DQ_REFUSE_PCT=
-FM_DQ_HOLD_PCT=
-FM_DQ_REASON=       # why the quota could not be read (unreadable only)
+FM_DQ_REASON=       # why quota could not be read, or the record could not be written
 FM_DQ_CLEARS=       # human-readable local time the hold clears (hold only)
 
 fm_dq_now() {
@@ -44,37 +45,17 @@ fm_dq_date() {
   date -r "$2" "+$1" 2>/dev/null || date -d "@$2" "+$1" 2>/dev/null
 }
 
-# The fleet home that owns the shared day-start record.
+# The fleet home that owns the shared day-start record: follow local parent
+# bindings up (bounded) to the main home.
 fm_dq_fleet_home() {  # <this-home>
-  printf '%s\n' "${FM_DAILY_QUOTA_HOME:-${FM_PUBLIC_FOLLOWUP_PRIMARY_HOME:-$1}}"
-}
-
-# Thresholds: env, then the fleet home's config/daily-quota-stop, then 20/25.
-# The file holds `refuse=<percent>` and `hold=<percent>` lines; # comments and
-# blank lines are ignored. A malformed value falls back to the default.
-fm_dq_load_thresholds() {  # <fleet-home>
-  local file="$1/config/daily-quota-stop" line key val
-  FM_DQ_REFUSE_PCT=$FM_DQ_DEFAULT_REFUSE
-  FM_DQ_HOLD_PCT=$FM_DQ_DEFAULT_HOLD
-  if [ -f "$file" ]; then
-    while IFS= read -r line || [ -n "$line" ]; do
-      case "$line" in ''|'#'*) continue ;; esac
-      key=${line%%=*}
-      val=${line#*=}
-      key=$(printf '%s' "$key" | tr -d '[:space:]')
-      val=$(printf '%s' "$val" | tr -d '[:space:]')
-      case "$val" in ''|*[!0-9]*) continue ;; esac
-      [ "$val" -le 100 ] || continue
-      case "$key" in
-        refuse) FM_DQ_REFUSE_PCT=$val ;;
-        hold) FM_DQ_HOLD_PCT=$val ;;
-      esac
-    done < "$file"
-  fi
-  case "${FM_DAILY_QUOTA_REFUSE_PCT:-}" in ''|*[!0-9]*) ;; *) FM_DQ_REFUSE_PCT=$FM_DAILY_QUOTA_REFUSE_PCT ;; esac
-  case "${FM_DAILY_QUOTA_HOLD_PCT:-}" in ''|*[!0-9]*) ;; *) FM_DQ_HOLD_PCT=$FM_DAILY_QUOTA_HOLD_PCT ;; esac
-  # The hold line never sits below the refuse line.
-  [ "$FM_DQ_HOLD_PCT" -ge "$FM_DQ_REFUSE_PCT" ] || FM_DQ_HOLD_PCT=$FM_DQ_REFUSE_PCT
+  local home=$1 depth=0
+  while [ "$depth" -lt 8 ]; do
+    fm_secondmate_parent_record_parse "$home/.fm-secondmate-parent" || break
+    [ "$FM_SECONDMATE_PARENT_ROUTE" = local ] && [ -n "$FM_SECONDMATE_PARENT_HOME" ] || break
+    home=$FM_SECONDMATE_PARENT_HOME
+    depth=$((depth + 1))
+  done
+  printf '%s\n' "$home"
 }
 
 # Read the weekly Claude window. On success sets FM_DQ_USED_NOW (integer percent
@@ -141,27 +122,34 @@ fm_dq_midnight() {  # <epoch>
 fm_dq_baseline_file() { printf '%s/state/daily-quota-day-start\n' "$1"; }
 
 # Baseline record: day=YYYY-MM-DD, used=<percent at the day's start>,
-# held=0|1 (the 25% line was crossed today and holds until the next day).
-fm_dq_baseline_read() {  # <file> -> sets FM_DQ_B_DAY FM_DQ_B_USED FM_DQ_B_HELD
+# held=0|1 (the hold line was crossed today and holds until the next day),
+# last=<percent at the latest check>, last_at=<epoch of that check>. The latest
+# check of one day is the next day's baseline, so a day's spend counts from
+# local midnight rather than from the day's first check.
+fm_dq_baseline_read() {  # <file> -> sets FM_DQ_B_DAY FM_DQ_B_USED FM_DQ_B_HELD FM_DQ_B_LAST FM_DQ_B_LAST_AT
   local line
-  FM_DQ_B_DAY=; FM_DQ_B_USED=; FM_DQ_B_HELD=0
+  FM_DQ_B_DAY=; FM_DQ_B_USED=; FM_DQ_B_HELD=0; FM_DQ_B_LAST=; FM_DQ_B_LAST_AT=
   [ -f "$1" ] || return 1
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
       day=*) FM_DQ_B_DAY=${line#day=} ;;
       used=*) FM_DQ_B_USED=${line#used=} ;;
       held=*) FM_DQ_B_HELD=${line#held=} ;;
+      last=*) FM_DQ_B_LAST=${line#last=} ;;
+      last_at=*) FM_DQ_B_LAST_AT=${line#last_at=} ;;
     esac
   done < "$1"
   case "$FM_DQ_B_USED" in ''|*[!0-9]*) return 1 ;; esac
+  case "$FM_DQ_B_LAST" in *[!0-9]*) FM_DQ_B_LAST= ;; esac
+  case "$FM_DQ_B_LAST_AT" in *[!0-9]*) FM_DQ_B_LAST_AT= ;; esac
   [ -n "$FM_DQ_B_DAY" ]
 }
 
-fm_dq_baseline_write() {  # <file> <day> <used> <held>
+fm_dq_baseline_write() {  # <file> <day> <used> <held> <last> <last_at>
   local tmp
   mkdir -p "$(dirname "$1")" || return 1
   tmp=$(mktemp "$1.XXXXXX") || return 1
-  if printf 'day=%s\nused=%s\nheld=%s\n' "$2" "$3" "$4" > "$tmp" && mv "$tmp" "$1"; then return 0; fi
+  if printf 'day=%s\nused=%s\nheld=%s\nlast=%s\nlast_at=%s\n' "$2" "$3" "$4" "$5" "$6" > "$tmp" && mv "$tmp" "$1"; then return 0; fi
   rm -f "$tmp"
   return 1
 }
@@ -172,26 +160,31 @@ fm_dq_evaluate() {  # <this-home>
   local fleet file now day midnight baseline held
   fleet=$(fm_dq_fleet_home "$1")
   file=$(fm_dq_baseline_file "$fleet")
-  fm_dq_load_thresholds "$fleet"
   FM_DQ_VERDICT=; FM_DQ_USED_TODAY=; FM_DQ_CLEARS=
   now=$(fm_dq_now)
   if ! fm_dq_read_quota; then
     FM_DQ_VERDICT=unreadable
     return 1
   fi
-  day=$(fm_dq_date %F "$now") || { FM_DQ_REASON="cannot read the local date"; FM_DQ_VERDICT=unreadable; return 1; }
-  midnight=$(fm_dq_midnight "$now") || { FM_DQ_REASON="cannot compute local midnight"; FM_DQ_VERDICT=unreadable; return 1; }
+  day=$(fm_dq_date %F "$now") || { FM_DQ_REASON="cannot read the local date"; FM_DQ_VERDICT=error; return 1; }
+  midnight=$(fm_dq_midnight "$now") || { FM_DQ_REASON="cannot compute local midnight"; FM_DQ_VERDICT=error; return 1; }
 
   held=0
-  if fm_dq_baseline_read "$file" && [ "$FM_DQ_B_DAY" = "$day" ]; then
-    baseline=$FM_DQ_B_USED
-    held=$FM_DQ_B_HELD
-    # A weekly reset today, or usage that fell since the baseline, means the
-    # week restarted: everything used since the reset counts as today's.
-    if [ "$FM_DQ_USED_NOW" -lt "$baseline" ]; then baseline=0; fi
-  else
-    baseline=$FM_DQ_USED_NOW
+  baseline=$FM_DQ_USED_NOW
+  if fm_dq_baseline_read "$file"; then
+    if [ "$FM_DQ_B_DAY" = "$day" ]; then
+      baseline=$FM_DQ_B_USED
+      held=$FM_DQ_B_HELD
+    elif [ -n "$FM_DQ_B_LAST" ] && [ -n "$FM_DQ_B_LAST_AT" ] &&
+      [ "$FM_DQ_B_LAST_AT" -ge $((midnight - 86400)) ] && [ "$FM_DQ_B_LAST_AT" -lt "$midnight" ]; then
+      # New local day: yesterday's latest reading is today's baseline. A reading
+      # older than yesterday cannot say how much of the gap was today's.
+      baseline=$FM_DQ_B_LAST
+    fi
   fi
+  # Usage that fell below the baseline, or a weekly reset today, means the week
+  # restarted: everything used since the reset counts as today's.
+  if [ "$FM_DQ_USED_NOW" -lt "$baseline" ]; then baseline=0; fi
   if [ -n "$FM_DQ_LAST_RESET" ] && [ "$FM_DQ_LAST_RESET" -ge "$midnight" ] && [ "$FM_DQ_LAST_RESET" -le "$now" ]; then
     baseline=0
   fi
@@ -199,7 +192,8 @@ fm_dq_evaluate() {  # <this-home>
   [ "$FM_DQ_USED_TODAY" -ge 0 ] || FM_DQ_USED_TODAY=0
 
   if [ "$FM_DQ_USED_TODAY" -ge "$FM_DQ_HOLD_PCT" ]; then held=1; fi
-  fm_dq_baseline_write "$file" "$day" "$baseline" "$held" || { FM_DQ_REASON="cannot write $file"; FM_DQ_VERDICT=unreadable; return 1; }
+  fm_dq_baseline_write "$file" "$day" "$baseline" "$held" "$FM_DQ_USED_NOW" "$now" ||
+    { FM_DQ_REASON="cannot write $file"; FM_DQ_VERDICT=error; return 1; }
 
   if [ "$held" = 1 ]; then
     FM_DQ_VERDICT=hold
@@ -224,16 +218,10 @@ fm_dq_message() {  # <what: "worker launch" | "no-mistakes run">
       printf 'daily quota stop: holding every new %s until %s. The fleet has used %s%% of the weekly Claude quota today, at or over the %s%% hold line. Running work finishes.\n' \
         "$1" "$FM_DQ_CLEARS" "$FM_DQ_USED_TODAY" "$FM_DQ_HOLD_PCT" ;;
     unreadable)
-      printf 'daily quota stop: refusing a new %s because Claude quota could not be read (%s). The daily budget cannot be checked, so the captain decides whether to proceed: grant one launch with FM_DAILY_QUOTA_ALLOW_UNREADABLE=1 (or bin/fm-daily-quota-stop.sh allow-unreadable for a hook-gated no-mistakes run), or fix quota-axi (a Claude Keychain approval may be pending).\n' \
+      printf 'daily quota stop: refusing a new %s because Claude quota could not be read (%s). The daily budget cannot be checked, so new work waits until quota-axi can read Claude quota (a Keychain approval may be pending); the captain decides whether to proceed.\n' \
+        "$1" "$FM_DQ_REASON" ;;
+    error)
+      printf 'daily quota stop: refusing a new %s because the daily budget record could not be kept (%s). Claude quota was read, but without the record the day-start baseline is lost.\n' \
         "$1" "$FM_DQ_REASON" ;;
   esac
-}
-
-# Consume the one-shot unreadable-quota grant. The env var covers a single
-# command; the file covers a gate that runs in a hook, where no env reaches.
-fm_dq_consume_unreadable_grant() {  # <fleet-home>
-  local grant="$1/state/daily-quota-allow-unreadable"
-  if [ "${FM_DAILY_QUOTA_ALLOW_UNREADABLE:-}" = 1 ]; then return 0; fi
-  [ -f "$grant" ] || return 1
-  rm -f "$grant" 2>/dev/null
 }

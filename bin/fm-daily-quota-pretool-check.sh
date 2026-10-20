@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # Fork-only: PreToolUse transport for the daily quota stop (applypass fork).
 #
-# Refuses a Bash command that STARTS a new no-mistakes run
-# (`no-mistakes axi run ... --intent ...`) while the fleet's daily Claude quota
-# stop is in force (bin/fm-daily-quota-stop.sh owns the decision). The run
-# start is the narrowest reliable interception point: no-mistakes requires
-# --intent only when it creates a run, so reattaching (`no-mistakes axi run`
-# with no flags), `axi respond`, and `axi status` never match and an existing
-# run is never blocked. Registered per Claude worker by bin/fm-spawn.sh through
-# bin/fm-daily-quota-guard-install.sh; other harnesses run with no hook, so
-# their only gate is the launch check in bin/fm-spawn.sh.
+# Refuses `no-mistakes rerun` while the fleet's daily Claude quota stop is in
+# force (bin/fm-daily-quota-stop.sh owns the decision). A new run started by a
+# push to the no-mistakes gate is checked at the shared pre-receive companion
+# (bin/fm-validation-gate-pre-receive.sh), which covers every harness and home;
+# `no-mistakes rerun` asks the daemon directly and never reaches that boundary,
+# so this Claude PreToolUse hook is its gate. Reattaching (`axi run` with no
+# flags), `axi respond`, and `axi status` never match, so an existing run is
+# never blocked. Registered per Claude worker by bin/fm-spawn.sh through
+# bin/fm-daily-quota-guard-install.sh.
 #
 # Usage:
-#   <PreToolUse JSON on stdin> | bin/fm-daily-quota-pretool-check.sh [--claude] [--home DIR] [--fleet-home DIR] [--status-file FILE]
-#   bin/fm-daily-quota-pretool-check.sh --command '<cmd>' [--home DIR] [--fleet-home DIR] [--status-file FILE]
+#   <PreToolUse JSON on stdin> | bin/fm-daily-quota-pretool-check.sh [--claude] [--home DIR] [--status-file FILE]
+#   bin/fm-daily-quota-pretool-check.sh --command '<cmd>' [--home DIR] [--status-file FILE]
 #
 # ALLOW - exit 0, no output. DENY - exit 2 and a Claude-shaped deny object on
 # stderr. FAIL OPEN on malformed or empty stdin and a missing jq or gate: this
@@ -27,7 +27,7 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --command) [ "$#" -gt 1 ] || { echo "error: --command requires a value" >&2; exit 2; }; CMD=$2; CMD_SET=1; shift 2 ;;
     --claude) shift ;;
-    --home|--status-file|--fleet-home) [ "$#" -gt 1 ] || { echo "error: $1 requires a value" >&2; exit 2; }; HOME_ARGS+=("$1" "$2"); shift 2 ;;
+    --home|--status-file) [ "$#" -gt 1 ] || { echo "error: $1 requires a value" >&2; exit 2; }; HOME_ARGS+=("$1" "$2"); shift 2 ;;
     -h|--help) sed -n '2,/^set -u/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "error: unknown argument: $1" >&2; exit 2 ;;
   esac
@@ -41,11 +41,10 @@ if [ "$CMD_SET" -eq 0 ]; then
 fi
 [ -n "$CMD" ] || exit 0
 
-# A new run: no-mistakes axi run at a command position, with --intent. A word
-# preceded by a quote, slash, dot, dash, or alphanumeric is not a command.
-START_RE='(^|[^A-Za-z0-9_./"'"'"'-])no-mistakes[[:space:]]+axi[[:space:]]+run([[:space:]]|$)'
-[[ "$CMD" =~ $START_RE ]] || exit 0
-case "$CMD" in *--intent*) ;; *) exit 0 ;; esac
+# A rerun: `no-mistakes rerun` at a command position. A word preceded by a
+# quote, slash, dot, dash, or alphanumeric is not a command.
+RERUN_RE='(^|[^A-Za-z0-9_./"'"'"'-])no-mistakes[[:space:]]+rerun([[:space:]]|$)'
+[[ "$CMD" =~ $RERUN_RE ]] || exit 0
 
 SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P) || exit 0
 GATE="$SCRIPT_DIR/fm-daily-quota-stop.sh"
