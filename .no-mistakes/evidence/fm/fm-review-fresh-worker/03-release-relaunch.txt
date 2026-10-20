@@ -1,0 +1,11 @@
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.YUGP0j/home
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.YUGP0j/home
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+released hlive at 4f69be3c8d5ca56225c5c6ecb199affaf734df13 and relaunched a fresh worker from the hand-over note to run /no-mistakes on that head
+rc=0
+released 4f69be3c8d5ca56225c5c6ecb199affaf734df13
+steered 4f69be3c8d5ca56225c5c6ecb199affaf734df13
+---
+4f69be3c8d5ca56225c5c6ecb199affaf734df13
+---
+handled

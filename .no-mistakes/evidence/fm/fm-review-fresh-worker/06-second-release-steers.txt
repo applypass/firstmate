@@ -1,0 +1,19 @@
+new head f427782b4b84b0ea92469f959845fe23a2eb4a6d
+/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.YUGP0j/home/data/hlive/final-run-handover.md
+== relaunch-note for new head (expect exit 1, already relaunched):
+exit=1
+== release of new head:
+released hlive at f427782b4b84b0ea92469f959845fe23a2eb4a6d and told the worker to run /no-mistakes on that head
+released f427782b4b84b0ea92469f959845fe23a2eb4a6d
+steered f427782b4b84b0ea92469f959845fe23a2eb4a6d
+operational-inbox launch inputs before=2 after=2
+== steer inbox:
+/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.YUGP0j/home/state/hlive.inbox:
+001.msg
+handled
+
+/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.YUGP0j/home/state/hlive.inbox/handled:
+schema=fm-task-inbox.v1
+at=2026-10-20T05:52:43Z
+--
+Firstmate released the final validation of f427782b4b84b0ea92469f959845fe23a2eb4a6d. Run /no-mistakes now on that exact head, as your Definition of done says, and drive it through to CI green.
