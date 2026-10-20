@@ -270,7 +270,7 @@ test_installer() {
     || fail "installer did not register the Bash PreToolUse hook"
   HOME="$SCRATCH_HOME" "$ROOT/bin/fm-op-guard-install.sh" "$dir" || fail "second install failed"
   n=$(jq '.hooks.PreToolUse | length' "$file")
-  [ "$n" = 1 ] || fail "installer is not idempotent: $n hook entries"
+  [ "$n" = 2 ] || fail "installer is not idempotent: $n hook entries"
   # The registered command, run as the harness would, refuses a bare op call.
   local cmd out
   cmd=$(jq -r '.hooks.PreToolUse[0].hooks[0].command' "$file")
@@ -280,7 +280,7 @@ test_installer() {
   mkdir -p "$TMP_ROOT/fresh"
   assert_outside_real_home "$TMP_ROOT/fresh"
   HOME="$SCRATCH_HOME" "$ROOT/bin/fm-op-guard-install.sh" "$TMP_ROOT/fresh" || fail "fresh install failed"
-  jq -e '.hooks.PreToolUse | length == 1' "$TMP_ROOT/fresh/.claude/settings.local.json" >/dev/null || fail "fresh install wrote no hook"
+  jq -e '.hooks.PreToolUse | length == 2' "$TMP_ROOT/fresh/.claude/settings.local.json" >/dev/null || fail "fresh install wrote no hook"
   # A checkout under a path with a space registers a hook that still launches.
   local spaced="$TMP_ROOT/with space/bin" target="$TMP_ROOT/spaced-target"
   mkdir -p "$spaced" "$target"
