@@ -72,7 +72,10 @@ publish_file() {  # <path> <content>
   local path=$1 tmp
   mkdir -p "$(dirname "$path")" || return 1
   tmp="$path.tmp.$$"
-  printf '%s\n' "$2" > "$tmp" && mv -f "$tmp" "$path" || { rm -f "$tmp"; return 1; }
+  if ! { printf '%s\n' "$2" > "$tmp" && mv -f "$tmp" "$path"; }; then
+    rm -f "$tmp"
+    return 1
+  fi
 }
 
 marker_get() {  # <marker> <key>
