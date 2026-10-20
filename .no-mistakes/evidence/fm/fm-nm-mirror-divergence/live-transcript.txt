@@ -1,0 +1,50 @@
+=== direct timing (diverged)
+{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[nm-mirror-diverged] Refusing to start a no-mistakes run for branch feat: the run would review for a long time and then fail at the push step. - the private mirror branch (gate refs/heads/feat, a59a639c2676baf0c75aea4649cc7e7e947c8c02) holds 1 commit(s) that local HEAD (37f8f82fc1da5e121ec617fc21a3ca6d3ddb2cac) does not contain, for example pre-rebase commits or commits from an earlier run that were never synced back. Safe fix: run 'no-mistakes sync --check' to see the proof, then 'no-mistakes sync' (or 'no-mistakes sync --recover') to bring the branch to the pipeline head, then retry. Never force-push, reset or delete the mirror branch yourself; report blocked to firstmate if sync refuses."}
+rc=2
+
+real	0m0.137s
+user	0m0.055s
+sys	0m0.064s
+=== claude: A diverged mirror, new run
+--- installer:
+"/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M5BWSRGG7BVH8QZ2MVX509X4/bin/fm-op-pretool-check.sh --claude"
+"/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M5BWSRGG7BVH8QZ2MVX509X4/bin/fm-nm-mirror-pretool-check.sh --claude"
+--- mirror before: a59a639c2676baf0c75aea4649cc7e7e947c8c02  HEAD: 37f8f82fc1da5e121ec617fc21a3ca6d3ddb2cac
+TOOL_RESULT: PreToolUse:Bash hook error: [/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M5BWSRGG7BVH8QZ2MVX509X4/bin/fm-nm-mirror-pretool-check.sh --claude]: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[nm-mirror-diverged] Refusing to start a no-mistakes run for branch feat: the run would review for a long time and then fail at the push step. - the private mirror branch (gate refs/heads/feat, a59a639c2676baf0c75aea4649cc7e7e947c8c02) holds 1 commit(s) that local HEAD (37f8f82fc1da5e121ec617fc21a3ca6d3ddb2cac) does not contain, for example pre-rebase commits or commits from an earlier run that were never synced back. Safe fix: run 'no-mistakes sync --check' to see the proof, then 'no-mistakes sync' (or 'no-mistakes sync --recover') to bring the branch to the pipeline head, then retry. Never force-push, reset or delete the mirror branch yourself; report blocked to firstmate if sync refuses."}
+
+FINAL: The command ran once and the PreToolUse hook blocked it. Nothing was started. The hook output, verbatim:
+
+```
+PreToolUse:Bash hook error: [/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M5BWSRGG7BVH8QZ2MVX509X4/bin/fm-nm-mirror-pretool-check.sh --claude]: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[nm-mirror-diverged] Refusing to start a no-mistakes run for branch feat: the run would review for a long time and then fail at the push step. - the private mirror branch (gate refs/heads/feat, a59a639c2676baf0c75aea4649cc7e7e947c8c02) holds 1 commit(s) that local HEAD (37f8f82fc1da5e121ec617fc21a3ca6d3ddb2cac) does not contain, for example pre-rebase commits or commits from an earlier run that were never synced back. Safe fix: run 'no-mistakes sync --check' to see the proof, then 'no-mistakes sync' (or 'no-mistakes sync --recover') to bring the branch to the pipeline head, then retry. Never force-push, reset or delete the mirror branch yourself; report blocked to firstmate if sync refuses."}
+```
+
+The hook says the private mirror branch for `feat` has one commit that local HEAD (`37f8f82`) does not contain. It suggests `no-mistakes sync --check` to inspect the proof, then `no-mistakes sync` or `--recover` to realign, then a retry. I have not run any of those, since you asked for only the one command. Tell me if you want me to run `no-mistakes sync --check` next.
+--- mirror after: a59a639c2676baf0c75aea4649cc7e7e947c8c02
+=== claude: C diverged mirror, reattach/status
+--- installer:
+"/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M5BWSRGG7BVH8QZ2MVX509X4/bin/fm-op-pretool-check.sh --claude"
+"/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M5BWSRGG7BVH8QZ2MVX509X4/bin/fm-nm-mirror-pretool-check.sh --claude"
+--- mirror before: a59a639c2676baf0c75aea4649cc7e7e947c8c02  HEAD: 37f8f82fc1da5e121ec617fc21a3ca6d3ddb2cac
+TOOL_RESULT: SHIM-NO-MISTAKES-REACHED args: axi status
+FINAL: I ran `no-mistakes axi status` once. The output was verbatim:
+
+```
+SHIM-NO-MISTAKES-REACHED args: axi status
+```
+
+No hook refused the command. The output does not look like a normal status report. The `SHIM-` prefix suggests `no-mistakes` on this machine is a shim script, not the real CLI. I did not investigate further, since you asked for one run only.
+--- mirror after: a59a639c2676baf0c75aea4649cc7e7e947c8c02
+=== claude: B rebased copy, new run
+--- installer:
+"/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M5BWSRGG7BVH8QZ2MVX509X4/bin/fm-op-pretool-check.sh --claude"
+"/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M5BWSRGG7BVH8QZ2MVX509X4/bin/fm-nm-mirror-pretool-check.sh --claude"
+--- mirror before: b6309ece80b8b26ae90ec0ce46e938ce5d3e7831  HEAD: 908bc92f260817c11b255888e4cdd5c203f7c1c9
+TOOL_RESULT: SHIM-NO-MISTAKES-REACHED args: axi run --intent ship feat
+FINAL: The command ran once. Verbatim output:
+
+```
+SHIM-NO-MISTAKES-REACHED args: axi run --intent ship feat
+```
+
+There was no hook refusal. Note that the output shows the `--intent` value as `ship feat` with the quotes stripped, so the shim may have received it as two arguments.
+--- mirror after: b6309ece80b8b26ae90ec0ce46e938ce5d3e7831
