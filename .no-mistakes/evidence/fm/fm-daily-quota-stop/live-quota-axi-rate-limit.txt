@@ -1,0 +1,22 @@
+# Live, this run, real quota-axi with the machine's normal Claude login (UTC times)
+06:58:22  quota-axi --provider claude --json            -> fresh, weekly percentRemaining 42
+~06:58:40 gate: quota-axi read (jq preview)              -> fresh
+          gate check #1 (no record)                       -> fresh, exit 0
+          gate check #2 (19% used today)                  -> fresh, exit 0
+          gate check #3 spawn (20% used today)            -> fresh, exit 3 refuse (correct)
+          gate check #4 nm-run (20% used today)           -> exit 3 "Claude quota could not be read (the Claude quota reading is stale)"
+          gate checks #5, #6 (25% / sticky hold cases)    -> same "unreadable" refusal instead of hold
+06:59     quota-axi --provider claude --json:
+  {"state":{"status":"stale","stale":true,"error":"Claude quota endpoint rate limited","retryAfter":"2026-10-20T07:03:45.618Z"},"w":[42]}
+06:59:15  quota-axi --provider claude --json --max-age 10m:
+  {"state":{"status":"fresh","stale":false,"refreshedAt":"2026-10-20T06:58:44.193Z","reused":true},"w":[42]}
+
+Result: about 5 vendor reads in about 25 s rate-limited Claude's quota endpoint for about 5 minutes.
+fm-daily-quota-lib.sh calls `quota-axi --provider claude --json` with no --max-age, once per
+spawn check, once per PreToolUse run-start match, and once per gated push. A Claude worker's
+run start is checked twice (hook, then pre-receive). So a few workers starting together
+rate-limit the endpoint, and every check then refuses all new fleet work as "unreadable", even
+well under 20% used today. The reason text also drops quota-axi's own error ("rate limited")
+and points the captain at a Keychain approval.
+quota-axi documents `--max-age <0-1h>` / QUOTA_AXI_MAX_AGE (reuse the last good reading,
+which still reports stale=false) for this exact case.

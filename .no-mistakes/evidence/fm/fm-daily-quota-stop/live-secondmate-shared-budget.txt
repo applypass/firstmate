@@ -1,0 +1,15 @@
+# secondmate lab home $MATE bound to main lab home $LAB by .fm-secondmate-parent only (no launch env)
+schema=fm-secondmate-parent.v1
+route=local
+parent_home=$LAB
+## main home baseline: 21% used today (baseline 37, weekly 58)
+## fresh ship spawn from the secondmate home (twice)
+fm-gate-refuse: gate agent lifecycle permitted only against lab home $MATE
+daily quota stop: refusing a new worker launch. The fleet has used 21% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+exit=1
+fm-gate-refuse: gate agent lifecycle permitted only against lab home $MATE
+daily quota stop: refusing a new worker launch. The fleet has used 21% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+exit=1
+--- secondmate kept its own baseline? no
+--- parent channel $LAB/state/qa-mate.status:
+blocked [at=1792479659]: daily quota stop: refusing a new worker launch. The fleet has used 21% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.

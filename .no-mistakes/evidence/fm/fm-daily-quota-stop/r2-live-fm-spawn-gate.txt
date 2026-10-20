@@ -1,0 +1,26 @@
+# fm-spawn in lab home $LAB, real quota-axi (weekly used 59%), UTC 07:06:35
+## A. 25% used today (baseline 34): fresh ship spawn
+$ FM_HOME=$LAB bin/fm-spawn.sh qa-ship /nonexistent-project-dir --mode no-mistakes --yolo off
+fm-gate-refuse: gate agent lifecycle permitted only against lab home $LAB
+daily quota stop: holding every new worker launch until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.
+exit=1
+## B. same: fresh scout spawn
+fm-gate-refuse: gate agent lifecycle permitted only against lab home $LAB
+daily quota stop: holding every new worker launch until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.
+exit=1
+## C. same: fresh secondmate spawn
+fm-gate-refuse: gate agent lifecycle permitted only against lab home $LAB
+daily quota stop: holding every new worker launch until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.
+exit=1
+## D. --relaunch is never gated (fails later for its own reason)
+fm-gate-refuse: gate agent lifecycle permitted only against lab home $LAB
+error: --relaunch needs an existing task record; no $LAB/state/qa-ship.meta
+exit=1
+## E. 20% used today (baseline 39): fresh ship spawn refused
+fm-gate-refuse: gate agent lifecycle permitted only against lab home $LAB
+daily quota stop: refusing a new worker launch. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+exit=1
+## F. 19% used today (baseline 40): passes the quota gate and fails later on the missing project
+fm-gate-refuse: gate agent lifecycle permitted only against lab home $LAB
+/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M5C0WTFKCWC7MY9R17X2C5BV/bin/fm-spawn.sh: line 2995: cd: /nonexistent-project-dir: No such file or directory
+exit=1

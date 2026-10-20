@@ -1,0 +1,14 @@
+# real claude -p (normal login, shimmed no-mistakes on PATH) in a throwaway project with the daily quota hook installed; lab home at 25% used today
+Two of the four commands were blocked and two ran. I did not retry the blocked ones.
+
+1. `no-mistakes axi run --intent "qa"` was **blocked**. The PreToolUse hook (`fm-daily-quota-pretool-check.sh`) denied it with this message: "daily quota stop: holding every new no-mistakes run until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes."
+
+2. `no-mistakes rerun` was **blocked** by the same hook, with the same message: "daily quota stop: holding every new no-mistakes run until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes."
+
+3. `no-mistakes axi status` **ran**. Its output was `SHIM-NO-MISTAKES-RAN: axi status`.
+
+4. `no-mistakes axi run --wait 1m` **ran**. Its output was `SHIM-NO-MISTAKES-RAN: axi run --wait 1m`.
+
+The hook only blocked commands that start a new run. Commands 3 and 4 printed `SHIM-NO-MISTAKES-RAN`, so they appear to have hit a shim, not the real binary. Command 4 is a run command, but the hook didn't stop it.
+--- worker status file $LAB/state/qa-cw.status:
+paused [at=1792480060]: daily quota stop: holding every new no-mistakes run until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes. until 2026-10-20T18:30Z

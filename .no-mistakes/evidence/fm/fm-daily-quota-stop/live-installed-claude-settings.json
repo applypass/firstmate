@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M5C0WTFKCWC7MY9R17X2C5BV/bin/fm-daily-quota-pretool-check.sh --claude --home $LAB --status-file $LAB/state/qa-cw.status"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+# bare gate repo with bin/fm-validation-gate-pre-receive.sh as pre-receive; real quota-axi weekly used 59%; pusher env as fm-spawn exports it
+## 1. 20% used today: git push no-mistakes fm/qa
+remote: daily quota stop: refusing a new no-mistakes run. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.        
+To $GATE/repo.git
+ ! [remote rejected] fm/qa -> fm/qa (pre-receive hook declined)
+error: failed to push some refs to '$GATE/repo.git'
+exit=1
+## 2. again: rejected again
+remote: daily quota stop: refusing a new no-mistakes run. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.        
+To $GATE/repo.git
+ ! [remote rejected] fm/qa -> fm/qa (pre-receive hook declined)
+error: failed to push some refs to '$GATE/repo.git'
+exit=1
+--- worker status file (reported once):
+blocked [at=1792480012]: daily quota stop: refusing a new no-mistakes run. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+## 3. 25% used today: held
+remote: daily quota stop: holding every new no-mistakes run until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.        
+To $GATE/repo.git
+ ! [remote rejected] fm/qa -> fm/qa (pre-receive hook declined)
+error: failed to push some refs to '$GATE/repo.git'
+exit=1
+--- worker status file:
+blocked [at=1792480012]: daily quota stop: refusing a new no-mistakes run. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+paused [at=1792480013]: daily quota stop: holding every new no-mistakes run until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes. until 2026-10-20T18:30Z
+## 4. non-fleet push (no FM_DAILY_QUOTA_CHECK) at 25%: never checked
+To $GATE/repo.git
+ * [new branch]      fm/qa -> fm/qa
+exit=0
+## 5. 19% used today: fleet push accepted
+To $GATE/repo.git
+ * [new branch]      fm/qa -> fm/qa
+exit=0

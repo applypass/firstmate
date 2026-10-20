@@ -1,0 +1,26 @@
+## A. 25% used today (baseline 33, weekly 58): fresh ship spawn
+$ FM_HOME=$LAB bin/fm-spawn.sh qa-ship /tmp/fm-lab-proj.vMtCiV --mode no-mistakes --yolo off
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.OrzYzz
+daily quota stop: holding every new worker launch until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.
+exit=1
+daily-quota-day-start
+daily-quota-reported
+
+## B. same, fresh scout spawn
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.OrzYzz
+daily quota stop: holding every new worker launch until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.
+exit=1
+
+## C. same, fresh secondmate spawn
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.OrzYzz
+daily quota stop: holding every new worker launch until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.
+exit=1
+
+## D. --relaunch of an existing task is never gated (fails later for its own reason: no such task)
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.OrzYzz
+error: --relaunch needs an existing task record; no /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.OrzYzz/state/qa-ship.meta
+exit=1
+
+## E. 19% used today: fresh ship spawn passes the gate (state reset)
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.OrzYzz
+bin/fm-spawn.sh: line 2995: cd: /nonexistent-project-dir: No such file or directory

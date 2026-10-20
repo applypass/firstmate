@@ -1,0 +1,19 @@
+ok - under 20% used today allows
+ok - 20% used today refuses and names number and threshold
+ok - 25% holds until the next local day
+ok - day rollover resets the budget
+ok - weekly reset mid-day counts from the reset
+ok - a lower reading resets the baseline only when a reset is confirmed
+ok - unreadable quota refuses and says why
+ok - unreadable quota has no override
+ok - thresholds are fixed at 20 and 25
+ok - used today counts from local midnight
+ok - homes share one budget through the parent binding and each level reports once
+ok - a secondmate home reports once to its parent channel and shares the main baseline
+ok - a failed record write is reported as such
+ok - the hook gates new run starts and never an existing run
+ok - the pre-receive companion gates every new run start
+ok - the hook fails open on bad input
+ok - installer merges, is idempotent, and registers a working hook
+ok - spawn refuses fresh launches and never relaunches
+ok - daily quota scripts are clean under bin/fm-lint.sh

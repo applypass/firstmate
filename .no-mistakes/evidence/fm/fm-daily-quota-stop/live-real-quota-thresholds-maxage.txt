@@ -1,0 +1,33 @@
+# real quota-axi with QUOTA_AXI_MAX_AGE=1h (reuses the last good vendor reading; weekly used = 58%)
+## 1. no record yet -> first check of the day allowed
+exit=0
+day=2026-10-20
+used=58
+held=0
+last=58
+last_at=1792479572
+## 2. baseline 39 (19% used today) -> allowed
+exit=0
+## 3. baseline 38 (20% used today) -> refuse spawn and nm-run
+daily quota stop: refusing a new worker launch. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+exit=3
+daily quota stop: refusing a new no-mistakes run. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+exit=3
+## 4. baseline 33 (25% used today) -> hold until next local day
+daily quota stop: holding every new worker launch until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.
+exit=3
+day=2026-10-20
+used=33
+held=1
+last=58
+last_at=1792479574
+## 5. hold is sticky for the day: baseline edited to 48 (10% used), held=1 kept -> still hold
+daily quota stop: holding every new worker launch until 2026-10-21 00:00 IST. The fleet has used 10% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.
+exit=3
+## 6. next local day: FM_DAILY_QUOTA_NOW = tomorrow 09:00 local -> held cleared, baseline=yesterday last reading (58), allowed
+exit=0
+day=2026-10-21
+used=58
+held=0
+last=58
+last_at=1792553400

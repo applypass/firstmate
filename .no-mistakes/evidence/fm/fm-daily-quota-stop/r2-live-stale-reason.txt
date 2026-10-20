@@ -1,0 +1,8 @@
+# Unreadable quota: quota-axi absent from PATH (lab home $LAB)
+daily quota stop: refusing a new worker launch because Claude quota could not be read (quota-axi is not installed or not on PATH). The daily budget cannot be checked, so new work waits until quota-axi can read Claude quota (a Keychain approval may be pending); the captain decides whether to proceed.
+exit=3
+daily quota stop: refusing a new no-mistakes run because Claude quota could not be read (quota-axi is not installed or not on PATH). The daily budget cannot be checked, so new work waits until quota-axi can read Claude quota (a Keychain approval may be pending); the captain decides whether to proceed.
+exit=3
+--- baseline recorded? no
+
+# Stale-reading reason (quota-axi state.error): not driven live. QUOTA_AXI_SNAPSHOT fixtures with state.stale=true and state.error set are served by real quota-axi as a fresh reused reading (stale=false), so a fixture cannot produce a stale row; producing one for real means deliberately rate-limiting the vendor endpoint with rapid uncached reads, which this run avoided. Covered by tests/fm-daily-quota-stop.test.sh 'unreadable quota refuses and says why'.

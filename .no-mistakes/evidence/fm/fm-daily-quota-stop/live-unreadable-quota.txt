@@ -1,0 +1,12 @@
+## U1. quota-axi not on PATH: fresh spawn
+fm-gate-refuse: gate agent lifecycle permitted only against lab home $LAB
+daily quota stop: refusing a new worker launch because Claude quota could not be read (quota-axi is not installed or not on PATH). The daily budget cannot be checked, so new work waits until quota-axi can read Claude quota (a Keychain approval may be pending); the captain decides whether to proceed.
+exit=1
+
+## U2. real quota-axi answering from a snapshot file that has no Claude reading (QUOTA_AXI_SNAPSHOT=empty file)
+daily quota stop: refusing a new no-mistakes run because Claude quota could not be read (quota-axi exited 2: error: "QUOTA_AXI_SNAPSHOT is not a readable quota snapshot: /tmp/fm-lab-snap.MDSS9a" code: VALIDATION_ERROR help[1]: "Point QUOTA_AXI_SNAPSHOT at a quota-axi cache file, or unset it"). The daily budget cannot be checked, so new work waits until quota-axi can read Claude quota (a Keychain approval may be pending); the captain decides whether to proceed.
+exit=3
+
+## U3. live vendor rate limit (captured earlier this run, real quota-axi, no max-age):
+daily quota stop: refusing a new no-mistakes run because Claude quota could not be read (the Claude quota reading is stale). The daily budget cannot be checked, so new work waits until quota-axi can read Claude quota (a Keychain approval may be pending); the captain decides whether to proceed.
+--- no baseline recorded on unreadable: 0 files

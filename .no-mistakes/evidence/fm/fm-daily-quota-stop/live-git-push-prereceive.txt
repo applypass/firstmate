@@ -1,0 +1,37 @@
+# bare gate repo with bin/fm-validation-gate-pre-receive.sh as its pre-receive; pusher env as fm-spawn exports it
+## 1. 20% used today (baseline 38): git push no-mistakes fm/qa
+remote: daily quota stop: refusing a new no-mistakes run. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.        
+To /tmp/fm-lab-gate.9TnK3P/repo.git
+ ! [remote rejected] fm/qa -> fm/qa (pre-receive hook declined)
+error: failed to push some refs to '/tmp/fm-lab-gate.9TnK3P/repo.git'
+exit=1
+--- worker status file:
+blocked [at=1792479641]: daily quota stop: refusing a new no-mistakes run. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+
+## 2. same refusal again: rejected again, reported once only
+remote: daily quota stop: refusing a new no-mistakes run. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.        
+To /tmp/fm-lab-gate.9TnK3P/repo.git
+ ! [remote rejected] fm/qa -> fm/qa (pre-receive hook declined)
+error: failed to push some refs to '/tmp/fm-lab-gate.9TnK3P/repo.git'
+exit=1
+--- status lines: 1
+
+## 3. 25% used today (baseline 33): push held, status gets a paused line
+remote: daily quota stop: holding every new no-mistakes run until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.        
+To /tmp/fm-lab-gate.9TnK3P/repo.git
+ ! [remote rejected] fm/qa -> fm/qa (pre-receive hook declined)
+error: failed to push some refs to '/tmp/fm-lab-gate.9TnK3P/repo.git'
+exit=1
+--- worker status file:
+blocked [at=1792479641]: daily quota stop: refusing a new no-mistakes run. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+paused [at=1792479642]: daily quota stop: holding every new no-mistakes run until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes. until 2026-10-20T18:30Z
+
+## 4. push without fleet env (non-fleet pusher) is never checked
+To /tmp/fm-lab-gate.9TnK3P/repo.git
+ * [new branch]      fm/qa -> fm/qa
+exit=0
+
+## 5. 19% used today: fleet push accepted
+To /tmp/fm-lab-gate.9TnK3P/repo.git
+ * [new branch]      fm/qa -> fm/qa
+exit=0

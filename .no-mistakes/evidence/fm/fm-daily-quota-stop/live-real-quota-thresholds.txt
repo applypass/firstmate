@@ -1,0 +1,30 @@
+$ quota-axi --provider claude --json | jq weekly
+{"resetsAt":"2026-10-24T08:00:00.226054+00:00","percentRemaining":42}
+
+## 1. first check of the day (no record) -> baseline set, allowed
+exit=0
+day=2026-10-20
+used=58
+held=0
+last=58
+last_at=1792479520
+
+## 2. seed today's baseline at 39 (19% used today) -> allowed
+exit=0
+
+## 3. baseline 38 (20% used today) -> refuse
+daily quota stop: refusing a new worker launch. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+exit=3
+daily quota stop: refusing a new no-mistakes run because Claude quota could not be read (the Claude quota reading is stale). The daily budget cannot be checked, so new work waits until quota-axi can read Claude quota (a Keychain approval may be pending); the captain decides whether to proceed.
+exit=3
+
+## 4. baseline 33 (25% used today) -> hold until next local day
+daily quota stop: refusing a new worker launch because Claude quota could not be read (the Claude quota reading is stale). The daily budget cannot be checked, so new work waits until quota-axi can read Claude quota (a Keychain approval may be pending); the captain decides whether to proceed.
+exit=3
+day=2026-10-20
+used=33
+held=0
+
+## 5. hold is sticky: baseline later rewritten to 10% used today, held=1 kept -> still hold
+daily quota stop: refusing a new worker launch because Claude quota could not be read (the Claude quota reading is stale). The daily budget cannot be checked, so new work waits until quota-axi can read Claude quota (a Keychain approval may be pending); the captain decides whether to proceed.
+exit=3

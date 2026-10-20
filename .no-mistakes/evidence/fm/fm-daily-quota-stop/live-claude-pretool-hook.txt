@@ -1,0 +1,15 @@
+Commands 1 and 2 were blocked. Commands 3 and 4 ran, but their output looks like a shim placeholder, not real `no-mistakes` output.
+
+1. `no-mistakes axi run --intent "qa"`: **blocked**. The `PreToolUse:Bash` hook denied it:
+   > daily quota stop: holding every new no-mistakes run until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.
+
+2. `no-mistakes rerun`: **blocked**. The same hook denied it with the same message.
+
+3. `no-mistakes axi status`: **ran**. Output:
+   > `SHIM-NO-MISTAKES-RAN: axi status`
+
+4. `no-mistakes axi run --wait 1m`: **ran**. Output:
+   > `SHIM-NO-MISTAKES-RAN: axi run --wait 1m`
+
+Per your instructions, I did not retry the two blocked commands. The `SHIM-NO-MISTAKES-RAN` output suggests `no-mistakes` on this machine is a shim. The session's git status also shows an untracked `shim/` directory, so the output may not reflect a real run or status. The block lifts at 2026-10-21 00:00 IST, so commands 1 and 2 can be run again after that.
+paused [at=1792479685]: daily quota stop: holding every new no-mistakes run until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes. until 2026-10-20T18:30Z

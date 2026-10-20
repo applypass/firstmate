@@ -1,0 +1,53 @@
+# Round 2, real quota-axi with the machine's normal Claude login, lab home $LAB (UTC 07:05:36)
+weekly used now: 59%
+
+## A. 12 sequential checks in a burst at 19% used today (baseline 40)
+check 1 spawn exit=0 (allowed)
+check 2 nm-run exit=0 (allowed)
+check 3 spawn exit=0 (allowed)
+check 4 nm-run exit=0 (allowed)
+check 5 spawn exit=0 (allowed)
+check 6 nm-run exit=0 (allowed)
+check 7 spawn exit=0 (allowed)
+check 8 nm-run exit=0 (allowed)
+check 9 spawn exit=0 (allowed)
+check 10 nm-run exit=0 (allowed)
+check 11 spawn exit=0 (allowed)
+check 12 nm-run exit=0 (allowed)
+burst took 3s
+
+## B. 8 checks started together (parallel) at 19% used today
+parallel 4 exit=0 (allowed)
+parallel 2 exit=0 (allowed)
+parallel 1 exit=0 (allowed)
+parallel 6 exit=0 (allowed)
+parallel 8 exit=0 (allowed)
+parallel 3 exit=0 (allowed)
+parallel 5 exit=0 (allowed)
+parallel 7 exit=0 (allowed)
+
+## C. 6 checks at 20% used today (baseline 39) -> refuse
+check 1 spawn exit=3 daily quota stop: refusing a new worker launch. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+check 2 nm-run exit=3 daily quota stop: refusing a new no-mistakes run. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+check 3 spawn exit=3 daily quota stop: refusing a new worker launch. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+check 4 nm-run exit=3 daily quota stop: refusing a new no-mistakes run. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+check 5 spawn exit=3 daily quota stop: refusing a new worker launch. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+check 6 nm-run exit=3 daily quota stop: refusing a new no-mistakes run. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+
+## D. 6 checks at 25% used today (baseline 34) -> hold
+check 1 spawn exit=3 daily quota stop: holding every new worker launch until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.
+check 2 nm-run exit=3 daily quota stop: holding every new no-mistakes run until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.
+check 3 spawn exit=3 daily quota stop: holding every new worker launch until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.
+check 4 nm-run exit=3 daily quota stop: holding every new no-mistakes run until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.
+check 5 spawn exit=3 daily quota stop: holding every new worker launch until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.
+check 6 nm-run exit=3 daily quota stop: holding every new no-mistakes run until 2026-10-21 00:00 IST. The fleet has used 25% of the weekly Claude quota today, at or over the 25% hold line. Running work finishes.
+--- record:
+day=2026-10-20
+used=34
+held=1
+last=59
+last_at=1792479944
+
+## E. quota-axi state after 32 checks (UTC 07:05:44)
+{"status":"fresh","stale":false,"refreshedAt":"2026-10-20T07:05:23.844Z","reused":true}
+quota-axi state at end of run (UTC 07:08:00): {"status":"fresh","stale":false,"error":null}
