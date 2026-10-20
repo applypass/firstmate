@@ -132,8 +132,8 @@ EOF
   # Fork-only: a secondmate home pins its host engine model
   # (bin/fm-secondmate-host-lib.sh).
   if [ -z "$model" ]; then
-    # shellcheck source=bin/fm-secondmate-host-lib.sh
-    . "$(dirname "${BASH_SOURCE[0]}")/fm-secondmate-host-lib.sh"
+    command -v fm_secondmate_host_default_model >/dev/null 2>&1 \
+      || . "$(dirname "${BASH_SOURCE[0]}")/fm-secondmate-host-lib.sh"
     model=$(fm_secondmate_host_default_model "$(dirname "$config")" "$engine") || model=
   fi
   # Fork-only end
