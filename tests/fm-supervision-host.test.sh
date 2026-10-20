@@ -1955,6 +1955,139 @@ test_next_host_clears_a_turn_its_killed_predecessor_left() {
   pass "host: a killed predecessor's engine is reaped and the next host removes its turn files"
 }
 
+# --- secondmate homes -----------------------------------------------------------
+# A marked secondmate home runs an Opus session, so the host takes what it can
+# on Sonnet and wakes the session only for what is its own (bin/fm-secondmate-host-lib.sh).
+
+# A secondmate home whose parent channel is <name>-parent/state/<id>.status.
+make_mate_home() {  # <name> [config line]
+  local home parent
+  home=$(make_home "$1" attended "${2:-}")
+  parent="$TMP_ROOT/$1-parent"
+  mkdir -p "$parent/state"
+  printf 'schema=fm-secondmate-parent.v1\nroute=local\nparent_home=%s\n' "$parent" > "$home/.fm-secondmate-parent"
+  printf 'mate-%s\n' "$1" > "$home/.fm-secondmate-home"
+  printf '%s\n' "$home"
+}
+mate_channel() { printf '%s/%s-parent/state/mate-%s.status\n' "$TMP_ROOT" "$1" "$1"; }
+
+test_secondmate_host_engine_runs_sonnet_5_5_unless_configured() {
+  local home
+  home=$(make_mate_home mate-model)
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "mate model: the host never started a watcher cycle"
+  append_status "$home" 'step one'
+  wait_until 250 handled_at_least "$home" 1 || fail "mate model: the wake was not handled: $(cat "$home/state/.supervision-host.log")"
+  assert_grep 'arg=claude-sonnet-5-5' "$home/engine-call.1" "a secondmate home's host engine must run Sonnet 5.5 by default"
+  stop_home_processes "$home"
+
+  home=$(make_mate_home mate-model-pinned 'claude claude-haiku-5-5')
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "mate model pinned: the host never started a watcher cycle"
+  append_status "$home" 'step one'
+  wait_until 250 handled_at_least "$home" 1 || fail "mate model pinned: the wake was not handled"
+  assert_grep 'arg=claude-haiku-5-5' "$home/engine-call.1" "a model named in config/supervision-host must win in a secondmate home"
+  assert_no_grep 'arg=claude-sonnet-5-5' "$home/engine-call.1" "the secondmate default overrode a configured model"
+  stop_home_processes "$home"
+
+  home=$(make_home main-model attended)
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "main model: the host never started a watcher cycle"
+  append_status "$home" 'step one'
+  wait_until 250 handled_at_least "$home" 1 || fail "main model: the wake was not handled"
+  assert_no_grep 'claude-sonnet-5-5' "$home/engine-call.1" "a main home must keep the engine's own default model"
+  pass "host: a secondmate home's engine runs Sonnet 5.5 unless the home names a model, and a main home is unchanged"
+}
+
+test_secondmate_routine_wake_never_wakes_the_mate_session() {
+  local home
+  home=$(make_mate_home mate-routine)
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "mate routine: the host never started a watcher cycle"
+  append_status "$home" 'step one'
+  wait_until 250 handled_at_least "$home" 1 || fail "mate routine: the wake was not handled on the engine: $(cat "$home/state/.supervision-host.log")"
+  [ ! -s "$home/host.rc" ] || fail "mate routine: a routine wake reached the mate session: $(cat "$home/host.out")"
+  [ "$(grep -cv '^watcher: started pid=' "$home/host.out")" -eq 0 ] \
+    || fail "mate routine: the host printed more than its status line to the mate session: $(cat "$home/host.out")"
+  watcher_live "$home" || fail "mate routine: the host is not parked after the routine wake"
+  pass "host: a routine wake in a secondmate home is handled on the engine and never wakes the mate session"
+}
+
+test_secondmate_captain_outcome_is_published_without_waking_the_mate() {
+  local home channel
+  home=$(make_mate_home mate-captain)
+  channel=$(mate_channel mate-captain)
+  echo captain > "$home/stub-mode"
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "mate captain: the host never started a watcher cycle"
+  append_status "$home" 'ready for review'
+  wait_until 250 handled_at_least "$home" 1 || fail "mate captain: the wake was not handled: $(cat "$home/state/.supervision-host.log")"
+  assert_re '^needs-decision \[key=branch-outcome-1\] \[at=[0-9]+\]: captain outcome for demo' "$channel" \
+    "the script must put the captain outcome on the parent channel"
+  [ ! -s "$home/host.rc" ] || fail "mate captain: a published captain outcome woke the mate session: $(cat "$home/host.out")"
+  wait_until 100 grep -qs '	published	secondmate	store rows 1 ' "$home/state/.supervision-host.log" \
+    || fail "the ledger must record that the parent channel has the outcome: $(cat "$home/state/.supervision-host.log")"
+  watcher_live "$home" || fail "mate captain: the host is not parked after the published outcome"
+  stop_home_processes "$home"
+
+  # A parent channel that cannot take the line leaves the outcome to the mate.
+  home=$(make_mate_home mate-captain-unpublished)
+  channel=$(mate_channel mate-captain-unpublished)
+  mkdir -p "$channel"
+  echo captain > "$home/stub-mode"
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "mate unpublished: the host never started a watcher cycle"
+  append_status "$home" 'ready for review'
+  wait_until 250 host_exited "$home" || fail "mate unpublished: an unpublished captain outcome did not wake the mate: $(cat "$home/state/.supervision-host.log")"
+  assert_re '^supervision-host: branch-outcome: .*\(store rows 1\); run bin/fm-wake-drain.sh' "$home/host.out" \
+    "an outcome that never reached the parent channel must wake the mate session"
+  pass "host: a captain outcome the script published to the parent channel does not wake the mate, and an unpublished one does"
+}
+
+test_secondmate_decision_close_and_non_routine_check_still_wake_the_mate() {
+  local home
+  home=$(make_mate_home mate-decision)
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "mate decision: the host never started a watcher cycle"
+  append_status "$home" 'which export format?' needs-decision
+  wait_until 250 host_exited "$home" || fail "mate decision: the decision close did not reach the mate: $(cat "$home/state/.supervision-host.log")"
+  assert_re '^signal: .*demo.status' "$home/host.out" "the decision close must reach the mate as the arm printed it"
+  [ "$(engine_calls "$home")" -eq 0 ] || fail "mate decision: the engine took a decision close"
+  stop_home_processes "$home"
+
+  home=$(make_mate_home mate-check)
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "mate check: the host never started a watcher cycle"
+  append_wake "$home/state" check from-firstmate "check: marked request from firstmate waits in the inbox"
+  wait_until 250 host_exited "$home" || fail "mate check: a request wake did not reach the mate: $(cat "$home/state/.supervision-host.log")"
+  assert_re '^check: ' "$home/host.out" "the request wake must reach the mate as the arm printed it"
+  assert_grep 'marked request from firstmate' "$home/state/.wake-queue" "the request row must stay queued for the mate's drain"
+  [ "$(engine_calls "$home")" -eq 0 ] || fail "mate check: the engine took a request wake"
+  pass "host: a decision close and a non-routine check close still wake the mate session"
+}
+
+test_secondmate_resurface_over_an_empty_queue_is_absorbed_by_the_host() {
+  local home
+  home=$(make_mate_home mate-resurface)
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "mate resurface: the host never started a watcher cycle"
+  host=$(awk -F '\t' '$1 == "host" { print $2 }' "$home/state/.supervision-host")
+  kill -TERM "$host"
+  wait_until 250 host_exited "$home" || fail "mate resurface: the stopped host did not exit"
+  rm -f "$home/host.rc"
+  start_host "$home"
+  wait_until 250 grep -qs '	absorbed	secondmate	check: rearm-resurface' "$home/state/.supervision-host.log" \
+    || fail "mate resurface: the host did not absorb the empty resurface: $(cat "$home/host.out"; cat "$home/state/.supervision-host.log")"
+  [ ! -s "$home/host.rc" ] || fail "mate resurface: an empty resurface reached the mate session: $(cat "$home/host.out")"
+  assert_no_re '^check: rearm-resurface' "$home/host.out" "an empty resurface must not be printed to the mate session"
+  [ "$(engine_calls "$home")" -eq 0 ] || fail "mate resurface: the host ran an engine turn for an empty queue"
+  watcher_live "$home" || fail "mate resurface: the host is not parked after absorbing the resurface"
+
+  append_status "$home" 'step one'
+  wait_until 250 handled_at_least "$home" 1 || fail "mate resurface: the host stopped handling wakes after absorbing: $(cat "$home/state/.supervision-host.log")"
+  pass "host: a resurface over an empty queue in a secondmate home is absorbed, and the host keeps handling wakes"
+}
+
 test_report_without_acknowledgement_hands_the_wake_to_main() {
   local home
   home=$(make_home away-noack away)
@@ -2622,6 +2755,11 @@ test_branch_outcomes_keep_an_unshown_outcome_until_acknowledged
 test_branch_outcomes_keep_a_drain_presented_outcome_across_a_switch_to_pi
 test_branch_outcomes_keep_a_drain_presented_outcome_across_an_index_repair
 test_attended_routine_wake_is_handled_on_the_engine_and_stays_off_main
+test_secondmate_host_engine_runs_sonnet_5_5_unless_configured
+test_secondmate_routine_wake_never_wakes_the_mate_session
+test_secondmate_captain_outcome_is_published_without_waking_the_mate
+test_secondmate_decision_close_and_non_routine_check_still_wake_the_mate
+test_secondmate_resurface_over_an_empty_queue_is_absorbed_by_the_host
 test_attended_captain_outcome_reaches_main_through_branch_outcomes
 test_captain_leaving_mid_turn_keeps_its_captain_outcome_for_the_return
 test_quiet_record_without_its_daemon_is_a_present_captain
