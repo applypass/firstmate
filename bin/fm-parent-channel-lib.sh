@@ -150,11 +150,4 @@ fm_parent_channel_report() {  # <home> <state> <line>
   destination=$(fm_parent_channel_destination "$home" "$state") || rc=$?
   [ "$rc" -eq 0 ] || return "$rc"
   fm_parent_channel_append_once "$destination" "$(status_stamp_line "$line")" || return 4
-  # Fork-only (applypass): a child's done or failed line ends a piece of work, so ask for a fresh session.
-  case "${line%%[ :]*}" in
-    done | failed)
-      FM_HOME="$home" FM_STATE_OVERRIDE="$state" \
-        "$_FM_PARENT_CHANNEL_LIB_DIR/fm-secondmate-fresh-session.sh" request --source child --verb "${line%%[ :]*}" "$line" >/dev/null 2>&1 || true
-      ;;
-  esac
 }

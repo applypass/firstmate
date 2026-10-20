@@ -13,8 +13,12 @@
 #      an unread steering message, an unacknowledged wake row, or a busy agent
 #      each defer the restart and leave every durable record untouched.
 #   3. An unread steering message survives the restart and a deferral.
-#   4. A child's done line asks for the same fresh session; a main home, a
-#      remote route, and FM_SECONDMATE_FRESH_SESSION=off ask for nothing.
+#   4. A child whose work landed (merged PR or landed cleanup record) asks for
+#      the same fresh session; a child's PR-ready line, a pure acknowledgement
+#      without --item, a main home, a remote route, and
+#      FM_SECONDMATE_FRESH_SESSION=off ask for nothing.
+#   5. A corr with no pending-reply record does not defer forever, and a failed
+#      relaunch leaves a line in state/fresh-session.log.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -207,7 +211,7 @@ open_request() {
 
 mate_report() {  # <case-dir> <id> <verb> <corr> <note>
   local dir=$1 id=$2
-  FM_HOME="$dir/$id-home" "$REPORT" "$3" "$4" "$5" || fail "the report helper refused"
+  FM_HOME="$dir/$id-home" "$REPORT" --item work-1 "$3" "$4" "$5" || fail "the report helper refused"
 }
 
 sweep() {  # <case-dir>
@@ -314,22 +318,24 @@ test_unread_work_and_busy_agent_defer() {
   pass "T3 unread steering, an unacknowledged wake, and a busy agent each defer; nothing is lost"
 }
 
-# --- T4: a child's done line asks for a fresh session -------------------------
-test_child_done_line_requests() {
+# --- T4: a landed child asks for a fresh session; other child lines do not ----
+test_child_landed_requests() {
   local dir out
   dir=$(new_case child)
   add_local_mate "$dir" sm1
   bind_mate "$dir" sm1
-  FM_HOME="$dir/sm1-home" bash -c '. "$1/bin/fm-parent-channel-lib.sh"; fm_parent_channel_report "$2" "$2/state" "done: child1 landed"' \
+  # A PR-ready line and a decision line go through the shared report path.
+  FM_HOME="$dir/sm1-home" bash -c '. "$1/bin/fm-parent-channel-lib.sh"; fm_parent_channel_report "$2" "$2/state" "done [key=child-pr-x]: child x PR ready"; fm_parent_channel_report "$2" "$2/state" "needs-decision: pick one"' \
     _ "$ROOT" "$dir/sm1-home"
-  assert_present "$dir/sm1-home/state/fresh-session.request" "a child's done line must request a fresh session"
-  rm -f "$dir/sm1-home/state/fresh-session.request"
-  FM_HOME="$dir/sm1-home" bash -c '. "$1/bin/fm-parent-channel-lib.sh"; fm_parent_channel_report "$2" "$2/state" "needs-decision: pick one"' \
-    _ "$ROOT" "$dir/sm1-home"
-  assert_absent "$dir/sm1-home/state/fresh-session.request" "a decision line must not request a restart"
-  out=$(sweep "$dir")
-  assert_not_contains "$out" "restarted" "nothing to restart without a request"
-  pass "T4 a child's done line requests a fresh session and a decision line does not"
+  assert_absent "$dir/sm1-home/state/fresh-session.request" "a PR-ready or decision line must not request a restart"
+  # A pure acknowledgement (no --item) must not request one either.
+  FM_HOME="$dir/sm1-home" "$REPORT" "done" abcdef0123456789 "re-read AGENTS.md" || fail "the ack report refused"
+  assert_absent "$dir/sm1-home/state/fresh-session.request" "an acknowledgement without --item must not request a restart"
+  # A merged child PR is a landed piece of work.
+  FM_HOME="$dir/sm1-home" bash -c '. "$1/bin/fm-merge-outcome-lib.sh"; fm_merge_outcome_report "$2" "$2/state" child1 https://github.com/o/r/pull/7 self attended' \
+    _ "$ROOT" "$dir/sm1-home" || true
+  assert_present "$dir/sm1-home/state/fresh-session.request" "a merged child PR must request a fresh session"
+  pass "T4 a landed child requests a fresh session; PR-ready, decision and ack lines do not"
 }
 
 # --- T5: nothing is requested where it does not apply -------------------------
@@ -346,6 +352,28 @@ test_no_request_where_not_applicable() {
   FM_HOME="$dir/sm1-home" "$FRESH" request --source report --verb "done" "x"
   assert_absent "$dir/sm1-home/state/fresh-session.request" "a remote mate is not covered"
   pass "T5 no request for the kill switch, a main home, or a remote route"
+}
+
+# --- T7: a corr with no record does not defer; a failed relaunch is logged ----
+test_no_record_corr_and_failed_relaunch() {
+  local dir out
+  dir=$(new_case norec)
+  add_local_mate "$dir" sm1
+  bind_mate "$dir" sm1
+  mate_report "$dir" sm1 "done" "abcdef0123456789" "closed a fire-and-forget request"
+  out=$(sweep "$dir")
+  assert_contains "$out" "restarted sm1" "a corr with no pending-reply record must not defer"$'\n'"$out"
+
+  # A relaunch that cannot start leaves a trace the parent can read.
+  mkdir -p "$dir/home/state/sm1.inbox/handled"
+  mv "$dir/home/state/sm1.inbox/"*.msg "$dir/home/state/sm1.inbox/handled/" 2>/dev/null || true
+  set_agent_state "$dir" sm1 idle
+  mate_report "$dir" sm1 "done" "abcdef0123456789" "second"
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$dir/fakebin/tmux"
+  out=$(sweep "$dir")
+  assert_present "$dir/sm1-home/state/fresh-session.request.failed" "a failed relaunch must keep its marker as .failed"$'\n'"$out"
+  assert_present "$dir/home/state/fresh-session.log" "a failed relaunch must leave a line in the parent log"$'\n'"$out"
+  pass "T7 a corr with no record restarts, and a failed relaunch is logged"
 }
 
 # --- T6: the watcher's own poll applies the request -----------------------
@@ -377,7 +405,8 @@ test_watcher_poll_applies_request() {
 test_report_done_restarts_with_handover_note
 test_mid_request_is_not_restarted
 test_unread_work_and_busy_agent_defer
-test_child_done_line_requests
+test_child_landed_requests
+test_no_record_corr_and_failed_relaunch
 test_no_request_where_not_applicable
 test_watcher_poll_applies_request
 
