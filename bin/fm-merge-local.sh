@@ -145,4 +145,4 @@ after=$(git -C "$PROJ" rev-parse --short "$DEFAULT")
 [ ! -e "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}/fleet-ledger" ] || FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE "$SCRIPT_DIR/fm-fleet-ledger.sh" merged "$ID" local || true
 echo "merged $BRANCH into local $DEFAULT ($before -> $after) in $PROJ"
 # Fork-only (applypass): a landed local-only child ends a piece of work, so ask for a fresh session.
-FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE "$SCRIPT_DIR/fm-secondmate-fresh-session.sh" request --source child --verb "done" --child "$ID" "merged $BRANCH into local $DEFAULT ($before -> $after)" >/dev/null 2>&1 || true
+FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE "$SCRIPT_DIR/fm-secondmate-fresh-session.sh" request --source child --verb "done" "merged $BRANCH into local $DEFAULT ($before -> $after)" >/dev/null 2>&1 || true

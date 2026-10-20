@@ -244,7 +244,7 @@ A local mate also restarts itself after each finished piece of work, so later tu
 Its `done`, `ready`, or `failed` report made with `--item`, or a child whose work landed (a merged PR, or a local-only fast-forward by `bin/fm-merge-local.sh`), leaves a request and a handover note in its home, and the watcher poll then relaunches it with `bin/fm-control.sh <id> relaunch`, on the same Opus pin.
 The relaunch waits until no other request to that mate is open, no steering message is unread, no wake row is unacknowledged, and its agent is idle; `bin/fm-secondmate-fresh-session.sh` owns those checks and the `FM_SECONDMATE_FRESH_SESSION=off` switch.
 The fresh agent finds a steer pointing at `data/fresh-session-handover.md` in its home, runs `bin/fm-session-start.sh`, and reconciles from durable records like on any restart.
-A pure acknowledgement, a child's `done` ledger line (its PR-ready report), and a branch outcome ask for nothing. One child's landed work restarts the mate once: its id goes into the home's `state/fresh-session.landed`.
+A pure acknowledgement, a child's `done` ledger line (its PR-ready report), and a branch outcome ask for nothing.
 A failed relaunch parks the request as `state/fresh-session.request.failed` and adds fm-control's error to the parent's `state/fresh-session.log`; look there before assuming a mate skipped its restart.
 <!-- Fork-only end -->
 

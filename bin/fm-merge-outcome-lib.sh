@@ -101,7 +101,7 @@ fm_merge_outcome_report() {  # <home> <state> <task-id> <pr-url> <origin> [autho
     fm_parent_channel_append_once "$destination" "$(status_stamp_line "$line")" || status=1
     # Fork-only (applypass): a merged child PR ends a piece of work, so ask for a fresh session.
     [ "$status" -ne 0 ] || FM_HOME="$home" FM_STATE_OVERRIDE="$state" \
-      "$_FM_MERGE_OUTCOME_LIB_DIR/fm-secondmate-fresh-session.sh" request --source child --verb "done" --child "$id" "$line" >/dev/null 2>&1 || true
+      "$_FM_MERGE_OUTCOME_LIB_DIR/fm-secondmate-fresh-session.sh" request --source child --verb "done" "$line" >/dev/null 2>&1 || true
   fi
   if [ "$status" -eq 0 ] && { [ "$origin" = poll ] || [ -z "$destination" ]; }; then
     fm_wake_append check "merged-$id-$FM_PR_URL" \
