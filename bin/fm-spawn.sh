@@ -813,7 +813,9 @@ esac
 # Fork-only: daily quota stop. A fresh launch (ship, scout, or secondmate) is
 # refused once the fleet has used its daily share of the weekly Claude quota;
 # --relaunch is running work and is never gated (bin/fm-daily-quota-stop.sh).
-if [ "$RELAUNCH" -eq 0 ]; then
+# The remote host-local secondmate leg (FM_SKIP_SECONDMATE_SYNC=1, from
+# bin/fm-remote-secondmate-control.sh) skips it: the parent already checked.
+if [ "$RELAUNCH" -eq 0 ] && [ "${FM_SKIP_SECONDMATE_SYNC:-0}" != 1 ]; then
   "$SCRIPT_DIR/fm-daily-quota-stop.sh" check spawn --home "$FM_HOME" || exit 1
 fi
 # Fork-only end
