@@ -459,6 +459,7 @@ Any of these preserves the candidate and lets session startup continue with at m
   Every earlier degradation on the fresh projected-create path (no session server, contended presentation lock, absent or ambiguous parent) still warns and continues flat.
 - Recovery of an existing presentation journal deliberately refuses the spawn when the shared presentation lock is contended, rather than falling back flat.
   Default-on makes that refusal reachable in any Herdr home.
+  <!-- Fork-only (applypass) --> Before refusing, recovery waits for the holder for `FM_TREEHOUSE_GET_TIMEOUT` (default 180s) plus 60s, because a fresh spawn holds the lock through its whole worktree wait; a fresh spawn still falls back flat after 5s.
 - Existing layouts are not force-renamed or rearranged.
 - Missing or ambiguous restart bindings fall back to the ordinary home workspace while the old projection remains untouched.
 - Crashes, lost responses, failed exact-pane cleanup, or human renames can leave quarantined spaces.
