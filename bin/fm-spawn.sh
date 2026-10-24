@@ -1190,8 +1190,12 @@ HERDR_PROJECTION_ABORT_SEEDED_PANE=
 HERDR_PRESENTATION_ORDER_LOCK=
 HERDR_PRESENTATION_ORDER_LOCK_HELD=0
 # The holder keeps the lock from projection create to launch, and its worktree
-# wait alone can last the 180s treehouse get default, so a recovery waits that long.
-HERDR_RECOVERY_LOCK_MAX_ATTEMPTS=1800
+# wait alone can last FM_TREEHOUSE_GET_TIMEOUT (default 180s), so a recovery waits
+# that long, at 0.1s per attempt.
+case ${FM_TREEHOUSE_GET_TIMEOUT:-180} in
+  ''|*[!0-9]*) HERDR_RECOVERY_LOCK_MAX_ATTEMPTS=1800 ;;
+  *) HERDR_RECOVERY_LOCK_MAX_ATTEMPTS=$((10#${FM_TREEHOUSE_GET_TIMEOUT:-180} * 10)) ;;
+esac
 SPAWN_TASK_LOCK=
 SPAWN_TASK_LOCK_HELD=0
 SPAWN_CONTROL_LOCK=
