@@ -102,6 +102,8 @@ stop_reply_listener() {
 
 # Block until this generation's capture has been applied. A live listener keeps
 # its claim across polls, so start is only launched when nothing owns the source.
+# Fork-only: the fork block below redefines this function, so shellcheck sees this one as unused.
+# shellcheck disable=SC2329
 await_reply_result() { # <result-path>
   local result=$1 handled=${1%.result}.handled _
   if [ "$(reply_owner)" != live ]; then
