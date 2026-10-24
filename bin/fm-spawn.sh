@@ -1191,11 +1191,10 @@ HERDR_PRESENTATION_ORDER_LOCK=
 HERDR_PRESENTATION_ORDER_LOCK_HELD=0
 # The holder keeps the lock from projection create to launch, and its worktree
 # wait alone can last FM_TREEHOUSE_GET_TIMEOUT (default 180s), so a recovery waits
-# that long, at 0.1s per attempt.
-case ${FM_TREEHOUSE_GET_TIMEOUT:-180} in
-  ''|*[!0-9]*) HERDR_RECOVERY_LOCK_MAX_ATTEMPTS=1800 ;;
-  *) HERDR_RECOVERY_LOCK_MAX_ATTEMPTS=$((10#${FM_TREEHOUSE_GET_TIMEOUT:-180} * 10)) ;;
-esac
+# that long plus 60s for the herdr calls and launch sleeps, at 0.1s per attempt.
+HERDR_RECOVERY_LOCK_WAIT=${FM_TREEHOUSE_GET_TIMEOUT:-180}
+case "$HERDR_RECOVERY_LOCK_WAIT" in ''|*[!0-9]*) HERDR_RECOVERY_LOCK_WAIT=180 ;; *[!0]*) ;; *) HERDR_RECOVERY_LOCK_WAIT=180 ;; esac
+HERDR_RECOVERY_LOCK_MAX_ATTEMPTS=$(((10#$HERDR_RECOVERY_LOCK_WAIT + 60) * 10))
 SPAWN_TASK_LOCK=
 SPAWN_TASK_LOCK_HELD=0
 SPAWN_CONTROL_LOCK=
