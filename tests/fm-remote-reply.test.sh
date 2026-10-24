@@ -127,7 +127,8 @@ await_reply_result() { # <result-path>
     sleep 0.05
   done
   return 1
-} # Fork-only end
+}
+# Fork-only end
 
 sha256_file() {
   if command -v shasum >/dev/null 2>&1; then
