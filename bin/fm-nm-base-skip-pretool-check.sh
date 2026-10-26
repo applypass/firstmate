@@ -10,13 +10,15 @@
 #
 # Rule, applied to a command that starts a NEW run (`no-mistakes axi run` with
 # --intent, as in bin/fm-nm-mirror-pretool-check.sh):
-#   base branch in FM_NM_TEST_SKIP_BASES (default "dev"): the command must pass
-#     `--skip test` (alone or inside a comma list), else it is refused.
+#   base branch dev: the command must pass `--skip test` (alone or inside a
+#     comma list), else it is refused.
 #   any other base: the command must not skip `test`, else it is refused.
 #   base unknown: allowed unchanged, so the full run with tests stays the default.
 # The base is the command's --base-branch when given, else the base of the open
 # PR for the current branch read from the forge (gh, 20s bound). A bare `axi
 # run`, `axi status`, `axi respond` and every other command are never checked.
+# Only Claude workers get this check (bin/fm-op-guard-install.sh); other workers
+# keep the full run with tests.
 #
 # Usage:
 #   <PreToolUse JSON on stdin> | bin/fm-nm-base-skip-pretool-check.sh [--claude]
@@ -97,9 +99,7 @@ SKIPS_TEST=0
 case "$SKIPS" in *,test,*) SKIPS_TEST=1 ;; esac
 
 IS_SKIP_BASE=0
-for b in ${FM_NM_TEST_SKIP_BASES:-dev}; do
-  [ "$b" = "$BASE" ] && IS_SKIP_BASE=1
-done
+[ "$BASE" = "dev" ] && IS_SKIP_BASE=1
 
 REASON=""
 if [ "$IS_SKIP_BASE" -eq 1 ] && [ "$SKIPS_TEST" -eq 0 ]; then
