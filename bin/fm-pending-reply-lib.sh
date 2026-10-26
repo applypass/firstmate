@@ -1264,6 +1264,26 @@ fm_pending_reply_escalation_line() {  # <status-file> <record-path> <corr_id>
   printf '%s' "$found"
 }
 
+# True while <escalation-line>'s keyed decision is still open with that exact
+# note in bin/fm-classify-lib.sh's fold, so nothing reopens or closes a
+# decision another writer has since closed or taken over.
+_fm_pending_reply_escalation_open() {  # <status-file> <escalation-line>
+  local key note open_line open_key open_note
+  key=$(_fm_decision_key "$2") || key=''
+  note=$(status_line_note "$2")
+  while IFS= read -r open_line; do
+    [ -n "$open_line" ] || continue
+    open_key=${open_line%%$'\t'*}
+    [ "$open_key" = "$key" ] || continue
+    open_note=${open_line#*$'\t'}
+    open_note=${open_note#*$'\t'}
+    [ "$open_note" = "$note" ] && return 0
+  done <<EOF
+$(status_open_decisions "$1")
+EOF
+  return 1
+}
+
 # Close the durable status decision a previous escalation opened for <corr_id>.
 # Idempotent, and safe to retry until it succeeds: it appends the closing line
 # only while that exact keyed decision is still open in
@@ -1291,8 +1311,8 @@ fm_pending_reply_close_escalation() {  # <state-dir> <corr_id>
 }
 
 _fm_pending_reply_close_escalation_locked() {  # <state-dir> <corr_id>
-  local state=$1 corr=$2 rec escalated closed parent_status escalation key note
-  local open_line open_key open_note now close_line close_rc _task _via
+  local state=$1 corr=$2 rec escalated closed parent_status escalation key
+  local now close_line close_rc _task _via
   rec=$(fm_pending_reply_path "$state" "$corr")
   [ -f "$rec" ] || return 1
   [ "$(fm_pending_reply_get "$rec" phase)" = resolved ] || return 0
@@ -1303,32 +1323,20 @@ _fm_pending_reply_close_escalation_locked() {  # <state-dir> <corr_id>
   parent_status=$(fm_pending_reply_get "$rec" parent_status)
   [ -n "$parent_status" ] || return 1
   escalation=$(fm_pending_reply_escalation_line "$parent_status" "$rec" "$corr")
-  if [ -n "$escalation" ]; then
+  if [ -n "$escalation" ] && _fm_pending_reply_escalation_open "$parent_status" "$escalation"; then
     key=$(_fm_decision_key "$escalation") || key=''
-    note=$(status_line_note "$escalation")
-    while IFS= read -r open_line; do
-      [ -n "$open_line" ] || continue
-      open_key=${open_line%%$'\t'*}
-      [ "$open_key" = "$key" ] || continue
-      open_note=${open_line#*$'\t'}
-      open_note=${open_note#*$'\t'}
-      [ "$open_note" = "$note" ] || continue
-      # This close is the home's own bookkeeping, written by the same resolve
-      # or tick that already consumed the reply, so it uses the guarded
-      # self-announced append (bin/fm-wake-lib.sh, sourced by this function's
-      # wrappers) and does not wake the home that wrote it; the escalation
-      # OPEN above stays a plain append because a new blocker must wake.
-      _task=$(fm_pending_reply_get "$rec" task_id)
-      _via=$(fm_pending_reply_get "$rec" resolved_via)
-      close_line="resolved [key=${key}]: $(fm_pending_reply_resolved_note "$_task" "$corr" "$_via")"
-      close_rc=0
-      fm_wake_status_append_self_announced "${parent_status%/*}" "$parent_status" "$close_line" \
-        2>/dev/null || close_rc=$?
-      [ "$close_rc" -ne 2 ] || return 1
-      break
-    done <<EOF
-$(status_open_decisions "$parent_status")
-EOF
+    # This close is the home's own bookkeeping, written by the same resolve
+    # or tick that already consumed the reply, so it uses the guarded
+    # self-announced append (bin/fm-wake-lib.sh, sourced by this function's
+    # wrappers) and does not wake the home that wrote it; the escalation
+    # OPEN above stays a plain append because a new blocker must wake.
+    _task=$(fm_pending_reply_get "$rec" task_id)
+    _via=$(fm_pending_reply_get "$rec" resolved_via)
+    close_line="resolved [key=${key}]: $(fm_pending_reply_resolved_note "$_task" "$corr" "$_via")"
+    close_rc=0
+    fm_wake_status_append_self_announced "${parent_status%/*}" "$parent_status" "$close_line" \
+      2>/dev/null || close_rc=$?
+    [ "$close_rc" -ne 2 ] || return 1
   fi
   now=$(fm_pending_reply_now)
   fm_pending_reply_set "$rec" escalation_closed_epoch "$now"
@@ -1480,12 +1488,14 @@ fm_pending_reply_wake_held_escalation() {  # <state-dir> <corr_id>
 }
 
 _fm_pending_reply_wake_held_escalation_locked() {  # <state-dir> <corr_id>
-  local state=$1 corr=$2 rec due now parent_status escalation note line hold
+  local state=$1 corr=$2 rec due escalated now parent_status escalation note suffix
   rec=$(fm_pending_reply_path "$state" "$corr")
   [ -f "$rec" ] || return 1
   [ "$(fm_pending_reply_get "$rec" phase)" = escalated ] || return 0
   due=$(fm_pending_reply_get "$rec" escalation_wake_due_epoch)
+  escalated=$(fm_pending_reply_get "$rec" escalated_epoch)
   case "$due" in ''|*[!0-9]*) return 0 ;; esac
+  case "$escalated" in ''|*[!0-9]*) return 0 ;; esac
   now=$(fm_pending_reply_now)
   [ "$now" -ge "$due" ] || return 0
   parent_status=$(fm_pending_reply_get "$rec" parent_status)
@@ -1495,14 +1505,20 @@ _fm_pending_reply_wake_held_escalation_locked() {  # <state-dir> <corr_id>
     return 0
   fi
   [ "$(fm_pending_reply_get "$rec" phase)" = escalated ] || return 1
+  # Only a decision still open as this library left it is reminded; one the
+  # supervisor already closed (fm-send --resolve-key) or that has left the
+  # status file needs no further turn.
   escalation=$(fm_pending_reply_escalation_line "$parent_status" "$rec" "$corr")
-  if [ -n "$escalation" ]; then
-    hold=$(fm_pending_reply_wake_hold_secs)
+  if [ -n "$escalation" ] && _fm_pending_reply_escalation_open "$parent_status" "$escalation"; then
     note=$(status_line_note "$escalation")
-    line="blocked [key=$(fm_pending_reply_escalation_key "$corr")]: $note - still unresolved after $((hold / 60))m"
-    if ! status_event_recorded "$parent_status" "$line"; then
-      printf '%s\n' "$(status_stamp_line "$line")" >> "$parent_status" 2>/dev/null || return 1
-    fi
+    suffix=" - still unresolved after $(((due - escalated) / 60))m"
+    case "$note" in
+      *"$suffix") ;;
+      *)
+        printf '%s\n' "$(status_stamp_line "blocked [key=$(fm_pending_reply_escalation_key "$corr")]: $note$suffix")" \
+          >> "$parent_status" 2>/dev/null || return 1
+        ;;
+    esac
   fi
   fm_pending_reply_set "$rec" escalation_wake_due_epoch ""
 }
