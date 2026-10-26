@@ -1,0 +1,8 @@
+== baseline announced
+== record before watcher: phase=acknowledged
+== watcher still blocking after 40s (NO WAKE)
+== hibit.status:
+   working [corr=7dc1b02c045bfa46]: on it
+   blocked [key=pending-reply-7dc1b02c045bfa46] [at=1793048822]: pending-reply-unreported: task=hibit pending-reply-id=7dc1b02c045bfa46 request=check the PR 367 canvas - acknowledged only, no result reached main
+== open decisions:
+   pending-reply-7dc1b02c045bfa46	blocked	pending-reply-unreported: task=hibit pending-reply-id=7dc1b02c045bfa46 request=check the PR 367 canvas - acknowledged only, no result reached main== record: escalation_wake_due_epoch=1793052422 escalated_epoch=1793048822 phase=escalated 

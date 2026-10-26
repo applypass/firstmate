@@ -1,0 +1,8 @@
+== baseline announced
+== record before watcher: phase=delivery_unknown
+== watcher EXITED (WAKE) after 3s; stdout:
+signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.qSQqFC/state/hibit.status
+== hibit.status:
+   blocked [key=pending-reply-349ea0d755874c42] [at=1793049162]: pending-reply-delivery-unknown: task=hibit pending-reply-id=349ea0d755874c42 request=check the PR 367 canvas
+== open decisions:
+   pending-reply-349ea0d755874c42	blocked	pending-reply-delivery-unknown: task=hibit pending-reply-id=349ea0d755874c42 request=check the PR 367 canvas== record: escalation_wake_due_epoch= escalated_epoch=1793049162 phase=escalated 

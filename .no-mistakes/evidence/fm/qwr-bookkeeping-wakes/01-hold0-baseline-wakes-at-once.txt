@@ -1,0 +1,9 @@
+== baseline announced
+== record before watcher: phase=acknowledged
+== watcher EXITED (WAKE) after 2s; stdout:
+signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.Y3CceY/state/hibit.status
+== hibit.status:
+   working [corr=60aa869d02b8dead]: on it
+   blocked [key=pending-reply-60aa869d02b8dead] [at=1793048819]: pending-reply-unreported: task=hibit pending-reply-id=60aa869d02b8dead request=check the PR 367 canvas - acknowledged only, no result reached main
+== open decisions:
+   pending-reply-60aa869d02b8dead	blocked	pending-reply-unreported: task=hibit pending-reply-id=60aa869d02b8dead request=check the PR 367 canvas - acknowledged only, no result reached main== record: escalation_wake_due_epoch= escalated_epoch=1793048819 phase=escalated 

@@ -1,0 +1,24 @@
+== baseline announced
+== record before watcher: phase=acknowledged
+== quiet escalation open: [pending-reply-569778d7b062cc35]
+== mate hibit replies inside the hold: done [corr=569778d7b062cc35]
+== watcher EXITED (WAKE) after 6s; stdout:
+signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.J4Zi2r/state/hibit.status
+== supervisor runs fm-wake-drain.sh:
+   | 1793049040	2	signal	hibit.status	signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.J4Zi2r/state/hibit.status
+   | wake annotation: unread wake-EVENT since last drain, not current state: hibit.status: working [corr=569778d7b062cc35]: on it
+   | wake annotation: unread wake-EVENT since last drain, not current state: hibit.status: blocked [key=pending-reply-569778d7b062cc35] [at=1793049034]: pending-reply-unreported: task=hibit pending-reply-id=569778d7b062cc35 request=check the PR 367 canvas - acknowledged only, no result reached main
+   | wake annotation: unread wake-EVENT since last drain, not current state: hibit.status: done [corr=569778d7b062cc35]: canvas fixed in PR 367
+   | wake annotation: latest wake-EVENT observed at drain, not current state: hibit.status: resolved [key=pending-reply-569778d7b062cc35] [at=1793049035]: pending-reply-resolved: task=hibit pending-reply-id=569778d7b062cc35 via=status
+   | UNREAD STATUS (new since last drain, not re-printed after this presentation):
+   | hibit resolved [key=pending-reply-569778d7b062cc35] [at=1793049035]: pending-reply-resolved: task=hibit pending-reply-id=569778d7b062cc35 via=status
+== drain acked through 2
+== restarting watcher for 35s
+== second watcher still blocking after 35s (NO REPEAT WAKE)
+== hibit.status:
+   working [corr=569778d7b062cc35]: on it
+   blocked [key=pending-reply-569778d7b062cc35] [at=1793049034]: pending-reply-unreported: task=hibit pending-reply-id=569778d7b062cc35 request=check the PR 367 canvas - acknowledged only, no result reached main
+   done [corr=569778d7b062cc35]: canvas fixed in PR 367
+   resolved [key=pending-reply-569778d7b062cc35] [at=1793049035]: pending-reply-resolved: task=hibit pending-reply-id=569778d7b062cc35 via=status
+== open decisions:
+== record: escalation_wake_due_epoch=1793049049 escalated_epoch=1793049034 phase=resolved 

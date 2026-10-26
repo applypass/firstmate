@@ -1,0 +1,21 @@
+== baseline announced
+== record before watcher: phase=acknowledged
+== watcher EXITED (WAKE) after 21s; stdout:
+signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.6Z3uR2/state/hibit.status
+== supervisor runs fm-wake-drain.sh:
+   | 1793048931	2	signal	hibit.status	signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.6Z3uR2/state/hibit.status
+   | wake annotation: unread wake-EVENT since last drain, not current state: hibit.status: working [corr=1dae1379e1c0b4eb]: on it
+   | wake annotation: unread wake-EVENT since last drain, not current state: hibit.status: blocked [key=pending-reply-1dae1379e1c0b4eb] [at=1793048913]: pending-reply-unreported: task=hibit pending-reply-id=1dae1379e1c0b4eb request=check the PR 367 canvas - acknowledged only, no result reached main
+   | wake annotation: latest wake-EVENT observed at drain, not current state: hibit.status: blocked [key=pending-reply-1dae1379e1c0b4eb] [at=1793048929]: pending-reply-unreported: task=hibit pending-reply-id=1dae1379e1c0b4eb request=check the PR 367 canvas - acknowledged only, no result reached main - still unresolved after 0m
+   | OPEN DECISIONS (still open, folded from the durable status logs - not just the latest line):
+   | hibit [key=pending-reply-1dae1379e1c0b4eb] blocked: pending-reply-unreported: task=hibit pending-reply-id=1dae1379e1c0b4eb request=check the PR 367 canvas - acknowledged only, no result reached main - still  [truncated]
+   | OPEN DECISIONS: close one by answering it: bin/fm-send.sh <task> --resolve-key <key> '<answer>'
+== drain acked through 2
+== restarting watcher for 40s
+== second watcher still blocking after 40s (NO REPEAT WAKE)
+== hibit.status:
+   working [corr=1dae1379e1c0b4eb]: on it
+   blocked [key=pending-reply-1dae1379e1c0b4eb] [at=1793048913]: pending-reply-unreported: task=hibit pending-reply-id=1dae1379e1c0b4eb request=check the PR 367 canvas - acknowledged only, no result reached main
+   blocked [key=pending-reply-1dae1379e1c0b4eb] [at=1793048929]: pending-reply-unreported: task=hibit pending-reply-id=1dae1379e1c0b4eb request=check the PR 367 canvas - acknowledged only, no result reached main - still unresolved after 0m
+== open decisions:
+   pending-reply-1dae1379e1c0b4eb	blocked	pending-reply-unreported: task=hibit pending-reply-id=1dae1379e1c0b4eb request=check the PR 367 canvas - acknowledged only, no result reached main - still unresolved after 0m== record: escalated_epoch=1793048913 phase=escalated escalation_wake_due_epoch= 
