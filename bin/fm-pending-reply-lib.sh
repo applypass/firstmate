@@ -1328,8 +1328,9 @@ _fm_pending_reply_close_escalation_locked() {  # <state-dir> <corr_id>
     # This close is the home's own bookkeeping, written by the same resolve
     # or tick that already consumed the reply, so it uses the guarded
     # self-announced append (bin/fm-wake-lib.sh, sourced by this function's
-    # wrappers) and does not wake the home that wrote it; the escalation
-    # OPEN above stays a plain append because a new blocker must wake.
+    # wrappers) and does not wake the home that wrote it; only a quiet
+    # escalation opens the same way, and every other escalation open stays a
+    # plain append because a new blocker must wake.
     _task=$(fm_pending_reply_get "$rec" task_id)
     _via=$(fm_pending_reply_get "$rec" resolved_via)
     close_line="resolved [key=${key}]: $(fm_pending_reply_resolved_note "$_task" "$corr" "$_via")"
