@@ -921,6 +921,15 @@ For Pi and pi-signed secondmate launches, `fm-spawn.sh` starts the selected exec
 
 For omp secondmate launches, `fm-spawn.sh` passes no `-e` at all: omp auto-discovers the home's tracked `.omp/extensions/` with no trust gate, and naming a discovered file with `-e` as well loads it twice; every omp launch instead carries the tracked `.omp/fm-worker-overlay.yml` posture overlay through `--config`, which [`fm-spawn.sh --help`](../bin/fm-spawn.sh) owns.
 
+## Claude worker MCP tools (config/claude-worker-mcp.json)
+
+Every Claude ship and scout launch runs with `--strict-mcp-config` and an empty `--mcp-config`, so no MCP server loads and the worker's first turn carries none of their tool definitions.
+Claude secondmates and supervisor sessions keep the full inherited set, and the captain's own Claude config files are never edited.
+The optional local, gitignored `config/claude-worker-mcp.json` (the shape of claude's `--mcp-config`, `{"mcpServers": {...}}`) is the home's standing allowlist for workers.
+`FM_WORKER_MCP=<file>` in the environment of one `fm-spawn.sh` call replaces it for that task, and `FM_WORKER_MCP=all` keeps the full inherited set for that task.
+A named file that is missing stops the spawn rather than falling back.
+`bin/fm-claude-lean-mcp.sh` owns the exact resolution order.
+
 ## Claude permission mode (config/claude-permission-mode)
 
 The optional local, gitignored `config/claude-permission-mode` selects the permission flag for every Claude worker launch: crewmates, scouts, Claude secondmates, and control-plane relaunches.
