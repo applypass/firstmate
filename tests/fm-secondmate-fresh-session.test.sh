@@ -20,6 +20,9 @@
 #   5. A corr with no pending-reply record does not defer forever, and a failed
 #      relaunch leaves fm-control's error in state/fresh-session.log; one that
 #      Claude's background-work exit dialog blocked closes that dialog.
+#   7. A mate whose Claude transcript passes FM_SECONDMATE_CONTEXT_LIMIT is
+#      restarted under the same guards, with no finished work; a small context,
+#      a disabled limit, and a transcript older than the last restart are not.
 #   6. The real ledger pass reports a child's done line (its PR-ready report)
 #      and asks for nothing; a merged PR or a local-only fast-forward
 #      (bin/fm-merge-local.sh) asks for one, once per landing.
@@ -477,6 +480,68 @@ test_each_landing_requests_once() {
   pass "T8 a done ledger line asks for nothing; a merged PR or local-only landing each request a fresh session once per landing"
 }
 
+# --- T9: a context past the limit restarts the mate ------------------------
+# write_transcript <case-dir> <id> <cache-read-tokens>: a Claude transcript for
+# the mate's home, in the layout the sweep reads.
+write_transcript() {
+  local dir=$1 id=$2 tokens=$3 enc tdir
+  enc=$(printf '%s' "$dir/$id-home" | LC_ALL=C sed 's/[^A-Za-z0-9]/-/g')
+  tdir="$dir/projects/$enc"
+  mkdir -p "$tdir"
+  printf '{"type":"assistant","message":{"usage":{"input_tokens":5,"cache_creation_input_tokens":100,"cache_read_input_tokens":%s,"output_tokens":9}}}\n' "$tokens" >> "$tdir/s1.jsonl"
+}
+
+csweep() {  # <case-dir> [limit]
+  local dir=$1
+  env FM_CLAUDE_PROJECTS_DIR="$dir/projects" FM_SECONDMATE_CONTEXT_LIMIT="${2:-100000}" FM_SECONDMATE_CONTEXT_CHECK_SECS=0 \
+    PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_FAKE_DIR="$dir/fake" \
+    FM_PENDING_REPLY_GRACE_SECS=0 FM_SPAWN_NO_GUARD=1 FM_CONTROL_POLL=0.01 FM_CONTROL_EXIT_WAIT=0.05 \
+    FM_CONTROL_LAUNCH_WAIT=0.05 "$FRESH" sweep 2>&1
+}
+
+test_context_limit_restarts_mate() {
+  local dir out note
+  dir=$(new_case ctx)
+  add_local_mate "$dir" sm1
+  bind_mate "$dir" sm1
+  printf 'working [at=1]: slice 2 under way\n' > "$dir/sm1-home/state/child1.status"
+  printf 'kind=ship\n' > "$dir/sm1-home/state/child1.meta"
+
+  write_transcript "$dir" sm1 40000
+  out=$(csweep "$dir")
+  assert_absent "$dir/sm1-home/state/fresh-session.request" "a small context must not ask for a restart"
+  assert_not_stopped "$dir" "a small context must not stop the agent"
+
+  write_transcript "$dir" sm1 250000
+  out=$(csweep "$dir" 0)
+  assert_absent "$dir/sm1-home/state/fresh-session.request" "a limit of 0 turns the check off"
+
+  # An unread steering message defers the restart; the request waits.
+  mkdir -p "$dir/home/state/sm1.inbox"
+  printf 'do the next thing\n' > "$dir/home/state/sm1.inbox/001.msg"
+  out=$(csweep "$dir")
+  assert_present "$dir/sm1-home/state/fresh-session.request" "a large context must file a request"
+  assert_contains "$out" "deferred sm1" "an unread message must defer the context restart"$'\n'"$out"
+  assert_not_stopped "$dir" "a deferred restart must not stop the agent"
+  assert_present "$dir/home/state/sm1.inbox/001.msg" "the unread message must survive"
+
+  rm -f "$dir/home/state/sm1.inbox/001.msg"
+  out=$(csweep "$dir")
+  assert_contains "$out" "restarted sm1" "the idle mate must be restarted once nothing is open"$'\n'"$out"
+  assert_stopped "$dir" "the old agent must be stopped"
+  note=$(cat "$dir/sm1-home/data/fresh-session-handover.md")
+  assert_contains "$note" "context was 250105 tokens" "the note must say why the mate restarted"
+  assert_contains "$note" "child1: working" "the note must list the child still in flight"
+  assert_contains "$note" "open captain decisions" "the note must point at the open decisions"
+
+  # The old transcript is older than the restart, so it asks for nothing again.
+  sleep 1
+  : > "$dir/fake/literal"
+  out=$(csweep "$dir")
+  assert_absent "$dir/sm1-home/state/fresh-session.request" "the old session's transcript must not request a second restart"
+  pass "T9 a context past the limit restarts the mate under the same guards"
+}
+
 # --- T6: the watcher's own poll applies the request -----------------------
 test_watcher_poll_applies_request() {
   local dir corr pid i=0 out
@@ -504,6 +569,7 @@ test_watcher_poll_applies_request() {
 }
 
 test_report_done_restarts_with_handover_note
+test_context_limit_restarts_mate
 test_mid_request_is_not_restarted
 test_unread_work_and_busy_agent_defer
 test_child_landed_requests
