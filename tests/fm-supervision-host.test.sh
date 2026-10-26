@@ -2650,6 +2650,25 @@ test_secondmate_resurface_over_an_empty_queue_is_absorbed_by_the_host() {
   pass "host: a resurface over an empty queue in a secondmate home is absorbed, and the host keeps handling wakes"
 }
 
+test_main_home_resurface_over_an_empty_queue_is_absorbed_by_the_host() {
+  local home host
+  home=$(make_home main-resurface attended)
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "main resurface: the host never started a watcher cycle"
+  host=$(awk -F '\t' '$1 == "host" { print $2 }' "$home/state/.supervision-host")
+  kill -TERM "$host"
+  wait_until 250 host_exited "$home" || fail "main resurface: the stopped host did not exit"
+  rm -f "$home/host.rc"
+  start_host "$home"
+  wait_until 250 grep -qs '	absorbed	main	check: rearm-resurface' "$home/state/.supervision-host.log" \
+    || fail "main resurface: the host did not absorb the empty resurface: $(cat "$home/host.out"; cat "$home/state/.supervision-host.log")"
+  [ ! -s "$home/host.rc" ] || fail "main resurface: an empty resurface reached the main session: $(cat "$home/host.out")"
+  assert_no_re '^check: rearm-resurface' "$home/host.out" "an empty resurface must not be printed to the main session"
+  [ "$(engine_calls "$home")" -eq 0 ] || fail "main resurface: the host ran an engine turn for an empty queue"
+  watcher_live "$home" || fail "main resurface: the host is not parked after absorbing the resurface"
+  pass "host: a resurface over an empty queue in the main home is absorbed on the host, and the host stays parked"
+}
+
 test_report_without_acknowledgement_hands_the_wake_to_main() {
   local home
   home=$(make_home away-noack away)
@@ -3631,6 +3650,7 @@ test_secondmate_decision_close_and_non_routine_check_still_wake_the_mate
 test_secondmate_resurface_over_an_empty_queue_is_absorbed_by_the_host
 test_host_stopped_right_after_a_handled_wake_exits_and_frees_the_queue
 test_engine_in_another_time_zone_handles_its_granted_rows
+test_main_home_resurface_over_an_empty_queue_is_absorbed_by_the_host
 test_attended_captain_outcome_reaches_main_through_branch_outcomes
 test_captain_leaving_mid_turn_keeps_its_captain_outcome_for_the_return
 test_quiet_record_without_its_daemon_is_a_present_captain

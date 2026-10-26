@@ -10,6 +10,7 @@
 #
 #   - fm_secondmate_host_routine_check: a close that only asks the session to
 #     re-read its queue, which the host absorbs when the queue holds no row.
+#     It applies to every home, the main home included.
 #   - fm_secondmate_host_outcomes_published: a captain outcome the engine
 #     recorded is already on the parent channel (bin/fm-branch-report.sh), so
 #     the mate session is not woken for it; the row waits unacknowledged for
