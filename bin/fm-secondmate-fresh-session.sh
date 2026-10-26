@@ -40,7 +40,7 @@
 # conversation (measured 2026-10-26: 517 calls at about 218k tokens each).
 # The sweep therefore reads the size of each local Claude mate's current
 # session from its transcript (input + cache read + cache creation tokens of the
-# last assistant turn). Past FM_SECONDMATE_CONTEXT_LIMIT (default 100000) it
+# last assistant turn). Past FM_SECONDMATE_CONTEXT_LIMIT (default 150000) it
 # files the same request as a finished piece of work (--source context --verb
 # handover), and apply restarts it under the same guards below. The check is
 # rate limited by FM_SECONDMATE_CONTEXT_CHECK_SECS (default 60) and ignores a
@@ -301,10 +301,18 @@ do_apply() {
   fi
 
   note_path="$home/$NOTE_REL"
+  msource=$(sed -n 's/^source=//p' "$marker" | head -1)
+  if [ "$msource" = context ]; then
+    relaunch_note="Fresh session after the context limit. Handover note: $note_path"
+    steer_why="your conversation grew past the context limit and was dropped on purpose"
+  else
+    relaunch_note="Fresh session after finished work. Handover note: $note_path"
+    steer_why="your conversation was dropped after a finished piece of work, on purpose"
+  fi
   rc=0
   out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
     "$SCRIPT_DIR/fm-control.sh" "$id" relaunch \
-    --note "Fresh session after finished work. Handover note: $note_path" 2>&1) || rc=$?
+    --note "$relaunch_note" 2>&1) || rc=$?
   if [ "$rc" -ne 0 ]; then
     dismiss_exit_dialog "$id" "$meta"
     mv -f "$marker" "$marker.failed" 2>/dev/null || true
@@ -316,7 +324,7 @@ do_apply() {
   delivery=$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n')
   if FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
     "$SCRIPT_DIR/fm-send.sh" "$id" --fire-and-forget "$delivery" \
-    "You are a fresh session: your conversation was dropped after a finished piece of work, on purpose. Read the handover note at $note_path, run bin/fm-session-start.sh, and reconcile from durable records. This is not a request; do not reply." >/dev/null 2>&1; then
+    "You are a fresh session: $steer_why. Read the handover note at $note_path, run bin/fm-session-start.sh, and reconcile from durable records. This is not a request; do not reply." >/dev/null 2>&1; then
     printf 'restarted %s: handover note %s\n' "$id" "$note_path"
   else
     printf 'restarted %s: handover note %s (the pointer steer could not be delivered)\n' "$id" "$note_path"
@@ -353,7 +361,7 @@ context_tokens() {  # <home>
 # File a context handover request for every local Claude mate over the limit.
 do_context_check() {
   local state limit stamp now meta id home harness last out tokens mtime
-  limit=${FM_SECONDMATE_CONTEXT_LIMIT:-100000}
+  limit=${FM_SECONDMATE_CONTEXT_LIMIT:-150000}
   case "$limit" in '' | *[!0-9]*) return 0 ;; esac
   [ "$limit" -gt 0 ] || return 0
   state="${FM_STATE_OVERRIDE:-$FM_HOME/state}"

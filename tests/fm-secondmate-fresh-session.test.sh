@@ -533,6 +533,9 @@ test_context_limit_restarts_mate() {
   assert_contains "$note" "context was 250105 tokens" "the note must say why the mate restarted"
   assert_contains "$note" "child1: working" "the note must list the child still in flight"
   assert_contains "$note" "open captain decisions" "the note must point at the open decisions"
+  if grep -rq "finished piece of work" "$dir/home/state/sm1.inbox" 2>/dev/null; then
+    fail "a context restart must not tell the mate it finished work"
+  fi
 
   # The old transcript is older than the restart, so it asks for nothing again.
   sleep 1

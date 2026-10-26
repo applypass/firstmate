@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """Fork-only (applypass): replay supervisor sessions with a context limit.
 
-Usage: fm-context-replay.py <utc-date-prefix[,prefix...]> [--limit N] [--start N] [--root DIR]...
+Usage: fm-context-replay.py <utc-date-prefix[,prefix...]> [--limit N] [--start N] [--homes FRAGMENT] [--root DIR]...
 
 Reads Claude transcripts the way data/quota-waste-reduction/usage.py does
 (weights: input 1, output 5, cache read 0.1, cache write 1.25) and, for each
 supervisor session (the main firstmate and every second mate home), replays it
 as if the session had been handed over to a fresh one each time its context
-reached the limit (default 100000 tokens).
+reached the limit (default 150000 tokens).
 
 Model of the replay, kept simple on purpose:
   - the context of call j is input + cache read + cache creation tokens;
-  - a fresh session starts at --start tokens (default 20000: the median
-    first-call context of 297 second-mate and 85 main sessions, measured
-    2026-10-26: 18344 and 17815);
+  - a fresh session starts at --start tokens (default 78000: the median
+    first-call context of the fresh second-mate sessions, measured 2026-10-26;
+    the main supervisor starts near 90000);
   - the simulated context grows by the same step as the real one between calls
     and never exceeds it (a real compaction lowers both), so after a handover
     the cache read of every call shrinks by the difference;
@@ -29,22 +29,26 @@ import time
 from collections import defaultdict
 
 W_IN, W_OUT, W_CR, W_CW = 1.0, 5.0, 0.1, 1.25
+# Second-mate homes live under <treehouse pool>/<n>/firstmate; override with --homes.
+HOMES_FRAGMENT = "firstmate-8fd6a9"
 
 
 def category(proj):
     if proj.endswith("workspace-firstmate"):
         return "main supervisor"
-    if "firstmate-8fd6a9" in proj and proj.endswith("-firstmate"):
+    if HOMES_FRAGMENT in proj and proj.endswith("-firstmate"):
         return "second-mate homes"
     return None
 
 
 def load(roots, days):
     seen = set()
+    skipped = 0
     sessions = defaultdict(list)  # (category, file) -> [(ts, i, o, cr, cw)]
     for root in roots:
         for path in glob.glob(root + "/**/*.jsonl", recursive=True):
             if time.time() - os.path.getmtime(path) > 3 * 86400:
+                skipped += 1
                 continue
             proj = path[len(root) + 1:].split("/")[0]
             cat = category(proj)
@@ -71,6 +75,9 @@ def load(roots, days):
                         ts, u.get("input_tokens", 0), u.get("output_tokens", 0),
                         u.get("cache_read_input_tokens", 0),
                         u.get("cache_creation_input_tokens", 0)))
+    if skipped:
+        print(f"warning: skipped {skipped} transcripts last modified over 3 days ago; "
+              "totals for older dates are partial", file=sys.stderr)
     return sessions
 
 
@@ -98,7 +105,7 @@ def replay(calls, limit, start):
 
 
 def main(argv):
-    days, limit, start, roots = None, 100000, 20000, []
+    days, limit, start, roots = None, 150000, 78000, []
     args = list(argv)
     while args:
         a = args.pop(0)
@@ -106,6 +113,9 @@ def main(argv):
             limit = int(args.pop(0))
         elif a == "--start":
             start = int(args.pop(0))
+        elif a == "--homes":
+            global HOMES_FRAGMENT
+            HOMES_FRAGMENT = args.pop(0)
         elif a == "--root":
             roots.append(args.pop(0))
         elif days is None:
