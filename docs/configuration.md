@@ -2506,6 +2506,7 @@ FM_SEND_SLEEP=0.4       # seconds between fm-send typed-plane submit checks
 FM_SEND_SETTLE=1        # seconds fm-send waits after a successful typed-plane submit; 0 disables
 FM_PENDING_REPLY_GRACE_SECS=120   # seconds after the request turn completes without a correlated parent report before its one recovery repost is eligible, and after the recovery turn completes before the missed-report escalation is eligible; never counted from delivery
 FM_PENDING_REPLY_ACK_SECS=1800   # seconds a request acknowledged only by a correlated working: or paused: line may go without a new correlated line before its pending-reply-unreported escalation (bin/fm-pending-reply-lib.sh)
+FM_PENDING_REPLY_WAKE_HOLD_SECS=3600   # seconds a missed or unreported pending-reply escalation stays a quiet open decision (listed in the next drain, no wake) before it wakes once; 0 wakes at once (bin/fm-pending-reply-lib.sh)
 # sub-supervisor (bin/fm-supervise-daemon.sh); presence-gated via /afk
 FM_SUPERVISOR_BACKEND=             # optional supervisor pane backend override; tmux/herdr only, otherwise detects $TMUX_PANE then HERDR_ENV/HERDR_PANE_ID before tmux fallback
 FM_SUPERVISOR_TARGET=              # optional supervisor pane target override; tmux target or herdr <session>:<pane-id>, otherwise auto-detected

@@ -64,6 +64,9 @@
 #   ack_lines=              count of correlated working:/paused: lines seen
 #   ack_line_epoch=         when the latest of those lines was first seen
 #   escalated_epoch=
+#   escalation_wake_due_epoch=
+#                           when a quiet missed or unreported escalation becomes
+#                           a wake; empty once woken or when it woke at once
 #   escalation_closed_epoch=
 #                           when the durable status decision opened by that
 #                           escalation was closed again (see the escalation
@@ -108,6 +111,18 @@
 # (bin/fm-backlog-handoff.sh's receiver wake) stayed refused forever once the
 # watcher escalated between the lost transport and the next resume.
 #
+# Quiet escalation: a missed or unreported escalation for a delivered request is
+# bookkeeping until proven otherwise - the mate is usually still working or has
+# answered where main already saw it, and every wake costs a supervisor turn that
+# re-reads the whole conversation. So the keyed blocked decision is published
+# with the home's own self-announced append (no wake) and still lists in the next
+# drain's OPEN DECISIONS. Only a request still unresolved after
+# FM_PENDING_REPLY_WAKE_HOLD_SECS gets one wake: a plain reminder line under the
+# same key (escalation_wake_due_epoch holds the due time; the reminder clears it).
+# A reply landing in between resolves the record and closes the decision without
+# any wake. Delivery-unknown and recovery-delivery escalations report a transport
+# fault main must act on, so they wake at once as before.
+#
 # Sourced by bin/fm-send.sh, bin/fm-watch.sh, bin/fm-secondmate-report.sh, and
 # tests. No side effects on source. set -u / set -e safe.
 #
@@ -119,6 +134,11 @@
 #   FM_PENDING_REPLY_ACK_SECS     default 1800; how long an acknowledged request
 #                                 may go without a new correlated line before
 #                                 the pending-reply-unreported escalation
+#   FM_PENDING_REPLY_WAKE_HOLD_SECS
+#                                 default 3600; how long a missed or unreported
+#                                 escalation stays a quiet status decision before
+#                                 it wakes the supervisor (see the quiet
+#                                 escalation note above); 0 wakes at once
 #   FM_PENDING_REPLY_DIR_OVERRIDE override the pending-replies directory (tests)
 #   FM_PENDING_REPLY_SEND_HOOK    optional command template for recovery delivery
 #                                 (tests); receives task_id and full message as args
@@ -146,6 +166,7 @@ FM_PENDING_REPLY_SCHEMA='fm-pending-reply.v1'
 FM_PENDING_REPLY_CORR_RE='corr=[A-Fa-f0-9]{16}'
 FM_PENDING_REPLY_GRACE_DEFAULT=120
 FM_PENDING_REPLY_ACK_DEFAULT=1800
+FM_PENDING_REPLY_WAKE_HOLD_DEFAULT=3600
 
 fm_pending_reply_now() {
   if [ -n "${FM_PENDING_REPLY_NOW:-}" ]; then
@@ -169,6 +190,14 @@ fm_pending_reply_ack_secs() {
     ''|*[!0-9]*) a=$FM_PENDING_REPLY_ACK_DEFAULT ;;
   esac
   printf '%s' "$a"
+}
+
+fm_pending_reply_wake_hold_secs() {
+  local h=${FM_PENDING_REPLY_WAKE_HOLD_SECS:-$FM_PENDING_REPLY_WAKE_HOLD_DEFAULT}
+  case "$h" in
+    ''|*[!0-9]*) h=$FM_PENDING_REPLY_WAKE_HOLD_DEFAULT ;;
+  esac
+  printf '%s' "$h"
 }
 
 # Directory holding durable pending-reply records for <state-dir>.
@@ -378,6 +407,7 @@ recovery_delivery_outcome=
 recovery_turn_seen_busy=0
 recovery_turn_completed_epoch=
 escalated_epoch=
+escalation_wake_due_epoch=
 resolved_epoch=
 resolved_via=
 wrong_home_hits=0
@@ -1331,7 +1361,7 @@ fm_pending_reply_maybe_escalate() {  # <state-dir> <corr_id>
 _fm_pending_reply_maybe_escalate_locked() {  # <state-dir> <corr_id>
   local state=$1 corr=$2
   local rec phase completed now payload parent_status line kind first display
-  local delivered task_id meta sm_home remote_host grace age
+  local delivered task_id meta sm_home remote_host grace age hold quiet append_rc
   rec=$(fm_pending_reply_path "$state" "$corr")
   [ -f "$rec" ] || return 1
   phase=$(fm_pending_reply_get "$rec" phase)
@@ -1403,13 +1433,78 @@ _fm_pending_reply_maybe_escalate_locked() {  # <state-dir> <corr_id>
   [ -n "$parent_status" ] || return 1
   mkdir -p "$(dirname "$parent_status")" 2>/dev/null || return 1
   line="blocked [key=$(fm_pending_reply_escalation_key "$corr")]: $payload"
+  hold=$(fm_pending_reply_wake_hold_secs)
+  quiet=0
+  case "$kind" in
+    missed|unreported) [ "$hold" -gt 0 ] && [ -n "$delivered" ] && quiet=1 ;;
+  esac
   if ! status_event_recorded "$parent_status" "$line"; then
-    printf '%s\n' "$(status_stamp_line "$line")" >> "$parent_status" 2>/dev/null || return 1
+    if [ "$quiet" = 1 ]; then
+      # Rc 1 (appended, marker left alone) still records the owned range that
+      # keeps the signal gate quiet, and where it cannot the watcher wakes
+      # as before; either way the reminder is armed, so a miss is never dropped.
+      append_rc=0
+      fm_wake_status_append_self_announced "${parent_status%/*}" "$parent_status" "$line" \
+        2>/dev/null || append_rc=$?
+      [ "$append_rc" -ne 2 ] || return 1
+    else
+      printf '%s\n' "$(status_stamp_line "$line")" >> "$parent_status" 2>/dev/null || return 1
+    fi
   fi
   now=$(fm_pending_reply_now)
+  if [ "$quiet" = 1 ]; then
+    fm_pending_reply_set "$rec" escalation_wake_due_epoch "$((now + hold))" || return 1
+  fi
   fm_pending_reply_set "$rec" escalated_epoch "$now" || return 1
   fm_pending_reply_set "$rec" phase escalated || return 1
   return 0
+}
+
+# Wake once for a quiet escalation that is still unresolved after the hold.
+# Appends a plain reminder under the escalation's own key, so the reserved-key
+# fold replaces the open note and a later resolve closes it like any escalation.
+# Retryable: the due epoch clears only after the reminder is on disk.
+fm_pending_reply_wake_held_escalation() {  # <state-dir> <corr_id>
+  # Serialized per correlation, like the escalation and its close; see
+  # fm_pending_reply_maybe_escalate for why the wake-lib globals are local.
+  local state=$1 corr=$2 lock rc=0
+  local STATE FM_WAKE_QUEUE FM_WAKE_QUEUE_LOCK
+  STATE=$state
+  lock="$state/.pending-reply-$corr.lock"
+  # Deliberately undirected, as in fm_pending_reply_maybe_escalate.
+  . "$_FM_PENDING_REPLY_LIB_DIR/fm-wake-lib.sh"
+  fm_lock_acquire_wait "$lock" || return 1
+  _fm_pending_reply_wake_held_escalation_locked "$@" || rc=$?
+  fm_lock_release "$lock"
+  return "$rc"
+}
+
+_fm_pending_reply_wake_held_escalation_locked() {  # <state-dir> <corr_id>
+  local state=$1 corr=$2 rec due now parent_status escalation note line hold
+  rec=$(fm_pending_reply_path "$state" "$corr")
+  [ -f "$rec" ] || return 1
+  [ "$(fm_pending_reply_get "$rec" phase)" = escalated ] || return 0
+  due=$(fm_pending_reply_get "$rec" escalation_wake_due_epoch)
+  case "$due" in ''|*[!0-9]*) return 0 ;; esac
+  now=$(fm_pending_reply_now)
+  [ "$now" -ge "$due" ] || return 0
+  parent_status=$(fm_pending_reply_get "$rec" parent_status)
+  [ -n "$parent_status" ] || return 1
+  # One fresh read first: a reply that landed during the hold ends it quietly.
+  if _fm_pending_reply_try_resolve_locked "$state" "$corr" "$parent_status"; then
+    return 0
+  fi
+  [ "$(fm_pending_reply_get "$rec" phase)" = escalated ] || return 1
+  escalation=$(fm_pending_reply_escalation_line "$parent_status" "$rec" "$corr")
+  if [ -n "$escalation" ]; then
+    hold=$(fm_pending_reply_wake_hold_secs)
+    note=$(status_line_note "$escalation")
+    line="blocked [key=$(fm_pending_reply_escalation_key "$corr")]: $note - still unresolved after $((hold / 60))m"
+    if ! status_event_recorded "$parent_status" "$line"; then
+      printf '%s\n' "$(status_stamp_line "$line")" >> "$parent_status" 2>/dev/null || return 1
+    fi
+  fi
+  fm_pending_reply_set "$rec" escalation_wake_due_epoch ""
 }
 
 # Detect a correlated report written under the secondmate home (wrong home)
@@ -1664,6 +1759,7 @@ fm_pending_reply_tick() {  # <state-dir>
       if fm_pending_reply_try_resolve "$state" "$corr"; then
         continue
       fi
+      fm_pending_reply_wake_held_escalation "$state" "$corr" 2>/dev/null || true
       if [ -f "$meta" ]; then
         sm_home=$(fm_meta_get "$meta" home)
         if [ -n "$sm_home" ]; then
