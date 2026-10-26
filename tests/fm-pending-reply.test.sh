@@ -2161,6 +2161,133 @@ test_delivery_unknown_escalation_wakes_at_once_despite_the_hold() {
   pass "delivery-unknown escalations still wake at once"
 }
 
+# --- retention and beacon ---------------------------------------------------
+
+# Write a record with the given phase and epochs straight into the store.
+seed_record() {  # <state> <corr> <phase> <delivered> <escalated> <resolved> [closed]
+  local rec
+  rec=$(fm_pending_reply_path "$1" "$2")
+  mkdir -p "$(dirname "$rec")"
+  {
+    printf 'schema=fm-pending-reply.v1\ncorr_id=%s\ntask_id=ret\nparent_home=%s\n' "$2" "${1%/state}"
+    printf 'parent_status=%s/ret.status\nrequest_summary=retention\ncreated_epoch=100\n' "$1"
+    printf 'delivered_epoch=%s\nphase=%s\nescalated_epoch=%s\nresolved_epoch=%s\n' "$4" "$3" "$5" "$6"
+    [ -z "${7:-}" ] || printf 'escalation_closed_epoch=%s\n' "$7"
+  } > "$rec"
+}
+
+test_tick_archives_aged_terminal_records() {
+  local home state day=86400 now dir arch
+  home=$(setup_parent retention)
+  state="$home/state"
+  dir=$(fm_pending_reply_dir "$state")
+  arch="$state/pending-replies-archive"
+  now=$((100 * day))
+  export FM_PENDING_REPLY_NOW=$now
+  seed_record "$state" 00000000000000a1 resolved 100 "" $((now - 3 * day))
+  seed_record "$state" 00000000000000a2 resolved 100 "" $((now - 1 * day))
+  seed_record "$state" 00000000000000a3 resolved 100 $((now - 9 * day)) $((now - 3 * day))
+  seed_record "$state" 00000000000000a4 resolved 100 $((now - 9 * day)) $((now - 3 * day)) $((now - 3 * day))
+  seed_record "$state" 00000000000000b1 escalated 100 $((now - 15 * day)) ""
+  seed_record "$state" 00000000000000b2 escalated 100 $((now - 5 * day)) ""
+  seed_record "$state" 00000000000000b3 escalated "" $((now - 15 * day)) ""
+  seed_record "$state" 00000000000000c1 awaiting_report 100 "" ""
+  cp "$dir/00000000000000a1" "$home/a1.before"
+  : > "$state/ret.status"
+  fm_pending_reply_tick "$state"
+  [ -f "$arch/00000000000000a1" ] && [ ! -e "$dir/00000000000000a1" ] \
+    || fail "a resolved record past the retention window should move to the archive"
+  cmp -s "$home/a1.before" "$arch/00000000000000a1" || fail "archiving must not alter the record"
+  [ -f "$dir/00000000000000a2" ] || fail "a recently resolved record stays scanned"
+  [ -f "$dir/00000000000000a3" ] || fail "a resolved record with an open escalation stays scanned"
+  [ -f "$arch/00000000000000a4" ] || fail "a resolved record whose escalation closed is archived"
+  [ -f "$arch/00000000000000b1" ] || fail "a long-escalated delivered record should move to the archive"
+  [ -f "$dir/00000000000000b2" ] || fail "a recently escalated record stays scanned"
+  [ -f "$dir/00000000000000b3" ] || fail "an undelivered escalation stays retryable and scanned"
+  [ -f "$dir/00000000000000c1" ] || fail "an unresolved record is never archived, however old"
+  FM_PENDING_REPLY_ARCHIVE_DAYS=0 FM_PENDING_REPLY_ARCHIVE_ESCALATED_DAYS=0 fm_pending_reply_tick "$state"
+  [ -f "$dir/00000000000000a2" ] || fail "retention off must leave every record in place"
+  unset FM_PENDING_REPLY_NOW
+  pass "the tick archives aged terminal records and keeps every other record scanned"
+}
+
+test_tick_archive_batch_is_bounded() {
+  local home state day=86400 now i n dir
+  home=$(setup_parent retention-batch)
+  state="$home/state"
+  dir=$(fm_pending_reply_dir "$state")
+  now=$((100 * day))
+  export FM_PENDING_REPLY_NOW=$now
+  i=0
+  while [ "$i" -lt 25 ]; do
+    seed_record "$state" "$(printf '%016x' $((0xd00000000000 + i)))" resolved 100 "" $((now - 3 * day))
+    i=$((i + 1))
+  done
+  FM_PENDING_REPLY_ARCHIVE_BATCH=10 fm_pending_reply_tick "$state"
+  n=$(find "$state/pending-replies-archive" -type f | wc -l | tr -d ' ')
+  [ "$n" -eq 10 ] || fail "one pass should archive at most the batch size, archived $n"
+  FM_PENDING_REPLY_ARCHIVE_BATCH=10 fm_pending_reply_tick "$state"
+  FM_PENDING_REPLY_ARCHIVE_BATCH=10 fm_pending_reply_tick "$state"
+  [ -z "$(ls "$dir")" ] || fail "later passes should finish the backlog"
+  unset FM_PENDING_REPLY_NOW
+  pass "an archive backlog drains over bounded passes"
+}
+
+test_tick_scales_to_a_thousand_records() {
+  local home state day=86400 now i corr dir
+  home=$(setup_parent retention-1000)
+  state="$home/state"
+  dir=$(fm_pending_reply_dir "$state")
+  now=$((100 * day))
+  export FM_PENDING_REPLY_NOW=$now
+  : > "$state/ret.status"
+  i=0
+  while [ "$i" -lt 1000 ]; do
+    corr=$(printf '%016x' $((0xe00000000000 + i)))
+    if [ "$i" -lt 767 ]; then
+      seed_record "$state" "$corr" resolved 100 "" $((now - 3 * day))
+    elif [ "$i" -lt 921 ]; then
+      seed_record "$state" "$corr" escalated 100 $((now - 15 * day)) ""
+    else
+      seed_record "$state" "$corr" resolved 100 "" $((now - 1 * day))
+    fi
+    i=$((i + 1))
+  done
+  FM_PENDING_REPLY_ARCHIVE_BATCH=2000 fm_pending_reply_tick "$state"
+  [ "$(find "$dir" -type f | wc -l | tr -d ' ')" -eq 79 ] || fail "only the 79 recent records should stay scanned"
+  [ "$(find "$state/pending-replies-archive" -type f | wc -l | tr -d ' ')" -eq 921 ] \
+    || fail "all 921 aged records should be archived"
+  unset FM_PENDING_REPLY_NOW
+  pass "a 1,000-record store shrinks to its recent records in one pass"
+}
+
+test_tick_touches_the_beacon_during_a_long_pass() {
+  local home state beat corr i m
+  home=$(setup_parent beacon)
+  state="$home/state"
+  beat="$home/beat"
+  export FM_PENDING_REPLY_NOW=500000
+  : > "$state/ret.status"
+  i=0
+  while [ "$i" -lt 3 ]; do
+    corr=$(printf '%016x' $((0xf00000000000 + i)))
+    seed_record "$state" "$corr" awaiting_report 100 "" ""
+    i=$((i + 1))
+  done
+  : > "$beat"
+  touch -t 200001010000 "$beat"
+  FM_PENDING_REPLY_BEAT_FILE="$beat" FM_PENDING_REPLY_BEAT_SECS=0 fm_pending_reply_tick "$state"
+  m=$(stat -f %m "$beat" 2>/dev/null || stat -c %Y "$beat")
+  [ "$m" -gt 1000000000 ] || fail "the tick should touch the beacon while it works through records"
+  : > "$home/other"
+  touch -t 200001010000 "$home/other"
+  fm_pending_reply_tick "$state"
+  m=$(stat -f %m "$home/other" 2>/dev/null || stat -c %Y "$home/other")
+  [ "$m" -lt 1000000000 ] || fail "without a beacon path the tick touches nothing"
+  unset FM_PENDING_REPLY_NOW
+  pass "the tick touches the watcher beacon while it works"
+}
+
 # --- run --------------------------------------------------------------------
 
 test_normal_correlated_reply_resolves_once
@@ -2215,5 +2342,9 @@ test_quiet_escalation_wakes_once_after_the_hold
 test_delivery_unknown_escalation_wakes_at_once_despite_the_hold
 test_quiet_escalation_closed_by_main_is_not_reminded
 test_quiet_escalation_reminder_names_the_recorded_hold
+test_tick_archives_aged_terminal_records
+test_tick_archive_batch_is_bounded
+test_tick_scales_to_a_thousand_records
+test_tick_touches_the_beacon_during_a_long_pass
 
 printf 'ok - all pending-reply tests passed\n'

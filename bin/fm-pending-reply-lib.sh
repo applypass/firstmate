@@ -143,6 +143,24 @@
 #   FM_PENDING_REPLY_SEND_HOOK    optional command template for recovery delivery
 #                                 (tests); receives task_id and full message as args
 #   FM_PENDING_REPLY_NOW          optional fixed epoch for deterministic tests
+#   FM_PENDING_REPLY_ARCHIVE_DAYS default 2; a resolved record whose escalation
+#                                 (if any) is closed leaves the scanned set after
+#                                 this many days. 0 turns retention off
+#   FM_PENDING_REPLY_ARCHIVE_ESCALATED_DAYS
+#                                 default 14; a delivered record still escalated
+#                                 after this many days leaves the scanned set. Its
+#                                 keyed status decision stays open in the status
+#                                 log; only the scan stops. 0 turns it off
+#   FM_PENDING_REPLY_ARCHIVE_BATCH default 200; most records one pass archives, so
+#                                 a large backlog drains over several polls
+#   FM_PENDING_REPLY_BEAT_FILE    optional file the tick touches while it works
+#                                 (the watcher passes its liveness beacon), so a
+#                                 slow pass is not read as a dead watcher
+#   FM_PENDING_REPLY_BEAT_SECS    default 5; least seconds between those touches
+#
+# Retention: records move, never vanish, to the sibling directory
+# <pending-replies>-archive (state/pending-replies-archive). Nothing in the tick
+# reads the archive.
 
 # This directive does double duty: it also binds _FM_PENDING_REPLY_LIB_DIR as
 # the bin/ source prefix so the deliberately undirected lazy sources below
@@ -167,6 +185,10 @@ FM_PENDING_REPLY_CORR_RE='corr=[A-Fa-f0-9]{16}'
 FM_PENDING_REPLY_GRACE_DEFAULT=120
 FM_PENDING_REPLY_ACK_DEFAULT=1800
 FM_PENDING_REPLY_WAKE_HOLD_DEFAULT=3600
+FM_PENDING_REPLY_ARCHIVE_DEFAULT=2
+FM_PENDING_REPLY_ARCHIVE_ESCALATED_DEFAULT=14
+FM_PENDING_REPLY_ARCHIVE_BATCH_DEFAULT=200
+FM_PENDING_REPLY_BEAT_DEFAULT=5
 
 fm_pending_reply_now() {
   if [ -n "${FM_PENDING_REPLY_NOW:-}" ]; then
@@ -198,6 +220,16 @@ fm_pending_reply_wake_hold_secs() {
     ''|*[!0-9]*) h=$FM_PENDING_REPLY_WAKE_HOLD_DEFAULT ;;
   esac
   printf '%s' "$h"
+}
+
+# <name>'s value when it is a non-negative integer, else <default>.
+_fm_pending_reply_uint_env() {  # <name> <default>
+  local v
+  eval "v=\${$1:-}"
+  case "$v" in
+    ''|*[!0-9]*) v=$2 ;;
+  esac
+  printf '%s' "$v"
 }
 
 # Directory holding durable pending-reply records for <state-dir>.
@@ -1688,30 +1720,92 @@ fm_pending_reply_tick_one() {  # <state-dir> <corr_id> <busy_state> [secondmate-
   return 0
 }
 
-# Print, one per line, the records among <record-path>... that the tick has work
-# for, reading every record once in a single awk process instead of forking
-# per record. A resolved record needs work only while an escalation it opened
-# is still unclosed: for every other resolved record the tick's per-record path
+# Print one tagged line per record among <record-path>... that the tick must
+# act on, reading every record once in a single awk process instead of forking
+# per record: "W<path>" for a record the tick has work for, "A<path>" for a
+# record that has aged out of the scanned set (see Retention in the header).
+# A resolved record needs work only while an escalation it opened is still
+# unclosed: for every other resolved record the tick's per-record path
 # (fm_pending_reply_close_escalation) is a no-op that still pays a lock and
-# several forks, and records are never pruned, so that cost grew with the store.
-# Every other record - any phase but resolved, no phase at all, or one awk
-# cannot read - is selected, so the per-record path still decides it. Values
-# follow fm_pending_reply_get: the last line for a key wins.
-_fm_pending_reply_select_needing_work() {  # <record-path>...
+# several forks. Such a record is archived once <archive-days> old, measured
+# from resolved_epoch; a delivered escalated record is archived once
+# <escalated-days> past escalated_epoch. A zero threshold, or a record without
+# a readable epoch, is never archived. Every other record - any phase but
+# resolved, no phase at all, or one awk cannot read - is selected, so the
+# per-record path still decides it. Values follow fm_pending_reply_get: the last
+# line for a key wins.
+_fm_pending_reply_select_needing_work() {  # <now> <archive-days> <escalated-days> <record-path>...
+  local now=$1 days=$2 esc_days=$3
+  shift 3
   [ "$#" -gt 0 ] || return 0
-  printf '%s\n' "$@" | LC_ALL=C awk '
+  printf '%s\n' "$@" | LC_ALL=C awk -v now="$now" -v rd="$days" -v ed="$esc_days" '
     {
       path = $0
-      phase = ""; escalated = ""; closed = ""
+      phase = ""; escalated = ""; closed = ""; resolved = ""; delivered = ""
       while ((rc = (getline line < path)) > 0) {
         if (index(line, "phase=") == 1) phase = substr(line, 7)
         else if (index(line, "escalated_epoch=") == 1) escalated = substr(line, 17)
         else if (index(line, "escalation_closed_epoch=") == 1) closed = substr(line, 25)
+        else if (index(line, "resolved_epoch=") == 1) resolved = substr(line, 16)
+        else if (index(line, "delivered_epoch=") == 1) delivered = substr(line, 17)
       }
       close(path)
-      if (rc < 0 || phase != "resolved" || (escalated != "" && closed == "")) print path
+      if (rc < 0) { print "W" path; next }
+      if (phase == "resolved") {
+        if (escalated != "" && closed == "") { print "W" path; next }
+        if (rd > 0 && resolved ~ /^[0-9]+$/ && now - resolved >= rd * 86400) print "A" path
+        next
+      }
+      if (phase == "escalated" && ed > 0 && delivered != "" && escalated ~ /^[0-9]+$/ \
+          && now - escalated >= ed * 86400) { print "A" path; next }
+      print "W" path
     }
   '
+}
+
+# Move one aged record to the archive directory beside the store. A resolved
+# record with a closed escalation is never written again, so it moves without a
+# lock. An escalated record can still be resolved by a late report, so it moves
+# only when its lock is free and its phase is still escalated; otherwise a later
+# pass retries.
+_fm_pending_reply_archive_record() {  # <state-dir> <record-path>
+  local state=$1 rec=$2 dir arch corr lock rc=0 phase
+  local STATE FM_WAKE_QUEUE FM_WAKE_QUEUE_LOCK
+  dir=$(fm_pending_reply_dir "$state")
+  arch="${dir}-archive"
+  [ -f "$rec" ] || return 0
+  mkdir -p "$arch" 2>/dev/null || return 1
+  phase=$(fm_pending_reply_get "$rec" phase)
+  if [ "$phase" = escalated ]; then
+    corr=${rec##*/}
+    STATE=$state
+    lock="$state/.pending-reply-$corr.lock"
+    # Deliberately undirected, as in fm_pending_reply_close_escalation.
+    . "$_FM_PENDING_REPLY_LIB_DIR/fm-wake-lib.sh"
+    fm_lock_try_acquire "$lock" || return 0
+    if [ "$(fm_pending_reply_get "$rec" phase)" = escalated ]; then
+      mv -f "$rec" "$arch/" 2>/dev/null || rc=1
+    fi
+    fm_lock_release "$lock"
+    return "$rc"
+  fi
+  [ "$phase" = resolved ] || return 0
+  mv -f "$rec" "$arch/" 2>/dev/null
+}
+
+# Touch FM_PENDING_REPLY_BEAT_FILE at most every FM_PENDING_REPLY_BEAT_SECS
+# seconds, so a long scan keeps the watcher's liveness beacon fresh. No file, no
+# touch.
+_fm_pending_reply_beat() {
+  [ -n "${FM_PENDING_REPLY_BEAT_FILE:-}" ] || return 0
+  local gap
+  gap=$(_fm_pending_reply_uint_env FM_PENDING_REPLY_BEAT_SECS "$FM_PENDING_REPLY_BEAT_DEFAULT")
+  if [ "$gap" -gt 0 ] && [ -n "${_FM_PENDING_REPLY_BEAT_AT:-}" ] \
+    && [ $((SECONDS - _FM_PENDING_REPLY_BEAT_AT)) -lt "$gap" ]; then
+    return 0
+  fi
+  _FM_PENDING_REPLY_BEAT_AT=$SECONDS
+  touch "$FM_PENDING_REPLY_BEAT_FILE" 2>/dev/null || true
 }
 
 # Scan every pending record for this parent state. Safe to call every poll.
@@ -1722,10 +1816,16 @@ _fm_pending_reply_select_needing_work() {  # <record-path>...
 # unchanged, only for the records that selection returns.
 fm_pending_reply_tick() {  # <state-dir>
   local state=$1 dir rec corr task_id phase delivered meta backend target label busy sm_home harness remote_host
-  local observation observation_task found i
+  local observation observation_task found i now archive_days esc_days archive_batch archived=0 tagged
   local -a observation_tasks=() observation_values=() records=() selected=()
   dir=$(fm_pending_reply_dir "$state")
   [ -d "$dir" ] || return 0
+  _FM_PENDING_REPLY_BEAT_AT=
+  _fm_pending_reply_beat
+  now=$(fm_pending_reply_now)
+  archive_days=$(_fm_pending_reply_uint_env FM_PENDING_REPLY_ARCHIVE_DAYS "$FM_PENDING_REPLY_ARCHIVE_DEFAULT")
+  esc_days=$(_fm_pending_reply_uint_env FM_PENDING_REPLY_ARCHIVE_ESCALATED_DAYS "$FM_PENDING_REPLY_ARCHIVE_ESCALATED_DEFAULT")
+  archive_batch=$(_fm_pending_reply_uint_env FM_PENDING_REPLY_ARCHIVE_BATCH "$FM_PENDING_REPLY_ARCHIVE_BATCH_DEFAULT")
   for rec in "$dir"/*; do
     [ -f "$rec" ] || continue
     case "${rec##*/}" in
@@ -1738,10 +1838,19 @@ fm_pending_reply_tick() {  # <state-dir>
       *) records+=("$rec") ;;
     esac
   done
-  while IFS= read -r rec; do
-    selected+=("$rec")
-  done < <(_fm_pending_reply_select_needing_work ${records[@]+"${records[@]}"})
+  while IFS= read -r tagged; do
+    rec=${tagged#?}
+    case "$tagged" in
+      A*)
+        if [ "$archived" -lt "$archive_batch" ]; then
+          _fm_pending_reply_archive_record "$state" "$rec" && archived=$((archived + 1))
+        fi
+        ;;
+      *) selected+=("$rec") ;;
+    esac
+  done < <(_fm_pending_reply_select_needing_work "$now" "$archive_days" "$esc_days" ${records[@]+"${records[@]}"})
   for rec in ${selected[@]+"${selected[@]}"}; do
+    _fm_pending_reply_beat
     corr=$(fm_pending_reply_get "$rec" corr_id)
     [ -n "$corr" ] || corr=$(basename "$rec")
     task_id=$(fm_pending_reply_get "$rec" task_id)
