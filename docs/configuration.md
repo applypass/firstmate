@@ -107,7 +107,7 @@ Each effective `FM_HOME` contains private operational directories.
 - One-shot Bearings reconcile requests under `state/reconcile-notify/`.
 - Private secondmate config-reread generations with their retry and quarantine state.
 - Per-task steering-inbox records under `state/<id>.inbox/` (`bin/fm-task-inbox-lib.sh`).
-- Parent-owned secondmate pending-reply records under `state/pending-replies/` (`bin/fm-pending-reply-lib.sh`).
+- Parent-owned secondmate pending-reply records under `state/pending-replies/`, with aged resolved records moved to `state/pending-replies-archive/` (`bin/fm-pending-reply-lib.sh`).
 
 `config/` holds local gitignored operating choices, including explicit extension bindings under `config/extensions.d/`.
 
@@ -435,6 +435,7 @@ A weekly reset today makes the baseline zero, and so does a reading below the ba
 At 20% used today, a fresh worker launch (`bin/fm-spawn.sh`, ship, scout, or secondmate) and a new no-mistakes run are refused with the number and the threshold.
 At 25% they are held until the next local day, and the hold persists for the rest of the day even if usage later reads lower.
 The 20 and 25 lines are fixed constants in `bin/fm-daily-quota-lib.sh`.
+The captain may lift one day's refuse line to the 25% hold: firstmate writes that local date (`date +%F`) into `state/daily-quota-raised` in the fleet home.
 Running work always finishes: `fm-spawn.sh --relaunch`, reattaching to a run, and answering a gate are never blocked.
 The stop applies in every home and in away and quiet mode.
 
@@ -1356,6 +1357,15 @@ Firstmate targets current CLIs rather than detecting versions or emulating older
 Crew and scout launches still request hook disablement and retain their notification wiring, while secondmates retain their primary-session hooks.
 A managed policy can override the requested hook disablement, so it may still require an operator's hook review.
 See the [current verification and limits](verification/runtime-backends.md#codex-automatic-approval-review) for observed task-channel and network access.
+
+## Claude worker MCP tools (config/claude-worker-mcp.json)
+
+Every Claude ship and scout launch runs with `--strict-mcp-config` and an empty `--mcp-config`, so no MCP server loads and the worker's first turn carries none of their tool definitions.
+Claude secondmates and supervisor sessions keep the full inherited set, and the captain's own Claude config files are never edited.
+The optional local, gitignored `config/claude-worker-mcp.json` (the shape of claude's `--mcp-config`, `{"mcpServers": {...}}`) is the home's standing allowlist for workers.
+`FM_WORKER_MCP=<file>` in the environment of one `fm-spawn.sh` call replaces it for that task, and `FM_WORKER_MCP=all` keeps the full inherited set for that task.
+A named file that is missing stops the spawn rather than falling back.
+`bin/fm-claude-lean-mcp.sh` owns the exact resolution order.
 
 ## Claude permission mode (config/claude-permission-mode)
 
@@ -3210,6 +3220,7 @@ FM_SECONDMATE_WAKE_STALL_SECS=180  # minimum interval with no change of the olde
 FM_SECONDMATE_LIVENESS_SECS=60   # seconds between watcher probes of each registered secondmate's recorded endpoint; bin/fm-secondmate-liveness-lib.sh owns recovery actions and refusal rules; zero or invalid values use 60
 FM_SECONDMATE_LIVENESS_TIMEOUT=120   # seconds allowed separately for a watcher-driven relaunch's per-home lock wait and its spawn execution; a lock-wait timeout skips recovery without touching the endpoint or recording an attempt; zero or invalid values use 120
 FM_SECONDMATE_FRESH_SESSION=on   # Fork-only: set to off to stop local second mates from asking for, and the watcher from applying, a fresh session after finished work (bin/fm-secondmate-fresh-session.sh)
+FM_SECONDMATE_CONTEXT_LIMIT=150000   # Fork-only: tokens of context at which the watcher poll asks a local Claude second mate for a fresh session with a handover note; 0 turns the check off (bin/fm-secondmate-fresh-session.sh; FM_SECONDMATE_CONTEXT_CHECK_SECS=60 rate limits it; bin/fm-context-replay.py replays transcripts to measure the saving)
 FM_SECONDMATE_LIVENESS_MAX_ATTEMPTS=3   # automatic relaunch attempts allowed per mate inside the window before the watcher parks auto-relaunch behind state/.secondmate-relaunch-bound-<id> and escalates once; a later live probe clears the marker and restores the full attempt budget (the ledger keeps its history behind a `rearmed` row); zero or invalid values use 3
 FM_SECONDMATE_LIVENESS_WINDOW_SECS=3600   # window the relaunch bound counts state/.secondmate-relaunch-<id> attempt lines over; the file is also the durable per-mate relaunch record; zero or invalid values use 3600
 FM_WEDGE_DEMAND_INSPECT_COUNT=3    # consecutive provably-working stale escalations on the same unchanged pane before demand-deep-inspection is added
@@ -3244,6 +3255,8 @@ FM_SEND_SETTLE=1        # seconds fm-send waits after a successful typed-plane s
 FM_PENDING_REPLY_GRACE_SECS=120   # seconds after the request turn completes without a correlated parent report before its one recovery repost is eligible, and after the recovery turn completes before the missed-report escalation is eligible; never counted from delivery
 FM_PENDING_REPLY_ACK_SECS=1800   # seconds a request acknowledged only by a correlated working: or paused: line may go without a new correlated line before its pending-reply-unreported escalation (bin/fm-pending-reply-lib.sh)
 FM_PENDING_REPLY_WAKE_HOLD_SECS=3600   # seconds a missed or unreported pending-reply escalation stays a quiet open decision (listed in the next drain, no wake) before it wakes once; 0 wakes at once (bin/fm-pending-reply-lib.sh)
+FM_PENDING_REPLY_ARCHIVE_DAYS=2   # days after resolution before a resolved record whose escalation, if any, is closed moves to state/pending-replies-archive/; open and escalated records never move; 0 turns retention off
+FM_PENDING_REPLY_ARCHIVE_BATCH=200   # most records one watcher poll archives, so a large backlog drains over several polls
 # sub-supervisor (bin/fm-supervise-daemon.sh); presence-gated via /afk
 FM_SUPERVISOR_BACKEND=             # optional supervisor endpoint backend override; see "Away-mode supervisor backend" for supported backends and detection
 FM_SUPERVISOR_TARGET=              # optional supervisor endpoint target override; tmux uses the exact forms owned by fm_backend_target_exists in bin/fm-backend.sh, herdr uses <session>:<pane-id>, t3code uses the thread id, otherwise auto-detected

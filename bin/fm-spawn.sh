@@ -2633,6 +2633,12 @@ launch_template() {
     if [ "$kind" != secondmate ]; then
       printf '%s' "--append-system-prompt '$(spawn_claude_task_channel_statement)' "
     fi
+    # Fork-only: a task worker launches with a lean MCP tool set
+    # (bin/fm-claude-lean-mcp.sh owns the default and how a task widens it).
+    if [ "$kind" != secondmate ]; then
+      printf '%s' '__CLAUDELEANMCP__'
+    fi
+    # Fork-only end
     # Claude Code strips invisible characters, U+2063 included, from the
     # launch-prompt argument, so the brief rides the operational-input owner's
     # record-backed doorbell: the full envelope is published into the receiving
@@ -6992,6 +6998,17 @@ case "$LAUNCH" in
   LAUNCH=${LAUNCH//__CLAUDEADDDIRS__/$CLAUDE_ADD_DIRS}
   ;;
 esac
+# Fork-only: splice the task worker's lean MCP flags (bin/fm-claude-lean-mcp.sh).
+case "$LAUNCH" in
+*__CLAUDELEANMCP__*)
+  CLAUDE_LEAN_MCP=$("$FM_ROOT/bin/fm-claude-lean-mcp.sh" "$CONFIG" "$STATE") || {
+    echo "error: could not resolve the lean MCP config for $ID's claude launch" >&2
+    exit 1
+  }
+  LAUNCH=${LAUNCH//__CLAUDELEANMCP__/$CLAUDE_LEAN_MCP}
+  ;;
+esac
+# Fork-only end
 case "$HARNESS" in
 claude | codex | opencode | pi | pi-signed | grok | kimi | gemini | muse | rovo | agy | devin | commandcode | cortex)
   LAUNCH="env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI $LAUNCH"

@@ -210,7 +210,10 @@ fm_dq_evaluate() {  # <this-home>
     FM_DQ_CLEARS=$(fm_dq_date '%F %H:%M %Z' $((midnight + 86400)))
     return 1
   fi
-  if [ "$FM_DQ_USED_TODAY" -ge "$FM_DQ_REFUSE_PCT" ]; then
+  # The captain may lift today's refuse line to the hold line: firstmate writes
+  # today's local date into state/daily-quota-raised in the fleet home.
+  if [ "$FM_DQ_USED_TODAY" -ge "$FM_DQ_REFUSE_PCT" ] &&
+    [ "$(cat "${file%/*}/daily-quota-raised" 2>/dev/null)" != "$day" ]; then
     FM_DQ_VERDICT=refuse
     return 1
   fi

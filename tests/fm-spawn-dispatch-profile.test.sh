@@ -649,7 +649,7 @@ test_claude_threads_model_and_effort() {
   expect_code 0 "$status" "claude spawn with profile flags should succeed"
   assert_meta_profile "$HOME_DIR/state/$id.meta" claude sonnet high
   launch=$(cat "$LAUNCH_LOG")
-  assert_contains "$launch" "$CLAUDE_CONTROL_CHANNEL_FLAG --model 'sonnet' --effort 'high'" \
+  assert_contains "$launch" "$CLAUDE_CONTROL_CHANNEL_FLAG $(claude_lean_mcp "$HOME_DIR")--model 'sonnet' --effort 'high'" \
     "claude launch did not thread model and effort flags"
   assert_not_contains "$launch" "--tui-mode" "non-Pi launches must not receive Pi's TUI mode override"
   pass "claude receives --model and --effort profile flags"
@@ -2449,6 +2449,12 @@ claude_launch_brief_arg() {  # <launch>
 # permission flag and --settings, real-path resolved the way the spawn's
 # claude_add_dirs_flag resolves it. Prints a trailing space so callers can
 # drop it straight into an expected command.
+# The lean MCP flags every Claude task worker launch carries after the
+# control-channel flag (bin/fm-claude-lean-mcp.sh). Trailing space included.
+claude_lean_mcp() {  # <home>
+  printf '%s ' "--strict-mcp-config --mcp-config '$1/state/claude-worker-mcp-none.json'"
+}
+
 claude_worker_add_dirs() {  # <home> <id>
   local state_real data_real root_real
   state_real=$(cd "$1/state" && pwd -P)
@@ -2463,7 +2469,7 @@ claude_expected_launch() {  # <launch> <home> <id> <permission-flag>
   [ "$(printf '%s' "$doorbell" | "$ROOT/bin/fm-operational-input.sh" doorbell-kind)" = launch-brief ] \
     || doorbell="not a launch-brief doorbell"
   quoted="'$(printf '%s' "$doorbell" | sed "s/'/'\\\\''/g")'"
-  printf '%s' "export COMPACT_ADVISER_DISABLE=1; export CHROME_DEVTOOLS_AXI_SESSION='$3'; $(task_inbox_export "$2" "$3")$(fm_test_launch_git_prefix "$1")env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_FEEDBACK=0 claude $4 $(claude_worker_add_dirs "$2" "$3")--settings '{\"feedbackDrafts\":\"off\",\"attribution\":{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}}' $CLAUDE_CONTROL_CHANNEL_FLAG $quoted"
+  printf '%s' "export COMPACT_ADVISER_DISABLE=1; export CHROME_DEVTOOLS_AXI_SESSION='$3'; $(task_inbox_export "$2" "$3")$(fm_test_launch_git_prefix "$1")env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_FEEDBACK=0 claude $4 $(claude_worker_add_dirs "$2" "$3")--settings '{\"feedbackDrafts\":\"off\",\"enabledPlugins\":{\"applypass-coach@synced\":false,\"applypass-coach@inline\":false},\"attribution\":{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}}' $CLAUDE_CONTROL_CHANNEL_FLAG $quoted"
 }
 
 test_claude_permission_mode_absent_defaults_to_bypass() {

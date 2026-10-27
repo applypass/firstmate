@@ -3612,7 +3612,9 @@ while :; do
   # parent reports, observe backend busy/idle turn completion, send one recovery
   # repost after grace, and escalate once if the recovery turn is also missed.
   # No conversation scraping; unresolved records are never silently expired.
-  fm_pending_reply_tick "$STATE" || true
+  # The tick touches the liveness beacon while it works, so a slow pass over a
+  # large store is not read as a dead watcher; it archives aged resolved records.
+  FM_PENDING_REPLY_BEAT_FILE="$STATE/.last-watcher-beat" fm_pending_reply_tick "$STATE" || true
 
   # Endpoint liveness runs before queue observation: a positively dead or
   # missing secondmate endpoint is relaunched here on a bounded cadence, which
