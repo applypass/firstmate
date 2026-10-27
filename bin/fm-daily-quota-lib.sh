@@ -202,6 +202,9 @@ fm_dq_evaluate() {  # <this-home>
   [ "$FM_DQ_USED_TODAY" -ge 0 ] || FM_DQ_USED_TODAY=0
 
   if [ "$FM_DQ_USED_TODAY" -ge "$FM_DQ_HOLD_PCT" ]; then held=1; fi
+  # The captain may lift both lines for one day: firstmate writes today's local
+  # date into state/daily-quota-off in the fleet home.
+  if [ "$(cat "${file%/*}/daily-quota-off" 2>/dev/null)" = "$day" ]; then held=0; fi
   fm_dq_baseline_write "$file" "$day" "$baseline" "$held" "$FM_DQ_USED_NOW" "$now" ||
     { FM_DQ_REASON="cannot write $file"; FM_DQ_VERDICT=error; return 1; }
 
@@ -213,7 +216,8 @@ fm_dq_evaluate() {  # <this-home>
   # The captain may lift today's refuse line to the hold line: firstmate writes
   # today's local date into state/daily-quota-raised in the fleet home.
   if [ "$FM_DQ_USED_TODAY" -ge "$FM_DQ_REFUSE_PCT" ] &&
-    [ "$(cat "${file%/*}/daily-quota-raised" 2>/dev/null)" != "$day" ]; then
+    [ "$(cat "${file%/*}/daily-quota-raised" 2>/dev/null)" != "$day" ] &&
+    [ "$(cat "${file%/*}/daily-quota-off" 2>/dev/null)" != "$day" ]; then
     FM_DQ_VERDICT=refuse
     return 1
   fi

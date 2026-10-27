@@ -105,6 +105,20 @@ test_hold_at_25_until_next_day() {
   pass "25% holds until the next local day"
 }
 
+test_quota_off_lifts_both_lines_for_one_day() {
+  reset_fleet
+  set_used 40; run_check spawn
+  set_used 66; run_check spawn
+  expect_code 3 "$CHECK_RC" "26% used today holds"
+  date -u -r "$DAY1" +%F > "$HOME_DIR/state/daily-quota-off"
+  run_check spawn
+  expect_code 0 "$CHECK_RC" "quota-off for today lifts the hold"
+  echo 2000-01-01 > "$HOME_DIR/state/daily-quota-off"
+  run_check spawn
+  expect_code 3 "$CHECK_RC" "quota-off for another day does not lift it"
+  pass "quota-off lifts both lines for its day only"
+}
+
 test_day_rollover_resets() {
   reset_fleet
   set_used 40; run_check spawn
@@ -444,6 +458,7 @@ test_scripts_are_shellcheck_clean() {
 test_under_threshold_allows
 test_refuse_at_20
 test_hold_at_25_until_next_day
+test_quota_off_lifts_both_lines_for_one_day
 test_day_rollover_resets
 test_weekly_reset_mid_day
 test_reading_drop_without_reset_keeps_baseline
