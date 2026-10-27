@@ -34,19 +34,17 @@ Regenerate the candidate list with `git diff --name-only upstream/main...origin/
 - `bin/fm-task-inbox-lib.sh` - delivers every mate result to main by script
 - `bin/fm-tasks-axi.sh` - keeps Shortcut stories in sync with backlog items
 - `bin/fm-teardown.sh` - closes chrome-devtools-axi sessions and holds the no-mistakes run
-- `bin/fm-test-run.sh` - runs the live-check frame reviewer and release Done moves
+- `bin/fm-test-run.sh` - runs the live-check frame reviewer and release Done moves; lists the fork-only tests in the serial weight hints
 - `bin/fm-wake-lib.sh` - resolves silent-handled wake keys
 - `bin/fm-watch.sh` - keys silent-handled wakes per record
 - `docs/configuration.md` - documents release next steps and Shortcut Done moves
 - `docs/documentation-audiences.json` - classifies the fork-only docs and skills
-- `docs/fm-test-portable-shards.md` - records the fork serial shard weights
 - `docs/scripts.md` - documents the fork-only scripts
 - `docs/secondmate-parent-channel.md` - documents captain outcome kinds and silent-handled wake keys
 - `docs/supervision-host.md` - documents the ack and silent-handled knobs
 - `tests/fm-backend-orca.test.sh` - covers the voice plugin and chrome session launch
 - `tests/fm-backlog-atomicity.test.sh` - covers the per-task verified Shortcut story
 - `tests/fm-calm-pi-extension.test.sh` - waits for the full Pi calm snapshot before asserting
-- `tests/fm-claude-trust.test.sh` - parses launch commands with any number of exports
 - `tests/fm-kimi-harness.test.sh` - covers the voice plugin and chrome session launch
 - `tests/fm-pending-reply.test.sh` - covers ack escalation and mate result delivery
 - `tests/fm-pi-branch-extension.test.sh` - covers silent-handled wake keys in dispatch
@@ -58,6 +56,5 @@ Regenerate the candidate list with `git diff --name-only upstream/main...origin/
 - `tests/fm-tangle-guard.test.sh` - covers worktree identity and the sc- branch convention
 - `tests/fm-task-inbox.test.sh` - covers silent-handled wake keys and captain outcome kinds
 - `tests/fm-teardown.test.sh` - covers chrome-devtools-axi session teardown
-- `tests/fm-test-run.test.sh` - covers the fork shard weights and sc- branch convention
 - `tests/fm-wake-queue.test.sh` - covers silent-handled wake key pruning
 - `tests/lib.sh` - adds helpers for Shortcut story and second-mate report tests
