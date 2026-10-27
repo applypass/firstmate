@@ -1260,13 +1260,17 @@ while :; do
     emit
     exit 0
   fi
-  # Fork-only: any home absorbs a routine check close over an empty queue on
-  # the host, so the Opus session is never woken for it
-  # (bin/fm-secondmate-host-lib.sh, docs/supervision-host.md "Routine closes").
+  # Fork-only: a secondmate home, or a main home whose host is attended-ready,
+  # absorbs a routine check close over an empty queue on the host, so the Opus
+  # session is never woken for it. A pass-through primary (no verified engine)
+  # keeps every close reaching main (bin/fm-secondmate-host-lib.sh,
+  # docs/supervision-host.md "Routine closes").
   if fm_secondmate_host_routine_check "$REASON" \
     && ! fm_afk_contract_away_present "$STATE" \
     && ! grep -q . "$STATE/.wake-queue" 2>/dev/null \
-    && fm_supervision_host_config "$CONFIG" "$PRIMARY"; then
+    && fm_supervision_host_config "$CONFIG" "$PRIMARY" \
+    && { fm_secondmate_host_home "$FM_HOME" \
+      || fm_supervision_host_attended_ready "$CONFIG" "$PRIMARY"; }; then
     host_still_owner || stand_down "this session no longer owns supervision"
     if ! start_successor "$CLOSED_ARM_PID"; then
       exit_to_main "the successor watcher cycle could not be verified before handling; this wake is yours"

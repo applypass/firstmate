@@ -2088,9 +2088,31 @@ quiet_pass_through_successor() {  # <home>
     || fail "fixture: could not acknowledge the successor downtime"
 }
 
+# Over an empty queue a ready host absorbs that resurface and parks on its
+# successor instead of exiting, so the park is already live: wait for either.
+absorbed_resurfaces() {  # <home>
+  local n
+  n=$(grep -c '	absorbed	main	check: rearm-resurface' "$1/state/.supervision-host.log" 2>/dev/null || true)
+  printf '%s\n' "${n:-0}"
+}
+
+resurface_settled() {  # <home> <absorbed count before the stop>
+  [ "$(absorbed_resurfaces "$1")" -gt "$2" ] || host_exited "$1"
+}
+
 park_after_stop() {  # <home>
+  local before
+  before=$(absorbed_resurfaces "$1")
   rm -f "$1/host.rc"
   : > "$1/park.go"
+  if ! grep -q . "$1/state/.wake-queue" 2>/dev/null; then
+    wait_until 150 resurface_settled "$1" "${before:-0}" \
+      || fail "the watcher's downtime resurface was neither absorbed nor handed to main: $(cat "$1/host.out")"
+    if [ "$(absorbed_resurfaces "$1")" -gt "${before:-0}" ]; then
+      park_again "$1"
+      return 0
+    fi
+  fi
   wait_until 150 host_exited "$1" || fail "the watcher's downtime resurface did not reach main: $(cat "$1/host.out")"
   assert_re '^check: rearm-resurface' "$1/host.out" "fixture: the first close after the watcher stopped was not its resurface"
   main_drain_and_ack "$1"
@@ -2667,6 +2689,24 @@ test_main_home_resurface_over_an_empty_queue_is_absorbed_by_the_host() {
   [ "$(engine_calls "$home")" -eq 0 ] || fail "main resurface: the host ran an engine turn for an empty queue"
   watcher_live "$home" || fail "main resurface: the host is not parked after absorbing the resurface"
   pass "host: a resurface over an empty queue in the main home is absorbed on the host, and the host stays parked"
+}
+
+test_main_home_without_a_ready_engine_sends_an_empty_resurface_to_main() {
+  local home host
+  # A primary whose configured engine is not verified: the home opted in, but
+  # the host is a pass-through, so every close reaches main.
+  home=$(make_home main-resurface-unready attended unverified-engine)
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "unready resurface: the host never started a watcher cycle"
+  host=$(awk -F '\t' '$1 == "host" { print $2 }' "$home/state/.supervision-host")
+  kill -TERM "$host"
+  wait_until 250 host_exited "$home" || fail "unready resurface: the stopped host did not exit"
+  rm -f "$home/host.rc"
+  start_host "$home"
+  wait_until 250 host_exited "$home" || fail "unready resurface: the empty resurface did not reach main: $(cat "$home/host.out"; cat "$home/state/.supervision-host.log")"
+  assert_re '^check: rearm-resurface' "$home/host.out" "an empty resurface must reach main when the host has no ready engine"
+  [ "$(absorbed_resurfaces "$home")" -eq 0 ] || fail "unready resurface: the host absorbed a close it cannot handle"
+  pass "host: a main home without a ready engine still sends an empty resurface to main"
 }
 
 test_report_without_acknowledgement_hands_the_wake_to_main() {
@@ -3651,6 +3691,7 @@ test_secondmate_resurface_over_an_empty_queue_is_absorbed_by_the_host
 test_host_stopped_right_after_a_handled_wake_exits_and_frees_the_queue
 test_engine_in_another_time_zone_handles_its_granted_rows
 test_main_home_resurface_over_an_empty_queue_is_absorbed_by_the_host
+test_main_home_without_a_ready_engine_sends_an_empty_resurface_to_main
 test_attended_captain_outcome_reaches_main_through_branch_outcomes
 test_captain_leaving_mid_turn_keeps_its_captain_outcome_for_the_return
 test_quiet_record_without_its_daemon_is_a_present_captain

@@ -213,7 +213,7 @@ The engine runs the Claude engine's default model (`sonnet`) there, as in every 
 
 - **Routine closes.** Stale rechecks of a paused worker, routine signals, and acknowledged fire-and-forget inbox notes already reach the engine through the ordinary attended rules.
   A `check: rearm-resurface` close over an empty wake queue announces nothing, so the host starts the successor cycle and parks on it (ledger kind `absorbed`, then `secondmate`).
-  The main home takes the same rule, with ledger kind `absorbed` then `main`, so a restart of the watcher no longer ends the main session's turn for a close with nothing in it; a resurface over a non-empty queue still reaches main.
+  The main home takes the same rule when its host is attended-ready (`fm_supervision_host_attended_ready`), with ledger kind `absorbed` then `main`; a pass-through primary without a verified engine still sends every close to main. So a restart of the watcher no longer ends the main session's turn for a close with nothing in it; a resurface over a non-empty queue still reaches main.
 - **Captain outcomes.** `bin/fm-branch-report.sh` puts each captain outcome on the parent channel when it records it ([secondmate-parent-channel.md](secondmate-parent-channel.md)).
   When every store row the turn recorded is on that channel, the host parks (ledger kind `published`) instead of exiting with `branch-outcome:`.
   The host never marks a row read or processed: the rows stay unacknowledged until the mate's next drain, which presents them with every unread routine row, and the mate acknowledges each one it finds settled.
