@@ -400,10 +400,7 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label]
       fm_task_inbox_composer_holds "$backend" "$target" "$line" "$label" \
         && [ "$(fm_backend_busy_state "$backend" "$target" 2>/dev/null)" != busy ] \
         || return 1
-      fm_backend_send_key "$backend" "$target" Enter "$label" >/dev/null 2>&1 || return 2
-      sleep 0.3
-      fm_task_inbox_composer_holds "$backend" "$target" "$line" "$label" || return 0
-      fm_backend_send_key "$backend" "$target" Enter "$label" >/dev/null 2>&1 || return 2
+      fm_task_inbox_submit_own_doorbell "$backend" "$target" "$line" "$label" || return $(( $? == 1 ? 1 : 2 ))
       return 0
       ;;
   esac
@@ -420,11 +417,33 @@ fm_task_inbox_ring() {  # <backend> <target> <record-path> [expected-label]
   return 0
 }
 
+# Submit the composer's content when it is exactly our own doorbell <line>: one
+# carriage return, then one confirmed retry if the line is still there. Returns
+# 0 submitted, 1 the composer does not hold exactly <line> (nothing is typed or
+# sent), 2 the backend send failed. The carriage return goes as typed text, not
+# a named Enter key: Herdr send-keys Enter did not submit an idle Claude
+# composer holding the doorbell, while a typed carriage return did. It never
+# checks busy state: a busy Claude Code agent queues a message submitted now,
+# so the caller decides whether busy is acceptable.
+fm_task_inbox_submit_own_doorbell() {  # <backend> <target> <line> [expected-label]
+  local backend=$1 target=$2 line=$3 label=${4:-}
+  fm_task_inbox_composer_holds "$backend" "$target" "$line" "$label" || return 1
+  fm_backend_send_literal "$backend" "$target" $'\r' "$label" >/dev/null 2>&1 || return 2
+  sleep 0.3
+  fm_task_inbox_composer_holds "$backend" "$target" "$line" "$label" || return 0
+  fm_backend_send_literal "$backend" "$target" $'\r' "$label" >/dev/null 2>&1 || return 2
+  return 0
+}
+
 # Whether the composer's content, ignoring line wrapping, is exactly <line>.
+# The doorbell embeds two absolute paths and wraps over many rows, and a busy
+# harness draws a status panel below the composer, so the usual composer capture
+# can clip the top of the doorbell and read as other text. This reads a fixed
+# 60-row capture so a whole doorbell is seen.
 fm_task_inbox_composer_holds() {  # <backend> <target> <line> [expected-label]
   local cap held
   fm_backend_source "$1" || return 1
-  cap=$(fm_backend_capture "$1" "$2" "$FM_COMPOSER_CAPTURE_LINES" "${4:-}" 2>/dev/null) || return 1
+  cap=$(fm_backend_capture "$1" "$2" 60 "${4:-}" 2>/dev/null) || return 1
   held=$(fm_composer_extract_selected_content styled=0 "$cap") || return 1
   [ -n "$held" ] && [ "$(printf '%s' "$held" | tr -d '[:space:]')" = "$(printf '%s' "$3" | tr -d '[:space:]')" ]
 }

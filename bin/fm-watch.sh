@@ -574,7 +574,7 @@ inbox_steer_busy() {  # <window> <backend> <task> <tail40>
 # Runs for secondmates too: their pane-staleness exemption is about quiet panes
 # being healthy, while an unacknowledged instruction can still be a stuck steer.
 inbox_steer_check() {  # <window> <task>
-  local w=$1 task=$2 action verb rec count tail40 reason ring_rc backend agent_state silent_name
+  local w=$1 task=$2 action verb rec count tail40 reason ring_rc backend agent_state silent_name line
   # A request moved to handled/ whose worker then stopped with no status line
   # since it arrived left its supervisor no result to read: each such record
   # queues its own row before the wake exits (fm_task_inbox_silent_handled).
@@ -615,6 +615,16 @@ inbox_steer_check() {  # <window> <task>
   tail40=$WATCHER_CAPTURE
   if inbox_steer_busy "$w" "$backend" "$task" "$tail40"; then
     [ "$verb" != retry ] || return 0
+    # Fork-only (applypass): a busy Claude pane queues a message submitted now,
+    # so a doorbell of ours left unsubmitted in the composer goes in rather than
+    # waiting behind the agent. Any other composer content is never touched.
+    if [ "$verb" = ring ] && [ "$(window_harness "$w")" = claude ] \
+      && line=$(fm_task_inbox_doorbell_line "$rec") \
+      && fm_task_inbox_submit_own_doorbell "$backend" "$w" "$line" "$(window_label "$w")"; then
+      fm_task_inbox_record_ring "$STATE" "$task" "$rec" || true
+      triage_log "steer-inbox busy-pane submit: $task ${rec##*/}"
+      return 0
+    fi
     if ! count=$(fm_task_inbox_record_busy "$STATE" "$task" "$rec"); then
       [ -f "$rec" ] || return 0
       reason="stale: $w (steering-inbox busy bookkeeping unwritable: ${rec%/*}/.busy-state cannot be written while $rec stays unhandled; inspect the inbox directory)"

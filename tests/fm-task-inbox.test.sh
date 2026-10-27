@@ -312,7 +312,8 @@ test_ring_skips_dead_agent() {
 # A fake tmux whose pane is a Claude-style composer that keeps its content in
 # FM_FAKE_COMPOSER: literal input appends to it, capture renders it wrapped
 # between rules, and Enter submits it (logged as SUBMIT) unless
-# FM_FAKE_DROP_ENTERS still holds a count of Enters to swallow.
+# FM_FAKE_DROP_ENTERS still holds a count of Enters to swallow. A carriage
+# return sent as literal text submits like Enter; FM_KEY_LOG records which form.
 make_composer_stub() {  # <dir>
   mkdir -p "$1/fakebin"
   cat > "$1/fakebin/tmux" <<'SH'
@@ -329,9 +330,15 @@ case "${1:-}" in
         *) break ;;
       esac
     done
-    if [ "$literal" = 1 ]; then
+    submit=0
+    if [ "$literal" = 1 ] && [ "${1:-}" = $'\r' ]; then
+      submit=1; echo 'KEY: carriage-return text' >> "${FM_KEY_LOG:-/dev/null}"
+    elif [ "$literal" = 1 ]; then
       printf '%s' "$1" >> "$FM_FAKE_COMPOSER"
     elif [ "${1:-}" = Enter ]; then
+      submit=1; echo 'KEY: send-keys Enter' >> "${FM_KEY_LOG:-/dev/null}"
+    fi
+    if [ "$submit" = 1 ]; then
       drops=$(cat "$FM_FAKE_DROP_ENTERS" 2>/dev/null || echo 0)
       if [ "$drops" -gt 0 ]; then
         echo $((drops - 1)) > "$FM_FAKE_DROP_ENTERS"
@@ -345,14 +352,22 @@ case "${1:-}" in
     case "$*" in *cursor_y*) printf '2\n'; exit 0 ;; esac
     printf 'fakepane\n'; exit 0 ;;
   capture-pane)
-    rule=$(printf '─%.0s' $(seq 64))
-    printf '● done\n%s\n' "$rule"
-    if [ -s "$FM_FAKE_COMPOSER" ]; then
-      fold -w 60 "$FM_FAKE_COMPOSER" | awk 'NR == 1 { print "❯ " $0; next } { print "  " $0 }'
-    else
-      printf '❯ \n'
-    fi
-    printf '%s\n  ? for shortcuts\n' "$rule"
+    rows=
+    while [ $# -gt 0 ]; do
+      case "$1" in -S) rows=${2#-}; shift 2 ;; *) shift ;; esac
+    done
+    {
+      rule=$(printf '─%.0s' $(seq 64))
+      printf '● done\n%s\n' "$rule"
+      if [ -s "$FM_FAKE_COMPOSER" ]; then
+        fold -w 60 "$FM_FAKE_COMPOSER" | awk 'NR == 1 { print "❯ " $0; next } { print "  " $0 }'
+      else
+        printf '❯ \n'
+      fi
+      printf '%s\n  ? for shortcuts\n' "$rule"
+      # A busy harness draws a panel of background work below the composer.
+      for i in $(seq "${FM_FAKE_TRAILER_ROWS:-0}"); do printf '  background agent %s running\n' "$i"; done
+    } | if [ -n "$rows" ] && [ "$rows" != 0 ]; then tail -n "$rows"; else cat; fi
     exit 0 ;;
   list-windows) printf 'fm-t1\n'; exit 0 ;;
 esac
@@ -366,28 +381,32 @@ SH
 # rings. Our own exact doorbell is submitted instead; any other pending text
 # still skips untouched; and a lost Enter after typing gets one retry.
 test_ring_submits_its_own_stuck_doorbell() {
-  local dir state rec doorbell log composer drops rc other
+  local dir state rec doorbell log composer drops rc other keys
   dir="$TMP_ROOT/ring-stuck"
   state="$dir/state"
   mkdir -p "$state"
   make_composer_stub "$dir"
   rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
   doorbell=$(inbox_lib "$state" fm_task_inbox_doorbell_line "$rec")
-  log="$dir/send.log"; composer="$dir/composer"; drops="$dir/drops"
+  log="$dir/send.log"; composer="$dir/composer"; drops="$dir/drops"; keys="$dir/keys.log"
   ring() {
     PATH="$dir/fakebin:$PATH" FM_SEND_LOG="$log" FM_FAKE_COMPOSER="$composer" \
-      FM_FAKE_DROP_ENTERS="$drops" inbox_lib "$state" fm_task_inbox_ring tmux sess:fm-t1 "$rec" fm-t1
+      FM_FAKE_DROP_ENTERS="$drops" FM_KEY_LOG="$keys" inbox_lib "$state" fm_task_inbox_ring tmux sess:fm-t1 "$rec" fm-t1
   }
 
-  : > "$log"; printf '%s' "$doorbell" > "$composer"
+  : > "$log"; : > "$keys"; printf '%s' "$doorbell" > "$composer"
   rc=0; ring || rc=$?
+  [ "$(cat "$keys")" = "KEY: carriage-return text" ] \
+    || fail "the stuck doorbell should be submitted with a carriage return sent as text, never send-keys Enter:"$'\n'"$(cat "$keys")"
   [ "$rc" = 0 ] || fail "a composer holding our own stuck doorbell should be submitted, got rc $rc"
   [ "$(cat "$log")" = "SUBMIT: $doorbell" ] \
     || fail "the stuck doorbell should be submitted exactly once, not retyped:"$'\n'"$(cat "$log")"
   [ ! -s "$composer" ] || fail "the stuck doorbell was left in the composer"
 
-  : > "$log"; printf '%s' "$doorbell" > "$composer"; echo 1 > "$drops"
+  : > "$log"; : > "$keys"; printf '%s' "$doorbell" > "$composer"; echo 1 > "$drops"
   rc=0; ring || rc=$?
+  [ "$(sort -u "$keys")" = "KEY: carriage-return text" ] && [ "$(wc -l < "$keys" | tr -d ' ')" = 2 ] \
+    || fail "the retry should also be a carriage return sent as text:"$'\n'"$(cat "$keys")"
   [ "$rc" = 0 ] || fail "a stuck doorbell whose first Enter is lost should still report rung, got rc $rc"
   [ "$(cat "$log")" = "SUBMIT: $doorbell" ] \
     || fail "the retry Enter should submit the stuck doorbell once, not retype it:"$'\n'"$(cat "$log")"
@@ -708,6 +727,77 @@ test_watcher_rerings_idle_pane_quietly() {
   kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null
   [ ! -s "$log" ] || fail "the watcher kept ringing after the ack:"$'\n'"$(cat "$log")"
   pass "watcher: an unhandled aged message on an idle pane re-rings without waking firstmate, and the ack silences it"
+}
+
+# The incident: the doorbell wraps over many rows and a busy harness draws a
+# panel below the composer, so the 20-row composer capture clipped the top of
+# our own doorbell and it read as other text.
+test_composer_holds_reads_a_clipped_doorbell() {
+  local dir state rec doorbell composer
+  dir="$TMP_ROOT/holds-clipped"; state="$dir/state"; mkdir -p "$state"
+  make_composer_stub "$dir"
+  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
+  doorbell=$(inbox_lib "$state" fm_task_inbox_doorbell_line "$rec")
+  composer="$dir/composer"; printf '%s' "$doorbell" > "$composer"
+  PATH="$dir/fakebin:$PATH" FM_FAKE_COMPOSER="$composer" FM_FAKE_TRAILER_ROWS=14 \
+    inbox_lib "$state" fm_task_inbox_composer_holds tmux sess:fm-t1 "$doorbell" fm-t1 \
+    || fail "a wrapped doorbell under a tall status panel should still read as our own"
+  printf '%s and a draft' "$doorbell" > "$composer"
+  ! PATH="$dir/fakebin:$PATH" FM_FAKE_COMPOSER="$composer" FM_FAKE_TRAILER_ROWS=14 \
+    inbox_lib "$state" fm_task_inbox_composer_holds tmux sess:fm-t1 "$doorbell" fm-t1 \
+    || fail "a doorbell plus other text must not read as our own"
+  pass "inbox: the composer check reads a wrapped doorbell even under a tall status panel, and still rejects extra text"
+}
+
+setup_busy_claude_case() {  # <name> -> echoes case dir; claude pane that is provably busy
+  local dir
+  dir=$(setup_watch_case "$1")
+  make_composer_stub "$dir"
+  fm_write_meta "$dir/state/t1.meta" "window=sess:fm-t1" "kind=ship" "harness=claude"
+  printf 'gen1\n' > "$dir/state/t1.busy-gen"
+  printf 'v1 gen=gen1 seq=1 state=busy source=claude-hook event=UserPromptSubmit ts=%s\n' "$(date +%s)" \
+    > "$dir/state/t1.busy-state"
+  printf '%s\n' "$dir"
+}
+
+# One watcher check in a fresh process against the busy Claude composer pane.
+busy_claude_check() {  # <case-dir>
+  PATH="$1/fakebin:$PATH" FM_STATE_OVERRIDE="$1/state" FM_SEND_LOG="$1/send.log" \
+    FM_FAKE_COMPOSER="$1/composer" FM_KEY_LOG="$1/keys.log" FM_FAKE_TRAILER_ROWS=8 \
+    FM_TASK_INBOX_GRACE_SECS=0 FM_TASK_INBOX_BUSY_MAX=99 \
+    bash -c '. "$1" && inbox_steer_check sess:fm-t1 t1' _ "$WATCH" > "$1/check.out" 2>&1
+}
+
+test_watcher_submits_own_doorbell_on_busy_claude_pane() {
+  local dir state rec doorbell
+  dir=$(setup_busy_claude_case busy-submit); state="$dir/state"
+  : > "$dir/send.log"; : > "$dir/keys.log"
+  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
+  doorbell=$(inbox_lib "$state" fm_task_inbox_doorbell_line "$rec")
+  age_path "$rec"
+  printf '%s' "$doorbell" > "$dir/composer"
+  busy_claude_check "$dir"
+  [ "$(cat "$dir/send.log")" = "SUBMIT: $doorbell" ] \
+    || fail "a busy Claude pane holding our own doorbell should have it submitted once:"$'\n'"$(cat "$dir/send.log")"
+  [ "$(cat "$dir/keys.log")" = "KEY: carriage-return text" ] \
+    || fail "the busy-pane submit should be a carriage return sent as text:"$'\n'"$(cat "$dir/keys.log")"
+  [ ! -s "$dir/composer" ] || fail "the stuck doorbell was left in the composer of a busy pane"
+  [ ! -s "$state/.wake-queue" ] || fail "a successful busy-pane submit queued a wake:"$'\n'"$(cat "$state/.wake-queue")"
+  pass "watcher: a busy Claude pane whose composer holds our own doorbell gets it submitted, with no wake"
+}
+
+test_watcher_never_submits_other_text_on_busy_claude_pane() {
+  local dir state rec
+  dir=$(setup_busy_claude_case busy-draft); state="$dir/state"
+  : > "$dir/send.log"; : > "$dir/keys.log"
+  rec=$(inbox_lib "$state" fm_task_inbox_write "$state" t1 "please continue")
+  age_path "$rec"
+  printf 'a half-typed draft' > "$dir/composer"
+  busy_claude_check "$dir"
+  [ ! -s "$dir/send.log" ] && [ ! -s "$dir/keys.log" ] \
+    || fail "a draft in a busy pane's composer was submitted or typed into:"$'\n'"$(cat "$dir/send.log" "$dir/keys.log")"
+  [ "$(cat "$dir/composer")" = 'a half-typed draft' ] || fail "the draft was changed: $(cat "$dir/composer")"
+  pass "watcher: a busy Claude pane's other pending text is never submitted or cleared"
 }
 
 # A fresh process for each check proves the busy budget survives watcher restarts.
@@ -1236,6 +1326,9 @@ test_fire_and_forget_retry_is_owed_once
 test_fire_and_forget_retry_is_quiet_without_the_flag
 test_ring_ladder_policy
 test_watcher_rerings_idle_pane_quietly
+test_composer_holds_reads_a_clipped_doorbell
+test_watcher_submits_own_doorbell_on_busy_claude_pane
+test_watcher_never_submits_other_text_on_busy_claude_pane
 test_watcher_waits_on_busy_pane
 test_watcher_busy_budget_resets_on_ring_and_ack
 test_watcher_busy_bookkeeping_failure_surfaces

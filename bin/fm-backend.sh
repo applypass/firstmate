@@ -1039,6 +1039,25 @@ fm_backend_send_key() {  # <backend> <target> <key> [expected-label]
   esac
 }
 
+# fm_backend_send_literal: send TEXT as typed characters with no submission.
+fm_backend_send_literal() {  # <backend> <target> <text> [expected-label]
+  local backend=$1
+  shift
+  fm_backend_source "$backend" || return 1
+  case "$backend" in
+    tmux) fm_backend_tmux_send_literal "$@" ;;
+    herdr) fm_backend_herdr_send_literal "$@" ;;
+    zellij) fm_backend_zellij_send_literal "$@" ;;
+    orca) fm_backend_orca_send_literal "$@" ;;
+    cmux) fm_backend_cmux_send_literal "$@" ;;
+    paseo) fm_backend_paseo_send_literal "$@" ;;
+    rex) fm_backend_rex_send_literal "$@" ;;
+    t3code) fm_backend_t3code_send_literal "$@" ;;
+    tern) fm_backend_tern_send_literal "$@" ;;
+    *) echo "error: no send-literal implementation for backend '$backend'" >&2; return 1 ;;
+  esac
+}
+
 # fm_backend_send_text_submit: submit and verify through the selected adapter.
 # Pane backends type once and retry only submission; T3 uses a native send.
 # Echoes the backend's verdict; callers require exact empty for confirmed delivery.
