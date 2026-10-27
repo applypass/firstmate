@@ -1544,3 +1544,41 @@ test_project_lock_anchors_at_the_local_root_across_home_layouts
 test_remote_seeded_home_returns_its_uncontested_slot
 test_remote_seeded_home_still_refuses_a_slot_its_child_holds
 test_remote_layout_homes_serialize_on_one_project_lock
+# Fork-only: --retire-stale-record retires a record whose slot another task holds, claim or no claim.
+run_retire() { FM_HOME="$1/home" FM_ROOT_OVERRIDE="$ROOT" FM_RUNTIME_LOG="$1/runtime.log" PATH="$1/fakebin:$PATH" "$TEARDOWN" "$2" --force --retire-stale-record; }
+retire_case() { # <name> <claim: other|mine|none> <other-record: yes|no>
+  local dir
+  dir=$(make_case "$1"); mark_case_as_treehouse_pool "$dir"
+  fm_write_meta "$dir/home/state/stale-scout.meta" "window=firstmate:fm-stale-scout" "endpoint_task_id=stale-scout" \
+    "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  [ "$3" = no ] || fm_write_meta "$dir/home/state/live-task.meta" "window=firstmate:fm-live-task" \
+    "endpoint_task_id=live-task" "worktree=$dir/worktree" "project=$dir/project" "kind=scout"
+  case "$2" in other) claim_pool_slot "$dir" live-task ;; mine) claim_pool_slot "$dir" stale-scout ;; esac
+  printf '%s\n' "$dir"
+}
+test_retire_stale_record_without_a_claim_leaves_the_slot_to_its_holder() {
+  local dir
+  dir=$(retire_case retire-no-claim none yes)
+  run_case "$dir" stale-scout >/dev/null 2>&1 && fail "a claimless collision tore down without --retire-stale-record"
+  assert_present "$dir/home/state/stale-scout.meta" "the plain refusal removed the stale record"
+  run_retire "$dir" stale-scout > "$dir/stdout" 2> "$dir/stderr" || fail "retiring the stale record failed: $(cat "$dir/stderr")"
+  assert_absent "$dir/home/state/stale-scout.meta" "the stale record survived its retirement"
+  assert_present "$dir/home/state/live-task.meta" "the holder's record was removed"
+  assert_present "$dir/worktree/sentinel" "retirement touched the holder's checkout"
+  ! grep -Fq "treehouse <return>" "$dir/runtime.log" || fail "retirement returned the holder's slot: $(cat "$dir/runtime.log")"
+  : > "$dir/runtime.log"; run_case "$dir" live-task >/dev/null 2>&1 || fail "the holder could not tear down after the stale record retired"
+  pass "fm-teardown: --retire-stale-record retires a claimless stale record, then the holder tears down"
+}
+test_retire_stale_record_refuses_a_slot_it_cannot_show_is_another_tasks() {
+  local dir name
+  for name in "mine yes" "none no"; do
+    # shellcheck disable=SC2086
+    set -- $name; dir=$(retire_case "retire-refuse-$1-$2" "$1" "$2")
+    run_retire "$dir" stale-scout >/dev/null 2>&1 && fail "retirement proceeded with claim=$1 other-record=$2"
+    assert_present "$dir/home/state/stale-scout.meta" "claim=$1 other-record=$2: a refused retirement removed the record"
+    assert_present "$dir/worktree/sentinel" "claim=$1 other-record=$2: a refused retirement touched the slot"
+  done
+  pass "fm-teardown: --retire-stale-record refuses its own claim and an unshared slot"
+}
+test_retire_stale_record_without_a_claim_leaves_the_slot_to_its_holder
+test_retire_stale_record_refuses_a_slot_it_cannot_show_is_another_tasks

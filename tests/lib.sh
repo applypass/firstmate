@@ -84,6 +84,22 @@ unset FM_VALIDATION_GATE
 # against an ambient override sets TASKS_AXI_FILE itself.
 unset TASKS_AXI_FILE TASKS_AXI_BACKEND
 
+# Pin every asdf-managed tool to the version it resolves to now. An asdf shim
+# reads its version from .tool-versions under $HOME, and cases point HOME at an
+# empty fixture directory, so the shim for node or tasks-axi would exit 126 with
+# no output there and fail every case that runs them (the Claude trust writer,
+# the captain-hold read). asdf honors ASDF_<TOOL>_VERSION ahead of any file, and
+# finds its installs under ASDF_DATA_DIR, which defaults to $HOME/.asdf.
+if command -v asdf >/dev/null 2>&1; then
+  export ASDF_DATA_DIR="${ASDF_DATA_DIR:-$HOME/.asdf}"
+  while read -r _fm_asdf_tool _fm_asdf_version _; do
+    case "$_fm_asdf_version" in
+      [0-9]*) export "ASDF_$(printf '%s' "$_fm_asdf_tool" | tr 'a-z-' 'A-Z_')_VERSION=$_fm_asdf_version" ;;
+    esac
+  done < <(asdf current 2>/dev/null)
+  unset _fm_asdf_tool _fm_asdf_version
+fi
+
 # Clear the Rex block identity an operator's terminal exports. Run directly
 # inside a Rex block, the suite would otherwise auto-detect the rex backend
 # (bin/fm-backend.sh's fm_backend_detect) and place fixture tasks into the
