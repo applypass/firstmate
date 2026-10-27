@@ -2218,6 +2218,7 @@ test_quiet_escalation_does_not_wake_and_resolves_without_a_wake() {
   home=$(setup_parent quiet-escalation)
   state="$home/state"
   status="$state/hibit.status"
+  # shellcheck disable=SC2031  # Fork-only: the subshell test above exports this too; each test here owns the variable
   export FM_PENDING_REPLY_NOW=50000
   export FM_PENDING_REPLY_WAKE_HOLD_SECS=3600
   corr=$(fm_pending_reply_create "$home" "$state" hibit "check the PR 367 canvas")
