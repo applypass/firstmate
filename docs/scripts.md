@@ -61,6 +61,7 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-op-pretool-check.sh` | Fork-only: PreToolUse transport that refuses a bare 1Password `op` call unless OP_SERVICE_ACCOUNT_TOKEN is loaded (decision in `fm-op-command-policy.mjs`) |
 | `fm-op-guard-install.sh` | Fork-only: register the op guard and the no-mistakes mirror check in a directory's untracked `.claude/settings.local.json`; `fm-spawn.sh` runs it for every Claude worker and secondmate |
 | `fm-nm-mirror-pretool-check.sh` | Fork-only: PreToolUse check that refuses a new `no-mistakes axi run --intent` when the private mirror branch holds commits whose patches local HEAD lacks |
+| `fm-nm-base-skip-pretool-check.sh` | Fork-only: PreToolUse check that makes a new `no-mistakes axi run --intent` skip the `test` step when the PR base is `dev` and keep it for any other base; an unknown base allows the full run. It covers Claude workers only; other workers keep the full run with tests |
 | `fm-op-service-account-token.sh` | Fork-only: print the 1Password service account token for a home (bash entry point over `fm-op-service-account-lib.sh`, named by the op guard's deny reason so the remedy works from any shell) |
 | `fm-daily-quota-stop.sh` | Fork-only: daily Claude quota stop gate (`check`); refuses new launches and no-mistakes runs at 20% of the weekly quota used today and holds them at 25% (docs/configuration.md) |
 | `fm-daily-quota-lib.sh` | Fork-only: quota-axi read, day-start baseline, and verdict logic sourced by `fm-daily-quota-stop.sh` |
