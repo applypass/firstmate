@@ -371,6 +371,7 @@ A weekly reset today makes the baseline zero, and so does a reading below the ba
 At 20% used today, a fresh worker launch (`bin/fm-spawn.sh`, ship, scout, or secondmate) and a new no-mistakes run are refused with the number and the threshold.
 At 25% they are held until the next local day, and the hold persists for the rest of the day even if usage later reads lower.
 The 20 and 25 lines are fixed constants in `bin/fm-daily-quota-lib.sh`.
+The captain may lift one day's refuse line to the 25% hold: firstmate writes that local date (`date +%F`) into `state/daily-quota-raised` in the fleet home.
 Running work always finishes: `fm-spawn.sh --relaunch`, reattaching to a run, and answering a gate are never blocked.
 The stop applies in every home and in away and quiet mode.
 
