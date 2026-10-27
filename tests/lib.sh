@@ -34,6 +34,8 @@ export FM_SHORTCUT_TICKETS=off
 # Fork-only: the daily Claude quota stop reads quota-axi on every launch, which
 # fixtures must never call. The cases that test the gate unset this themselves.
 export FM_DAILY_QUOTA_STOP=off
+# Fork-only: the hourly /stow reminder prints on primary prompts; fixtures expect silence.
+export FM_CLEAR_REMINDER=off
 # Fork-only end
 
 # Pin the fixture umask. Firstmate's state-root and process-event contracts
