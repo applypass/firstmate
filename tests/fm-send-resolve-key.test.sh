@@ -113,6 +113,24 @@ setup_home() {  # <name> -> echoes a fresh home dir with an empty state/
   printf '%s\n' "$home"
 }
 
+# Fork-only (applypass): a --resolve-key close also resolves the pending-reply
+# record behind a pending-reply-<corr> key, for --close-ack too.
+test_resolve_key_resolves_pending_reply_record() {
+  local stubs sendlog home corr other recdir
+  stubs=$(make_stubs "$TMP_ROOT/rec-stubs"); sendlog="$TMP_ROOT/rec-send.log"
+  home=$(setup_home rec); recdir="$home/state/pending-replies"
+  fm_write_secondmate_meta "$home/state/domain.meta" "$home" "sess:fm-domain"
+  corr=$(bash -c '. "$1"; fm_pending_reply_create "$2" "$2/state" "$3" req' _ "$ROOT/bin/fm-pending-reply-lib.sh" "$home" domain)
+  other=$(bash -c '. "$1"; fm_pending_reply_create "$2" "$2/state" "$3" req' _ "$ROOT/bin/fm-pending-reply-lib.sh" "$home" other)
+  sed -i.bak 's/^delivered_epoch=.*/delivered_epoch=100/' "$recdir/$corr" && rm -f "$recdir/$corr.bak"
+  printf 'blocked [key=pending-reply-%s]: pending-reply-missed: task=domain pending-reply-id=%s\n' "$corr" "$corr" > "$home/state/domain.status"
+  run_send "$stubs" "$home" "$sendlog" fm-domain --resolve-key "pending-reply-$corr" --close-ack "acknowledged"
+  grep -qx 'phase=resolved' "$recdir/$corr" || fail "the record stayed open: $(cat "$recdir/$corr")"
+  grep -qx 'resolved_via=operator-resolve-key' "$recdir/$corr" || fail "no operator resolve marker: $(cat "$recdir/$corr")"
+  grep -qx 'phase=awaiting_report' "$recdir/$other" || fail "another task's record was touched"
+  pass "fm-send --resolve-key: resolves the pending-reply record with the key, and leaves another task's record open"
+}
+# Fork-only end
 drain_out() {  # <home>
   FM_STATE_OVERRIDE="$1/state" "$DRAIN" 2>/dev/null
 }
@@ -989,3 +1007,4 @@ test_decision_answer_partition_relocates_under_the_record
 # Fork-only (applypass): fire-and-forget close case.
 test_resolve_key_with_fire_and_forget_closes_without_pending_reply
 test_close_ack_closes_without_pending_reply
+test_resolve_key_resolves_pending_reply_record
