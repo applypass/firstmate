@@ -54,6 +54,8 @@ TMP_ROOT=$(fm_test_tmproot fm-pending-reply)
 
 export FM_PENDING_REPLY_GRACE_SECS=0
 export FM_SEND_SETTLE=0
+# Escalations wake at once here; the quiet hold has its own tests below.
+export FM_PENDING_REPLY_WAKE_HOLD_SECS=0
 
 # --- fixtures ---------------------------------------------------------------
 
@@ -2208,6 +2210,158 @@ test_summary_keeps_accents_and_caps_by_character() {
   pass "the summary keeps accented letters, drops control characters, and caps by character"
 }
 
+# Walks one request: web-perf is steered, acknowledges with working:, then goes
+# quiet. The unreported escalation lists as an open decision but does not wake;
+# the reply lands inside the hold, so the supervisor never spends a turn on it.
+test_quiet_escalation_does_not_wake_and_resolves_without_a_wake() {
+  local home state corr status open
+  home=$(setup_parent quiet-escalation)
+  state="$home/state"
+  status="$state/hibit.status"
+  export FM_PENDING_REPLY_NOW=50000
+  export FM_PENDING_REPLY_WAKE_HOLD_SECS=3600
+  corr=$(fm_pending_reply_create "$home" "$state" hibit "check the PR 367 canvas")
+  fm_pending_reply_mark_delivered "$state" "$corr"
+  printf 'working [corr=%s]: on it\n' "$corr" > "$status"
+  fm_pending_reply_try_resolve "$state" "$corr" && fail "working: must not resolve"
+  prime_seen "$state" "$status" || fail "could not prime the announced baseline"
+  FM_PENDING_REPLY_NOW=$((50000 + 1800))
+  fm_pending_reply_maybe_escalate "$state" "$corr" || fail "unreported escalation should fire"
+  [ "$(phase_of "$state" "$corr")" = escalated ] || fail "phase should be escalated"
+  open=$(status_open_decisions "$status" | cut -f1)
+  [ "$open" = "pending-reply-$corr" ] || fail "quiet escalation must still list as an open decision"
+  seen_gate "$state" "$status" || fail "a quiet escalation woke the watcher's signal gate"
+  # The hold has not run out: a tick adds nothing.
+  FM_PENDING_REPLY_NOW=$((50000 + 1800 + 600))
+  fm_pending_reply_wake_held_escalation "$state" "$corr" || fail "early wake check failed"
+  [ "$(grep -Fc "blocked [key=pending-reply-$corr]" "$status")" = 1 ] \
+    || fail "no reminder is due before the hold ends"
+  # The mate answers inside the hold: resolve and close, still no wake.
+  printf 'done [corr=%s]: canvas fixed\n' "$corr" >> "$status"
+  prime_seen "$state" "$status" || fail "could not mark the reply announced"
+  fm_pending_reply_try_resolve "$state" "$corr" || fail "correlated reply should resolve"
+  [ -z "$(status_open_decisions "$status")" ] || fail "resolve must close the quiet escalation"
+  seen_gate "$state" "$status" || fail "closing a quiet escalation woke the watcher's signal gate"
+  unset FM_PENDING_REPLY_NOW
+  export FM_PENDING_REPLY_WAKE_HOLD_SECS=0
+  pass "a quiet escalation lists but does not wake, and a reply inside the hold resolves it silently"
+}
+
+test_quiet_escalation_wakes_once_after_the_hold() {
+  local home state corr status reminders
+  home=$(setup_parent quiet-escalation-hold)
+  state="$home/state"
+  status="$state/hibit.status"
+  export FM_PENDING_REPLY_NOW=60000
+  export FM_PENDING_REPLY_WAKE_HOLD_SECS=3600
+  corr=$(fm_pending_reply_create "$home" "$state" hibit "confirm the notarization")
+  fm_pending_reply_mark_delivered "$state" "$corr"
+  printf 'working [corr=%s]: relayed\n' "$corr" > "$status"
+  fm_pending_reply_try_resolve "$state" "$corr" || true
+  prime_seen "$state" "$status" || fail "could not prime the announced baseline"
+  FM_PENDING_REPLY_NOW=$((60000 + 1800))
+  fm_pending_reply_maybe_escalate "$state" "$corr" || fail "unreported escalation should fire"
+  # Past the hold with no reply, the tick wakes once, not on every poll.
+  FM_PENDING_REPLY_NOW=$((60000 + 1800 + 3600))
+  fm_pending_reply_tick "$state"
+  if seen_gate "$state" "$status"; then
+    fail "an escalation still unresolved after the hold must wake the watcher"
+  fi
+  reminders=$(grep -Fc "still unresolved after 60m" "$status")
+  [ "$reminders" = 1 ] || fail "expected one reminder, got $reminders"
+  prime_seen "$state" "$status" || fail "could not mark the reminder announced"
+  fm_pending_reply_tick "$state"
+  fm_pending_reply_tick "$state"
+  [ "$(grep -Fc "still unresolved after 60m" "$status")" = 1 ] \
+    || fail "later ticks must not repeat the reminder"
+  seen_gate "$state" "$status" || fail "a repeated tick woke the watcher again"
+  [ "$(status_open_decisions "$status" | cut -f1)" = "pending-reply-$corr" ] \
+    || fail "the reminder must keep one open decision under the same key"
+  # A reply after the reminder still closes it.
+  printf 'done [corr=%s]: notarization confirmed\n' "$corr" >> "$status"
+  fm_pending_reply_try_resolve "$state" "$corr" || fail "correlated reply should resolve"
+  [ -z "$(status_open_decisions "$status")" ] || fail "resolve must close the reminded escalation"
+  unset FM_PENDING_REPLY_NOW
+  export FM_PENDING_REPLY_WAKE_HOLD_SECS=0
+  pass "a quiet escalation wakes once after the hold and still closes on a reply"
+}
+
+# Main closes the quiet escalation itself (fm-send --resolve-key) before the
+# hold runs out; the reminder must not reopen it or wake anyone.
+test_quiet_escalation_closed_by_main_is_not_reminded() {
+  local home state corr status key
+  home=$(setup_parent quiet-escalation-main-closed)
+  state="$home/state"
+  status="$state/hibit.status"
+  export FM_PENDING_REPLY_NOW=80000
+  export FM_PENDING_REPLY_WAKE_HOLD_SECS=3600
+  corr=$(fm_pending_reply_create "$home" "$state" hibit "check the PR 367 canvas")
+  fm_pending_reply_mark_delivered "$state" "$corr"
+  printf 'working [corr=%s]: on it\n' "$corr" > "$status"
+  fm_pending_reply_try_resolve "$state" "$corr" || true
+  FM_PENDING_REPLY_NOW=$((80000 + 1800))
+  fm_pending_reply_maybe_escalate "$state" "$corr" || fail "unreported escalation should fire"
+  key="pending-reply-$corr"
+  printf 'resolved [key=%s]: %s\n' "$key" \
+    "$(fm_pending_reply_close_note_for_key "$key" hibit operator-resolve-key "handled")" >> "$status"
+  [ -z "$(status_open_decisions "$status")" ] || fail "main's close should leave nothing open"
+  prime_seen "$state" "$status" || fail "could not prime the announced baseline"
+  FM_PENDING_REPLY_NOW=$((80000 + 1800 + 3600))
+  fm_pending_reply_tick "$state"
+  ! grep -Fq "still unresolved" "$status" || fail "a decision main closed must not be reminded"
+  [ -z "$(status_open_decisions "$status")" ] || fail "the reminder reopened a decision main closed"
+  seen_gate "$state" "$status" || fail "a closed escalation woke the watcher"
+  [ -z "$(fm_pending_reply_get "$(fm_pending_reply_path "$state" "$corr")" escalation_wake_due_epoch)" ] \
+    || fail "the due reminder should be cleared"
+  unset FM_PENDING_REPLY_NOW
+  export FM_PENDING_REPLY_WAKE_HOLD_SECS=0
+  pass "a quiet escalation main already closed is not reminded"
+}
+
+# The reminder names the hold that set its due time, not the hold in force now.
+test_quiet_escalation_reminder_names_the_recorded_hold() {
+  local home state corr status
+  home=$(setup_parent quiet-escalation-recorded-hold)
+  state="$home/state"
+  status="$state/hibit.status"
+  export FM_PENDING_REPLY_NOW=90000
+  export FM_PENDING_REPLY_WAKE_HOLD_SECS=1800
+  corr=$(fm_pending_reply_create "$home" "$state" hibit "confirm the notarization")
+  fm_pending_reply_mark_delivered "$state" "$corr"
+  printf 'working [corr=%s]: relayed\n' "$corr" > "$status"
+  fm_pending_reply_try_resolve "$state" "$corr" || true
+  FM_PENDING_REPLY_NOW=$((90000 + 1800))
+  fm_pending_reply_maybe_escalate "$state" "$corr" || fail "unreported escalation should fire"
+  export FM_PENDING_REPLY_WAKE_HOLD_SECS=0
+  FM_PENDING_REPLY_NOW=$((90000 + 1800 + 1800))
+  fm_pending_reply_tick "$state"
+  [ "$(grep -Fc "still unresolved after 30m" "$status")" = 1 ] \
+    || fail "the reminder should name the 30m hold it was armed with"
+  unset FM_PENDING_REPLY_NOW
+  pass "the reminder names the hold recorded at escalation"
+}
+
+test_delivery_unknown_escalation_wakes_at_once_despite_the_hold() {
+  local home state corr status
+  home=$(setup_parent delivery-unknown-wakes)
+  state="$home/state"
+  status="$state/hibit.status"
+  export FM_PENDING_REPLY_NOW=70000
+  export FM_PENDING_REPLY_WAKE_HOLD_SECS=3600
+  corr=$(fm_pending_reply_create "$home" "$state" hibit "lost transport")
+  fm_pending_reply_prepare_delivery "$state" "$corr" || fail "prepare delivery failed"
+  fm_pending_reply_mark_delivery_unknown "$state" "$corr" || fail "mark delivery unknown failed"
+  : > "$status"
+  prime_seen "$state" "$status" || fail "could not prime the announced baseline"
+  fm_pending_reply_maybe_escalate "$state" "$corr" || fail "delivery-unknown escalation should fire"
+  if seen_gate "$state" "$status"; then
+    fail "a delivery-unknown escalation is a transport fault and must wake at once"
+  fi
+  unset FM_PENDING_REPLY_NOW
+  export FM_PENDING_REPLY_WAKE_HOLD_SECS=0
+  pass "delivery-unknown escalations still wake at once"
+}
+
 # --- run --------------------------------------------------------------------
 
 test_normal_correlated_reply_resolves_once
@@ -2262,5 +2416,10 @@ test_ack_escalates_on_age_not_on_an_idle_mate_pane
 test_resolved_records_keep_upgrade_behaviour
 test_same_kind_escalation_reopens_after_operator_close
 test_summary_keeps_accents_and_caps_by_character
+test_quiet_escalation_does_not_wake_and_resolves_without_a_wake
+test_quiet_escalation_wakes_once_after_the_hold
+test_delivery_unknown_escalation_wakes_at_once_despite_the_hold
+test_quiet_escalation_closed_by_main_is_not_reminded
+test_quiet_escalation_reminder_names_the_recorded_hold
 
 printf 'ok - all pending-reply tests passed\n'
