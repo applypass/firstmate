@@ -90,7 +90,7 @@ Each effective `FM_HOME` contains private operational directories.
 - One-shot Bearings reconcile requests under `state/reconcile-notify/`.
 - Private secondmate config-reread generations with their retry and quarantine state.
 - Per-task steering-inbox records under `state/<id>.inbox/` (`bin/fm-task-inbox-lib.sh`).
-- Parent-owned secondmate pending-reply records under `state/pending-replies/` (`bin/fm-pending-reply-lib.sh`).
+- Parent-owned secondmate pending-reply records under `state/pending-replies/`, with aged resolved records moved to `state/pending-replies-archive/` (`bin/fm-pending-reply-lib.sh`).
 
 `config/` holds local gitignored operating choices, including explicit extension bindings under `config/extensions.d/`.
 
@@ -2516,6 +2516,8 @@ FM_SEND_SETTLE=1        # seconds fm-send waits after a successful typed-plane s
 FM_PENDING_REPLY_GRACE_SECS=120   # seconds after the request turn completes without a correlated parent report before its one recovery repost is eligible, and after the recovery turn completes before the missed-report escalation is eligible; never counted from delivery
 FM_PENDING_REPLY_ACK_SECS=1800   # seconds a request acknowledged only by a correlated working: or paused: line may go without a new correlated line before its pending-reply-unreported escalation (bin/fm-pending-reply-lib.sh)
 FM_PENDING_REPLY_WAKE_HOLD_SECS=3600   # seconds a missed or unreported pending-reply escalation stays a quiet open decision (listed in the next drain, no wake) before it wakes once; 0 wakes at once (bin/fm-pending-reply-lib.sh)
+FM_PENDING_REPLY_ARCHIVE_DAYS=2   # days after resolution before a resolved record whose escalation, if any, is closed moves to state/pending-replies-archive/; open and escalated records never move; 0 turns retention off
+FM_PENDING_REPLY_ARCHIVE_BATCH=200   # most records one watcher poll archives, so a large backlog drains over several polls
 # sub-supervisor (bin/fm-supervise-daemon.sh); presence-gated via /afk
 FM_SUPERVISOR_BACKEND=             # optional supervisor pane backend override; tmux/herdr only, otherwise detects $TMUX_PANE then HERDR_ENV/HERDR_PANE_ID before tmux fallback
 FM_SUPERVISOR_TARGET=              # optional supervisor pane target override; tmux target or herdr <session>:<pane-id>, otherwise auto-detected
