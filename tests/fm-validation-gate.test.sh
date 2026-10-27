@@ -132,6 +132,40 @@ outcome() {  # <id> <verdict> <summary>
     --task "$1" --verdict "$2" --summary "$3" 2>&1
 }
 
+test_release_defers_at_the_final_run_cap() {
+  local out status id
+  make_world cap
+  commit_in "$WT_DIR" 'feat: final version'
+  printf '3\n' >"$HOME_DIR/config/final-run-cap"
+  for id in cap-a cap-b cap-c cap-d; do
+    write_task_meta "$id"
+    prepare_ship "$id" >/dev/null || fail "prepare $id should succeed"
+    printf 'done [at=%s]: PR https://example.invalid/pr/%s ready for final validation\n' \
+      "$(date +%s)" "$id" >>"$STATE_DIR/$id.status"
+  done
+  for id in cap-a cap-b cap-c; do
+    out=$(release_task "$id" 2>&1) || fail "release of $id under the cap should succeed: $out"
+  done
+  out=$(release_task cap-d 2>&1)
+  status=$?
+  expect_code 75 "$status" "a fourth release at a cap of 3 should defer: $out"
+  assert_equals held "$(gate_verdict cap-d)" "a deferred release must stay held"
+  assert_grep 'release deferred' "$STATE_DIR/cap-d.validation-gate" "the deferral should be recorded"
+  assert_equals 0 "$(steer_count cap-d)" "a deferred release must not start the run"
+  out=$(PATH="$SEND_BIN:$PATH" FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$STATE_DIR" FM_SEND_LOG="$TMP_ROOT/send.log" \
+    FM_SEND_SETTLE=0 "$GATE" release-deferred 2>&1) || fail "release-deferred should succeed: $out"
+  assert_equals held "$(gate_verdict cap-d)" "a retry with the cap still full must keep it held"
+  printf 'done [at=%s]: PR https://example.invalid/pr/cap-c checks green\n' "$(date +%s)" >>"$STATE_DIR/cap-c.status"
+  out=$(PATH="$SEND_BIN:$PATH" FM_HOME="$HOME_DIR" FM_STATE_OVERRIDE="$STATE_DIR" FM_SEND_LOG="$TMP_ROOT/send.log" \
+    FM_SEND_SETTLE=0 "$GATE" release-deferred 2>&1) || fail "release-deferred should succeed: $out"
+  assert_contains "$(gate_verdict cap-d)" "released" "a finished run frees a slot for the deferred release"
+  assert_equals 1 "$(steer_count cap-d)" "the deferred release should start its run once a slot frees"
+  printf 'x\n' >"$HOME_DIR/config/final-run-cap"
+  out=$(release_task cap-d 2>&1) || fail "an already released task keeps its slot: $out"
+  rm -f "$HOME_DIR/config/final-run-cap"
+  pass "release defers at the per-home final-run cap and is retried when a run finishes"
+}
+
 test_pre_release_push_is_refused() {
   local out status
   make_world held
@@ -641,6 +675,7 @@ test_failed_release_can_still_escalate() {
   pass "a release that fails leaves the escalation to the captain open"
 }
 
+test_release_defers_at_the_final_run_cap
 test_pre_release_push_is_refused
 test_released_head_is_accepted_and_only_that_head
 test_release_refuses_an_ungated_task
