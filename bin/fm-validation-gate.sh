@@ -86,6 +86,17 @@
 #       leaves the release and exits nonzero; rerunning retries the steer.
 #       A release that cannot find the worktree HEAD keeps `held` and notes
 #       `release failed: <reason>` as line 2, so the escalation stays open.
+#       Per-home cap: when config/final-run-cap holds a positive integer and
+#       that many other tasks already have a live released run (gate file
+#       `released <sha>`, no terminal `checks green` or `failed` status line),
+#       release defers: the task stays `held` with `release deferred: <why>`
+#       as line 2 and the command exits 75. A task already released keeps its
+#       slot, so re-releasing a new head never defers. The file absent means
+#       no cap; anything but a positive integer keeps the task held and fails.
+#   fm-validation-gate.sh release-deferred
+#       Retries every deferred release, oldest first, until the cap is full
+#       again, and exits 0. Idempotent, so firstmate runs it on each wake
+#       while a deferral is pending.
 #   fm-validation-gate.sh outcome-check <task-id> <verdict>
 #       bin/fm-branch-outcome.sh calls this before storing an outcome. Exits 1
 #       for verdict captain while the gate file reads only `held` and the
@@ -256,12 +267,73 @@ release_failed() {  # <gate-file> <reason>
   die "$2"
 }
 
+# The per-home cap on concurrent final runs, from config/final-run-cap.
+# Prints nothing when absent; returns 1 when malformed.
+final_run_cap() {
+  local word
+  word=$(switch_word "$(config_dir)/final-run-cap")
+  case "$word" in
+  '') return 0 ;;
+  *[!0-9]* | 0) return 1 ;;
+  *) printf '%s' "$word" ;;
+  esac
+}
+
+# Count released runs still live in this home, not counting <id>.
+live_final_runs() {  # <id>
+  local state f t last n=0
+  state=$(state_dir)
+  for f in "$state"/*.validation-gate; do
+    [ -e "$f" ] || continue
+    t=${f##*/}
+    t=${t%.validation-gate}
+    [ "$t" != "$1" ] || continue
+    case "$(head -n 1 "$f" 2>/dev/null)" in released\ *) ;; *) continue ;; esac
+    [ -e "$state/$t.meta" ] || continue
+    last=$(awk 'NF { line = $0 } END { print line }' "$state/$t.status" 2>/dev/null)
+    case "$last" in done*'checks green'* | failed*) continue ;; esac
+    n=$((n + 1))
+  done
+  printf '%s' "$n"
+}
+
+# Exit 75, leaving the task held, when releasing <id> would exceed the cap.
+defer_at_cap() {  # <id> <gate-file>
+  local cap live
+  case "$(head -n 1 "$2" 2>/dev/null)" in released\ *) return 0 ;; esac
+  cap=$(final_run_cap) || release_failed "$2" "config/final-run-cap must hold a positive integer"
+  [ -n "$cap" ] || return 0
+  live=$(live_final_runs "$1")
+  [ "$live" -ge "$cap" ] || return 0
+  if [ "$(head -n 1 "$2" 2>/dev/null)" = held ]; then
+    write_atomic "$2" "held"$'\n'"release deferred: $live of $cap final runs are live in this home" || true
+  fi
+  echo "deferred $1: $live of $cap final runs are live in this home; it stays held until release-deferred finds a free slot" >&2
+  exit 75
+}
+
+cmd_release_deferred() {
+  [ "$#" -eq 0 ] || usage
+  local state f id rc
+  state=$(state_dir)
+  while IFS= read -r f; do
+    grep -q '^release deferred:' "$f" 2>/dev/null || continue
+    id=${f##*/}
+    id=${id%.validation-gate}
+    rc=0
+    "${BASH_SOURCE[0]}" release "$id" || rc=$?
+    [ "$rc" -ne 75 ] || break
+  done < <(ls -tr "$state"/*.validation-gate 2>/dev/null)
+  return 0
+}
+
 cmd_release() {
   local id=${1:-} state meta file wt full verdict='' steered=''
   [ -n "$id" ] && [ "$#" -eq 1 ] || usage
   state=$(state_dir)
   file="$state/$id.validation-gate"
   [ -e "$file" ] || die "task $id is not gated (no $file)"
+  defer_at_cap "$id" "$file"
   meta="$state/$id.meta"
   wt=$(sed -n 's/^worktree=//p' "$meta" 2>/dev/null | head -n 1)
   [ -n "$wt" ] && [ -d "$wt" ] || release_failed "$file" "task $id has no readable worktree in $meta"
@@ -336,6 +408,7 @@ When a ship reports `done [at=<epoch>]: PR <url> ready for final validation`, fi
 Then report verdict captain with the PR's URL: the PR is ready to merge to dev, and its final validation is now running without waiting for the captain's merge word.
 The worker's later `done: PR <url> checks green` is a follow-up that clears the merge.
 The report surface refuses a captain verdict for a ready report the gate still holds, so release first; if release itself fails, report verdict captain with its exact error.
+When release exits 75 the home is at its final-run cap: the task stays held, so report verdict captain that its final validation is queued, then run `bin/fm-validation-gate.sh release-deferred` on each later wake until no deferral remains.
 EOF
 }
 
@@ -364,6 +437,7 @@ case "$CMD" in
 enabled) cmd_enabled "$@" ;;
 prepare) cmd_prepare "$@" ;;
 release) cmd_release "$@" ;;
+release-deferred) cmd_release_deferred "$@" ;;
 dod) cmd_dod "$@" ;;
 outcome-check) cmd_outcome_check "$@" ;;
 supervision-rule) cmd_supervision_rule "$@" ;;

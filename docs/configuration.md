@@ -407,6 +407,7 @@ This feature does not set `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE` or any other autocom
 The validation release gate holds a no-mistakes ship's full pipeline run until firstmate releases it in the turn that handles the worker's ready report, then tells the captain the PR is ready to merge to dev.
 A local, gitignored `config/validation-gate` holding `on` or `off` wins; otherwise the tracked `defaults/validation-gate` decides, and neither present means off.
 [`bin/fm-validation-gate.sh`](../bin/fm-validation-gate.sh)'s header owns the mechanism, scope, and release command.
+A local `config/final-run-cap` holding a positive integer caps the final runs live in that home; a release past it stays held until `release-deferred` finds a free slot, and an absent file means no cap.
 
 ### Own-PR-to-dev auto-merge (applypass fork)
 
