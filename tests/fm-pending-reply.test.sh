@@ -2201,14 +2201,14 @@ test_tick_archives_aged_terminal_records() {
   [ -f "$dir/00000000000000a2" ] || fail "a recently resolved record stays scanned"
   [ -f "$dir/00000000000000a3" ] || fail "a resolved record with an open escalation stays scanned"
   [ -f "$arch/00000000000000a4" ] || fail "a resolved record whose escalation closed is archived"
-  [ -f "$arch/00000000000000b1" ] || fail "a long-escalated delivered record should move to the archive"
-  [ -f "$dir/00000000000000b2" ] || fail "a recently escalated record stays scanned"
-  [ -f "$dir/00000000000000b3" ] || fail "an undelivered escalation stays retryable and scanned"
+  [ -f "$dir/00000000000000b1" ] || fail "an escalated record stays in the store, however old"
+  [ -f "$dir/00000000000000b2" ] || fail "a recently escalated record stays in the store"
+  [ -f "$dir/00000000000000b3" ] || fail "an undelivered escalation stays retryable and in the store"
   [ -f "$dir/00000000000000c1" ] || fail "an unresolved record is never archived, however old"
-  FM_PENDING_REPLY_ARCHIVE_DAYS=0 FM_PENDING_REPLY_ARCHIVE_ESCALATED_DAYS=0 fm_pending_reply_tick "$state"
+  FM_PENDING_REPLY_ARCHIVE_DAYS=0 fm_pending_reply_tick "$state"
   [ -f "$dir/00000000000000a2" ] || fail "retention off must leave every record in place"
   unset FM_PENDING_REPLY_NOW
-  pass "the tick archives aged terminal records and keeps every other record scanned"
+  pass "the tick archives aged resolved records and keeps every other record in the store"
 }
 
 test_tick_archive_batch_is_bounded() {
@@ -2254,38 +2254,56 @@ test_tick_scales_to_a_thousand_records() {
     i=$((i + 1))
   done
   FM_PENDING_REPLY_ARCHIVE_BATCH=2000 fm_pending_reply_tick "$state"
-  [ "$(find "$dir" -type f | wc -l | tr -d ' ')" -eq 79 ] || fail "only the 79 recent records should stay scanned"
-  [ "$(find "$state/pending-replies-archive" -type f | wc -l | tr -d ' ')" -eq 921 ] \
-    || fail "all 921 aged records should be archived"
+  [ "$(find "$dir" -type f | wc -l | tr -d ' ')" -eq 233 ] \
+    || fail "the 154 escalated and 79 recent records should stay in the store"
+  [ "$(find "$state/pending-replies-archive" -type f | wc -l | tr -d ' ')" -eq 767 ] \
+    || fail "all 767 aged resolved records should be archived"
   unset FM_PENDING_REPLY_NOW
-  pass "a 1,000-record store shrinks to its recent records in one pass"
+  pass "a 1,000-record store sheds its aged resolved records in one pass"
 }
 
+# Each probed step sees a beacon the tick touched just before it, then ages the
+# beacon again, so only a touch per record keeps every probe fresh.
 test_tick_touches_the_beacon_during_a_long_pass() {
-  local home state beat corr i m
+  local home state beat corr i probes stale
   home=$(setup_parent beacon)
   state="$home/state"
   beat="$home/beat"
-  export FM_PENDING_REPLY_NOW=500000
+  probes="$home/probes"
+  export FM_PENDING_REPLY_NOW=$((100 * 86400))
   : > "$state/ret.status"
   i=0
   while [ "$i" -lt 3 ]; do
     corr=$(printf '%016x' $((0xf00000000000 + i)))
-    seed_record "$state" "$corr" awaiting_report 100 "" ""
+    seed_record "$state" "$corr" resolved 100 $((FM_PENDING_REPLY_NOW - 9 * 86400)) $((FM_PENDING_REPLY_NOW - 3 * 86400))
+    corr=$(printf '%016x' $((0xf10000000000 + i)))
+    seed_record "$state" "$corr" resolved 100 "" $((FM_PENDING_REPLY_NOW - 3 * 86400))
     i=$((i + 1))
   done
   : > "$beat"
   touch -t 200001010000 "$beat"
-  FM_PENDING_REPLY_BEAT_FILE="$beat" FM_PENDING_REPLY_BEAT_SECS=0 fm_pending_reply_tick "$state"
-  m=$(stat -f %m "$beat" 2>/dev/null || stat -c %Y "$beat")
-  [ "$m" -gt 1000000000 ] || fail "the tick should touch the beacon while it works through records"
+  : > "$probes"
+  (
+    probe() {
+      stat -f %m "$beat" 2>/dev/null || stat -c %Y "$beat"
+      touch -t 200001010000 "$beat"
+    }
+    eval "orig_archive() $(declare -f _fm_pending_reply_archive_record | tail -n +2)"
+    eval "orig_close() $(declare -f fm_pending_reply_close_escalation | tail -n +2)"
+    _fm_pending_reply_archive_record() { probe >> "$probes"; orig_archive "$@"; }
+    fm_pending_reply_close_escalation() { probe >> "$probes"; orig_close "$@"; }
+    FM_PENDING_REPLY_BEAT_FILE="$beat" FM_PENDING_REPLY_BEAT_SECS=0 fm_pending_reply_tick "$state"
+  )
+  [ "$(wc -l < "$probes" | tr -d ' ')" -eq 6 ] || fail "every record should reach a probed step"
+  stale=$(awk '$1 < 1000000000' "$probes" | wc -l | tr -d ' ')
+  [ "$stale" -eq 0 ] || fail "the tick should touch the beacon before each record, $stale probes saw it stale"
   : > "$home/other"
   touch -t 200001010000 "$home/other"
   fm_pending_reply_tick "$state"
-  m=$(stat -f %m "$home/other" 2>/dev/null || stat -c %Y "$home/other")
-  [ "$m" -lt 1000000000 ] || fail "without a beacon path the tick touches nothing"
+  [ "$(stat -f %m "$home/other" 2>/dev/null || stat -c %Y "$home/other")" -lt 1000000000 ] \
+    || fail "without a beacon path the tick touches nothing"
   unset FM_PENDING_REPLY_NOW
-  pass "the tick touches the watcher beacon while it works"
+  pass "the tick touches the watcher beacon before each record it works through"
 }
 
 # --- run --------------------------------------------------------------------
