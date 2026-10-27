@@ -24,7 +24,7 @@ run_lean() {
 test_default_is_strict_and_empty() {
   run_lean default
   assert_equals 0 "$RC" "default must succeed: $OUT"
-  assert_equals "--strict-mcp-config --mcp-config '$ST/claude-worker-mcp-none.json' " "$OUT" "default flags"
+  assert_contains "$OUT" "--strict-mcp-config --mcp-config '$ST/claude-worker-mcp-none.json' " "default flags"
   assert_equals '{"mcpServers":{}}' "$(tr -d '[:space:]' <"$ST/claude-worker-mcp-none.json")" "default config must hold no servers"
   pass "default launch carries a strict, empty MCP config"
 }
@@ -33,7 +33,7 @@ test_home_allowlist_replaces_the_empty_set() {
   run_lean home
   printf '{"mcpServers":{"shortcut":{"command":"x"}}}\n' >"$CFG/claude-worker-mcp.json"
   OUT=$(env -u FM_WORKER_MCP "$LEAN" "$CFG" "$ST" 2>&1)
-  assert_equals "--strict-mcp-config --mcp-config '$CFG/claude-worker-mcp.json' " "$OUT" "home allowlist flags"
+  assert_contains "$OUT" "--strict-mcp-config --mcp-config '$CFG/claude-worker-mcp.json' " "home allowlist flags"
   pass "config/claude-worker-mcp.json widens the default"
 }
 
@@ -42,14 +42,14 @@ test_task_override_wins_over_home() {
   printf '{}\n' >"$CFG/claude-worker-mcp.json"
   printf '{"mcpServers":{}}\n' >"$TMP_ROOT/task/one-task.json"
   OUT=$(FM_WORKER_MCP="$TMP_ROOT/task/one-task.json" "$LEAN" "$CFG" "$ST" 2>&1)
-  assert_equals "--strict-mcp-config --mcp-config '$TMP_ROOT/task/one-task.json' " "$OUT" "task override flags"
+  assert_contains "$OUT" "--strict-mcp-config --mcp-config '$TMP_ROOT/task/one-task.json' " "task override flags"
   pass "FM_WORKER_MCP=<file> beats the home allowlist"
 }
 
 test_all_inherits_everything() {
   run_lean all
   OUT=$(FM_WORKER_MCP=all "$LEAN" "$CFG" "$ST" 2>&1)
-  assert_equals "" "$OUT" "FM_WORKER_MCP=all must print no flags"
+  assert_not_contains "$OUT" "--mcp-config" "FM_WORKER_MCP=all must print no MCP flags"
   pass "FM_WORKER_MCP=all keeps the full inherited MCP set"
 }
 
@@ -62,7 +62,21 @@ test_missing_named_file_refuses() {
   pass "a missing MCP config refuses instead of falling back"
 }
 
+test_ship_drops_four_tools_and_scout_keeps_them() {
+  run_lean tools
+  assert_contains "$OUT" "--disallowedTools=Artifact,Workflow,AskUserQuestion,ScheduleWakeup " "ship default must disallow the four tools"
+  OUT=$(env -u FM_WORKER_MCP "$LEAN" "$CFG" "$ST" scout 2>&1)
+  assert_not_contains "$OUT" "--disallowedTools" "scout must keep every built-in tool"
+  assert_contains "$OUT" "--strict-mcp-config" "scout still gets the lean MCP set"
+  OUT=$(env -u FM_WORKER_MCP FM_WORKER_TOOLS=all "$LEAN" "$CFG" "$ST" 2>&1)
+  assert_not_contains "$OUT" "--disallowedTools" "FM_WORKER_TOOLS=all must keep the full tool set"
+  OUT=$(FM_WORKER_MCP=all "$LEAN" "$CFG" "$ST" 2>&1)
+  assert_equals "--disallowedTools=Artifact,Workflow,AskUserQuestion,ScheduleWakeup " "$OUT" "FM_WORKER_MCP=all still drops the four tools"
+  pass "ship and final-run launches drop four tools; a scout keeps them"
+}
+
 test_default_is_strict_and_empty
+test_ship_drops_four_tools_and_scout_keeps_them
 test_home_allowlist_replaces_the_empty_set
 test_task_override_wins_over_home
 test_all_inherits_everything

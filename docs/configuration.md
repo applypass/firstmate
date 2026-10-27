@@ -929,6 +929,7 @@ Claude secondmates and supervisor sessions keep the full inherited set, and the 
 The optional local, gitignored `config/claude-worker-mcp.json` (the shape of claude's `--mcp-config`, `{"mcpServers": {...}}`) is the home's standing allowlist for workers.
 `FM_WORKER_MCP=<file>` in the environment of one `fm-spawn.sh` call replaces it for that task, and `FM_WORKER_MCP=all` keeps the full inherited set for that task.
 A named file that is missing stops the spawn rather than falling back.
+Ship workers, including the fresh worker of a final run, also launch with `--disallowedTools=Artifact,Workflow,AskUserQuestion,ScheduleWakeup`, so those four tools' fixed text is not resent every turn; a scout keeps them all, Artifact included, and `FM_WORKER_TOOLS=all` in the environment of one `fm-spawn.sh` call keeps them for that task.
 `bin/fm-claude-lean-mcp.sh` owns the exact resolution order.
 
 ## Claude permission mode (config/claude-permission-mode)

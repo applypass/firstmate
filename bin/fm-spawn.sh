@@ -5171,7 +5171,7 @@ esac
 # Fork-only: splice the task worker's lean MCP flags (bin/fm-claude-lean-mcp.sh).
 case "$LAUNCH" in
 *__CLAUDELEANMCP__*)
-  CLAUDE_LEAN_MCP=$("$FM_ROOT/bin/fm-claude-lean-mcp.sh" "$CONFIG" "$STATE") || {
+  CLAUDE_LEAN_MCP=$("$FM_ROOT/bin/fm-claude-lean-mcp.sh" "$CONFIG" "$STATE" "$KIND") || {
     echo "error: could not resolve the lean MCP config for $ID's claude launch" >&2
     exit 1
   }
