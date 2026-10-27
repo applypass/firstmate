@@ -159,6 +159,10 @@
 # per-send nonce, so the caller needs no id and a later identical close is
 # delivered rather than deduplicated onto an earlier record.
 #
+# Fork-only (applypass): a pending-reply-<corr> key also marks the matching
+# state/pending-replies record resolved in the same step
+# (fm_pending_reply_resolve_operator; a key with no record is not an error).
+#
 # Decision closure (answerer-closes): pass --resolve-key <key> (repeatable,
 # before the message) when this send answers an open keyed needs-decision: or
 # blocked: record in the target task's state/<id>.status. fm-send itself
@@ -775,7 +779,24 @@ fm_send_close_resolved_keys() { # <answer-text>
     esac
     i=$((i + 1))
   done
+  # Fork-only (applypass): also resolve the pending-reply records, see below.
+  fm_send_resolve_pending_reply_records
 }
+
+# Fork-only (applypass): answering a pending-reply-<corr> escalation also
+# resolves its record, so the record does not stay open after the alert it
+# raised is closed. A key with no matching record is skipped. The answer and
+# the close are already durable, so a failed record update warns instead of
+# failing the send.
+fm_send_resolve_pending_reply_records() {
+  local k
+  for k in $RESOLVE_STATUS_KEYS; do
+    case "$k" in pending-reply-*) ;; *) continue ;; esac
+    fm_pending_reply_resolve_operator "$STATE" "${k#pending-reply-}" "$RESOLVE_TASK_ID" operator-resolve-key ||
+      echo "warning: the decision '$k' is closed, but its pending-reply record could not be marked resolved; inspect $(fm_pending_reply_path "$STATE" "${k#pending-reply-}")" >&2
+  done
+}
+# Fork-only end
 
 # Feed the answered captain-held tasks to the ONE keyed-answer intake, as keyed
 # lines, exactly the way every other channel does. fm-send decides nothing here:

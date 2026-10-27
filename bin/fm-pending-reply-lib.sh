@@ -852,6 +852,43 @@ _fm_pending_reply_try_resolve_locked() {  # <state-dir> <corr_id> [status-file-o
   return 0
 }
 
+# Resolve an expectation because the operator answered its escalation with
+# fm-send --resolve-key, so the answer closes the record as well as the alert.
+# Resolves only a delivered record that belongs to <task_id>; no record, another
+# task's record, an already resolved one, or one never confirmed delivered is not
+# an error (return 0, nothing to do). An undelivered record stays open because its
+# owner may still resend it under the same correlation (retryable undelivered
+# escalation, above).
+# Returns 1 only when a matching open record could not be updated.
+fm_pending_reply_resolve_operator() {  # <state-dir> <corr_id> <task_id> [via]
+  local state=$1 corr=$2 task=$3 via=${4:-operator-resolve-key} lock rc=0
+  local STATE FM_WAKE_QUEUE FM_WAKE_QUEUE_LOCK
+  [ -f "$(fm_pending_reply_path "$state" "$corr")" ] || return 0
+  STATE=$state
+  lock="$state/.pending-reply-$corr.lock"
+  # shellcheck source=bin/fm-wake-lib.sh
+  . "$_FM_PENDING_REPLY_LIB_DIR/fm-wake-lib.sh"
+  fm_lock_acquire_wait "$lock" || return 1
+  _fm_pending_reply_resolve_operator_locked "$state" "$corr" "$task" "$via" || rc=$?
+  fm_lock_release "$lock"
+  return "$rc"
+}
+
+_fm_pending_reply_resolve_operator_locked() {  # <state-dir> <corr_id> <task_id> <via>
+  local state=$1 corr=$2 task=$3 via=$4 rec now
+  rec=$(fm_pending_reply_path "$state" "$corr")
+  [ -f "$rec" ] || return 0
+  [ "$(fm_pending_reply_get "$rec" task_id)" = "$task" ] || return 0
+  [ "$(fm_pending_reply_get "$rec" phase)" != resolved ] || return 0
+  [ -n "$(fm_pending_reply_get "$rec" delivered_epoch)" ] || return 0
+  now=$(fm_pending_reply_now)
+  fm_pending_reply_set "$rec" phase resolved || return 1
+  fm_pending_reply_set "$rec" resolved_epoch "$now" || return 1
+  fm_pending_reply_set "$rec" resolved_via "$via" || return 1
+  _fm_pending_reply_close_escalation_locked "$state" "$corr" || true
+  return 0
+}
+
 # Record a correlated working:/paused: line without resolving: the request stays
 # open as phase=acknowledged, and each new such line restarts its age bound.
 # Only the original awaiting_report turn moves; a request already in recovery or
