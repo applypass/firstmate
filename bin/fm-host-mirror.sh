@@ -252,6 +252,14 @@ case "$1" in
     TEXT=$(printf '%s\n' "$PARSED" | sed '1,2d')
     writer_in_scope || exit 0
     append_entry "$TAG" "$TEXT" "$ID"
+    # Fork-only: hourly /stow then /clear reminder, shown to the captain on a real typed prompt.
+    if [ "$2" = claude ] && [ "$TAG" = captain ]; then
+      case "${TEXT#"${TEXT%%[![:space:]]*}"}" in
+        '<task-notification>'*) ;;
+        *) operational "$TEXT" || "$SCRIPT_DIR/fm-clear-reminder.sh" --state "$STATE" ;;
+      esac
+    fi
+    # Fork-only end
     exit 0
     ;;
   commit)
