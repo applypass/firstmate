@@ -1021,6 +1021,10 @@ test_spawn_secondmate_harness_model_token() {
   jq -e '.feedbackDrafts == "off" and .attribution.commit == "" and .attribution.pr == "" and .attribution.sessionUrl == false and .hooks.UserPromptSubmit' \
     "$(sm_claude_settings "$w" sm)" >/dev/null \
     || fail "model-token: the --settings file did not carry the session keys and busy hooks"
+  # Fork-only: the voice plugin stays disabled for a secondmate.
+  jq -e '.enabledPlugins["applypass-coach@synced"] == false and .enabledPlugins["applypass-coach@inline"] == false' \
+    "$(sm_claude_settings "$w" sm)" >/dev/null \
+    || fail "model-token: the --settings file did not disable the voice plugin"
   assert_not_contains "$launch" "--effort" "model-token: launch must not carry an --effort flag"
   pass "C3 spawn: config/secondmate-harness's model token threads --model into the launch and meta"
 }

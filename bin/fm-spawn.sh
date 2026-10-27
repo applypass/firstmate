@@ -1917,7 +1917,7 @@ spawn_herdr_presentation_order_lock_acquire() {
     return 0
   fi
   attempt=0
-  while [ "$attempt" -lt "$max_attempts" ]; do
+  while [ "$attempt" -lt 50 ]; do
     if fm_lock_try_acquire "$HERDR_PRESENTATION_ORDER_LOCK"; then
       HERDR_PRESENTATION_ORDER_LOCK_HELD=1
       return 0
