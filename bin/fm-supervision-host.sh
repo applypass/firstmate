@@ -1260,13 +1260,17 @@ while :; do
     emit
     exit 0
   fi
-  # Fork-only: a secondmate home absorbs a routine check close over an empty
-  # queue on the host, so the Opus mate session is never woken for it
-  # (bin/fm-secondmate-host-lib.sh, docs/supervision-host.md "Secondmate homes").
-  if fm_secondmate_host_routine_check "$REASON" && fm_secondmate_host_home "$FM_HOME" \
+  # Fork-only: a secondmate home, or a main home whose host is attended-ready,
+  # absorbs a routine check close over an empty queue on the host, so the Opus
+  # session is never woken for it. A pass-through primary (no verified engine)
+  # keeps every close reaching main (bin/fm-secondmate-host-lib.sh,
+  # docs/supervision-host.md "Routine closes").
+  if fm_secondmate_host_routine_check "$REASON" \
     && ! fm_afk_contract_away_present "$STATE" \
     && ! grep -q . "$STATE/.wake-queue" 2>/dev/null \
-    && fm_supervision_host_config "$CONFIG" "$PRIMARY"; then
+    && fm_supervision_host_config "$CONFIG" "$PRIMARY" \
+    && { fm_secondmate_host_home "$FM_HOME" \
+      || fm_supervision_host_attended_ready "$CONFIG" "$PRIMARY"; }; then
     host_still_owner || stand_down "this session no longer owns supervision"
     if ! start_successor "$CLOSED_ARM_PID"; then
       exit_to_main "the successor watcher cycle could not be verified before handling; this wake is yours"
@@ -1275,7 +1279,8 @@ while :; do
       && ! "$SCRIPT_DIR/fm-watch-arm.sh" --handling-delivered "$SUCCESSOR_GENERATION" --watcher-pid "$SUCCESSOR_WATCHER" >/dev/null 2>&1; then
       exit_to_main "the handling handoff to the successor watcher could not be confirmed; this wake is yours"
     fi
-    log_line "absorbed	secondmate	$(printf '%s\n' "$REASON" | head -n 1)"
+    if fm_secondmate_host_home "$FM_HOME"; then HOME_KIND=secondmate; else HOME_KIND=main; fi
+    log_line "absorbed	$HOME_KIND	$(printf '%s\n' "$REASON" | head -n 1)"
     ARM_PID=$SUCCESSOR_PID
     ARM_OUT=$SUCCESSOR_OUT
     SUCCESSOR_PID=
