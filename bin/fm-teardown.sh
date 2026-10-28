@@ -2955,15 +2955,21 @@ remove_firstmate_home() {  # <home> <label> <task-id> <backend>
       restore_firstmate_home_process_events "$abs_home_path" "$label" "$process_event_backup" || return $?
       return 1
     }
+    # Fork-only (applypass): retire the home markers in place under the lease; treehouse return keeps ignored files.
+    # shellcheck source=bin/fm-slot-home-lib.sh
+    if ! { . "$SCRIPT_DIR/fm-slot-home-lib.sh" && fm_slot_home_retire "$abs_home_path" "${expected_id:-home}"; }; then
+      restore_firstmate_home_process_events "$abs_home_path" "$label" "$process_event_backup" || return $?
+      return 1
+    fi
+    # Fork-only end
     teardown_treehouse_return "$abs_home_path" "$FM_ROOT" "$label" || {
       echo "error: treehouse return failed for $label $abs_home_path; lease may still be held" >&2
+      # Fork-only (applypass): the markers are already renamed to *.retired-${expected_id:-home}; stop without further cleanup.
+      echo "error: slot $abs_home_path needs manual cleanup: its markers were renamed to .fm-secondmate-home.retired-${expected_id:-home} and .fm-secondmate-parent.retired-${expected_id:-home}" >&2
+      # Fork-only end
       restore_firstmate_home_process_events "$abs_home_path" "$label" "$process_event_backup" || return $?
       return 1
     }
-    # Fork-only (applypass): treehouse return keeps ignored files, so clear the retired home's marker and state.
-    # shellcheck source=bin/fm-slot-home-lib.sh
-    . "$SCRIPT_DIR/fm-slot-home-lib.sh" && fm_slot_home_scrub "$abs_home_path"
-    # Fork-only end
     [ -z "$process_event_backup" ] || rm -rf -- "$process_event_backup"
     return 0
   fi

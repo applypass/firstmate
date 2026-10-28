@@ -29,12 +29,13 @@ make_retire_case() {
   fakebin="$case_dir/fakebin"
   mkdir -p "$case_dir/state" "$case_dir/data" "$case_dir/config" "$fakebin"
   git init --quiet -b main "$root"
-  printf 'state/\ndata/\nconfig/\n.fm-secondmate-home\n.fm-secondmate-parent\n' > "$root/.gitignore"
+  printf 'state/\ndata/\nconfig/\n.fm-secondmate-home*\n.fm-secondmate-parent*\n' > "$root/.gitignore"
   git -C "$root" add .gitignore
   git -C "$root" -c user.name=t -c user.email=t@example.invalid commit -qm init
   git -C "$root" worktree add --quiet --detach "$home" HEAD
   mkdir -p "$home/state" "$home/data" "$home/config"
   printf '%s\n' task-x1 > "$home/.fm-secondmate-home"
+  printf '%s\n' task-x1 > "$home/.fm-secondmate-parent"
   printf '%s\n' "$$" > "$home/state/.lock"
   printf 'x\n' > "$home/state/leftover"
   printf 'x\n' > "$home/data/charter.md"
@@ -75,32 +76,50 @@ run_retire() {  # <case-dir> [args...]
     "$TEARDOWN" task-x1 "$@" 2>&1
 }
 
-test_retiring_a_leased_home_clears_its_marker_and_state() {
+test_retiring_a_leased_home_renames_its_markers() {
   local case_dir home out rc
-  case_dir=$(make_retire_case retire-clears)
+  case_dir=$(make_retire_case retire-renames)
   home="$case_dir/home-slot"
 
   out=$(run_retire "$case_dir" --force); rc=$?
   expect_code 0 "$rc" "retiring a leased second-mate home should succeed"$'\n'"$out"
-  assert_absent "$home/.fm-secondmate-home" "retirement left the home marker in the returned slot"
+  assert_absent "$home/.fm-secondmate-home" "retirement left the live home marker in the returned slot"
+  assert_absent "$home/.fm-secondmate-parent" "retirement left the live parent marker in the returned slot"
+  assert_present "$home/.fm-secondmate-home.retired-task-x1" "retirement did not leave the renamed home marker"
+  assert_present "$home/.fm-secondmate-parent.retired-task-x1" "retirement did not leave the renamed parent marker"
   assert_absent "$home/state/.lock" "retirement left state/.lock in the returned slot"
-  assert_absent "$home/state/leftover" "retirement left home-only state in the returned slot"
-  assert_absent "$home/data/charter.md" "retirement left home-only data in the returned slot"
   [ -e "$home/.git" ] || fail "retirement removed the pool slot itself"
-  pass "retiring a leased second-mate home leaves no marker or lock in the slot"
+  pass "retiring a leased second-mate home leaves only renamed markers and no lock"
 }
 
-test_failed_return_keeps_the_home_intact() {
+test_markers_are_renamed_before_the_return_call() {
+  local case_dir home out rc
+  case_dir=$(make_retire_case retire-order)
+  home="$case_dir/home-slot"
+  # Record what the slot looks like at the moment treehouse return runs.
+  sed -i.bak 's|^if \[ "\${1:-}" = return \]; then|if [ "${1:-}" = return ]; then\n  { ls -a "${@: -1}"; } > "'"$case_dir"'/at-return.txt"|' "$case_dir/fakebin/treehouse"
+  out=$(run_retire "$case_dir" --force); rc=$?
+  expect_code 0 "$rc" "retirement should succeed"$'\n'"$out"
+  assert_contains "$(cat "$case_dir/at-return.txt")" ".fm-secondmate-home.retired-task-x1" "markers were not renamed before the return call"
+  case "$(cat "$case_dir/at-return.txt")" in
+    *$'\n'.fm-secondmate-home$'\n'*) fail "the live marker was still present when treehouse return ran" ;;
+  esac
+  pass "markers are renamed before treehouse return runs"
+}
+
+test_failed_return_stops_with_a_manual_cleanup_message() {
   local case_dir home out rc
   case_dir=$(make_retire_case retire-return-fails)
   home="$case_dir/home-slot"
 
   out=$(FM_FAKE_TREEHOUSE_FAIL=1 run_retire "$case_dir" --force); rc=$?
   [ "$rc" -ne 0 ] || fail "a failed treehouse return should fail the retirement"$'\n'"$out"
-  assert_present "$home/.fm-secondmate-home" "a failed return must keep the home marker"
-  assert_present "$home/state/.lock" "a failed return must keep the home lock"
-  assert_present "$home/state/leftover" "a failed return must keep the home state"
-  pass "a failed return leaves the home marker and state untouched"
+  assert_contains "$out" "$home needs manual cleanup" "the error did not name the slot needing manual cleanup"
+  assert_contains "$out" ".fm-secondmate-home.retired-task-x1" "the error did not name the renamed marker"
+  assert_present "$home/.fm-secondmate-home.retired-task-x1" "the renamed marker must remain"
+  assert_present "$home/state/leftover" "a failed return must not delete home state"
+  assert_present "$home/data/charter.md" "a failed return must not delete home data"
+  pass "a failed return stops with a manual-cleanup message and deletes nothing else"
 }
 
 make_spawn_case() {  # <name> <id>
@@ -115,7 +134,7 @@ make_spawn_case() {  # <name> <id>
   fm_test_spawn_brief "$home" "$id"
   touch "$home/state/.last-watcher-beat"
   git init --quiet -b main "$project"
-  printf 'state/\n.fm-secondmate-home\n' > "$project/.gitignore"
+  printf 'state/\n.fm-secondmate-home*\n.fm-secondmate-parent*\n' > "$project/.gitignore"
   git -C "$project" add .gitignore
   git -C "$project" -c user.name=t -c user.email=t@example.invalid commit -qm init
   git -C "$project" worktree add --quiet --detach "$pool" HEAD
@@ -143,6 +162,20 @@ REC
   pass "spawn refuses a slot carrying a second-mate marker or home lock and launches nothing"
 }
 
+test_spawn_accepts_a_renamed_marker_slot() {
+  local id=slot-home-retired rec case_dir home project pool fakebin out status
+  rec=$(make_spawn_case spawn-retired "$id")
+  IFS='|' read -r case_dir home project pool fakebin <<REC
+$rec
+REC
+  printf 'autoapply\n' > "$pool/.fm-secondmate-home.retired-autoapply"
+  printf 'autoapply\n' > "$pool/.fm-secondmate-parent.retired-autoapply"
+  out=$(fm_test_run_spawn "$home" "$pool" "$fakebin" "$id" "$project" --scout); status=$?
+  expect_code 0 "$status" "a slot with renamed markers should launch"$'\n'"$out"
+  assert_present "$pool/.fm-secondmate-home.retired-autoapply" "spawn must leave the renamed marker alone"
+  pass "spawn accepts a slot carrying renamed markers"
+}
+
 test_spawn_still_launches_a_clean_slot() {
   local id=slot-home-clean rec case_dir home project pool fakebin out status
   rec=$(make_spawn_case spawn-clean "$id")
@@ -155,9 +188,11 @@ REC
   pass "spawn still launches a clean slot"
 }
 
-test_retiring_a_leased_home_clears_its_marker_and_state
-test_failed_return_keeps_the_home_intact
+test_retiring_a_leased_home_renames_its_markers
+test_markers_are_renamed_before_the_return_call
+test_failed_return_stops_with_a_manual_cleanup_message
 test_spawn_refuses_a_slot_with_home_leftovers
+test_spawn_accepts_a_renamed_marker_slot
 test_spawn_still_launches_a_clean_slot
 
 echo "# all fm-slot-home-leak tests passed"
