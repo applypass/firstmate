@@ -50,7 +50,7 @@
 # Persist first. Before the relaunch, apply asks the mate to write down the open
 # work it holds only in its conversation, with the same marked request
 # /updatefirstmate sends (fm_secondmate_persist_send in
-# bin/fm-secondmate-restart-lib.sh). The sweep never waits: it records the
+# bin/fm-secondmate-persist-first-lib.sh). The sweep never waits: it records the
 # request per mate in state/<id>.fresh-session-persist (corr, deadline, marker
 # epoch) and defers, so a later sweep sends no second request and relaunches only
 # once that correlated answer lands. FM_SECONDMATE_PERSIST_WAIT (default 900)
@@ -343,6 +343,8 @@ do_apply() {
 
   # shellcheck source=bin/fm-secondmate-restart-lib.sh
   . "$SCRIPT_DIR/fm-secondmate-restart-lib.sh"
+  # shellcheck source=bin/fm-secondmate-persist-first-lib.sh
+  . "$SCRIPT_DIR/fm-secondmate-persist-first-lib.sh"
   # shellcheck source=bin/fm-pending-reply-lib.sh
   . "$SCRIPT_DIR/fm-pending-reply-lib.sh"
   # shellcheck source=bin/fm-secondmate-liveness-lib.sh

@@ -29,7 +29,6 @@ Regenerate the candidate list with `git diff --name-only upstream/main...origin/
 - `bin/fm-pr-check.sh` - auto-merges own green PRs to dev from the ready report
 - `bin/fm-pr-merge.sh` - moves Shortcut stories to Done on release
 - `bin/fm-promote.sh` - records the gate decision at spawn and follows it on promotion
-- `bin/fm-secondmate-restart.sh` - sends its persist request through the shared fm_secondmate_persist_send that fresh-session also uses
 - `bin/fm-secondmate-report.sh` - gates second-mate done and ready reports
 - `bin/fm-spawn.sh` - disables the voice plugin and manages chrome-devtools-axi sessions
 - `bin/fm-task-inbox-lib.sh` - delivers every mate result to main by script

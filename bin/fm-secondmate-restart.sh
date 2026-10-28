@@ -305,12 +305,20 @@ while [ "$i" -lt "${#IDS[@]}" ]; do
     fi
   fi
 
-  if ! fm_secondmate_persist_send "$FM_HOME" "$STATE" "$id"; then
-    REASON[i]=$FM_SECONDMATE_PERSIST_REASON
+  if ! corr=$(fm_pending_reply_create "$FM_HOME" "$STATE" "$id" \
+    "$FM_SECONDMATE_PERSIST_REQUEST"); then
+    REASON[i]="its answer about the open work cannot be tracked, so a clean reload could not be proven"
     i=$((i + 1))
     continue
   fi
-  corr=$FM_SECONDMATE_PERSIST_CORR
+  if ! send_out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+    FM_PENDING_REPLY_EXISTING_CORR="$corr" \
+    "$SCRIPT_DIR/fm-send.sh" "$id" "$FM_SECONDMATE_PERSIST_REQUEST" 2>&1); then
+    fm_pending_reply_discard_undelivered "$STATE" "$corr" >/dev/null 2>&1 || true
+    REASON[i]="the request to write down its open work could not be delivered: $(first_reported_line "$send_out")"
+    i=$((i + 1))
+    continue
+  fi
   CORR[i]=$corr
   DEADLINE[i]=$(($(date +%s) + PERSIST_WAIT))
   PLAN[i]="persisted-pending"
