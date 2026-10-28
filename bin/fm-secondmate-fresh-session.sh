@@ -48,16 +48,18 @@
 # session cannot trigger a second restart. Set the limit to 0 to turn it off.
 #
 # Persist first. Before the relaunch, apply asks the mate to write down the open
-# work it holds only in its conversation, with the same marked request
-# /updatefirstmate sends (fm_secondmate_persist_send in
+# work it holds only in its conversation, with the persist step /updatefirstmate
+# runs, worded for a fresh session (fm_secondmate_persist_send in
 # bin/fm-secondmate-persist-first-lib.sh). The sweep never waits: it records the
-# request per mate in state/<id>.fresh-session-persist (corr, deadline, marker
-# epoch) and defers, so a later sweep sends no second request and relaunches only
-# once that correlated answer lands. FM_SECONDMATE_PERSIST_WAIT (default 900)
-# bounds the wait, and the watcher poll is the polling interval. A mate that does
-# not answer in time is not relaunched ("deferred ... did not confirm"): the
-# marker stays, the open request is left to the pending-reply recovery ladder, and
-# a late answer releases the restart on a later sweep.
+# request per mate in state/<id>.fresh-session-persist (corr, deadline) and
+# defers, so a later sweep sends no second request and relaunches only once that
+# correlated answer lands; the record goes when the relaunch runs.
+# FM_SECONDMATE_PERSIST_WAIT (default 900) bounds the wait, and the watcher poll
+# is the polling interval. A mate that does not answer in time is not relaunched
+# and gets no nudge ("timed out ... did not confirm"): apply clears the marker and
+# the record, logs the timeout to the parent's state/fresh-session.log, and leaves
+# the open request to the pending-reply recovery ladder. The next trigger files a
+# new request.
 #
 # A restart happens only when ALL of these hold, so it never cuts a request or
 # an unread message short:
@@ -278,27 +280,27 @@ dismiss_exit_dialog() {  # <id> <meta>
 }
 
 # Run the persist-first step. Returns 0 once the mate's correlated answer is in
-# and the restart may go on; otherwise prints a deferral and returns 1, leaving the
-# marker and any open request untouched.
+# and the restart may go on; otherwise prints a deferral or a timeout and
+# returns 1.
 persist_gate() {  # <id> <meta> <home> <marker>
-  local id=$1 meta=$2 home=$3 marker=$4 pfile pcorr deadline pepoch mepoch wait reason
+  local id=$1 meta=$2 home=$3 marker=$4 pfile pcorr deadline wait reason line
   pfile="$STATE/$id.$PERSIST_NAME"
   wait=${FM_SECONDMATE_PERSIST_WAIT:-900}
   case "$wait" in '' | *[!0-9]*) wait=900 ;; esac
-  mepoch=$(marker_get "$marker" epoch)
   if [ -f "$pfile" ]; then
     pcorr=$(marker_get "$pfile" corr)
     deadline=$(marker_get "$pfile" deadline)
-    pepoch=$(marker_get "$pfile" marker_epoch)
     case "$deadline" in '' | *[!0-9]*) deadline=0 ;; esac
-    if [ "$pepoch" != "$mepoch" ] || [ ! -f "$(fm_pending_reply_path "$STATE" "$pcorr")" ]; then
-      # A request for an earlier marker, or one whose record is gone: ask again.
+    if [ ! -f "$(fm_pending_reply_path "$STATE" "$pcorr")" ]; then
+      # The request's record is gone: ask again.
       rm -f "$pfile"
     elif fm_pending_reply_try_resolve "$STATE" "$pcorr"; then
-      rm -f "$pfile"
       return 0
     elif [ "$(date +%s)" -ge "$deadline" ]; then
-      defer "$id" "it did not confirm within ${wait}s that its open work is written down ($pcorr), so its conversation was not spent"
+      rm -f "$marker" "$pfile"
+      line="timed out $id: it did not confirm within ${wait}s that its open work is written down ($pcorr), so it was not restarted"
+      printf '%s\n' "$line"
+      printf '%s %s\n' "$(date +%s)" "$line" >> "$STATE/fresh-session.log"
       return 1
     else
       defer "$id" "waiting for its answer that its open work is written down ($pcorr)"
@@ -315,12 +317,8 @@ persist_gate() {  # <id> <meta> <home> <marker>
   fi
   pcorr=$FM_SECONDMATE_PERSIST_CORR
   publish_file "$pfile" "corr=$pcorr
-deadline=$(($(date +%s) + wait))
-marker_epoch=$mepoch" || true
-  if fm_pending_reply_try_resolve "$STATE" "$pcorr"; then
-    rm -f "$pfile"
-    return 0
-  fi
+deadline=$(($(date +%s) + wait))" || true
+  fm_pending_reply_try_resolve "$STATE" "$pcorr" && return 0
   defer "$id" "asked it to write down its open work ($pcorr); waiting for its answer"
   return 1
 }
@@ -377,6 +375,7 @@ do_apply() {
   out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
     "$SCRIPT_DIR/fm-control.sh" "$id" relaunch \
     --note "$relaunch_note" 2>&1) || rc=$?
+  rm -f "$STATE/$id.$PERSIST_NAME"
   if [ "$rc" -ne 0 ]; then
     dismiss_exit_dialog "$id" "$meta"
     mv -f "$marker" "$marker.failed" 2>/dev/null || true
