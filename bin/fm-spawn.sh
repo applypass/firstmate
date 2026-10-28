@@ -4264,6 +4264,13 @@ validate_spawn_worktree() { # <source> <inspect-target>
     echo "error: $source did not yield an isolated worktree (resolved '$WT'; worktree root '${SPAWN_WT_TOP:-none}'; spawning project '$PROJ_ABS'); refusing to launch to avoid tangling the primary checkout. Inspect target $inspect_target" >&2
     exit 1
   fi
+  # Fork-only (applypass): never hand a retired second-mate home's leftovers to a ship or scout worker.
+  if [ "$KIND" != secondmate ]; then
+    # shellcheck source=bin/fm-slot-home-lib.sh
+    . "$SCRIPT_DIR/fm-slot-home-lib.sh"
+    fm_slot_home_refuse "$WT" || exit 1
+  fi
+  # Fork-only end
 }
 
 # A pooled slot whose only deviation is a submodule gitlink is stale, not dirty:
