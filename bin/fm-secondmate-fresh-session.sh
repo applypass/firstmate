@@ -60,9 +60,9 @@
 # per-mate liveness lock in the parent's state, held for the whole call, makes a
 # concurrent sweep skip that mate instead of sending a second request. A mate
 # that does not answer in time is not relaunched and gets no nudge ("timed out
-# ... did not confirm"): apply closes that request's pending-reply record so it
-# cannot block the next attempt, clears the marker, and logs the timeout to the
-# parent's state/fresh-session.log. The next trigger files a new request.
+# ... did not confirm"): apply closes that request's pending-reply record and
+# withdraws its own unread steering message so neither can block the next attempt,
+# clears the marker, and logs the timeout to the parent's state/fresh-session.log. The next trigger files a new request.
 #
 # A restart happens only when ALL of these hold, so it never cuts a request or
 # an unread message short:
@@ -312,6 +312,8 @@ persist_gate() {  # <id> <meta> <home> <marker>
         return 1
       fi
       fm_pending_reply_resolve_operator "$STATE" "$corr" "$id" fresh-session-persist-timeout >/dev/null 2>&1 || true
+      # Withdraw this attempt's own unread request so it cannot block the next trigger.
+      grep -l "corr=$corr" "$STATE/$id.inbox"/*.msg 2>/dev/null | while IFS= read -r msg; do rm -f "$msg"; done
       rm -f "$marker"
       line="timed out $id: it did not confirm within ${wait}s that its open work is written down ($corr), so it was not restarted"
       printf '%s\n' "$line"

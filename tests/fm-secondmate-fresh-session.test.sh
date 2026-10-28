@@ -203,15 +203,15 @@ disarm_answer() {
 
 # persist_requests <case-dir> <id>: how many persist-first requests the mate was sent.
 persist_requests() {
-  grep -l 'persist the open work you are holding' "$1/home/state/$2.inbox"/*.msg "$1/home/state/$2.inbox"/handled/*.msg 2>/dev/null | wc -l | tr -d ' '
+  persist_corrs "$1" "$2" | grep -c . || true
 }
 
 # answer_persist <case-dir> <id>: the mate's correlated answer, written late.
 answer_persist() {
   local corr
-  corr=$(grep -ho 'corr=[0-9a-f]\{16\}' "$1/home/state/$2.inbox"/*.msg "$1/home/state/$2.inbox"/handled/*.msg 2>/dev/null | head -1)
+  corr=$(persist_corrs "$1" "$2" | head -1)
   [ -n "$corr" ] || fail "no persist request carrying a correlation token was sent"
-  printf 'done [%s]: open records written down\n' "$corr" >> "$1/home/state/$2.status"
+  printf 'done [corr=%s]: open records written down\n' "$corr" >> "$1/home/state/$2.status"
 }
 
 # late_answer <case-dir> <id> <status|report>: the next doorbell makes the mate
@@ -250,8 +250,11 @@ read_inbox() {
 
 # persist_corrs <case-dir> <id>: the correlation id of every persist request sent.
 persist_corrs() {
-  grep -h 'persist the open work you are holding' "$1/home/state/$2.inbox"/*.msg "$1/home/state/$2.inbox"/handled/*.msg 2>/dev/null \
-    | grep -oE 'corr=[0-9a-f]{16}' | cut -d= -f2 | sort -u
+  grep -l "^request_summary=I am about to restart your agent to start a fresh conversation" \
+    "$1/home/state/pending-replies"/* 2>/dev/null \
+    | while IFS= read -r rec; do
+      [ "$(sed -n 's/^task_id=//p' "$rec")" = "$2" ] && sed -n 's/^corr_id=//p' "$rec"
+    done | sort -u
 }
 
 # assert_asked_then_relaunched <case-dir> <id>: one persist request, rung before the stop.
@@ -730,14 +733,14 @@ test_persist_timeout_clears_marker() {
   assert_absent "$dir/sm1-home/state/fresh-session.request" "a timeout must clear the marker"
   assert_grep "timed out sm1" "$dir/home/state/fresh-session.log" "a timeout must be logged"
   [ "$(persist_requests "$dir" sm1)" = 1 ] || fail "the context sweep must send one persist request"
-  [ "$(find "$dir/home/state/sm1.inbox" -name '*.msg' | wc -l | tr -d ' ')" = 1 ] \
-    || fail "a timeout must send nothing besides the one persist request"
   corr=$(persist_corrs "$dir" sm1)
   rec="$dir/home/state/pending-replies/$corr"
   assert_present "$rec" "the timed-out request must keep its record"
   [ "$(sed -n 's/^phase=//p' "$rec")" = resolved ] || fail "a timeout must close its own persist record"
 
-  read_inbox "$dir" sm1
+  [ "$(find "$dir/home/state/sm1.inbox" -maxdepth 1 -name '*.msg' | wc -l | tr -d ' ')" = 0 ] \
+    || fail "a timeout must withdraw its own unread persist request"
+  # The mate never reads its inbox: the next trigger must still ask again.
   out=$(FM_SECONDMATE_PERSIST_WAIT=0 csweep "$dir")
   assert_contains "$out" "timed out sm1" "the next trigger must ask again"$'\n'"$out"
   [ "$(persist_requests "$dir" sm1)" = 2 ] || fail "the next trigger must send a second persist request"
@@ -788,7 +791,7 @@ test_concurrent_sweep_sends_no_duplicate() {
   printf '999999\n' > "$dir/home/state/.secondmate-liveness-sm1.lock/pid"
   FM_SECONDMATE_PERSIST_WAIT=60 sweep "$dir" > "$dir/bg.out" &
   bg=$!
-  until [ "$(persist_requests "$dir" sm1)" = 1 ]; do
+  until [ "$(persist_requests "$dir" sm1)" = 1 ] && compgen -G "$dir/home/state/sm1.inbox/*.msg" >/dev/null; do
     i=$((i + 1))
     [ "$i" -lt 300 ] || { kill "$bg"; fail "the first sweep never sent its persist request"; }
     /bin/sleep 0.1
