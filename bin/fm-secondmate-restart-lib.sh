@@ -103,7 +103,6 @@ fm_secondmate_restart_capable() {  # <meta-file>
   FM_SECONDMATE_RESTART_HARNESS=$family
   return 0
 }
-
 # Fork-only: shared persist-first request step.
 # Ask one mate to write down its open work: arm the parent-owned reply
 # expectation, then deliver FM_SECONDMATE_PERSIST_REQUEST through fm-send. Both
