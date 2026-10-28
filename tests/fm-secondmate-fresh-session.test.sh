@@ -214,6 +214,58 @@ answer_persist() {
   printf 'done [%s]: open records written down\n' "$corr" >> "$1/home/state/$2.status"
 }
 
+# late_answer <case-dir> <id> <status|report>: the next doorbell makes the mate
+# read the request and answer it a moment later, while apply is still waiting:
+# with a bare status line, or through fm-secondmate-report.sh --item, which also
+# rewrites its restart marker.
+late_answer() {
+  local dir=$1 id=$2 mode=$3
+  disarm_answer "$dir"
+  cat > "$dir/fake/on-doorbell" <<EOT
+#!/usr/bin/env bash
+rm -f "\$0"
+inbox=$(printf '%q' "$dir/home/state/$id.inbox")
+(
+  /bin/sleep 0.3
+  corr=\$(cat "\$inbox"/*.msg 2>/dev/null | grep -oE 'corr=[0-9a-f]{16}' | head -1)
+  corr=\${corr#corr=}
+  [ -n "\$corr" ] || exit 0
+  mkdir -p "\$inbox/handled"
+  mv "\$inbox"/*.msg "\$inbox/handled/"
+  if [ $mode = report ]; then
+    FM_HOME=$(printf '%q' "$dir/$id-home") $(printf '%q' "$REPORT") --item work-2 done "\$corr" "open records written down"
+  else
+    printf 'done [corr=%s]: open records written down\n' "\$corr" >> $(printf '%q' "$dir/home/state/$id.status")
+  fi
+) >/dev/null 2>&1 &
+EOT
+  chmod +x "$dir/fake/on-doorbell"
+}
+
+# read_inbox <case-dir> <id>: the mate reads its steering inbox without answering.
+read_inbox() {
+  mkdir -p "$1/home/state/$2.inbox/handled"
+  mv "$1/home/state/$2.inbox"/*.msg "$1/home/state/$2.inbox/handled/" 2>/dev/null || true
+}
+
+# persist_corrs <case-dir> <id>: the correlation id of every persist request sent.
+persist_corrs() {
+  grep -h 'persist the open work you are holding' "$1/home/state/$2.inbox"/*.msg "$1/home/state/$2.inbox"/handled/*.msg 2>/dev/null \
+    | grep -oE 'corr=[0-9a-f]{16}' | cut -d= -f2 | sort -u
+}
+
+# assert_asked_then_relaunched <case-dir> <id>: one persist request, rung before the stop.
+assert_asked_then_relaunched() {
+  local dir=$1 id=$2 req_line stop_line
+  [ "$(persist_requests "$dir" "$id")" = 1 ] || fail "exactly one persist request must be sent"
+  # The persist request is the only instruction rung before the relaunch.
+  req_line=$(grep -n '^: Firstmate instruction waiting' "$dir/fake/literal" | head -1 | cut -d: -f1)
+  stop_line=$(grep -nx '/exit' "$dir/fake/literal" | head -1 | cut -d: -f1)
+  [ -n "$req_line" ] || fail "the persist request was never delivered"
+  [ -n "$stop_line" ] || fail "the mate was never relaunched"
+  [ "$req_line" -lt "$stop_line" ] || fail "the persist request must be delivered before the relaunch"
+}
+
 
 # The harness exit command is a whole line of the pane transcript; assert_grep is
 # a substring match, so these read the line exactly.
@@ -605,62 +657,37 @@ test_watcher_poll_applies_request() {
 }
 
 # --- T10: persist first, on both triggers -------------------------------------
-# persist_first_flow <case-dir>: the mate holds a restart marker, answers nothing
-# at first. Asserts the request goes out before any relaunch, a repeat sweep sends
-# no second one, and the late answer releases the restart.
-persist_first_flow() {
-  local dir=$1 out
-  disarm_answer "$dir"
-  out=$(sweep "$dir")
-  assert_contains "$out" "deferred sm1" "the first pass must ask, not restart"$'\n'"$out"
-  assert_not_stopped "$dir" "the mate was restarted before it answered"
-  assert_present "$dir/sm1-home/state/fresh-session.request" "the marker must stay while the mate has not answered"
-  [ "$(persist_requests "$dir" sm1)" = 1 ] || fail "exactly one persist request must be sent"
-
-  out=$(sweep "$dir")
-  assert_contains "$out" "waiting for its answer" "a pass while waiting must defer"$'\n'"$out"
-  assert_not_stopped "$dir" "a mate still waiting must not be restarted"
-  [ "$(persist_requests "$dir" sm1)" = 1 ] || fail "a sweep while waiting must not send a second persist request"
-
-  answer_persist "$dir" sm1
-  mkdir -p "$dir/home/state/sm1.inbox/handled"
-  mv "$dir/home/state/sm1.inbox"/*.msg "$dir/home/state/sm1.inbox/handled/" 2>/dev/null || true
-  out=$(sweep "$dir")
-  assert_contains "$out" "restarted sm1" "the correlated answer must release the restart"$'\n'"$out"
-  assert_stopped "$dir" "the answer must lead to the relaunch"
-  assert_absent "$dir/sm1-home/state/fresh-session.request" "the marker must be consumed after the restart"
-  assert_absent "$dir/home/state/sm1.fresh-session-persist" "the persist record must be cleared"
-  [ "$(persist_requests "$dir" sm1)" = 1 ] || fail "the restart must not send another persist request"
-}
-
 test_finished_work_persists_first() {
-  local dir corr
+  local dir corr out
   dir=$(new_case persist-done)
   add_local_mate "$dir" sm1
   bind_mate "$dir" sm1
   corr=$(open_request "$dir" sm1)
   mate_report "$dir" sm1 "done" "$corr" "audit clean"
-  persist_first_flow "$dir"
-  pass "T10a finished-work restart persists open work first, waits for the answer, and never double-asks"
+  late_answer "$dir" sm1 status
+  out=$(FM_SECONDMATE_PERSIST_WAIT=30 sweep "$dir")
+  assert_contains "$out" "restarted sm1" "the late correlated answer must release the restart"$'\n'"$out"
+  assert_asked_then_relaunched "$dir" sm1
+  assert_absent "$dir/sm1-home/state/fresh-session.request" "the marker must be consumed after the restart"
+  pass "T10a finished-work restart asks once, waits for the late answer, then relaunches"
 }
 
 test_context_limit_persists_first() {
-  local dir
+  local dir out
   dir=$(new_case persist-ctx)
   add_local_mate "$dir" sm1
   bind_mate "$dir" sm1
-  disarm_answer "$dir"
   write_transcript "$dir" sm1 250000
-  csweep "$dir" >/dev/null
-  assert_present "$dir/sm1-home/state/fresh-session.request" "a large context must file a request"
-  assert_not_stopped "$dir" "the context sweep restarted the mate before it answered"
-  [ "$(persist_requests "$dir" sm1)" = 1 ] || fail "the context sweep must send the persist request"
-  persist_first_flow "$dir"
-  pass "T10b context-limit restart persists open work first, waits for the answer, and never double-asks"
+  late_answer "$dir" sm1 status
+  out=$(FM_SECONDMATE_PERSIST_WAIT=30 csweep "$dir")
+  assert_contains "$out" "restarted sm1" "the late correlated answer must release the restart"$'\n'"$out"
+  assert_asked_then_relaunched "$dir" sm1
+  assert_absent "$dir/sm1-home/state/fresh-session.request" "the marker must be consumed after the restart"
+  pass "T10b context-limit restart asks once, waits for the late answer, then relaunches"
 }
 
 test_answering_mate_restarts_after_request() {
-  local dir out req_line stop_line corr msg
+  local dir out corr msg
   dir=$(new_case persist-order)
   add_local_mate "$dir" sm1
   bind_mate "$dir" sm1
@@ -668,44 +695,113 @@ test_answering_mate_restarts_after_request() {
   mate_report "$dir" sm1 "done" "$corr" "audit clean"
   out=$(sweep "$dir")
   assert_contains "$out" "restarted sm1" "a mate that answers at once must restart in the same pass"$'\n'"$out"
-  [ "$(persist_requests "$dir" sm1)" = 1 ] || fail "the persist request must go out before the relaunch"
-  # The persist request is the only instruction rung before the relaunch.
-  req_line=$(grep -n '^: Firstmate instruction waiting' "$dir/fake/literal" | head -1 | cut -d: -f1)
-  stop_line=$(grep -nx '/exit' "$dir/fake/literal" | head -1 | cut -d: -f1)
-  [ -n "$req_line" ] || fail "the persist request was never delivered"
-  [ -n "$stop_line" ] || fail "the mate was never relaunched"
-  [ "$req_line" -lt "$stop_line" ] || fail "the persist request must be delivered before the relaunch"
+  assert_asked_then_relaunched "$dir" sm1
   msg=$(grep -l 'persist the open work you are holding' "$dir/home/state/sm1.inbox"/handled/*.msg)
   assert_grep "start a fresh conversation" "$msg" "the request must give the fresh-session reason"
   ! grep -q 'Firstmate was updated' "$msg" || fail "a fresh-session request must not claim firstmate was updated"
   pass "T10c an answering mate is asked once, then relaunched"
 }
 
+test_report_answer_restarts_once() {
+  local dir corr out
+  dir=$(new_case persist-report)
+  add_local_mate "$dir" sm1
+  bind_mate "$dir" sm1
+  corr=$(open_request "$dir" sm1)
+  mate_report "$dir" sm1 "done" "$corr" "audit clean"
+  late_answer "$dir" sm1 report
+  out=$(FM_SECONDMATE_PERSIST_WAIT=30 sweep "$dir")
+  assert_contains "$out" "restarted sm1" "an --item report answer must release the restart"$'\n'"$out"
+  assert_asked_then_relaunched "$dir" sm1
+  pass "T10e an answer through fm-secondmate-report.sh --item asks once, then relaunches"
+}
+
 # --- T10d: a mate that does not answer in time ------------------------------
 test_persist_timeout_clears_marker() {
-  local dir out
+  local dir out corr rec
   dir=$(new_case persist-timeout)
   add_local_mate "$dir" sm1
   bind_mate "$dir" sm1
   disarm_answer "$dir"
   write_transcript "$dir" sm1 250000
   out=$(FM_SECONDMATE_PERSIST_WAIT=0 csweep "$dir")
-  assert_contains "$out" "deferred sm1" "the context sweep must ask first"$'\n'"$out"
-  [ "$(persist_requests "$dir" sm1)" = 1 ] || fail "the context sweep must send the persist request"
-
-  out=$(FM_SECONDMATE_PERSIST_WAIT=0 sweep "$dir")
   assert_contains "$out" "timed out sm1" "an unanswered request must report its timeout"$'\n'"$out"
   assert_not_stopped "$dir" "a mate that did not answer in time was restarted"
   assert_absent "$dir/sm1-home/state/fresh-session.request" "a timeout must clear the marker"
-  assert_absent "$dir/home/state/sm1.fresh-session-persist" "a timeout must clear the persist record"
   assert_grep "timed out sm1" "$dir/home/state/fresh-session.log" "a timeout must be logged"
+  [ "$(persist_requests "$dir" sm1)" = 1 ] || fail "the context sweep must send one persist request"
   [ "$(find "$dir/home/state/sm1.inbox" -name '*.msg' | wc -l | tr -d ' ')" = 1 ] \
     || fail "a timeout must send nothing besides the one persist request"
+  corr=$(persist_corrs "$dir" sm1)
+  rec="$dir/home/state/pending-replies/$corr"
+  assert_present "$rec" "the timed-out request must keep its record"
+  [ "$(sed -n 's/^phase=//p' "$rec")" = resolved ] || fail "a timeout must close its own persist record"
 
+  read_inbox "$dir" sm1
   out=$(FM_SECONDMATE_PERSIST_WAIT=0 csweep "$dir")
-  assert_present "$dir/sm1-home/state/fresh-session.request" "a later context check must file a new request"
-  assert_not_stopped "$dir" "the mate was restarted while its persist request is still open"
-  pass "T10d a persist timeout clears the marker, logs it, and a later context check files again"
+  assert_contains "$out" "timed out sm1" "the next trigger must ask again"$'\n'"$out"
+  [ "$(persist_requests "$dir" sm1)" = 2 ] || fail "the next trigger must send a second persist request"
+  assert_not_stopped "$dir" "a mate that did not answer in time was restarted"
+  pass "T10d a persist timeout closes its record, clears the marker, logs it, and the next trigger asks again"
+}
+
+# --- T10f: an earlier answer never releases a later restart -----------------
+test_stale_answer_does_not_release() {
+  local dir corr out
+  dir=$(new_case persist-stale)
+  add_local_mate "$dir" sm1
+  bind_mate "$dir" sm1
+  corr=$(open_request "$dir" sm1)
+  mate_report "$dir" sm1 "done" "$corr" "audit clean"
+  # The mate answers at once but stays busy past the wait.
+  # shellcheck disable=SC2016 # $FM_FAKE_DIR expands when the hook runs.
+  printf '#!/usr/bin/env bash
+rm -f "$0"
+printf "✻ Working… (3s · esc to interrupt)\n" > "$FM_FAKE_DIR/pane"
+' > "$dir/fake/on-doorbell"
+  chmod +x "$dir/fake/on-doorbell"
+  out=$(FM_SECONDMATE_PERSIST_WAIT=0 sweep "$dir")
+  assert_contains "$out" "deferred sm1: its agent is not provably idle" "an answered but busy mate must defer"$'\n'"$out"
+  assert_present "$dir/sm1-home/state/fresh-session.request" "a deferral must keep the marker"
+  [ "$(persist_requests "$dir" sm1)" = 1 ] || fail "the first attempt must send one persist request"
+
+  set_agent_state "$dir" idle
+  disarm_answer "$dir"
+  out=$(FM_SECONDMATE_PERSIST_WAIT=0 sweep "$dir")
+  [ "$(persist_requests "$dir" sm1)" = 2 ] || fail "a later attempt must ask again"
+  assert_contains "$out" "timed out sm1" "the earlier answer must not release the later restart"$'\n'"$out"
+  assert_not_stopped "$dir" "an earlier answer released a later restart"
+  pass "T10f an answer to an earlier attempt never releases a later restart"
+}
+
+# --- T10g: one sweep at a time per mate --------------------------------------
+test_concurrent_sweep_sends_no_duplicate() {
+  local dir corr out bg i=0
+  dir=$(new_case persist-lock)
+  add_local_mate "$dir" sm1
+  bind_mate "$dir" sm1
+  corr=$(open_request "$dir" sm1)
+  mate_report "$dir" sm1 "done" "$corr" "audit clean"
+  disarm_answer "$dir"
+  # A lock left by a dead holder is recovered.
+  mkdir -p "$dir/home/state/.secondmate-liveness-sm1.lock"
+  printf '999999\n' > "$dir/home/state/.secondmate-liveness-sm1.lock/pid"
+  FM_SECONDMATE_PERSIST_WAIT=60 sweep "$dir" > "$dir/bg.out" &
+  bg=$!
+  until [ "$(persist_requests "$dir" sm1)" = 1 ]; do
+    i=$((i + 1))
+    [ "$i" -lt 300 ] || { kill "$bg"; fail "the first sweep never sent its persist request"; }
+    /bin/sleep 0.1
+  done
+  out=$(FM_SECONDMATE_PERSIST_WAIT=0 sweep "$dir")
+  assert_contains "$out" "another restart or recovery is in progress" "a concurrent sweep must skip the mate"$'\n'"$out"
+  [ "$(persist_requests "$dir" sm1)" = 1 ] || fail "a concurrent sweep sent a second persist request"
+  answer_persist "$dir" sm1
+  read_inbox "$dir" sm1
+  wait "$bg" || true
+  assert_contains "$(cat "$dir/bg.out")" "restarted sm1" "the first sweep must relaunch once answered"$'\n'"$(cat "$dir/bg.out")"
+  assert_asked_then_relaunched "$dir" sm1
+  pass "T10g a stale lock is recovered and a concurrent sweep sends no duplicate request"
 }
 
 test_report_done_restarts_with_handover_note
@@ -722,5 +818,8 @@ test_finished_work_persists_first
 test_context_limit_persists_first
 test_answering_mate_restarts_after_request
 test_persist_timeout_clears_marker
+test_report_answer_restarts_once
+test_stale_answer_does_not_release
+test_concurrent_sweep_sends_no_duplicate
 
 echo "# all fm-secondmate-fresh-session tests passed"
