@@ -59,7 +59,7 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-kimi-turnend-hook.sh` | Surgically install or remove Kimi's guarded global crew turn-end hook                |
 | `fm-arm-pretool-check.sh` | Stable PreToolUse transport for the watcher-arm command policy (docs/arm-pretool-check.md) |
 | `fm-final-run-handover.sh` | Fork-only: hand-over note a ship writes before its final no-mistakes run; `fm-validation-gate.sh release` relaunches a fresh worker from it instead of steering the long implementation conversation |
-| `fm-secondmate-fresh-session.sh` | Fork-only: ask an idle local second mate to write down its open work, then restart it with a handover note after it reports finished work, a child's work lands, or its context passes the limit; the watcher poll runs its sweep |
+| `fm-secondmate-fresh-session.sh` | Fork-only: restart an idle local second mate with a handover note after it reports finished work, a child's work lands, or its context passes the limit; the watcher poll runs its sweep |
 | `fm-context-replay.py` | Fork-only: replay supervisor transcripts with a context limit and print calls, context per call, and weighted tokens before and after |
 | `fm-op-pretool-check.sh` | Fork-only: PreToolUse transport that refuses a bare 1Password `op` call unless OP_SERVICE_ACCOUNT_TOKEN is loaded (decision in `fm-op-command-policy.mjs`) |
 | `fm-op-guard-install.sh` | Fork-only: register the op guard and the no-mistakes mirror check in a directory's untracked `.claude/settings.local.json`; `fm-spawn.sh` runs it for every Claude worker and secondmate |
