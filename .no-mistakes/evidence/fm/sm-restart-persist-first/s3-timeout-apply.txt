@@ -1,0 +1,30 @@
+timed out lab694bb45d1561-mate: it did not confirm within 1s that its open work is written down (cfa2fd285c1b2909), so it was not restarted
+## timeout attempt record
+schema=fm-pending-reply.v1
+corr_id=cfa2fd285c1b2909
+task_id=lab694bb45d1561-mate
+parent_home=/private/tmp/fmlab.yPkhZM/home
+parent_status=/private/tmp/fmlab.yPkhZM/home/state/lab694bb45d1561-mate.status
+request_summary=I am about to restart your agent to start a fresh conversation, because you finished a piece of work or your conversa...
+created_epoch=1793202019
+turn_seen_busy=0
+request_turn_completed_epoch=
+recovery_attempted_epoch=
+recovery_sender_pid=
+recovery_sender_identity=
+recovery_sent_epoch=
+recovery_delivery_outcome=
+recovery_turn_seen_busy=0
+recovery_turn_completed_epoch=
+escalated_epoch=
+escalation_wake_due_epoch=
+wrong_home_hits=0
+wrong_home_first_sighting=
+wrong_home_sightings=
+wrong_home_scan_signature=
+grace_secs=120
+delivered_epoch=1793202020
+parent_status_scan_signature=16777228:214017032:280:1793201917:1793201917
+phase=resolved
+resolved_epoch=1793202024
+resolved_via=fresh-session-persist-timeout

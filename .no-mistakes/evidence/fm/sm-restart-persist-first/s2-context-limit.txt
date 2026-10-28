@@ -1,0 +1,85 @@
+pid before 19625
+deferred lab694bb45d1561-mate: its agent is not provably idle (fallback-idle within the grace window)
+source=context
+verb=handover
+corr=
+epoch=1793202100
+note=data/fresh-session-handover.md
+## mate pid after context-limit restart: 2787 (before 19625)
+## 005.msg
+--
+[fm-from-firstmate]⁣corr=cfa2fd285c1b2909 I am about to restart your agent to start a fresh conversation, because you finished a piece of work or your conversation grew past the context limit. That dr
+## 006.msg
+--
+[fm-from-firstmate]⁣corr=0b590c6c8e2c7b84 I am about to restart your agent to start a fresh conversation, because you finished a piece of work or your conversation grew past the context limit. That dr
+## 007.msg
+--
+[fm-from-firstmate]⁣delivery=5de3efad6c167efc You are a fresh session: your conversation grew past the context limit and was dropped on purpose. Read the handover note at /private/tmp/fmlab.yPkhZM/mat
+## pending-replies
+corr_id=0b590c6c8e2c7b84
+created_epoch=1793202234
+phase=resolved
+resolved_epoch=1793202243
+resolved_via=helper
+
+corr_id=5712ec9579fd99f1
+created_epoch=1793201907
+phase=resolved
+resolved_epoch=1793201920
+resolved_via=helper
+
+corr_id=6a654d5094e6800c
+created_epoch=1793201631
+phase=resolved
+resolved_epoch=1793201906
+resolved_via=helper
+
+corr_id=cfa2fd285c1b2909
+created_epoch=1793202019
+phase=resolved
+resolved_epoch=1793202024
+resolved_via=fresh-session-persist-timeout
+
+## parent status
+done [corr=6a654d5094e6800c] [at=1793201897]: config re-read applied: startup-memory-budget=7500 (via-helper)
+done [corr=5712ec9579fd99f1] [at=1793201917]: nothing open to persist: no in-flight work, no unfiled records, no unregistered captain calls; safe to restart (via-helper)
+done [corr=cfa2fd285c1b2909] [at=1793202035]: nothing held only in this conversation; no open records to file or correct (via-helper)
+done [corr=0b590c6c8e2c7b84] [at=1793202242]: nothing held only in this conversation; no open records to file or correct (via-helper)
+## fresh-session.log
+1793202024 timed out lab694bb45d1561-mate: it did not confirm within 1s that its open work is written down (cfa2fd285c1b2909), so it was not restarted
+## handover note
+# Fresh session handover
+Written 2026-10-28T15:41:40Z by the previous session of lab694bb45d1561-mate.
+Your conversation was dropped on purpose to save tokens. Every record is on disk.
+
+## Just finished
+Nothing finished. Your conversation grew past the context limit, so it was replaced: context was 87583 tokens (limit 1000)
+
+## Still open
+Unread steering messages for you: 0 (list /private/tmp/fmlab.yPkhZM/home/state/lab694bb45d1561-mate.inbox/*.msg, act in order, mv each into handled/).
+Child tasks still in flight: none.
+
+## First steps
+1. Run bin/fm-session-start.sh and reconcile from its digest.
+2. Open work lives in this home's backlog and state/*.status, not in this note.
+3. Nothing here is a request. Do not reply to it; wait for routed work.
+4. The digest lists open captain decisions and unread status; handle them before anything else.
+## pane
+ ▐▛███▛█   Claude Code v2.1.312
+▝▜██████▀  Sonnet 5.5 with low effort · Claude Team
+ ▝▝   ▝▝   /private/tmp/fmlab.yPkhZM/mate
+❯ : Firstmate operational input waiting: read '/private/tmp/fmlab.yPkhZM/mate/state/operational-inbox/1793202251-82deca90d6915049.msg' and handle its contents as Firstmate operational input.                              
+  Read 1 file                                                                                                                                                                                                               
+⏺ Captain, I read the launch brief and I'm set up as the idle live-validation second mate. The session-start check found no queued wakes and no work already assigned to this home. So I'm waiting silently until the main  
+  firstmate routes a task, and I've appended nothing to the parent channel.                                                                                                                                                 
+✻ Baked for 12s · done 9:14 PM                                                                                                                                                                                              
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'lab694bb45d1561-mate.inbox' steering inbox, read and act on each in numeric order, then mv each into its handled/.                                  
+  Ran 4 shell commands                                           
+⏺ Captain, I read the handover note and reran session start. There are no queued wakes, no open decisions and no child tasks in flight. I moved the steering message into handled/. The message asked for no reply, so I
+  appended nothing to the parent channel. I'm idle and waiting for routed work.
+✻ Sautéed for 13s · done 9:14 PM
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯                                                                                                                                                                                         
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Sonnet 5.5 | ctx 8% | main | : Firstmate instruction waiting: list "$FM_TASK_IN...
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 5 agents  
