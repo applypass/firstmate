@@ -47,6 +47,23 @@
 # transcript last written before the mate's previous restart, so the old
 # session cannot trigger a second restart. Set the limit to 0 to turn it off.
 #
+# Persist first. Before the relaunch, apply asks the mate to write down the open
+# work it holds only in its conversation, with the persist step /updatefirstmate
+# runs, worded for a fresh session (fm_secondmate_persist_send in
+# bin/fm-secondmate-persist-first-lib.sh). Like bin/fm-secondmate-restart.sh, one
+# apply call sends the request and then polls for that request's correlated
+# answer every FM_SECONDMATE_PERSIST_POLL seconds (default 5), up to
+# FM_SECONDMATE_PERSIST_WAIT seconds (default 900); the watcher runs the sweep
+# detached, so the wait never stalls a poll. Every attempt asks afresh; no
+# answer is carried to a later sweep. Once the answer is in, apply waits within
+# the same bound for the checks below to pass, and defers if they do not. The
+# per-mate liveness lock in the parent's state, held for the whole call, makes a
+# concurrent sweep skip that mate instead of sending a second request. A mate
+# that does not answer in time is not relaunched and gets no nudge ("timed out
+# ... did not confirm"): apply closes that request's pending-reply record and
+# withdraws its own unread steering message so neither can block the next attempt,
+# clears the marker, and logs the timeout to the parent's state/fresh-session.log. The next trigger files a new request.
+#
 # A restart happens only when ALL of these hold, so it never cuts a request or
 # an unread message short:
 #   - the marker's own correlated request, if any, is resolved;
@@ -264,6 +281,50 @@ dismiss_exit_dialog() {  # <id> <meta>
   fm_backend_send_key "$backend" "$target" Escape "fm-$1" >/dev/null 2>&1 || true
 }
 
+# Run the persist-first step. Returns 0 once the mate's correlated answer is in
+# and every restart check passes; otherwise prints a deferral or a timeout and
+# returns 1.
+persist_gate() {  # <id> <meta> <home> <marker>
+  local id=$1 meta=$2 home=$3 marker=$4 wait poll deadline corr reason resolved=0 now line
+  wait=${FM_SECONDMATE_PERSIST_WAIT:-900}
+  case "$wait" in '' | *[!0-9]*) wait=900 ;; esac
+  poll=${FM_SECONDMATE_PERSIST_POLL:-5}
+  case "$poll" in '' | *[!0-9]* | 0) poll=5 ;; esac
+  if ! reason=$(blocked_reason "$id" "$meta" "$home" "$marker"); then
+    defer "$id" "$reason"
+    return 1
+  fi
+  if ! fm_secondmate_persist_send "$FM_HOME" "$STATE" "$id"; then
+    defer "$id" "$FM_SECONDMATE_PERSIST_REASON"
+    return 1
+  fi
+  corr=$FM_SECONDMATE_PERSIST_CORR
+  deadline=$(($(date +%s) + wait))
+  while :; do
+    [ "$resolved" = 1 ] || ! fm_pending_reply_try_resolve "$STATE" "$corr" || resolved=1
+    if [ "$resolved" = 1 ] && reason=$(blocked_reason "$id" "$meta" "$home" "$marker"); then
+      return 0
+    fi
+    now=$(date +%s)
+    if [ "$now" -ge "$deadline" ]; then
+      if [ "$resolved" = 1 ]; then
+        defer "$id" "$reason"
+        return 1
+      fi
+      fm_pending_reply_resolve_operator "$STATE" "$corr" "$id" fresh-session-persist-timeout >/dev/null 2>&1 || true
+      # Withdraw this attempt's own unread request so it cannot block the next trigger.
+      grep -l "corr=$corr" "$STATE/$id.inbox"/*.msg 2>/dev/null | while IFS= read -r msg; do rm -f "$msg"; done
+      rm -f "$marker"
+      line="timed out $id: it did not confirm within ${wait}s that its open work is written down ($corr), so it was not restarted"
+      printf '%s\n' "$line"
+      printf '%s %s\n' "$now" "$line" >> "$STATE/fresh-session.log"
+      return 1
+    fi
+    [ $((deadline - now)) -ge "$poll" ] || poll=$((deadline - now))
+    sleep "$poll"
+  done
+}
+
 do_apply() {
   local id=${1:-} meta home marker reason out rc delivery note_path
   case "$id" in '' | *[!A-Za-z0-9._-]*) usage >&2; return 2 ;; esac
@@ -282,6 +343,8 @@ do_apply() {
 
   # shellcheck source=bin/fm-secondmate-restart-lib.sh
   . "$SCRIPT_DIR/fm-secondmate-restart-lib.sh"
+  # shellcheck source=bin/fm-secondmate-persist-first-lib.sh
+  . "$SCRIPT_DIR/fm-secondmate-persist-first-lib.sh"
   # shellcheck source=bin/fm-pending-reply-lib.sh
   . "$SCRIPT_DIR/fm-pending-reply-lib.sh"
   # shellcheck source=bin/fm-secondmate-liveness-lib.sh
@@ -295,10 +358,7 @@ do_apply() {
     defer "$id" "$FM_SECONDMATE_RESTART_REASON"
     return 0
   fi
-  if ! reason=$(blocked_reason "$id" "$meta" "$home" "$marker"); then
-    defer "$id" "$reason"
-    return 0
-  fi
+  persist_gate "$id" "$meta" "$home" "$marker" || return 0
 
   note_path="$home/$NOTE_REL"
   msource=$(sed -n 's/^source=//p' "$marker" | head -1)
