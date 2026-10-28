@@ -47,6 +47,18 @@
 # transcript last written before the mate's previous restart, so the old
 # session cannot trigger a second restart. Set the limit to 0 to turn it off.
 #
+# Persist first. Before the relaunch, apply asks the mate to write down the open
+# work it holds only in its conversation, with the same marked request
+# /updatefirstmate sends (fm_secondmate_persist_send in
+# bin/fm-secondmate-restart-lib.sh). The sweep never waits: it records the
+# request per mate in state/<id>.fresh-session-persist (corr, deadline, marker
+# epoch) and defers, so a later sweep sends no second request and relaunches only
+# once that correlated answer lands. FM_SECONDMATE_PERSIST_WAIT (default 900)
+# bounds the wait, and the watcher poll is the polling interval. A mate that does
+# not answer in time is not relaunched ("deferred ... did not confirm"): the
+# marker stays, the open request is left to the pending-reply recovery ladder, and
+# a late answer releases the restart on a later sweep.
+#
 # A restart happens only when ALL of these hold, so it never cuts a request or
 # an unread message short:
 #   - the marker's own correlated request, if any, is resolved;
@@ -76,6 +88,7 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MARKER_NAME='fresh-session.request'
 NOTE_REL=data/fresh-session-handover.md
+PERSIST_NAME='fresh-session-persist'
 
 usage() {
   sed -n '3,/^set -u/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'
@@ -264,6 +277,54 @@ dismiss_exit_dialog() {  # <id> <meta>
   fm_backend_send_key "$backend" "$target" Escape "fm-$1" >/dev/null 2>&1 || true
 }
 
+# Run the persist-first step. Returns 0 once the mate's correlated answer is in
+# and the restart may go on; otherwise prints a deferral and returns 1, leaving the
+# marker and any open request untouched.
+persist_gate() {  # <id> <meta> <home> <marker>
+  local id=$1 meta=$2 home=$3 marker=$4 pfile pcorr deadline pepoch mepoch wait reason
+  pfile="$STATE/$id.$PERSIST_NAME"
+  wait=${FM_SECONDMATE_PERSIST_WAIT:-900}
+  case "$wait" in '' | *[!0-9]*) wait=900 ;; esac
+  mepoch=$(marker_get "$marker" epoch)
+  if [ -f "$pfile" ]; then
+    pcorr=$(marker_get "$pfile" corr)
+    deadline=$(marker_get "$pfile" deadline)
+    pepoch=$(marker_get "$pfile" marker_epoch)
+    case "$deadline" in '' | *[!0-9]*) deadline=0 ;; esac
+    if [ "$pepoch" != "$mepoch" ] || [ ! -f "$(fm_pending_reply_path "$STATE" "$pcorr")" ]; then
+      # A request for an earlier marker, or one whose record is gone: ask again.
+      rm -f "$pfile"
+    elif fm_pending_reply_try_resolve "$STATE" "$pcorr"; then
+      rm -f "$pfile"
+      return 0
+    elif [ "$(date +%s)" -ge "$deadline" ]; then
+      defer "$id" "it did not confirm within ${wait}s that its open work is written down ($pcorr), so its conversation was not spent"
+      return 1
+    else
+      defer "$id" "waiting for its answer that its open work is written down ($pcorr)"
+      return 1
+    fi
+  fi
+  if ! reason=$(blocked_reason "$id" "$meta" "$home" "$marker"); then
+    defer "$id" "$reason"
+    return 1
+  fi
+  if ! fm_secondmate_persist_send "$FM_HOME" "$STATE" "$id"; then
+    defer "$id" "$FM_SECONDMATE_PERSIST_REASON"
+    return 1
+  fi
+  pcorr=$FM_SECONDMATE_PERSIST_CORR
+  publish_file "$pfile" "corr=$pcorr
+deadline=$(($(date +%s) + wait))
+marker_epoch=$mepoch" || true
+  if fm_pending_reply_try_resolve "$STATE" "$pcorr"; then
+    rm -f "$pfile"
+    return 0
+  fi
+  defer "$id" "asked it to write down its open work ($pcorr); waiting for its answer"
+  return 1
+}
+
 do_apply() {
   local id=${1:-} meta home marker reason out rc delivery note_path
   case "$id" in '' | *[!A-Za-z0-9._-]*) usage >&2; return 2 ;; esac
@@ -295,6 +356,7 @@ do_apply() {
     defer "$id" "$FM_SECONDMATE_RESTART_REASON"
     return 0
   fi
+  persist_gate "$id" "$meta" "$home" "$marker" || return 0
   if ! reason=$(blocked_reason "$id" "$meta" "$home" "$marker"); then
     defer "$id" "$reason"
     return 0
