@@ -37,6 +37,7 @@ _FM_SECONDMATE_RESTART_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # correlated answer, never the wall clock, is what releases the restart.
 FM_SECONDMATE_PERSIST_REQUEST='Firstmate was updated and I am about to restart your agent so it comes up on the current instructions and launch-time settings, which drops your conversation but keeps every durable record. Before that, persist the open work you are holding only in this conversation, following the /stow skill'"'"'s "Open-record persistence" section and nothing else from that skill: file a task for each open record that exists only in this conversation, including any captain call you had formed but never registered, and correct any task whose status no longer reflects what you now know. Do NOT run the memory, learnings, or captain-preference sweeps. Then reply on your parent channel saying it is done, or saying what you deliberately left alone and why.'
 
+# Fork-only (applypass): shared persist-first request step.
 # Ask one mate to write down its open work: arm the parent-owned reply
 # expectation, then deliver FM_SECONDMATE_PERSIST_REQUEST through fm-send. Both
 # restart paths (bin/fm-secondmate-restart.sh and
@@ -66,6 +67,7 @@ fm_secondmate_persist_send() {  # <parent-home> <state> <id>
   fi
   FM_SECONDMATE_PERSIST_CORR=$corr
 }
+# Fork-only end
 
 # Resolve one mate's restart capability from its durable record alone.
 # Publishes, on success:
