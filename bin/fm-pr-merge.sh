@@ -176,7 +176,13 @@
 # explicit captain instruction and never skips the live green check, the
 # away-record read, or a captain hold.
 #
-# Usage: fm-pr-merge.sh <task-id> <pr-url> [--attended-override] [--release-main] [--allow-red <check-name>] [--allow-missing <check-name>] [--allow-no-pipeline] [-- <extra forge merge args>]
+# Fork-only: a GitHub merge is also refused when the PR body's proof admits an
+# unchecked path, or its test step was skipped with no passing test check;
+# --waive-proof <line> <reason> (repeatable, attended-only) waives a finding and
+# records proof_waiver= and proof_waiver_reason= in the task meta. The rules
+# and the GitLab/Forgejo gap live in bin/fm-merge-proof-lib.sh.
+#
+# Usage: fm-pr-merge.sh <task-id> <pr-url> [--attended-override] [--release-main] [--waive-proof <line> <reason>] [--allow-red <check-name>] [--allow-missing <check-name>] [--allow-no-pipeline] [-- <extra forge merge args>]
 #
 # On GitLab, this script confirms the MR is actually merged before reporting it;
 # an auto-merge-queued or unconfirmed request leaves the poll armed and records
@@ -201,6 +207,9 @@ STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 . "$SCRIPT_DIR/fm-merge-authority-lib.sh"
 # shellcheck source=bin/fm-afk-contract.sh
 . "$SCRIPT_DIR/fm-afk-contract.sh"
+# Fork-only: the merge proof gate (bin/fm-merge-proof-lib.sh).
+# shellcheck source=bin/fm-merge-proof-lib.sh
+. "$SCRIPT_DIR/fm-merge-proof-lib.sh"
 
 if [ "$#" -lt 2 ]; then
   echo "error: invalid PR merge request" >&2
@@ -248,6 +257,9 @@ RELEASE_MAIN=false
 ALLOW_NO_PIPELINE=false
 ALLOW_RED=()
 ALLOW_MISSING=()
+# Fork-only: --waive-proof <line> <reason> pairs for the merge proof gate.
+FM_MERGE_PROOF_WAIVE_LINES=()
+FM_MERGE_PROOF_WAIVE_REASONS=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --attended-override)
@@ -261,6 +273,14 @@ while [ "$#" -gt 0 ]; do
     --release-main)
       RELEASE_MAIN=true
       shift
+      ;;
+    --waive-proof)
+      # Fork-only: a captain waiver of one proof finding, with its reason.
+      [ -n "${2:-}" ] && [ -n "${3:-}" ] || { echo "error: --waive-proof requires a proof line and a reason" >&2; exit 2; }
+      case "$2$3" in *$'\n'*) echo "error: --waive-proof line and reason must each be one line" >&2; exit 2 ;; esac
+      FM_MERGE_PROOF_WAIVE_LINES+=("$2")
+      FM_MERGE_PROOF_WAIVE_REASONS+=("$3")
+      shift 3
       ;;
     --allow-red)
       [ -n "${2:-}" ] || { echo "error: --allow-red requires a check name" >&2; exit 2; }
@@ -294,6 +314,11 @@ while [ "$#" -gt 0 ]; do
     *) break ;;
   esac
 done
+# Fork-only: the proof gate reads the GitHub PR body, so its waiver applies only there.
+if [ "${#FM_MERGE_PROOF_WAIVE_LINES[@]}" -gt 0 ] && [ "$PROVIDER" != github ]; then
+  echo "error: --waive-proof applies only to GitHub, the only forge whose merge reads the PR body proof" >&2
+  exit 2
+fi
 # --allow-red names one check run to waive, which only GitHub's per-check
 # reading can match. GitLab and Forgejo each collapse their checks into a
 # single head verdict - a head pipeline status and a combined commit status -
@@ -1026,7 +1051,7 @@ github_verify_mergeable() {
   local total=0 named=0 refusals='' mergeable_refusal=''
   local state='' draft='' mergeable='' merge_state='' live_head='' base=''
 
-  if ! json=$(gh pr view "$URL" --json state,isDraft,mergeable,mergeStateStatus,headRefOid,baseRefName,statusCheckRollup 2>/dev/null) \
+  if ! json=$(gh pr view "$URL" --json state,isDraft,mergeable,mergeStateStatus,headRefOid,baseRefName,statusCheckRollup,body 2>/dev/null) \
     || [ -z "$json" ]; then
     echo "error: could not read the GitHub pull request state before merging" >&2
     return 1
@@ -1107,6 +1132,9 @@ FIELDS
   done <<EOF
 $red
 EOF
+
+  # Fork-only: refuse a body whose proof admits an unchecked path (bin/fm-merge-proof-lib.sh).
+  fm_merge_proof_evaluate "$json" || refusals="$refusals$FM_MERGE_PROOF_REFUSALS"
 
   unreported=''
   if ! github_read_required_contexts "$base"; then
@@ -1440,6 +1468,10 @@ require_current_away_authority() {
     echo "error: --allow-red is attended-only; while the away-posture record exists the green check is absolute" >&2
     return 2
   fi
+  if [ "$FM_PR_AWAY_POSTURE" = true ] && [ "${#FM_MERGE_PROOF_WAIVE_LINES[@]}" -gt 0 ]; then
+    echo "error: --waive-proof is attended-only; while the away-posture record exists the PR proof must stand without a waiver" >&2
+    return 2
+  fi
   if [ "$FM_PR_AWAY_POSTURE" = true ] && [ "${#ALLOW_MISSING[@]}" -gt 0 ]; then
     echo "error: --allow-missing is attended-only; while the away-posture record exists every required check must report" >&2
     return 2
@@ -1465,6 +1497,40 @@ persist_accepted_merge_authority() {
   printf 'actionable: the forge accepted the merge request for %s but its merge authority could not be persisted; the merge poll remains armed\n' \
     "$URL" >&2
   return 1
+}
+
+# Fork-only: record each used proof waiver in the task meta before the merge
+# call. The identity parse (fm_pr_metadata_identity_parse) accepts nothing after
+# pr=, so the lines go in just before it; fm-pr-check.sh keeps them in place
+# when it re-records pr=.
+record_proof_waivers() {
+  local status=0 entry waived reason tmp lines=''
+  [ -n "$FM_MERGE_PROOF_WAIVED" ] || return 0
+  MERGE_META_LOCK=$(fm_meta_lock_path "$META") || return 1
+  fm_lock_acquire_wait "$MERGE_META_LOCK" || return 1
+  while IFS= read -r entry; do
+    [ -n "$entry" ] || continue
+    waived=${entry%%$'\t'*}
+    reason=${entry#*$'\t'}
+    grep -qxF "proof_waiver=$waived" "$META" 2>/dev/null && continue
+    lines="${lines}proof_waiver=$waived
+proof_waiver_reason=$reason
+"
+  done <<EOF
+$FM_MERGE_PROOF_WAIVED
+EOF
+  if [ -n "$lines" ]; then
+    tmp=$(mktemp "$STATE/.fm-proof-waiver.XXXXXX") || status=1
+    if [ "$status" -eq 0 ]; then
+      FM_PROOF_WAIVER_LINES=$lines awk '/^pr=/ && !done { printf "%s", ENVIRON["FM_PROOF_WAIVER_LINES"]; done = 1 } { print }' "$META" > "$tmp" \
+        && chmod 0600 "$tmp" && mv -f -- "$tmp" "$META" || status=1
+    fi
+    [ "$status" -eq 0 ] || rm -f -- "$tmp"
+  fi
+  fm_lock_release "$MERGE_META_LOCK" || status=1
+  MERGE_META_LOCK=
+  [ "$status" -eq 0 ] || echo "error: could not record the proof waiver in task metadata" >&2
+  return "$status"
 }
 
 # While away, a merge proceeds only when the base branch's rules prove no
@@ -1706,6 +1772,7 @@ case "$PROVIDER" in
       fi
       exit 1
     fi
+    record_proof_waivers || exit 1
     # The away record is locked first, so this last presence and authority read
     # and the forge command below share one live-owner critical section.
     hold_away_record_for_merge || exit 1
