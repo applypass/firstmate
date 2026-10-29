@@ -4774,7 +4774,10 @@ test_proof_gate_scans_proof_sections_and_flagged_headings() {
     '## Not checked here' '- end-to-end resume against api-test on test-app' > "$TMP_ROOT/heading-body.md"
   printf '%s\n' '## Fix' '- Retry the upload.' '' '## Testing' '- Not verified on test-app.' > "$TMP_ROOT/testing-body.md"
   printf '%s\n' '## Proof' '- Unit tests pass.' '' '## Risk Assessment' '- Not verified on test-app.' > "$TMP_ROOT/risk-body.md"
-  for label in heading testing risk; do
+  printf '%s\n' '## Summary' '- Adds the gate.' '' '## Proof' '- Unit tests pass.' '' \
+    '## Test plan' '- [ ] Not verified on test-app' > "$TMP_ROOT/testplan-body.md"
+  printf '%s\n' 'Not checked: the retry path.' '' '## Problem' '- Old bug.' > "$TMP_ROOT/preamble-body.md"
+  for label in heading testing risk testplan preamble; do
     case_dir=$(make_case "proof-section-$label")
     mkdir -p "$case_dir/wt"
     set_proof_case "$case_dir" "$TMP_ROOT/$label-body.md" "$PROOF_HEAD" ci
