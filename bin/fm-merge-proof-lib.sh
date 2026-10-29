@@ -6,15 +6,19 @@
 # body,statusCheckRollup` payload and refuses when either holds:
 #   1. The body's own proof has a line matching FM_MERGE_PROOF_UNCHECKED_PATTERN,
 #      such as "Not checked here: an end-to-end resume against api-test". The
-#      proof is the "## Proof" section (any case) of the text before the
-#      no-mistakes appendix marker, or all of that text when it has no such
-#      section.
+#      proof is the author-written text before the no-mistakes appendix
+#      marker. Every "## " and "### " heading line is scanned, and a section
+#      whose heading matches the pattern, such as "## Not checked here",
+#      refuses on its heading and on each non-blank line under it. Other
+#      lines are scanned only in "## " sections whose heading starts with
+#      Proof, Testing, Verification or Risk (any case, so "Risk Assessment"
+#      counts), so Problem and Fix prose is not. A body with no such section
+#      is scanned whole.
 #   2. The no-mistakes test step was skipped (a "**Test** - skipped" section
 #      or an attestation with test status "skipped") AND no check whose name
 #      has "test" or "tests" as a word (any case) concluded SUCCESS in the
-#      rollup. The rollup
-#      is read live for the current head, so "at the head" holds by
-#      construction. A skipped test step alone does not block: dev-bound PRs
+#      rollup. The rollup is read live for the current head, so "at the head"
+#      holds by construction. A skipped test step alone does not block: dev-bound PRs
 #      skip it by design and rely on GitHub CI.
 # A caller waives a finding with --waive-proof <line> <reason> (repeatable).
 # The line must equal one whole finding, as the refusal prints it, after
@@ -27,7 +31,7 @@
 # parallel arrays the caller owns. Outputs: FM_MERGE_PROOF_REFUSALS (one
 # "  - ..." line per refusal) and FM_MERGE_PROOF_WAIVED.
 
-# Case-insensitive extended regex. Keep it small.
+# Case-insensitive extended regex, matched in lower case. Keep it small.
 FM_MERGE_PROOF_UNCHECKED_PATTERN='not checked|not verified'
 FM_MERGE_PROOF_APPENDIX_MARKER='<!-- no-mistakes-pr-appendix'
 # Fragments of the no-mistakes body that say its test step was skipped.
@@ -36,20 +40,29 @@ FM_MERGE_PROOF_SKIP_PATTERN='\*\*Test\*\* - skipped|"step":"test","status":"skip
 FM_MERGE_PROOF_REFUSALS=
 FM_MERGE_PROOF_WAIVED=
 
-# Print the PR proof text: the "## Proof" section of the body before the
-# no-mistakes appendix marker, or all of that text when it has no such section.
-fm_merge_proof_text() {  # <body>
-  printf '%s\n' "$1" | awk -v m="$FM_MERGE_PROOF_APPENDIX_MARKER" '
-    index($0, m) { exit }
-    { all = all $0 "\n" }
-    /^##[ \t]/ { in_proof = tolower($0) ~ /^##[ \t]+proof([^a-z]|$)/; if (in_proof) found = 1 }
-    in_proof { proof = proof $0 "\n" }
-    END { printf "%s", found ? proof : all }'
-}
-
-# Print each proof line that matches the unchecked pattern.
+# Print each unchecked proof line of the body before the no-mistakes appendix
+# marker: a "## "/"### " heading that matches the unchecked pattern and every
+# non-blank line under it, plus each matching line in a Proof, Testing,
+# Verification or Risk "## " section, or anywhere when there is no such section.
 fm_merge_proof_unchecked_lines() {  # <body>
-  fm_merge_proof_text "$1" | grep -iE -- "$FM_MERGE_PROOF_UNCHECKED_PATTERN" || true
+  printf '%s\n' "$1" | awk -v m="$FM_MERGE_PROOF_APPENDIX_MARKER" -v re="$(printf '%s' "$FM_MERGE_PROOF_UNCHECKED_PATTERN" | tr '[:upper:]' '[:lower:]')" '
+    index($0, m) { exit }
+    { low = tolower($0); match_re = low ~ re }
+    /^###?[ \t]/ {
+      if (low ~ /^##[ \t]/) {
+        named = low ~ /^##[ \t]+(proof|testing|verification|risk)/
+        if (named) found = 1
+        sec_flag = match_re
+        sub_flag = 0
+      } else {
+        sub_flag = match_re
+      }
+      if (match_re) { all = all $0 "\n"; proof = proof $0 "\n" }
+      next
+    }
+    (sec_flag || sub_flag) && NF { all = all $0 "\n"; proof = proof $0 "\n"; next }
+    match_re { all = all $0 "\n"; if (named) proof = proof $0 "\n" }
+    END { printf "%s", found ? proof : all }'
 }
 
 # Print the first fragment saying the test step was skipped, if any.

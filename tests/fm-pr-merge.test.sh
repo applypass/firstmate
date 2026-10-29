@@ -4765,7 +4765,33 @@ test_proof_gate_passes_clean_body() {
   run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/96 \
     > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "proof-scope: a Problem line outside the Proof section should not block"
   assert_logged_gh_merge "$case_dir" 96 example/repo --squash
-  pass "fm-pr-merge scans only the Proof section when the body has one"
+  pass "fm-pr-merge does not scan Problem prose when the body has a Proof section"
+}
+
+test_proof_gate_scans_proof_sections_and_flagged_headings() {
+  local case_dir rc label pull=97
+  printf '%s\n' '## Proof' '- Behaviour tests cover resume.' '' \
+    '## Not checked here' '- end-to-end resume against api-test on test-app' > "$TMP_ROOT/heading-body.md"
+  printf '%s\n' '## Fix' '- Retry the upload.' '' '## Testing' '- Not verified on test-app.' > "$TMP_ROOT/testing-body.md"
+  printf '%s\n' '## Proof' '- Unit tests pass.' '' '## Risk Assessment' '- Not verified on test-app.' > "$TMP_ROOT/risk-body.md"
+  for label in heading testing risk; do
+    case_dir=$(make_case "proof-section-$label")
+    mkdir -p "$case_dir/wt"
+    set_proof_case "$case_dir" "$TMP_ROOT/$label-body.md" "$PROOF_HEAD" ci
+    set +e
+    run_pr_merge "$case_dir" task-x1 "https://github.com/example/repo/pull/$pull" \
+      > "$case_dir/stdout" 2> "$case_dir/stderr"
+    rc=$?
+    set -e
+    expect_code 1 "$rc" "proof-section-$label: an unchecked line in a scanned section must refuse"
+    assert_grep "the PR proof says a path was not checked" "$case_dir/stderr" \
+      "proof-section-$label: the unchecked line was not named"
+    assert_no_grep 'pr merge' "$case_dir/gh.log" "proof-section-$label: gh pr merge ran"
+    pull=$((pull + 1))
+  done
+  assert_grep '"- end-to-end resume against api-test on test-app"' "$TMP_ROOT/proof-section-heading/stderr" \
+    "proof-section-heading: the line under the flagged heading was not named"
+  pass "fm-pr-merge refuses an unchecked line under a flagged heading or in a Testing or Risk section"
 }
 
 test_proof_gate_waiver_merges_and_records() {
@@ -4841,6 +4867,7 @@ test_proof_gate_skipped_test_needs_green_test_job() {
 test_proof_gate_refuses_pr_411_body
 test_proof_gate_passes_clean_body
 test_proof_gate_waiver_merges_and_records
+test_proof_gate_scans_proof_sections_and_flagged_headings
 test_proof_gate_skipped_test_needs_green_test_job
 
 test_main_base_merge_needs_release_main
