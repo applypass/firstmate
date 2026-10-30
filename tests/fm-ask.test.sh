@@ -125,6 +125,19 @@ test_the_queued_order_is_the_only_exception() {
   pass "only bin/fm-ask-order.sh runs, only with a fixed owning mate"
 }
 
+test_refusal_hint_names_runnable_scripts() {
+  local paths p
+  bash_cmd 'awk 1 state/x.status'
+  expect_code 2 "$RC" "awk is refused"
+  paths=$(printf '%s' "$ERR" | grep -oE '[^ ,]*fm-(crew-state|fleet-view|peek|tasks-axi)\.sh')
+  [ "$(printf '%s\n' "$paths" | grep -c .)" = 4 ] || fail "the hint does not name the four read scripts: $ERR"
+  for p in $paths; do
+    case "$p" in /*) ;; *) fail "the hint names a relative path: $p" ;; esac
+    [ -x "$p" ] || fail "the hint names a script that does not run: $p"
+  done
+  pass "a refusal points at the read scripts by absolute, runnable paths"
+}
+
 test_other_tools_and_paths() {
   local tool
   for tool in Edit Write NotebookEdit Agent WebFetch mcp__x__y; do
@@ -279,6 +292,7 @@ test_reads_are_allowed
 test_git_cannot_run_a_program_or_leave_the_home
 test_bash_reads_outside_the_home_are_refused
 test_the_queued_order_is_the_only_exception
+test_refusal_hint_names_runnable_scripts
 test_other_tools_and_paths
 test_the_guard_fails_closed_and_is_inert_elsewhere
 test_launch_shape

@@ -40,6 +40,7 @@ import { basename, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const MAX_DEPTH = 8;
+const BIN = shellQuote(dirname(fileURLToPath(import.meta.url)));
 const HAND_OFF = "Hand the order to the real firstmate or the second mate that owns the work; this session only reads.";
 
 // Mutating firstmate scripts, named so the refusal tells the model what it hit.
@@ -78,7 +79,7 @@ const SECRET_PATH = /(^|\/)(\.env($|[./])|[^/]*\.(pem|key|age)$|id_(rsa|ed25519)
 
 const REASONS = {
   "ask-mutation": (name) => `${name} changes the fleet and is refused in this read-only side session. ${HAND_OFF}`,
-  "ask-not-allowed": (name) => `${name} is not on this read-only session's list of read commands. Use cat, head, tail, ls, grep, rg, jq, find, git log or show, or bin/fm-crew-state.sh, bin/fm-fleet-view.sh, bin/fm-peek.sh, bin/fm-tasks-axi.sh list|show. ${HAND_OFF}`,
+  "ask-not-allowed": (name) => `${name} is not on this read-only session's list of read commands. Use cat, head, tail, ls, grep, rg, jq, find, git log or show, or ${BIN}/fm-crew-state.sh, ${BIN}/fm-fleet-view.sh, ${BIN}/fm-peek.sh, ${BIN}/fm-tasks-axi.sh list|show. ${HAND_OFF}`,
   "ask-write": () => `writing to a file is refused in this read-only side session; only redirects to /dev/null are allowed. ${HAND_OFF}`,
   "ask-tool": (name) => `the ${name} tool is refused in this read-only side session; only Read, Grep, Glob, and read-only Bash run here. ${HAND_OFF}`,
   "ask-path": (name) => `${name} is outside this session's home or is a secret file; this session reads only the home's records. ${HAND_OFF}`,
@@ -92,6 +93,10 @@ class Refusal extends Error {
     this.code = code;
     this.subject = subject;
   }
+}
+
+function shellQuote(value) {
+  return /^[\w@%+=:,./-]+$/.test(value) ? value : `'${value.replace(/'/g, "'\\''")}'`;
 }
 
 function base(value) {
