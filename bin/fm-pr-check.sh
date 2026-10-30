@@ -252,6 +252,12 @@ fi
 # The merge-time re-record is not a new review-ready PR, so it writes nothing.
 [ ! -e "${FM_CONFIG_OVERRIDE:-$FM_HOME/config}/fleet-ledger" ] || [ "${FM_PR_CHECK_MERGE:-}" = 1 ] \
   || FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE "$SCRIPT_DIR/fm-fleet-ledger.sh" pr_ready "$ID" "$URL" || true
+# Fork-only: a ready PR is two ledger events, pr-open and pr-ready (once each; best-effort).
+LEDGER_DATA=${FM_DATA_OVERRIDE:-$FM_HOME/data}
+[ "${FM_PR_CHECK_MERGE:-}" = 1 ] || for ledger_event in pr-open pr-ready; do
+  FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$LEDGER_DATA "$SCRIPT_DIR/fm-task-ledger.sh" record "$ID" "$ledger_event" --once --note "$URL" >/dev/null 2>&1 || true
+done
+# Fork-only end
 # Fork-only: code complete moves the Shortcut story to In Review and links the PR (best-effort).
 [ "${FM_PR_CHECK_MERGE:-}" = 1 ] \
   || FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE "$SCRIPT_DIR/fm-shortcut-ticket.sh" review "$ID" --pr "$URL" --best-effort || true

@@ -1,0 +1,475 @@
+#!/usr/bin/env bash
+# shellcheck disable=SC1091,SC2016
+# Fork-only: behavior tests for the per-task event ledger (bin/fm-task-ledger.sh)
+# and the gates built on it: the launch gate in bin/fm-spawn.sh, the merge gates in
+# bin/fm-pr-merge.sh and bin/fm-merge-local.sh, the captain wait clock, the turn-end
+# charge, and the never-wait checks. No network, no real harness.
+set -u
+
+# shellcheck source=tests/fixtures.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
+
+# tests/lib.sh turns the ledger gates off for fixtures; this suite tests them.
+unset FM_TASK_LEDGER FM_NEVER_WAIT
+export FM_NEVER_WAIT_UNTHROTTLED=1
+export TZ=UTC
+
+TMP_ROOT=$(fm_test_tmproot fm-task-ledger)
+LEDGER="$ROOT/bin/fm-task-ledger.sh"
+NEVER="$ROOT/bin/fm-never-wait.sh"
+FM="$TMP_ROOT/home"
+mkdir -p "$FM/data" "$FM/state"
+export FM_HOME="$FM"
+
+ledger_file() { printf '%s/data/ticket-ledger/%s.jsonl' "$FM" "$1"; }
+
+test_record_appends_json_lines() {
+  local f
+  f=$(ledger_file t1)
+  "$LEDGER" record t1 intake-start --at 1000 --session s-main --note "filed" || fail "record failed"
+  "$LEDGER" record t1 grill-start --at 1060 --session s-main || fail "record failed"
+  [ "$(wc -l < "$f")" -eq 2 ] || fail "expected two lines, got: $(cat "$f")"
+  assert_equals "intake-start" "$(sed -n 1p "$f" | jq -r .event)" "first event"
+  assert_equals "1000" "$(sed -n 1p "$f" | jq -r .at)" "first timestamp"
+  assert_equals "s-main" "$(sed -n 1p "$f" | jq -r .session)" "session id kept"
+  assert_equals "filed" "$(sed -n 1p "$f" | jq -r .note)" "note kept"
+  assert_equals "grill-start" "$(sed -n 2p "$f" | jq -r .event)" "second event appended, not rewritten"
+  pass "record appends one JSON line per event"
+}
+
+test_record_rejects_unknown_event() {
+  local out rc
+  out=$("$LEDGER" record t1 coffee-break 2>&1); rc=$?
+  expect_code 2 "$rc" "unknown event is a usage error"
+  assert_contains "$out" "intake-start" "the error lists the legal events"
+  pass "record rejects an event outside the vocabulary"
+}
+
+test_record_defaults_time_to_now() {
+  local before after at
+  before=$(date +%s)
+  "$LEDGER" record t2 intake-start || fail "record failed"
+  after=$(date +%s)
+  at=$(jq -r .at "$(ledger_file t2)")
+  [ "$at" -ge "$before" ] && [ "$at" -le "$after" ] || fail "timestamp $at outside $before..$after"
+  pass "record stamps the current time by default"
+}
+
+test_ledger_survives_task_state_cleanup() {
+  "$LEDGER" record t3 intake-start --at 5 || fail "record failed"
+  mkdir -p "$FM/state"
+  : > "$FM/state/t3.meta"
+  rm -rf "$FM/state/t3.meta"
+  [ -s "$(ledger_file t3)" ] || fail "ledger lost with the task state"
+  assert_contains "$("$LEDGER" show t3)" "intake-start" "show reads the kept ledger"
+  pass "ledger lives in data/ and outlives the task state"
+}
+
+test_require_spawn_names_missing_event_and_command() {
+  local out rc
+  "$LEDGER" record fresh1 grill-start --at 5
+  out=$("$LEDGER" require spawn fresh1 2>&1); rc=$?
+  expect_code 1 "$rc" "a filed task with no intake event is refused"
+  assert_contains "$out" "intake-start" "names the missing intake event"
+  assert_contains "$out" "bin/fm-task-ledger.sh record fresh1 intake-start" "names the command that records it"
+  "$LEDGER" record fresh1 intake-start --at 10
+  out=$("$LEDGER" require spawn fresh1 2>&1); rc=$?
+  expect_code 1 "$rc" "intake alone is not enough"
+  assert_contains "$out" "planning-done" "names the missing planning event"
+  assert_contains "$out" "bin/fm-task-ledger.sh record fresh1 planning-done" "names the command that records it"
+  "$LEDGER" record fresh1 planning-done --at 20
+  out=$("$LEDGER" require spawn fresh1 2>&1); rc=$?
+  expect_code 0 "$rc" "intake and planning satisfy the gate: $out"
+  pass "require spawn needs intake-start and planning-done"
+}
+
+test_record_once_skips_a_repeat() {
+  "$LEDGER" record once1 intake-start --at 1 --once
+  "$LEDGER" record once1 intake-start --at 2 --once
+  [ "$(wc -l < "$(ledger_file once1)")" -eq 1 ] || fail "--once appended a duplicate"
+  assert_equals "1" "$(jq -r .at "$(ledger_file once1)")" "the first record stays"
+  pass "record --once leaves an existing event alone"
+}
+
+test_require_off_switch() {
+  FM_TASK_LEDGER=off "$LEDGER" require spawn never-recorded >/dev/null 2>&1 || fail "FM_TASK_LEDGER=off must disable the gate"
+  pass "the fixture switch disables the gate"
+}
+
+test_spawn_refuses_without_intake_and_planning() {
+  local out rc fm="$TMP_ROOT/spawnhome"
+  mkdir -p "$fm/data" "$fm/state"
+  FM_HOME=$fm "$LEDGER" record gated-task grill-start --at 1
+  out=$(FM_HOME=$fm "$ROOT/bin/fm-spawn.sh" gated-task "$TMP_ROOT/no-such-project" --scout 2>&1); rc=$?
+  expect_code 1 "$rc" "spawn is refused without ledger events"
+  assert_contains "$out" "bin/fm-task-ledger.sh record gated-task intake-start" "refusal names the record command"
+  [ ! -e "$fm/state/gated-task.meta" ] || fail "refused launch left task state"
+  FM_HOME=$fm "$LEDGER" record gated-task intake-start --at 1
+  FM_HOME=$fm "$LEDGER" record gated-task planning-done --at 2
+  out=$(FM_HOME=$fm "$ROOT/bin/fm-spawn.sh" gated-task "$TMP_ROOT/no-such-project" --scout 2>&1)
+  assert_not_contains "$out" "task ledger" "recorded events pass the gate"
+  out=$(FM_HOME=$fm "$ROOT/bin/fm-spawn.sh" other-task --relaunch 2>&1)
+  assert_not_contains "$out" "task ledger" "relaunch is running work and is never gated"
+  pass "spawn refuses a fresh launch without intake and planning events"
+}
+
+test_merge_refusals() {
+  local out rc fm="$TMP_ROOT/mergehome" url=https://github.com/o/r/pull/1
+  mkdir -p "$fm/data" "$fm/state"
+  out=$(FM_HOME=$fm "$ROOT/bin/fm-pr-merge.sh" merge-task "$url" 2>&1); rc=$?
+  expect_code 1 "$rc" "merge is refused without ready and approval times"
+  assert_contains "$out" "bin/fm-task-ledger.sh record merge-task pr-ready" "names the pr-ready command"
+  assert_contains "$out" "bin/fm-task-ledger.sh record merge-task captain-approval" "names the approval command"
+  FM_HOME=$fm "$LEDGER" record merge-task pr-ready --at 1
+  out=$(FM_HOME=$fm "$ROOT/bin/fm-pr-merge.sh" merge-task "$url" 2>&1); rc=$?
+  expect_code 1 "$rc" "ready alone is not enough"
+  assert_not_contains "$out" "record merge-task pr-ready" "pr-ready no longer missing"
+  assert_contains "$out" "record merge-task captain-approval" "approval still missing"
+  FM_HOME=$fm "$LEDGER" record merge-task captain-approval --at 2
+  out=$(FM_HOME=$fm "$ROOT/bin/fm-pr-merge.sh" merge-task "$url" 2>&1)
+  assert_not_contains "$out" "task ledger" "both recorded: the ledger gate passes"
+  out=$(FM_HOME=$fm "$ROOT/bin/fm-merge-local.sh" local-task 2>&1); rc=$?
+  expect_code 1 "$rc" "local landing is refused without ready and approval times"
+  assert_contains "$out" "bin/fm-task-ledger.sh record local-task pr-ready" "local landing names the command"
+  pass "merge and local landing are refused without pr-ready and captain-approval"
+}
+
+test_captain_wait_clock_includes_away_time() {
+  local out
+  "$LEDGER" record w1 intake-start --at 1000
+  "$LEDGER" wait-start w1 --at 1100 --note "design pick"
+  # A second ask before the first answer does not restart the clock.
+  "$LEDGER" wait-start w1 --at 1200
+  : > "$FM/state/.afk"
+  "$LEDGER" wait-end w1 --at 5000
+  rm -f "$FM/state/.afk"
+  out=$("$LEDGER" summary w1 --now 9000)
+  assert_contains "$out" "captain_wait_seconds=3900" "the clock runs from the first ask to the answer, away time included"
+  assert_contains "$out" "open_captain_wait=0" "answered wait is closed"
+  "$LEDGER" wait-start w1 --at 6000
+  out=$("$LEDGER" summary w1 --now 7000)
+  assert_contains "$out" "captain_wait_seconds=4900" "an open ask counts up to now"
+  assert_contains "$out" "open_captain_wait=1" "open ask is reported"
+  pass "captain wait clock runs from recorded ask to recorded answer"
+}
+
+test_wait_end_after_pr_ready_records_approval() {
+  "$LEDGER" record w2 pr-ready --at 100
+  "$LEDGER" wait-start w2 --at 200
+  "$LEDGER" wait-end w2 --at 300
+  "$LEDGER" has w2 captain-approval || fail "answer to the post-ready ask is the approval"
+  assert_equals "300" "$(jq -r 'select(.event == "captain-approval") | .at' "$(ledger_file w2)")" "approval time is the answer time"
+  "$LEDGER" record w3 intake-start --at 1
+  "$LEDGER" wait-start w3 --at 2
+  "$LEDGER" wait-end w3 --at 3
+  "$LEDGER" has w3 captain-approval && fail "a pre-ready answer is not a merge approval"
+  pass "an answer to an ask opened after pr-ready records captain-approval"
+}
+
+test_captain_hold_records_the_wait() {
+  local fm="$TMP_ROOT/holdhome"
+  mkdir -p "$fm/data" "$fm/state"
+  # Drive the real hold and answer commands against a fixture backlog.
+  command -v tasks-axi >/dev/null 2>&1 || { pass "fm-captain-hold records the wait around hold and answer (skipped: tasks-axi absent)"; return 0; }
+  printf '## In flight\n\n## Queued\n\n## Done\n' > "$fm/data/backlog.md"
+  FM_HOME=$fm "$ROOT/bin/fm-tasks-axi.sh" add hold-t "Hold test" --kind ship >/dev/null 2>&1
+  FM_HOME=$fm "$ROOT/bin/fm-captain-hold.sh" hold hold-t --reason "pick one" >/dev/null 2>&1
+  printf 'option a\n' > "$fm/decision.txt"
+  FM_HOME=$fm "$ROOT/bin/fm-captain-hold.sh" answer hold-t --decision-file "$fm/decision.txt" --release >/dev/null 2>&1
+  local f="$fm/data/ticket-ledger/hold-t.jsonl"
+  assert_contains "$(jq -r .event "$f" | tr '\n' ' ')" "captain-wait-start" "hold recorded the ask"
+  assert_contains "$(jq -r .event "$f" | tr '\n' ' ')" "captain-wait-end" "answer recorded the answer"
+  pass "fm-captain-hold records the wait around hold and answer"
+}
+
+# A two-line Claude transcript fragment: one user prompt and one assistant reply
+# whose usage repeats across content blocks (same message id).
+write_transcript() {  # <file> <t0 ISO> <t1 ISO> <msg-id> <in> <out>
+  local reply
+  reply=$(jq -nc --arg t "$3" --arg id "$4" --argjson i "$5" --argjson o "$6" \
+    '{type: "assistant", timestamp: $t, message: {id: $id, role: "assistant", usage: {input_tokens: $i, output_tokens: $o, cache_read_input_tokens: 7, cache_creation_input_tokens: 3}}}')
+  {
+    jq -nc --arg t "$2" '{type: "user", timestamp: $t, message: {role: "user", content: "go"}}'
+    printf '%s\n%s\n' "$reply" "$reply"
+  } >> "$1"
+}
+
+charge() {  # <home> <session> <transcript>
+  FM_HOME=$1 "$LEDGER" charge --payload "$(jq -nc --arg s "$2" --arg t "$3" '{session_id: $s, transcript_path: $t}')"
+}
+
+test_charge_bills_the_open_task_then_fleet_overhead() {
+  local fm="$TMP_ROOT/chargehome" tr="$TMP_ROOT/chargehome/transcript.jsonl" f out
+  mkdir -p "$fm/data" "$fm/state"
+  # No open task: the turn goes to fleet overhead.
+  write_transcript "$tr" 2026-10-27T10:00:00.000Z 2026-10-27T10:01:30.000Z msg-a 100 40
+  charge "$fm" sess-1 "$tr" || fail "charge failed"
+  f="$fm/data/ticket-ledger/_fleet-overhead.jsonl"
+  [ -s "$f" ] || fail "no overhead record: $(ls "$fm/data/ticket-ledger")"
+  assert_equals "turn" "$(jq -r .event "$f")" "event kind"
+  assert_equals "sess-1" "$(jq -r .session "$f")" "session id kept for the token join"
+  assert_equals "90" "$(jq -r .turn_seconds "$f")" "turn length from the transcript timestamps"
+  assert_equals "100" "$(jq -r .tokens.input "$f")" "duplicate message blocks count once"
+  assert_equals "40" "$(jq -r .tokens.output "$f")" "output tokens"
+  # Filing a task opens it: the next turn is charged to it, and only the new transcript lines count.
+  FM_HOME=$fm "$LEDGER" record open-t intake-start --at 1
+  write_transcript "$tr" 2026-10-27T11:00:00.000Z 2026-10-27T11:00:20.000Z msg-b 5 6
+  charge "$fm" sess-1 "$tr" || fail "charge failed"
+  f="$fm/data/ticket-ledger/open-t.jsonl"
+  assert_equals "20" "$(jq -rs '[.[] | select(.event == "turn")][0].turn_seconds' "$f")" "second charge reads only the new region"
+  assert_equals "5" "$(jq -rs '[.[] | select(.event == "turn")][0].tokens.input' "$f")" "second charge tokens"
+  out=$(FM_HOME=$fm "$LEDGER" tokens open-t)
+  assert_contains "$out" "input=5" "tokens sums the task's turns"
+  assert_contains "$out" "output=6" "tokens sums output"
+  assert_contains "$(FM_HOME=$fm "$LEDGER" sessions open-t)" "sess-1" "sessions lists the join keys"
+  # The merge closes the task: later turns return to fleet overhead.
+  FM_HOME=$fm "$LEDGER" record open-t merged --at 9
+  write_transcript "$tr" 2026-10-27T12:00:00.000Z 2026-10-27T12:00:10.000Z msg-c 1 1
+  charge "$fm" sess-1 "$tr"
+  [ "$(jq -rs '[.[] | select(.event == "turn")] | length' "$fm/data/ticket-ledger/open-t.jsonl")" -eq 1 ] || fail "a merged task kept getting charged"
+  [ "$(jq -rs 'length' "$fm/data/ticket-ledger/_fleet-overhead.jsonl")" -eq 2 ] || fail "the post-merge turn did not reach fleet overhead"
+  pass "charge bills the open task, falls back to fleet overhead, and joins tokens by session id"
+}
+
+test_charge_is_a_noop_without_a_session() {
+  local fm="$TMP_ROOT/nosessionhome"
+  mkdir -p "$fm/data" "$fm/state"
+  FM_HOME=$fm "$LEDGER" charge --payload '{}' || fail "charge must not fail the turn end"
+  [ ! -e "$fm/data/ticket-ledger" ] || fail "a payload with no session wrote a record"
+  FM_TASK_LEDGER=off FM_HOME=$fm "$LEDGER" charge --payload '{"session_id":"x","transcript_path":"/nope"}' || fail "off switch"
+  pass "charge never blocks a turn end and respects the off switch"
+}
+
+test_turnend_guard_charges_a_primary_turn() {
+  local dir="$TMP_ROOT/guardprimary" tr="$TMP_ROOT/guard-transcript.jsonl"
+  mkdir -p "$dir/state"
+  git init -q "$dir"
+  fm_git_identity fmtest fmtest@example.invalid
+  git -C "$dir" commit -q --allow-empty -m init
+  : > "$dir/AGENTS.md"
+  cp -R "$ROOT/bin" "$dir/bin"
+  write_transcript "$tr" 2026-10-27T10:00:00.000Z 2026-10-27T10:00:05.000Z msg-g 9 4
+  jq -nc --arg t "$tr" '{session_id: "sess-guard", transcript_path: $t}' \
+    | CLAUDECODE=1 FM_HOME="$dir" bash "$dir/bin/fm-turnend-guard.sh" --claude >/dev/null 2>&1
+  assert_equals "turn" "$(jq -r .event "$dir/data/ticket-ledger/_fleet-overhead.jsonl" 2>/dev/null)" "the guard charged the turn"
+  assert_equals "9" "$(jq -r .tokens.input "$dir/data/ticket-ledger/_fleet-overhead.jsonl")" "with the transcript tokens"
+  pass "the turn-end guard charges a primary session's turn"
+}
+
+# A fake unsigned JWT whose exp claim is $1.
+fake_jwt() {
+  local payload
+  payload=$(printf '{"sub":"user","exp":%s}' "$1" | base64 | tr -d '=\n' | tr '+/' '-_')
+  printf 'eyJhbGciOiJub25lIn0.%s.sig' "$payload"
+}
+
+brief_with() {  # <file> <line>
+  printf '# Task\n## Captain'"'"'s intent\nship it\n\n## Firstmate spec\n%s\n' "$2" > "$1"
+}
+
+test_brief_check_refuses_report_blocked_asking_for_self_obtainable() {
+  local f="$TMP_ROOT/brief.md" out rc line
+  for line in \
+    "If the share link expires, report blocked asking for a new Vercel share link." \
+    "When you need a Clerk session JWT, append blocked and wait for the captain." \
+    "Report blocked asking for test database access." \
+    "If you cannot see the logs, report blocked asking for SigNoz access."; do
+    brief_with "$f" "$line"
+    out=$("$NEVER" brief-check "$f" --now 1000 2>&1); rc=$?
+    expect_code 1 "$rc" "refused: $line"
+    assert_contains "$out" "fix:" "names the way to get it: $line"
+  done
+  brief_with "$f" "Mint your own Vercel share link with the Vercel MCP; if the page 403s, mint another and continue."
+  "$NEVER" brief-check "$f" --now 1000 >/dev/null 2>&1 || fail "a brief that says how to self-serve was refused"
+  brief_with "$f" "If you need the production admin password, report blocked: captain-credential."
+  "$NEVER" brief-check "$f" --now 1000 >/dev/null 2>&1 || fail "asking for a captain credential was refused"
+  pass "brief-check refuses report-blocked-asking for a self-obtainable item"
+}
+
+test_brief_check_refuses_access_expiring_within_two_hours() {
+  local f="$TMP_ROOT/brief-exp.md" out rc now=1800000000
+  brief_with "$f" "Use this Clerk token: $(fake_jwt $((now + 3600)))"
+  out=$("$NEVER" brief-check "$f" --now $now 2>&1); rc=$?
+  expect_code 1 "$rc" "a JWT with 1 h left is refused"
+  assert_contains "$out" "expires" "says why"
+  brief_with "$f" "Use this Clerk token: $(fake_jwt $((now + 86400)))"
+  "$NEVER" brief-check "$f" --now $now >/dev/null 2>&1 || fail "a JWT with 24 h left was refused"
+  brief_with "$f" "The share link expires in 30 minutes."
+  "$NEVER" brief-check "$f" --now $now >/dev/null 2>&1 && fail "expires in 30 minutes was accepted"
+  brief_with "$f" "The share link expires in 24 hours."
+  "$NEVER" brief-check "$f" --now $now >/dev/null 2>&1 || fail "expires in 24 hours was refused"
+  brief_with "$f" "Access expires at 2027-01-15T08:30:00Z."
+  "$NEVER" brief-check "$f" --now "$(date -u -j -f %Y-%m-%dT%H:%M:%SZ 2027-01-15T07:00:00Z +%s 2>/dev/null || date -u -d 2027-01-15T07:00:00Z +%s)" >/dev/null 2>&1 && fail "an ISO expiry 90 minutes away was accepted"
+  brief_with "$f" "Access exp=$((now + 600))"
+  "$NEVER" brief-check "$f" --now $now >/dev/null 2>&1 && fail "an epoch expiry 10 minutes away was accepted"
+  pass "brief-check refuses handed-over access that expires within 2 hours"
+}
+
+test_spawn_refuses_a_never_wait_violation() {
+  local home="$TMP_ROOT/nwspawn" out rc
+  fm_test_spawn_home "$home"
+  fm_git_identity fmtest fmtest@example.invalid
+  fm_git_init_commit "$home/projects/p" >/dev/null 2>&1 || { git init -q "$home/projects/p" && git -C "$home/projects/p" commit -q --allow-empty -m init; }
+  fm_test_spawn_brief "$home" nw-task "If the link expires, report blocked asking for a new Vercel share link."
+  FM_HOME=$home "$LEDGER" record nw-task intake-start --at 1
+  FM_HOME=$home "$LEDGER" record nw-task planning-done --at 2
+  out=$(FM_HOME=$home FM_DATA_OVERRIDE="$home/data" "$ROOT/bin/fm-spawn.sh" nw-task "$home/projects/p" --scout 2>&1); rc=$?
+  expect_code 1 "$rc" "spawn is refused"
+  assert_contains "$out" "never wait" "the refusal names the rule"
+  pass "spawn refuses a brief that sets up a self-fixable wait"
+}
+
+# status_block <home> <id> <epoch> <text>: append a blocked line.
+status_block() { printf 'blocked [at=%s]: %s\n' "$3" "$4" >> "$1/state/$2.status"; }
+
+test_sweep_rejects_a_block_without_a_legal_reason() {
+  local home="$TMP_ROOT/nwsweep1" out
+  mkdir -p "$home/state" "$home/data"
+  status_block "$home" bad-task 1000 "waiting on someone to send me a fresh Vercel share link"
+  out=$(FM_HOME=$home "$NEVER" sweep --now 1100)
+  assert_contains "$out" "SELF-FIX bad-task" "rejected and routed as a self-fix"
+  assert_contains "$out" "Vercel MCP" "with the playbook step for the blocker"
+  out=$(FM_HOME=$home "$NEVER" sweep --now 1200)
+  assert_not_contains "$out" "SELF-FIX" "the same block is routed once"
+  status_block "$home" ok1 1000 "captain-credential: need the prod admin password"
+  status_block "$home" ok2 1000 "captain-decision: pick option a or b"
+  status_block "$home" ok3 1000 "resource-exhausted: OpenAI credit is gone"
+  status_block "$home" ok4 1000 "external-wait until=2027-01-01T00:00Z: vendor fix"
+  out=$(FM_HOME=$home "$NEVER" sweep --now 1300)
+  assert_not_contains "$out" "SELF-FIX" "the four legal reasons are accepted"
+  status_block "$home" bad2 1000 "external-wait: vendor fix with no end time"
+  out=$(FM_HOME=$home "$NEVER" sweep --now 1400)
+  assert_contains "$out" "SELF-FIX bad2" "external-wait without an end time is rejected"
+  assert_contains "$(FM_HOME=$home "$NEVER" playbook "unknown thing")" "no known playbook" "unknown blockers get the generic self-fix"
+  pass "sweep rejects blocks without a legal reason and routes them with the playbook"
+}
+
+test_sweep_alarms_a_stale_block_and_counts_blocked_time() {
+  local home="$TMP_ROOT/nwsweep2" out
+  mkdir -p "$home/state" "$home/data"
+  status_block "$home" stuck 1000 "captain-decision: pick option a or b"
+  out=$(FM_HOME=$home "$NEVER" sweep --now $((1000 + 600)))
+  assert_not_contains "$out" "ALARM" "a 10 minute block is not yet an alarm"
+  out=$(FM_HOME=$home "$NEVER" sweep --now $((1000 + 901)))
+  assert_contains "$out" "ALARM stuck" "a 15 minute block with no action alarms"
+  assert_contains "$out" "tell the captain" "the alarm reaches the captain through main"
+  out=$(FM_HOME=$home "$NEVER" sweep --now $((1000 + 1000)))
+  assert_not_contains "$out" "ALARM" "one alarm per threshold"
+  out=$(FM_HOME=$home "$NEVER" sweep --now $((1000 + 1900)))
+  assert_contains "$out" "ALARM stuck" "it repeats each threshold until someone acts"
+  # A steer is action: the next threshold stays quiet.
+  mkdir -p "$home/state/stuck.inbox"
+  printf 'try the other link\n' > "$home/state/stuck.inbox/1.msg"
+  out=$(FM_HOME=$home "$NEVER" sweep --now $((1000 + 3000)))
+  assert_not_contains "$out" "ALARM" "a steer after the block counts as action"
+  # The block is blocked time in the ledger, closed when the worker moves on.
+  printf 'working [at=%s]: carrying on\n' 4000 >> "$home/state/stuck.status"
+  FM_HOME=$home "$NEVER" sweep --now 4100 >/dev/null
+  out=$(FM_HOME=$home "$LEDGER" summary stuck --now 5000)
+  assert_contains "$out" "blocked_seconds=3000" "blocked time runs from the block to the next status line"
+  pass "sweep alarms a block that sits 15 minutes with no action and counts it as blocked time"
+}
+
+test_brief_teaches_the_block_reasons() {
+  local home="$TMP_ROOT/nwbrief" mode brief
+  mkdir -p "$home/data" "$home/state"
+  for mode in no-mistakes direct-PR local-only; do
+    FM_HOME=$home "$ROOT/bin/fm-brief.sh" "brief-$mode" some-proj --mode "$mode" >/dev/null 2>&1 || fail "brief scaffold failed for $mode"
+    brief="$home/data/brief-$mode/brief.md"
+    assert_grep "captain-credential, captain-decision, resource-exhausted, or external-wait until=" "$brief" "$mode brief lists the four reasons"
+  done
+  pass "ship briefs teach the four legal block reasons"
+}
+
+test_watcher_wakes_on_a_never_wait_finding() {
+  local home="$TMP_ROOT/nwwatch" out="$TMP_ROOT/nwwatch.out" pid i=0 now
+  mkdir -p "$home/state" "$home/config" "$home/data"
+  now=$(date +%s)
+  status_block "$home" wtask $((now - 1200)) "waiting on someone to send me a fresh Vercel share link"
+  : > "$home/state/wtask.meta"
+  FM_HOME=$home FM_STATE_OVERRIDE="$home/state" FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 \
+    FM_HEARTBEAT=999999 FM_SECONDMATE_LIVENESS_SECS=99999999 bash "$ROOT/bin/fm-watch.sh" > "$out" 2>&1 &
+  pid=$!
+  while [ "$i" -lt 150 ] && kill -0 "$pid" 2>/dev/null; do sleep 0.1; i=$((i + 1)); done
+  if kill -0 "$pid" 2>/dev/null; then kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; fail "watcher never surfaced the finding: $(cat "$out")"; fi
+  wait "$pid" 2>/dev/null
+  assert_contains "$(cat "$out")" "check: never-wait" "the watcher wakes with the never-wait reason"
+  assert_contains "$(cat "$out")" "SELF-FIX wtask" "and names the self-fix"
+  assert_contains "$(cat "$out")" "ALARM wtask" "and the stale-block alarm"
+  pass "the watcher wakes the supervisor on a never-wait finding"
+}
+
+test_task_queued_before_the_ledger_counts_as_filed() {
+  local out f
+  f=$(ledger_file old1)
+  [ ! -e "$f" ] || fail "fixture: old1 must have no ledger"
+  out=$("$LEDGER" require spawn old1 2>&1) || fail "a task with no ledger at all was refused: $out"
+  assert_contains "$("$LEDGER" show old1)" "intake-start" "intake recorded as grandfathered"
+  assert_contains "$("$LEDGER" show old1)" "planning-done" "planning recorded as grandfathered"
+  assert_contains "$("$LEDGER" show old1)" "queued before the task ledger" "the note says why"
+  # Its merge still needs its own ready and approval times.
+  "$LEDGER" require merge old1 >/dev/null 2>&1 && fail "grandfathering must not waive the merge gate"
+  pass "an item queued before the ledger existed launches without recorded times"
+}
+
+test_auto_dev_merge_counts_as_captain_approval() {
+  local dir="$TMP_ROOT/autodev" out
+  mkdir -p "$dir/state" "$dir/fakebin" "$dir/data"
+  fm_write_meta "$dir/state/t1.meta" "kind=ship" "mode=no-mistakes"
+  printf '%s\n' "working [at=0]: go" "done [at=1]: PR https://github.com/o/r/pull/9 checks green" > "$dir/state/t1.status"
+  cat > "$dir/fakebin/gh" <<'GH'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "pr view") echo '{"baseRefName":"dev","author":{"login":"me"},"labels":[]}' ;;
+  "api user") echo me ;;
+  *) exit 1 ;;
+esac
+GH
+  # The merge stand-in is the real ledger gate: it succeeds only when approval is recorded.
+  cat > "$dir/merge" <<M
+#!/usr/bin/env bash
+"$LEDGER" require merge "\$1" || exit 1
+echo "verified: \$2 is merged (state=MERGED, merged=true, isInMergeQueue=false)"
+M
+  chmod +x "$dir/fakebin/gh" "$dir/merge"
+  FM_HOME=$dir "$LEDGER" record t1 pr-ready --at 1
+  out=$(PATH="$dir/fakebin:$PATH" FM_HOME=$dir FM_STATE_OVERRIDE="$dir/state" FM_AUTO_DEV_MERGE_MERGE="$dir/merge" \
+    "$ROOT/bin/fm-auto-dev-merge.sh" t1 https://github.com/o/r/pull/9 2>&1)
+  assert_contains "$out" "auto-dev-merge: merged" "the automatic merge went through the ledger gate: $out"
+  assert_contains "$(FM_HOME=$dir "$LEDGER" show t1)" "standing dev-merge authority" "approval says where it came from"
+  # A PR the authority does not cover (base main) records no approval.
+  FM_HOME=$dir "$LEDGER" record t2 pr-ready --at 1
+  printf '%s\n' "working [at=0]: go" "done [at=1]: PR https://github.com/o/r/pull/10 checks green" > "$dir/state/t2.status"
+  fm_write_meta "$dir/state/t2.meta" "kind=ship" "mode=no-mistakes"
+  sed -i.bak 's/"dev"/"main"/' "$dir/fakebin/gh" && rm -f "$dir/fakebin/gh.bak"
+  PATH="$dir/fakebin:$PATH" FM_HOME=$dir FM_STATE_OVERRIDE="$dir/state" FM_AUTO_DEV_MERGE_MERGE="$dir/merge" \
+    "$ROOT/bin/fm-auto-dev-merge.sh" t2 https://github.com/o/r/pull/10 >/dev/null 2>&1
+  FM_HOME=$dir "$LEDGER" has t2 captain-approval && fail "a main-base PR got a standing approval"
+  pass "an own green PR merged to dev under standing authority records captain-approval"
+}
+
+fm_test_run \
+  test_record_appends_json_lines \
+  test_record_rejects_unknown_event \
+  test_record_defaults_time_to_now \
+  test_ledger_survives_task_state_cleanup \
+  test_require_spawn_names_missing_event_and_command \
+  test_record_once_skips_a_repeat \
+  test_require_off_switch \
+  test_spawn_refuses_without_intake_and_planning \
+  test_merge_refusals \
+  test_captain_wait_clock_includes_away_time \
+  test_wait_end_after_pr_ready_records_approval \
+  test_captain_hold_records_the_wait \
+  test_charge_bills_the_open_task_then_fleet_overhead \
+  test_charge_is_a_noop_without_a_session \
+  test_turnend_guard_charges_a_primary_turn \
+  test_brief_check_refuses_report_blocked_asking_for_self_obtainable \
+  test_brief_check_refuses_access_expiring_within_two_hours \
+  test_spawn_refuses_a_never_wait_violation \
+  test_sweep_rejects_a_block_without_a_legal_reason \
+  test_sweep_alarms_a_stale_block_and_counts_blocked_time \
+  test_brief_teaches_the_block_reasons \
+  test_watcher_wakes_on_a_never_wait_finding \
+  test_task_queued_before_the_ledger_counts_as_filed \
+  test_auto_dev_merge_counts_as_captain_approval

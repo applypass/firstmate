@@ -465,6 +465,62 @@ A budget record that cannot be written refuses too, with its own message.
 `FM_DAILY_QUOTA_STOP=off` disables the gate; `tests/lib.sh` sets it so fixtures never read quota-axi.
 <!-- Fork-only end -->
 
+<!-- Fork-only: task ledger and never-wait config; bin/fm-task-ledger.sh and bin/fm-never-wait.sh own the contracts. -->
+
+### Task ledger (applypass fork)
+
+Every ship and scout keeps one append-only event ledger at `data/ticket-ledger/<task-id>.jsonl` in its home.
+It lives in `data/`, so it outlives the task's cleanup.
+Each line is a JSON object with a timestamp, an event name, and the session id of the writer, so token spend can be joined on the session id later.
+The events are intake-start, grill-start, grill-end, planning-done, spawn, first-action, pr-open, check-start, pr-ready, captain-approval, captain-wait-start, captain-wait-end, merged, turn, blocked-start, and blocked-end.
+`bin/fm-task-ledger.sh` owns the format and every command.
+
+A missing record refuses the step that needs it, and each refusal names the missing event and the one command that records it:
+
+- `bin/fm-spawn.sh` refuses a fresh ship or scout launch until intake-start and planning-done are recorded.
+  A task with no ledger file was queued before the ledger existed, so spawn counts it as filed and records both events as grandfathered.
+  Filing the task with `bin/fm-tasks-axi.sh add` records intake-start; `bin/fm-task-ledger.sh record <id> planning-done` records the end of planning.
+- `bin/fm-pr-merge.sh` and `bin/fm-merge-local.sh` refuse a merge until pr-ready and captain-approval are recorded.
+  `bin/fm-pr-check.sh` records pr-open and pr-ready when the PR is registered.
+  Under `yolo`, or for a local-only ready branch, firstmate records the missing event by hand with the command the refusal prints.
+
+The captain wait clock runs from the recorded ask to the recorded answer on the wall clock, away time included.
+`bin/fm-captain-hold.sh` records captain-wait-start at `hold` and captain-wait-end at `answer`.
+An answer to an ask opened after pr-ready also records captain-approval, because the merge call is the only ask left once the work is ready.
+Standing dev-merge authority counts as approval too: `bin/fm-auto-dev-merge.sh` records captain-approval before it merges a covered own PR to dev, so that merge is not refused.
+`bin/fm-task-ledger.sh summary <id>` prints the captain wait, grill, blocked, and planning seconds.
+
+Planning time is charged by a turn-end hook.
+`bin/fm-turnend-guard.sh` runs `bin/fm-task-ledger.sh charge` for every main and second-mate turn, and a worker turn is never charged here.
+The turn goes to the open task, or to `data/ticket-ledger/_fleet-overhead.jsonl` when none is open.
+The open task is the one `state/ticket-ledger-open` names: filing a task, starting a grill, or answering a captain ask focuses it, and its merge releases it.
+Each charge records the turn length and the tokens in the transcript lines added since the session's last charge.
+`bin/fm-task-ledger.sh tokens <id>` sums them and `sessions <id>` lists the session ids to join other token sources on.
+Only a Claude primary reports a transcript to the hook, so a primary on another harness records no turn.
+
+`FM_TASK_LEDGER=off` turns the refusals and the charge off, and `tests/lib.sh` sets it so fixtures that do not model the ledger keep working.
+
+### Never wait (applypass fork)
+
+Work never sits waiting unless the captain asked or a resource ran out.
+`bin/fm-never-wait.sh` enforces that in five checks:
+
+1. Spawn refuses a brief that tells the worker to report blocked while asking for something it can get itself: a Vercel share link, a Clerk test session JWT, test database access (psql-17 through `~/.pgpass`), or SigNoz logs.
+   The refusal names the line and how to get the item.
+2. Spawn refuses a brief that hands over access expiring within 2 hours: a JWT whose `exp` is under 2 hours away, `expires in N minutes`, or an expiry timestamp under 2 hours away.
+3. A `blocked:` line starts its text with one reason: `captain-credential`, `captain-decision`, `resource-exhausted`, or `external-wait until=<UTC time>`.
+   The watcher rejects any other block once and wakes the supervisor to self-fix it.
+   `bin/fm-brief.sh` teaches workers the four reasons.
+4. The wake carries the playbook step for the blocker the line names; `bin/fm-never-wait.sh playbook <text>` prints it.
+   An expired test-site link, for example, is replaced with a fresh share link from the Vercel MCP saved under the task's data directory, and the worker is steered to continue.
+   A script cannot call an MCP, so the supervisor runs the step in the same turn.
+5. A block older than 15 minutes with no action since (no steer, no ledger event) alarms the supervisor, which tells the captain, and repeats every 15 minutes until someone acts.
+   Every block is also a blocked-start and blocked-end pair in the ledger, so the time counts as blocked time.
+
+`bin/fm-watch.sh` runs the sweep on every poll and the sweep throttles itself to once a minute.
+`FM_NEVER_WAIT=off` turns all five checks off, and `tests/lib.sh` sets it for fixtures.
+<!-- Fork-only end -->
+
 ## Backlog backend (.tasks.toml / config/backlog-backend)
 
 The tracked `.tasks.toml` pins the default `tasks-axi` markdown backend to `data/backlog.md`, with `done_keep = 10` and an archive at `data/done-archive.md`.

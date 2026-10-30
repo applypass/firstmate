@@ -3682,6 +3682,14 @@ while :; do
     triage_log "inactive-outcome reconciliation unavailable"
   fi
 
+  # Fork-only: never-wait sweep (bin/fm-never-wait.sh). A blocked line without a legal reason, or a block
+  # that sat 15 minutes with no action, wakes the supervisor to self-fix or alarm; silent otherwise.
+  never_wait_out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-never-wait.sh" sweep 2>/dev/null) || never_wait_out=
+  if [ -n "$never_wait_out" ]; then
+    wake "check: never-wait $never_wait_out"
+  fi
+  # Fork-only end
+
   # Slow per-task checks (firstmate writes these, e.g. a merged-PR poll).
   # Time-based via .last-check mtime so the cadence survives watcher restarts.
   # Evaluated BEFORE the signal scan: wake() exits the cycle, so a check placed

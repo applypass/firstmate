@@ -95,6 +95,10 @@ fi
 BASE=$(jq -r '.baseRefName' <<<"$PR")
 [ "$BASE" = "$DEV_BRANCH" ] || pause "base is $BASE, not $DEV_BRANCH"
 
+# Fork-only: standing dev-merge authority counts as the captain's approval in the task ledger.
+LEDGER_DATA=${FM_DATA_OVERRIDE:-$FM_HOME/data}
+FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$LEDGER_DATA "$SCRIPT_DIR/fm-task-ledger.sh" record "$ID" captain-approval --once \
+  --note "standing dev-merge authority" >/dev/null 2>&1 || true
 MERGE_RC=0
 OUT=$("$MERGE_CMD" "$ID" "$URL" 2>&1) || MERGE_RC=$?
 [ "$MERGE_RC" -ne "$FM_LEASE_REFUSE_EXIT" ] || skip "this actor is not the merge authority; main merges it"

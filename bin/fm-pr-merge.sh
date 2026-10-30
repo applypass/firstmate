@@ -241,6 +241,10 @@ if [ "$PROVIDER" = gerrit ]; then
   echo "error: firstmate does not submit a Gerrit change: submitting requires an attributed human approval it must not manufacture, so a human submits the change on the server" >&2
   exit 2
 fi
+# Fork-only: task ledger gate. A merge needs the task's ready and captain-approval times recorded (bin/fm-task-ledger.sh).
+LEDGER_DATA=${FM_DATA_OVERRIDE:-$FM_HOME/data}
+FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$LEDGER_DATA "$SCRIPT_DIR/fm-task-ledger.sh" require merge "$ID" || exit 1
+# Fork-only end
 shift 2
 ATTENDED_OVERRIDE=false
 # Fork-only: --release-main permits a merge whose base is main (bin/fm-main-merge-guard.sh).
@@ -1859,5 +1863,7 @@ case "$outcome_rc" in
     printf 'actionable: merged %s but could not record the outcome for supervision\n' "$URL" >&2
     ;;
 esac
+# Fork-only: the verified merge closes the ledger (best-effort).
+FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$LEDGER_DATA "$SCRIPT_DIR/fm-task-ledger.sh" record "$ID" merged --once --note "$URL" >/dev/null 2>&1 || true
 # Fork-only: a merge to the release base moves its Shortcut stories to Done once production runs it, or prints the next step (best-effort).
 [ "$PROVIDER" != github ] || FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE "$SCRIPT_DIR/fm-shortcut-ticket.sh" release-hook "$URL" --task "$ID" --best-effort || true
