@@ -173,6 +173,8 @@ esac
 # Fork-only: handbook pointer block for firstmate-repo briefs.
 # shellcheck source=bin/fm-handbook-lib.sh
 . "$SCRIPT_DIR/fm-handbook-lib.sh"
+# shellcheck source=bin/fm-cleanup-line-lib.sh
+. "$SCRIPT_DIR/fm-cleanup-line-lib.sh"
 # Fork-only end
 PAUSED_VERB=${FM_CLASSIFY_PAUSED_VERB:-$FM_CLASSIFY_PAUSED_VERB_DEFAULT}
 IFS= read -r -d '' CREWMATE_PAUSE_INSTRUCTIONS <<EOF || true
@@ -747,6 +749,7 @@ When the report is complete, append \`done [at=<epoch>]: {one-line conclusion}\`
 If your findings reveal work that should ship (e.g. you reproduced a bug and the fix is clear), say so in the report; firstmate may promote this task in place, and you would then receive mode-specific ship instructions as a follow-up message.
 EOF
 fm_handbook_brief_block "$FM_HOME" "$PROJECT_DIR" "$FM_ROOT" >> "$BRIEF"  # Fork-only
+fm_cleanup_brief_block >> "$BRIEF"  # Fork-only
 append_brief_include
 echo "scaffolded: $BRIEF (scout; replace {TASK} and {FIRSTMATE_SPEC})"
 exit 0
@@ -828,6 +831,7 @@ A correction edits only the wrong text: do not run \`$FM_ROOT/bin/fm-ensure-agen
 $DOD
 EOF
 fm_handbook_brief_block "$FM_HOME" "$PROJECT_DIR" "$FM_ROOT" >> "$BRIEF"  # Fork-only
+fm_cleanup_brief_block >> "$BRIEF"  # Fork-only
 append_brief_include
 if [ "$FORGE" = none ]; then
   echo "scaffolded: $BRIEF (ship, mode=$MODE; replace {TASK} and {FIRSTMATE_SPEC})"
