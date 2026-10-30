@@ -1,0 +1,152 @@
+# Live fm-config-push.sh in a disposable lab home (local secondmate apply-delivery + remote secondmate remote-sm via SSH transport shim running the real tracked receiver)
+
+### Round 1: initial push (primary has INDEX.md + topic-git.md)
+config-push: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.RDLAXj -> live secondmate homes
+secondmate apply-delivery (/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab-sm.1RYLpt):
+  crew-dispatch.json: unchanged
+  dispatch-never-send: unchanged
+  crew-harness: unchanged
+  backlog-backend: unchanged
+  backend: unchanged
+  herdr-presentation-spaces: unchanged
+  herdr-project-groups: unchanged
+  startup-memory-budget: unchanged
+  trace-context: unchanged - session-scoped
+  launch-env-allowlist: unchanged
+  claude-permission-mode: unchanged
+  codex-approval-mode: unchanged
+  lavish-axi-host: unchanged
+  t3code-instances: unchanged
+  keep-ai-trailers: unchanged
+  supervision-host-off: unchanged
+  firstmate-role: unchanged
+  data/captain-shared.md: pushed
+  data/firstmate-handbook/INDEX.md: pushed
+  data/firstmate-handbook/topic-git.md: pushed
+secondmate remote-sm (labhost:/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab-rm.kF5bv5):
+  unchanged: config/crew-dispatch.json
+  unchanged: config/dispatch-never-send
+  unchanged: config/crew-harness
+  unchanged: config/backlog-backend
+  unchanged: config/backend
+  unchanged: config/herdr-presentation-spaces
+  unchanged: config/herdr-project-groups
+  unchanged: config/startup-memory-budget
+  unchanged: config/trace-context
+  unchanged: config/launch-env-allowlist
+  unchanged: config/claude-permission-mode
+  unchanged: config/codex-approval-mode
+  unchanged: config/lavish-axi-host
+  unchanged: config/t3code-instances
+  unchanged: config/keep-ai-trailers
+  unchanged: config/supervision-host-off
+  unchanged: config/firstmate-role
+  pushed: data/captain-shared.md
+  pushed: data/firstmate-handbook/INDEX.md
+  pushed: data/firstmate-handbook/topic-git.md
+  unchanged: data/firstmate-handbook
+  config-reread: send failed; retry retained
+exit=
+== apply-delivery(local) data/firstmate-handbook:
+   -r--r--r--@ INDEX.md
+   -r--r--r--@ topic-git.md
+
+### State after round 1
+== apply-delivery(local) data/firstmate-handbook:
+   -r--r--r--@ INDEX.md
+   -r--r--r--@ topic-git.md
+   INDEX.md: # Handbook INDEX|- topic-git.md|
+   topic-git.md: git topic v1|
+== remote-sm(remote) data/firstmate-handbook:
+   -r--r--r--@ INDEX.md
+   -r--r--r--@ topic-git.md
+   INDEX.md: # Handbook INDEX|- topic-git.md|
+   topic-git.md: git topic v1|
+
+### Round 2: captain adds topic-deploy.md, removes topic-git.md, edits INDEX.md; a mate keeps its own mate-notes.md
+secondmate apply-delivery (/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab-sm.1RYLpt):
+  data/captain-shared.md: unchanged
+  data/firstmate-handbook/INDEX.md: pushed
+  data/firstmate-handbook/topic-deploy.md: pushed
+  data/firstmate-handbook/topic-git.md: pushed - mirrored primary absence
+secondmate remote-sm (labhost:/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab-rm.kF5bv5):
+  unchanged: data/captain-shared.md
+  pushed: data/firstmate-handbook/INDEX.md
+  pushed: data/firstmate-handbook/topic-deploy.md
+  removed: data/firstmate-handbook/topic-git.md
+exit=1
+== apply-delivery(local) data/firstmate-handbook:
+   -r--r--r--@ INDEX.md
+   -rw-r--r--@ mate-notes.md
+   -r--r--r--@ topic-deploy.md
+   INDEX.md: # Handbook INDEX v2|- topic-deploy.md|
+   mate-notes.md: mine|
+   topic-deploy.md: deploy topic|
+== remote-sm(remote) data/firstmate-handbook:
+   -r--r--r--@ INDEX.md
+   -rw-r--r--@ mate-notes.md
+   -r--r--r--@ topic-deploy.md
+   INDEX.md: # Handbook INDEX v2|- topic-deploy.md|
+   mate-notes.md: mine|
+   topic-deploy.md: deploy topic|
+
+### Round 3: INDEX.md becomes hardlinked, topic-deploy.md grows past 1 MiB, new big.md (oversize, never published), new hl.md hardlinked
+secondmate apply-delivery (/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab-sm.1RYLpt):
+fm-config-inherit: warning: skipping hardlinked inherited file /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.RDLAXj/data/firstmate-handbook/INDEX.md
+fm-config-inherit: warning: skipping inherited file over 1048576 bytes /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.RDLAXj/data/firstmate-handbook/big.md
+fm-config-inherit: warning: skipping hardlinked inherited file /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.RDLAXj/data/firstmate-handbook/hl.md
+fm-config-inherit: warning: skipping inherited file over 1048576 bytes /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.RDLAXj/data/firstmate-handbook/topic-deploy.md
+  data/captain-shared.md: unchanged
+  data/firstmate-handbook/fresh.md: pushed
+secondmate remote-sm (labhost:/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab-rm.kF5bv5):
+  fm-config-inherit: warning: skipping hardlinked inherited file /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.RDLAXj/data/firstmate-handbook/INDEX.md
+  fm-config-inherit: warning: skipping inherited file over 1048576 bytes /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.RDLAXj/data/firstmate-handbook/big.md
+  fm-config-inherit: warning: skipping hardlinked inherited file /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.RDLAXj/data/firstmate-handbook/hl.md
+  fm-config-inherit: warning: skipping inherited file over 1048576 bytes /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.RDLAXj/data/firstmate-handbook/topic-deploy.md
+  unchanged: data/captain-shared.md
+  pushed: data/firstmate-handbook/fresh.md
+  unchanged: data/firstmate-handbook
+exit=1
+== apply-delivery(local) data/firstmate-handbook:
+   -r--r--r--@ INDEX.md
+   -r--r--r--@ fresh.md
+   -rw-r--r--@ mate-notes.md
+   -r--r--r--@ topic-deploy.md
+   INDEX.md: # Handbook INDEX v2|- topic-deploy.md|
+   fresh.md: new|
+   mate-notes.md: mine|
+   topic-deploy.md: deploy topic|
+== remote-sm(remote) data/firstmate-handbook:
+   -r--r--r--@ INDEX.md
+   -r--r--r--@ fresh.md
+   -rw-r--r--@ mate-notes.md
+   -r--r--r--@ topic-deploy.md
+   INDEX.md: # Handbook INDEX v2|- topic-deploy.md|
+   fresh.md: new|
+   mate-notes.md: mine|
+   topic-deploy.md: deploy topic|
+
+### Round 4: captain deletes the whole handbook dir
+secondmate apply-delivery (/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab-sm.1RYLpt):
+  data/firstmate-handbook/INDEX.md: pushed - mirrored primary absence
+  data/firstmate-handbook/fresh.md: pushed - mirrored primary absence
+  data/firstmate-handbook/topic-deploy.md: pushed - mirrored primary absence
+secondmate remote-sm (labhost:/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab-rm.kF5bv5):
+  removed: data/firstmate-handbook/fresh.md
+  removed: data/firstmate-handbook/INDEX.md
+  removed: data/firstmate-handbook/topic-deploy.md
+exit=1
+== apply-delivery(local) data/firstmate-handbook:
+   -rw-r--r--@ mate-notes.md
+   mate-notes.md: mine|
+== remote-sm(remote) data/firstmate-handbook:
+   -rw-r--r--@ mate-notes.md
+   mate-notes.md: mine|
+
+### Round 5: no changes - only failure is the reread nudge (lab has no tmux pane for fm-remote-sm)
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+config-push: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.RDLAXj -> live secondmate homes
+secondmate apply-delivery (/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab-sm.1RYLpt):
+secondmate remote-sm (labhost:/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab-rm.kF5bv5):
+  config-reread: send failed; retry retained
+exit=1

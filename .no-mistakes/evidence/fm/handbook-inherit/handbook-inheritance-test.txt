@@ -1,0 +1,15 @@
+1..13
+ok - local: new file reaches the secondmate home read-only
+ok - local: changed file updates
+ok - local: removed file is removed and an unrelated file is kept
+ok - local: absent source dir removes only inherited copies
+ok - local: hidden, symlinked, oddly named and nested entries are not inherited
+ok - local: inspection error preserves the destination
+ok - local: symlinked destination directory is refused
+ok - remote: new file arrives, changed file updates, removed file is removed, unrelated file kept
+ok - remote: absent source dir removes only inherited copies
+ok - remote: receiver refuses traversal, hidden, nested and undeclared names
+ok - both routes: hardlinked and oversize handbook files are skipped with a warning; everything else arrives
+ok - both routes: a published file that becomes hardlinked, oversize or unreadable keeps its copy; a deleted one is removed
+ok - items: per-file listing follows FM_INHERITABLE_DATA_DIRS
+FM_TEST_COMPLETE
