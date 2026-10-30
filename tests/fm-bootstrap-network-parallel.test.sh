@@ -540,7 +540,7 @@ test_inherit_push_overlaps_items_and_replays_in_order() {
   [ "$(max_inherit_overlap "$CF_LOG")" -le 4 ] \
     || fail "more than the default four inheritance items were in flight"$'\n'"$(cat "$CF_LOG")"
   order=$(printf '%s\n' "$out" | sed -n 's/^unchanged: //p' | tr '\n' ' ')
-  [ "$order" = "config/item-a config/item-b config/item-c config/item-d config/item-e config/item-f data/captain-shared.md " ] \
+  [ "$order" = "config/item-a config/item-b config/item-c config/item-d config/item-e config/item-f data/captain-shared.md data/firstmate-handbook " ] \
     || fail "the push output was not replayed in allowlist order: $order"$'\n'"$out"
 
   : > "$CF_LOG"

@@ -201,6 +201,40 @@ test_receiver_refuses_traversal_and_undeclared_names() {
   pass "remote: receiver refuses traversal, hidden, nested and undeclared names"
 }
 
+add_unsafe_sources_and_shared() {  # adds a hardlinked + an oversize handbook file, a config item, captain-shared.md
+  ln "$P/data/$DIR/topic-a.md" "$TMP_ROOT/${P//\//_}.hardlink"
+  head -c 1048577 /dev/zero > "$P/data/$DIR/big.md"
+  printf 'github\n' > "$P/config/backend"
+  cat > "$P/data/captain-shared.md" <<'EOF'
+# Shared captain preferences
+This file is main-authoritative and maintained by the main firstmate.
+It is read-only in secondmate homes and must not be edited there.
+Changes return through a marked status document pointer.
+EOF
+}
+
+assert_unsafe_sources_skipped() {  # <home> <output> <route>
+  assert_equals "index v1" "$(cat "$1/data/$DIR/INDEX.md")" "$3: other handbook files should arrive"
+  [ ! -e "$1/data/$DIR/topic-a.md" ] || fail "$3: a hardlinked handbook file must be skipped"
+  [ ! -e "$1/data/$DIR/big.md" ] || fail "$3: an oversize handbook file must be skipped"
+  assert_equals "github" "$(cat "$1/config/backend")" "$3: config items should still arrive"
+  assert_contains "$(cat "$1/data/captain-shared.md")" "main-authoritative" "$3: captain-shared.md should still arrive"
+  assert_contains "$2" "skipping hardlinked inherited file $P/data/$DIR/topic-a.md" "$3: hardlink skip should warn"
+  assert_contains "$2" "bytes $P/data/$DIR/big.md" "$3: oversize skip should warn"
+}
+
+test_hardlinked_and_oversize_sources_skipped_on_both_routes() {
+  new_pair local-unsafe-src
+  add_unsafe_sources_and_shared
+  push_local || fail "local propagation should not fail on skipped handbook files: $LOCAL_OUT"
+  assert_unsafe_sources_skipped "$S" "$LOCAL_OUT" local
+  setup_remote remote-unsafe-src
+  add_unsafe_sources_and_shared
+  push_remote 1 || fail "remote push should not fail on skipped handbook files: $REMOTE_OUT"
+  assert_unsafe_sources_skipped "$R" "$REMOTE_OUT" remote
+  pass "both routes: hardlinked and oversize handbook files are skipped with a warning; everything else arrives"
+}
+
 test_declared_items_are_per_file_and_data_dirs_override() {
   new_pair items
   items=$(fm_handbook_inherit_items "$P/data")
@@ -222,4 +256,5 @@ fm_test_run \
   test_remote_new_changed_removed \
   test_remote_source_dir_absent_removes_only_inherited \
   test_receiver_refuses_traversal_and_undeclared_names \
+  test_hardlinked_and_oversize_sources_skipped_on_both_routes \
   test_declared_items_are_per_file_and_data_dirs_override
