@@ -61,9 +61,9 @@ const TASKS_READ = new Set(["list", "show", "view", "--help", "-h"]);
 // Read-only system commands. Anything that can run another program (sed with e,
 // awk with system, xargs, env, tee, ssh, tmux, ...) is left out on purpose.
 const SYSTEM_COMMANDS = new Set([
-  "cat", "head", "tail", "ls", "grep", "egrep", "fgrep", "rg", "wc", "jq", "date", "stat", "sort", "uniq",
+  "cat", "head", "tail", "ls", "grep", "egrep", "fgrep", "rg", "wc", "jq", "date", "stat", "sort",
   "cut", "tr", "basename", "dirname", "readlink", "realpath", "pwd", "echo", "printf", "test", "[", "true",
-  "false", "file", "du", "nl", "column", "diff", "cmp", "tac", "rev", "paste", "comm", "sleep", "whoami",
+  "false", "du", "nl", "column", "diff", "cmp", "tac", "rev", "paste", "comm", "sleep", "whoami",
   "hostname", "uname", "which", "find", "git",
 ]);
 const SYSTEM_DIRS = ["/bin", "/usr/bin", "/usr/local/bin", "/opt/homebrew/bin"];
@@ -189,7 +189,7 @@ function checkCommandName(word, args, context) {
   if (value.includes("/") && !SYSTEM_DIRS.includes(dirname(value))) throw new Refusal("ask-not-allowed", value);
   if (name === "find" && args.some((arg) => FIND_WRITERS.has(arg.value))) throw new Refusal("ask-mutation", "find with an action that runs or writes");
   if (name === "rg" && args.some((arg) => /^--(pre|hostname-bin)(=|$)/.test(arg.value))) throw new Refusal("ask-not-allowed", "rg with an option that runs a program");
-  if (name === "sort" && args.some((arg) => arg.value === "-o" || arg.value.startsWith("--output"))) throw new Refusal("ask-write", "sort -o");
+  if (name === "sort" && args.some((arg) => /^-[^-]*o/.test(arg.value) || /^--(output|compress-program)/.test(arg.value))) throw new Refusal("ask-write", "sort -o");
   if (name === "git") {
     let i = 0;
     while (i < args.length && args[i].value.startsWith("-")) {
@@ -233,7 +233,7 @@ function checkNodes(command, depth, context) {
     if (position.wrappers.some((wrapper) => wrapper !== "command" && wrapper !== "timeout" && wrapper !== "gtimeout")) {
       throw new Refusal("ask-not-allowed", position.wrappers.find((wrapper) => wrapper !== "command" && wrapper !== "timeout" && wrapper !== "gtimeout"));
     }
-    if (position.index >= position.words.length) continue; // assignments only
+    if (position.index >= position.words.length) throw new Refusal("ask-not-allowed", "a variable assignment");
     // A prefix assignment would reach the command's environment, including the order target.
     if (position.prefixAssignments > 0) throw new Refusal("ask-not-allowed", "a command with a leading variable assignment");
     const word = position.words[position.index];

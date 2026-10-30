@@ -64,7 +64,7 @@ test_every_named_mutation_is_refused() {
 test_writes_and_shell_escapes_are_refused() {
   local c
   for c in 'echo x > f' 'echo x >> f' 'cat a > b' 'ls 2> err.txt' 'tee f' 'rm -rf x' 'mv a b' 'cp a b' 'touch f' \
-    'git commit -m x' 'git add .' 'git push' 'find . -delete' 'find . -exec rm {} ;' 'sort -o f g' 'git diff --output=f' \
+    'git commit -m x' 'git add .' 'git push' 'find . -delete' 'find . -exec rm {} ;' 'sort -o f g' 'sort -uo f g' 'sort -of g' 'sort --compress-program=sh f' 'uniq a b' 'file -C -m x' 'git diff --output=f' \
     'bash -c ls' 'sh -c "rm x"' 'eval ls' 'xargs rm' 'env ls' 'sudo ls' 'python3 -c 1' 'node -e 1' 'sed -i s/a/b/ f' \
     'FM_HOME=/x ls' 'x=$(rm -rf y)' 'ls; $CMD' 'rg --pre cat x' 'tmux kill-server' 'curl http://x' 'exec ls' 'nohup ls'; do
     bash_cmd "$c"
@@ -115,7 +115,11 @@ test_bash_reads_outside_the_home_are_refused() {
 test_the_queued_order_is_the_only_exception() {
   assert_allowed 'bin/fm-ask-order.sh do the invoice bug first' FM_ASK_ORDER_TARGET=mate-a
   bash_cmd 'FM_ASK_ORDER_HOME=/other bin/fm-ask-order.sh x' FM_ASK_ORDER_TARGET=mate-a
-  expect_code 2 "$RC" "an order command cannot override its target through the environment"
+  expect_code 2 "$RC" "an order command cannot override its home through the environment"
+  bash_cmd 'FM_ASK_ORDER_TARGET=mate-b; bin/fm-ask-order.sh x' FM_ASK_ORDER_TARGET=mate-a
+  expect_code 2 "$RC" "an earlier assignment cannot redirect the order"
+  bash_cmd 'FM_HOME=/other; bin/fm-crew-state.sh' FM_ASK_ORDER_TARGET=mate-a
+  expect_code 2 "$RC" "an earlier assignment cannot move the home the read scripts use"
   bash_cmd 'bin/fm-send.sh mate-a x' FM_ASK_ORDER_TARGET=mate-a
   expect_code 2 "$RC" "a direct send stays refused even when orders are allowed"
   pass "only bin/fm-ask-order.sh runs, only with a fixed owning mate"
@@ -192,6 +196,8 @@ test_launch_shape() {
   assert_contains "$rec" "env FM_ASK_ORDER_TARGET=<unset>" "a main-style home has no order target"
   assert_contains "$rec" "READ-ONLY side session" "the prompt says it is read-only"
   assert_contains "$rec" "hand it to the real firstmate" "the prompt hands orders off"
+  assert_contains "$rec" "$ROOT/bin/fm-crew-state.sh" "the prompt names the read scripts by absolute path"
+  [ -x "$ROOT/bin/fm-crew-state.sh" ] || fail "the prompt's crew-state path does not run"
   assert_contains "$rec" "fm-ask-pretool-check.sh" "the guard hook is registered"
   [ ! -e "$HOME_DIR/state/.lock" ] && [ ! -e "$HOME_DIR/state/.lock-session" ] || fail "the session lock was taken"
   [ -z "$(find "$HOME_DIR/state" -type f 2>/dev/null)" ] || fail "the home's state changed: $(find "$HOME_DIR/state" -type f)"

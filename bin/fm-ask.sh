@@ -104,18 +104,19 @@ fi
 CLAUDE_BIN=${FM_ASK_CLAUDE_BIN:-claude}
 command -v "$CLAUDE_BIN" >/dev/null 2>&1 || die "$CLAUDE_BIN not found on PATH"
 command -v jq >/dev/null 2>&1 || die "jq is required"
+BIN=$(printf %q "$SCRIPT_DIR")
 SCRATCH=${FM_ASK_SCRATCH:-${XDG_STATE_HOME:-$HOME/.local/state}/firstmate-ask}
 mkdir -p "$SCRATCH" || die "cannot create $SCRATCH"
 
 PROMPT="You are a READ-ONLY side session on the $WHO's home at $HOME_DIR. The real session of that home may be mid-turn right now; you are not it. You hold no session lock, you run no supervision, and you change nothing.
 
-Answer the captain's questions only from that home's own records: data/ (backlog, decisions, reports, charter), state/ (status files, task meta, ledgers), and config/. Read them with Read, Grep, Glob, and read-only Bash (cat, ls, grep, jq, bin/fm-crew-state.sh, bin/fm-fleet-view.sh, bin/fm-tasks-axi.sh list or show). Name the file you got each fact from. If the records do not say, say so; do not guess. A status line is an event, not current state: check bin/fm-crew-state.sh before calling anything current. Answer fast: lead with the answer, plain words, short.
+Answer the captain's questions only from that home's own records: data/ (backlog, decisions, reports, charter), state/ (status files, task meta, ledgers), and config/. Read them with Read, Grep, Glob, and read-only Bash (cat, ls, grep, jq, $BIN/fm-crew-state.sh, $BIN/fm-fleet-view.sh, $BIN/fm-tasks-axi.sh list or show). Name the file you got each fact from. If the records do not say, say so; do not guess. A status line is an event, not current state: check $BIN/fm-crew-state.sh before calling anything current. Answer fast: lead with the answer, plain words, short.
 
 You cannot send, spawn, merge, drain wakes, hold, decide, write the backlog, tear down, or write any file; every such call is refused by a hook. Do not look for a way around it."
 if [ -n "$ORDER_TARGET" ]; then
   PROMPT="$PROMPT
 
-The one exception: when the captain gives an order or asks for a change, queue it to the second mate that owns this home with bin/fm-ask-order.sh '<the order in the captain's words>'. It writes to that mate's steering inbox through the normal send path and prints what the mate is doing now. Reply 'queued' and say what the mate is mid-turn on (from the mate-state and latest-status lines it printed); never claim the order was done. Any other change is not yours: tell him to hand it to the real firstmate."
+The one exception: when the captain gives an order or asks for a change, queue it to the second mate that owns this home with $BIN/fm-ask-order.sh '<the order in the captain's words>'. It writes to that mate's steering inbox through the normal send path and prints what the mate is doing now. Reply 'queued' and say what the mate is mid-turn on (from the mate-state and latest-status lines it printed); never claim the order was done. Any other change is not yours: tell him to hand it to the real firstmate."
 else
   PROMPT="$PROMPT
 
