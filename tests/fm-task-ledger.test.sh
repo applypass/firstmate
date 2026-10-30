@@ -109,6 +109,27 @@ test_spawn_refuses_without_intake_and_planning() {
   pass "spawn refuses a fresh launch without intake and planning events"
 }
 
+test_merge_refusals() {
+  local out rc fm="$TMP_ROOT/mergehome" url=https://github.com/o/r/pull/1
+  mkdir -p "$fm/data" "$fm/state"
+  out=$(FM_HOME=$fm "$ROOT/bin/fm-pr-merge.sh" merge-task "$url" 2>&1); rc=$?
+  expect_code 1 "$rc" "merge is refused without ready and approval times"
+  assert_contains "$out" "bin/fm-task-ledger.sh record merge-task pr-ready" "names the pr-ready command"
+  assert_contains "$out" "bin/fm-task-ledger.sh record merge-task captain-approval" "names the approval command"
+  FM_HOME=$fm "$LEDGER" record merge-task pr-ready --at 1
+  out=$(FM_HOME=$fm "$ROOT/bin/fm-pr-merge.sh" merge-task "$url" 2>&1); rc=$?
+  expect_code 1 "$rc" "ready alone is not enough"
+  assert_not_contains "$out" "record merge-task pr-ready" "pr-ready no longer missing"
+  assert_contains "$out" "record merge-task captain-approval" "approval still missing"
+  FM_HOME=$fm "$LEDGER" record merge-task captain-approval --at 2
+  out=$(FM_HOME=$fm "$ROOT/bin/fm-pr-merge.sh" merge-task "$url" 2>&1)
+  assert_not_contains "$out" "task ledger" "both recorded: the ledger gate passes"
+  out=$(FM_HOME=$fm "$ROOT/bin/fm-merge-local.sh" local-task 2>&1); rc=$?
+  expect_code 1 "$rc" "local landing is refused without ready and approval times"
+  assert_contains "$out" "bin/fm-task-ledger.sh record local-task pr-ready" "local landing names the command"
+  pass "merge and local landing are refused without pr-ready and captain-approval"
+}
+
 fm_test_run \
   test_record_appends_json_lines \
   test_record_rejects_unknown_event \
@@ -117,4 +138,5 @@ fm_test_run \
   test_require_spawn_names_missing_event_and_command \
   test_record_once_skips_a_repeat \
   test_require_off_switch \
-  test_spawn_refuses_without_intake_and_planning
+  test_spawn_refuses_without_intake_and_planning \
+  test_merge_refusals
