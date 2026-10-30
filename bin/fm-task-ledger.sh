@@ -144,6 +144,12 @@ fm_ledger_require() {  # <spawn|merge> <id>
     *) die_usage "require needs spawn or merge" ;;
   esac
   valid_id "$id" || die_usage "invalid task id: $id"
+  # A task queued before the ledger existed has no file at all: count it as already filed.
+  if [ "$step" = spawn ] && [ ! -e "$(fm_ledger_file "$id")" ]; then
+    fm_ledger_record "$id" intake-start --once --note "grandfathered: queued before the task ledger"
+    fm_ledger_record "$id" planning-done --once --note "grandfathered: queued before the task ledger"
+    return 0
+  fi
   for event in $need; do
     fm_ledger_has "$id" "$event" && continue
     missing=1

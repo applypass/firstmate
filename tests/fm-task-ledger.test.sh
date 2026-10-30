@@ -67,8 +67,9 @@ test_ledger_survives_task_state_cleanup() {
 
 test_require_spawn_names_missing_event_and_command() {
   local out rc
+  "$LEDGER" record fresh1 grill-start --at 5
   out=$("$LEDGER" require spawn fresh1 2>&1); rc=$?
-  expect_code 1 "$rc" "a task with no events is refused"
+  expect_code 1 "$rc" "a filed task with no intake event is refused"
   assert_contains "$out" "intake-start" "names the missing intake event"
   assert_contains "$out" "bin/fm-task-ledger.sh record fresh1 intake-start" "names the command that records it"
   "$LEDGER" record fresh1 intake-start --at 10
@@ -98,6 +99,7 @@ test_require_off_switch() {
 test_spawn_refuses_without_intake_and_planning() {
   local out rc fm="$TMP_ROOT/spawnhome"
   mkdir -p "$fm/data" "$fm/state"
+  FM_HOME=$fm "$LEDGER" record gated-task grill-start --at 1
   out=$(FM_HOME=$fm "$ROOT/bin/fm-spawn.sh" gated-task "$TMP_ROOT/no-such-project" --scout 2>&1); rc=$?
   expect_code 1 "$rc" "spawn is refused without ledger events"
   assert_contains "$out" "bin/fm-task-ledger.sh record gated-task intake-start" "refusal names the record command"
@@ -397,6 +399,55 @@ test_watcher_wakes_on_a_never_wait_finding() {
   pass "the watcher wakes the supervisor on a never-wait finding"
 }
 
+test_task_queued_before_the_ledger_counts_as_filed() {
+  local out f
+  f=$(ledger_file old1)
+  [ ! -e "$f" ] || fail "fixture: old1 must have no ledger"
+  out=$("$LEDGER" require spawn old1 2>&1) || fail "a task with no ledger at all was refused: $out"
+  assert_contains "$("$LEDGER" show old1)" "intake-start" "intake recorded as grandfathered"
+  assert_contains "$("$LEDGER" show old1)" "planning-done" "planning recorded as grandfathered"
+  assert_contains "$("$LEDGER" show old1)" "queued before the task ledger" "the note says why"
+  # Its merge still needs its own ready and approval times.
+  "$LEDGER" require merge old1 >/dev/null 2>&1 && fail "grandfathering must not waive the merge gate"
+  pass "an item queued before the ledger existed launches without recorded times"
+}
+
+test_auto_dev_merge_counts_as_captain_approval() {
+  local dir="$TMP_ROOT/autodev" out
+  mkdir -p "$dir/state" "$dir/fakebin" "$dir/data"
+  fm_write_meta "$dir/state/t1.meta" "kind=ship" "mode=no-mistakes"
+  printf '%s\n' "working [at=0]: go" "done [at=1]: PR https://github.com/o/r/pull/9 checks green" > "$dir/state/t1.status"
+  cat > "$dir/fakebin/gh" <<'GH'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "pr view") echo '{"baseRefName":"dev","author":{"login":"me"},"labels":[]}' ;;
+  "api user") echo me ;;
+  *) exit 1 ;;
+esac
+GH
+  # The merge stand-in is the real ledger gate: it succeeds only when approval is recorded.
+  cat > "$dir/merge" <<M
+#!/usr/bin/env bash
+"$LEDGER" require merge "\$1" || exit 1
+echo "verified: \$2 is merged (state=MERGED, merged=true, isInMergeQueue=false)"
+M
+  chmod +x "$dir/fakebin/gh" "$dir/merge"
+  FM_HOME=$dir "$LEDGER" record t1 pr-ready --at 1
+  out=$(PATH="$dir/fakebin:$PATH" FM_HOME=$dir FM_STATE_OVERRIDE="$dir/state" FM_AUTO_DEV_MERGE_MERGE="$dir/merge" \
+    "$ROOT/bin/fm-auto-dev-merge.sh" t1 https://github.com/o/r/pull/9 2>&1)
+  assert_contains "$out" "auto-dev-merge: merged" "the automatic merge went through the ledger gate: $out"
+  assert_contains "$(FM_HOME=$dir "$LEDGER" show t1)" "standing dev-merge authority" "approval says where it came from"
+  # A PR the authority does not cover (base main) records no approval.
+  FM_HOME=$dir "$LEDGER" record t2 pr-ready --at 1
+  printf '%s\n' "working [at=0]: go" "done [at=1]: PR https://github.com/o/r/pull/10 checks green" > "$dir/state/t2.status"
+  fm_write_meta "$dir/state/t2.meta" "kind=ship" "mode=no-mistakes"
+  sed -i.bak 's/"dev"/"main"/' "$dir/fakebin/gh" && rm -f "$dir/fakebin/gh.bak"
+  PATH="$dir/fakebin:$PATH" FM_HOME=$dir FM_STATE_OVERRIDE="$dir/state" FM_AUTO_DEV_MERGE_MERGE="$dir/merge" \
+    "$ROOT/bin/fm-auto-dev-merge.sh" t2 https://github.com/o/r/pull/10 >/dev/null 2>&1
+  FM_HOME=$dir "$LEDGER" has t2 captain-approval && fail "a main-base PR got a standing approval"
+  pass "an own green PR merged to dev under standing authority records captain-approval"
+}
+
 fm_test_run \
   test_record_appends_json_lines \
   test_record_rejects_unknown_event \
@@ -419,4 +470,6 @@ fm_test_run \
   test_sweep_rejects_a_block_without_a_legal_reason \
   test_sweep_alarms_a_stale_block_and_counts_blocked_time \
   test_brief_teaches_the_block_reasons \
-  test_watcher_wakes_on_a_never_wait_finding
+  test_watcher_wakes_on_a_never_wait_finding \
+  test_task_queued_before_the_ledger_counts_as_filed \
+  test_auto_dev_merge_counts_as_captain_approval

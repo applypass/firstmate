@@ -478,6 +478,7 @@ The events are intake-start, grill-start, grill-end, planning-done, spawn, first
 A missing record refuses the step that needs it, and each refusal names the missing event and the one command that records it:
 
 - `bin/fm-spawn.sh` refuses a fresh ship or scout launch until intake-start and planning-done are recorded.
+  A task with no ledger file was queued before the ledger existed, so spawn counts it as filed and records both events as grandfathered.
   Filing the task with `bin/fm-tasks-axi.sh add` records intake-start; `bin/fm-task-ledger.sh record <id> planning-done` records the end of planning.
 - `bin/fm-pr-merge.sh` and `bin/fm-merge-local.sh` refuse a merge until pr-ready and captain-approval are recorded.
   `bin/fm-pr-check.sh` records pr-open and pr-ready when the PR is registered.
@@ -486,6 +487,7 @@ A missing record refuses the step that needs it, and each refusal names the miss
 The captain wait clock runs from the recorded ask to the recorded answer on the wall clock, away time included.
 `bin/fm-captain-hold.sh` records captain-wait-start at `hold` and captain-wait-end at `answer`.
 An answer to an ask opened after pr-ready also records captain-approval, because the merge call is the only ask left once the work is ready.
+Standing dev-merge authority counts as approval too: `bin/fm-auto-dev-merge.sh` records captain-approval before it merges a covered own PR to dev, so that merge is not refused.
 `bin/fm-task-ledger.sh summary <id>` prints the captain wait, grill, blocked, and planning seconds.
 
 Planning time is charged by a turn-end hook.
