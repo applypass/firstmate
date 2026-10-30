@@ -275,6 +275,9 @@ fi
 # shellcheck source=bin/fm-task-inbox-lib.sh
 . "$SCRIPT_DIR/fm-task-inbox-lib.sh"
 
+# Fork-only (applypass): the --resolve-key checks read the open set through the per-log cursor, not a fold of the whole log (bin/fm-fast-lib.sh).
+status_open_decisions() { fm_fast_status_open_decisions "$@"; }
+# Fork-only end
 FM_GUARD_CONTINUE_LINE='This is a supervision warning only; the requested message WILL still be sent.' "$SCRIPT_DIR/fm-guard.sh" || true
 
 fm_send_id_from_meta() { # <meta-file>

@@ -35,7 +35,7 @@ decide() {  # <case-dir> <args...>
   shift
   (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
     SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" FM_DECIDE_DATE=2026-10-09 \
-    PATH="$dir/fakebin:$PATH" "$ROOT/bin/fm-decide.sh" "$@" 2>&1)
+    PATH="$dir/fakebin:$PATH" FM_DECIDE_SYNC=1 "$ROOT/bin/fm-decide.sh" "$@" 2>&1)
 }
 
 install_guard() {  # <case-dir>
@@ -72,7 +72,7 @@ printf 500
 SH
   chmod +x "$dir/failbin/curl"
   out=$( (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
-    SHORTCUT_API_TOKEN="$TOKEN" PATH="$dir/failbin:$PATH" "$ROOT/bin/fm-decide.sh" record dd-2 "Words." --story sc-6523 2>&1)) \
+    SHORTCUT_API_TOKEN="$TOKEN" PATH="$dir/failbin:$PATH" FM_DECIDE_SYNC=1 "$ROOT/bin/fm-decide.sh" record dd-2 "Words." --story sc-6523 2>&1)) \
     && fail "record succeeded although the post failed: $out"
   assert_contains "$out" "nothing was recorded" "the refusal does not say nothing was recorded"
   assert_absent "$dir/home/data/decided.md" "a failed post left an entry behind"
@@ -183,7 +183,7 @@ test_captain_hold_answer_calls_fm_decide() {
   printf 'Go with B.\n' > "$dir/decision.txt"
   hold() {
     (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" FM_DECIDE_DATE=2026-10-09 \
-      SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" \
+      SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" FM_DECIDE_SYNC=1 \
       "$ROOT/bin/fm-captain-hold.sh" "$@" 2>&1)
   }
   out=$(hold hold dh-1 --reason "captain must choose") || fail "hold failed: $out"
@@ -208,7 +208,7 @@ test_captain_hold_reanswer_records_each_occurrence() {
   printf 'Use B.\n' > "$dir/b.txt"
   hold() {
     (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" FM_DECIDE_DATE=2026-10-09 \
-      SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" \
+      SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" FM_DECIDE_SYNC=1 \
       "$ROOT/bin/fm-captain-hold.sh" "$@" 2>&1)
   }
   out=$(hold hold rh-1 --reason "captain must choose") || fail "hold failed: $out"

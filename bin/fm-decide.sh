@@ -3,19 +3,29 @@
 #
 # Usage: fm-decide.sh record <key> <text> [--story sc-NNNN] [--item <task-id>] [--best-effort]
 #        fm-decide.sh record <key> --file <file> [...]
+#        fm-decide.sh sync [<key>]                post entries still waiting for Shortcut, now
 #        fm-decide.sh audit                       list entries with no Shortcut stamp
 #        fm-decide.sh guard-hook                  PreToolUse hook: block direct writes to data/decided.md
 #        fm-decide.sh guard-line                  print the settings.local.json hook that installs the guard
 #
-# record resolves the story, comments the decision on it, and only then appends
-#   - [<key>] YYYY-MM-DD <text> (shortcut: sc-NNNN <url>)
-# to $FM_HOME/data/decided.md (temp file plus rename, under a lock). The story is
-# --story, else the story --item's backlog body names, else a new Engineering/
-# Backlog chore story filed through bin/fm-shortcut-ticket.sh (its settings, token
+# record first appends the entry to $FM_HOME/data/decided.md (temp file plus
+# rename, under a lock) and returns; a detached job then resolves the story,
+# comments the decision on it, and rewrites the entry's stamp
+#   - [<key>] YYYY-MM-DD <text> (shortcut: pending)            written at once
+#   - [<key>] YYYY-MM-DD <text> (shortcut: pending sc-NNNN)    story known, comment not yet posted
+#   - [<key>] YYYY-MM-DD <text> (shortcut: sc-NNNN <url>)      posted
+# The job retries a failed call FM_DECIDE_SYNC_ATTEMPTS times (default 4) with
+# FM_DECIDE_SYNC_DELAY seconds (default 10) tripled between tries. After the last
+# failure it queues one note for the primary (bin/fm-inbox.sh, request id
+# fm-decide-sync-<key>), presented at its next drain; `sync` then retries by hand.
+# `audit` lists pending entries too. --sync (or FM_DECIDE_SYNC=1) keeps the old
+# order: post first, record only when the comment landed, and record nothing if
+# it fails. The story is --story, else the story --item's backlog body names,
+# else a new Engineering/Backlog chore story filed through bin/fm-shortcut-ticket.sh (its settings, token
 # path, and API base; nothing is duplicated here). A story the item does not own
-# is only commented on, never moved or edited. If the comment fails nothing is
-# recorded; a decision is never recorded without a story. Recording the same key
-# and exact text again is a no-op; other text under a recorded key is refused.
+# is only commented on, never moved or edited. Recording the same key and exact
+# text again is a no-op (pending or posted); other text under a recorded key is
+# refused.
 # --best-effort turns a refusal into a warning, which is how
 # bin/fm-captain-hold.sh answer calls it, keyed <task-id>-<answer occurrence>.
 #
@@ -31,6 +41,7 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 DECIDED="$DATA/decided.md"
 TICKET="$SCRIPT_DIR/fm-shortcut-ticket.sh"
 BEST_EFFORT=0
+SYNC=${FM_DECIDE_SYNC:-0}
 
 usage() {
   awk '
@@ -129,6 +140,123 @@ take_lock() {
   trap 'rmdir "$LOCKDIR" 2>/dev/null; [ -z "${TMPENTRY:-}" ] || rm -f "$TMPENTRY"' EXIT
 }
 
+release_lock() {
+  [ -z "$LOCKDIR" ] || rmdir "$LOCKDIR" 2>/dev/null
+  LOCKDIR=''
+}
+
+# pending_entry <key>: the entry's line when it still waits for Shortcut.
+pending_entry() {
+  [ -f "$DECIDED" ] || return 0
+  FM_KEY=$1 awk '
+    BEGIN { p = "- [" ENVIRON["FM_KEY"] "] " }
+    index($0, p) == 1 && $0 ~ / \(shortcut: pending( sc-[0-9]+)?\)$/ { print; exit }
+  ' "$DECIDED"
+}
+
+# pending_keys: the key of every entry still waiting for Shortcut.
+pending_keys() {
+  [ -f "$DECIDED" ] || return 0
+  awk '/^- \[[A-Za-z0-9._-]+\] .* \(shortcut: pending( sc-[0-9]+)?\)$/ { k = $0; sub(/^- \[/, "", k); sub(/\].*/, "", k); print k }' "$DECIDED"
+}
+
+# set_stamp <key> <stamp>: swap a pending entry's stamp, under the lock.
+set_stamp() {
+  take_lock
+  TMPENTRY=$(mktemp "$DATA/.decided.XXXXXX") || die "cannot create a temp file in $DATA"
+  FM_KEY=$1 FM_STAMP=$2 awk '
+    BEGIN { p = "- [" ENVIRON["FM_KEY"] "] " }
+    index($0, p) == 1 && $0 ~ / \(shortcut: pending( sc-[0-9]+)?\)$/ {
+      sub(/ \(shortcut: pending( sc-[0-9]+)?\)$/, " (shortcut: " ENVIRON["FM_STAMP"] ")")
+    }
+    { print }
+  ' "$DECIDED" >"$TMPENTRY"
+  if ! mv "$TMPENTRY" "$DECIDED"; then
+    rm -f "$TMPENTRY"
+    TMPENTRY=''
+    release_lock
+    return 1
+  fi
+  TMPENTRY=''
+  release_lock
+}
+
+# sync_once <key>: one try at posting a pending entry. 0 when it is posted (or
+# was never pending), 1 when a Shortcut call failed.
+sync_once() {
+  local key=$1 entry story text url created comment_url
+  entry=$(pending_entry "$key")
+  [ -n "$entry" ] || return 0
+  story=$(printf '%s' "$entry" | sed -n 's/.* (shortcut: pending \(sc-[0-9]*\))$/\1/p')
+  text=${entry#"- [$key] "}
+  text=${text:11}
+  text=${text% (shortcut: pending*}
+  url=''
+  if [ -z "$story" ]; then
+    created=$(ticket chore "Decision: $key" "Captain decision $key: $text") || return 1
+    story=${created%% *}
+    url=${created#* }
+    set_stamp "$key" "pending $story" || return 1
+  fi
+  comment_url=$(ticket comment "$story" "Captain decision [$key]: $text" --print-url) || return 1
+  [ -n "$url" ] || url="https://app.shortcut.com/applypass/story/${story#sc-}"
+  [ -z "$comment_url" ] || url=$comment_url
+  set_stamp "$key" "$story $url"
+}
+
+# sync_key <key>: sync_once with bounded retries; one note for the primary when
+# the last try fails.
+sync_key() {
+  local key=$1 attempts=${FM_DECIDE_SYNC_ATTEMPTS:-4} delay=${FM_DECIDE_SYNC_DELAY:-10} i=1
+  while ! sync_once "$key"; do
+    if [ "$i" -ge "$attempts" ]; then
+      FM_HOME=$FM_HOME "$SCRIPT_DIR/fm-inbox.sh" note --request-id "fm-decide-sync-$key" -- \
+        "Decision $key is in data/decided.md but is not on Shortcut after $attempts tries. Run: '$SCRIPT_DIR/fm-decide.sh' sync $key" >/dev/null 2>&1 || true
+      printf 'fm-decide: decision %s is recorded locally but could not be posted to Shortcut after %s tries\n' "$key" "$attempts" >&2
+      return 1
+    fi
+    sleep "$delay"
+    delay=$((delay * 3))
+    i=$((i + 1))
+  done
+  printf 'fm-decide: posted %s\n' "$key"
+}
+
+command_sync() {  # [<key>]
+  local key rc=0
+  if [ -n "${1:-}" ]; then
+    sync_key "$1" || rc=1
+  else
+    while IFS= read -r key; do
+      [ -n "$key" ] || continue
+      sync_key "$key" || rc=1
+    done <<KEYS
+$(pending_keys)
+KEYS
+  fi
+  return "$rc"
+}
+
+# Detached: the caller never waits for the network, and a caller that captures
+# our output does not wait on the job's pipe either.
+launch_sync() {  # <key>
+  FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA nohup "$SCRIPT_DIR/fm-decide.sh" sync "$1" \
+    >>"$DATA/.decided-sync.log" 2>&1 </dev/null &
+  disown 2>/dev/null || true
+}
+
+# append_entry <line>: add one entry (the lock is held), temp file plus rename.
+append_entry() {
+  TMPENTRY=$(mktemp "$DATA/.decided.XXXXXX") || return 1
+  { [ ! -f "$DECIDED" ] || cat "$DECIDED"; printf '%s\n' "$1"; } >"$TMPENTRY"
+  mv "$TMPENTRY" "$DECIDED" || { rm -f "$TMPENTRY"; TMPENTRY=''; return 1; }
+  TMPENTRY=''
+}
+
+guard_warning() {
+  guard_installed || printf 'fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to %s/.claude/settings.local.json (merge into its "hooks"):\n%s\n' "$FM_HOME" "$(guard_line)" >&2
+}
+
 command_record() {
   local key=${1:-} text='' story='' item='' file='' url='' line=''
   [ -n "$key" ] || die "usage: record <key> <text> [--story sc-NNNN] [--item <task-id>]"
@@ -156,10 +284,11 @@ command_record() {
   take_lock
   if [ -f "$DECIDED" ]; then
     case $(FM_KEY=$key FM_TEXT=$text awk '
-      BEGIN { p = "- [" ENVIRON["FM_KEY"] "] "; t = ENVIRON["FM_TEXT"] " (shortcut: sc-" }
+      BEGIN { p = "- [" ENVIRON["FM_KEY"] "] "; t = ENVIRON["FM_TEXT"] " (shortcut: sc-"; q = ENVIRON["FM_TEXT"] " (shortcut: pending" }
       index($0, p) == 1 {
         seen = 1; r = substr($0, length(p) + 12)
         if (index(r, t) == 1 && substr(r, length(t) + 1) ~ /^[0-9]+ [^ ]*\)$/) same = 1
+        if (index(r, q) == 1 && substr(r, length(q) + 1) ~ /^( sc-[0-9]+)?\)$/) same = 1
       }
       END { print same ? "same" : seen ? "other" : "" }' "$DECIDED") in
       same) return 0 ;;
@@ -169,6 +298,16 @@ command_record() {
 
   if [ -z "$story" ] && [ -n "$item" ]; then
     story=$(ticket --linked "$item" 2>/dev/null || true)
+  fi
+  if [ "$SYNC" != 1 ]; then
+    local stamp=pending
+    [ -z "$story" ] || stamp="pending $story"
+    append_entry "- [$key] ${FM_DECIDE_DATE:-$(date +%F)} $text (shortcut: $stamp)" || die "cannot write $DECIDED"
+    release_lock
+    launch_sync "$key"
+    printf 'fm-decide: recorded %s locally; posting to Shortcut in the background\n' "$key"
+    guard_warning
+    return 0
   fi
   if [ -z "$story" ]; then
     local created
@@ -183,22 +322,24 @@ command_record() {
   [ -z "$comment_url" ] || url=$comment_url
 
   line="- [$key] ${FM_DECIDE_DATE:-$(date +%F)} $text (shortcut: $story $url)"
-  TMPENTRY=$(mktemp "$DATA/.decided.XXXXXX") || die "cannot create a temp file in $DATA"
-  { [ ! -f "$DECIDED" ] || cat "$DECIDED"; printf '%s\n' "$line"; } >"$TMPENTRY"
-  mv "$TMPENTRY" "$DECIDED" || die "posted to $story but could not write $DECIDED; re-run to record it"
-  TMPENTRY=''
+  append_entry "$line" || die "posted to $story but could not write $DECIDED; re-run to record it"
   printf 'fm-decide: recorded %s on %s\n' "$key" "$story"
-  guard_installed || printf 'fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to %s/.claude/settings.local.json (merge into its "hooks"):\n%s\n' "$FM_HOME" "$(guard_line)" >&2
+  guard_warning
 }
 
 ARGS=()
 for arg in "$@"; do
-  if [ "$arg" = --best-effort ]; then BEST_EFFORT=1; else ARGS+=("$arg"); fi
+  case "$arg" in
+    --best-effort) BEST_EFFORT=1 ;;
+    --sync) SYNC=1 ;;
+    *) ARGS+=("$arg") ;;
+  esac
 done
 set -- ${ARGS[@]+"${ARGS[@]}"}
 
 case "${1:-}" in
   record) shift; command_record "$@" ;;
+  sync) shift; command_sync "$@" ;;
   audit) command_audit ;;
   guard-hook) command_guard_hook ;;
   guard-line) guard_line ;;

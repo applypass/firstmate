@@ -2062,7 +2062,7 @@ list_has_line() {  # <newline-separated-list> <value>
 }
 
 command_diverged() {
-  local ids resolve f origin tokens id keys key show title
+  local ids resolve f origin tokens cands id keys key show title
   [ "$#" -eq 0 ] || { usage >&2; exit 2; }
   # Both records must belong to the SAME home or the comparison is meaningless:
   # tasks-axi reads $FM_HOME's backlog, so a state dir pointed somewhere else
@@ -2082,6 +2082,17 @@ command_diverged() {
     origin=$(basename "$f"); origin=${origin%.status}
     tokens=$(status_log_key_tokens "$f")
     [ -n "$tokens" ] || continue
+    # Fork-only (applypass): one awk pass keeps the ids that could name a key in
+    # this log (the id itself, or its legacy suffix), so the loop below walks a
+    # few candidates instead of every open task against every log.
+    cands=$(awk -v origin="$origin" '
+      NR == FNR { seen[$0] = 1; next }
+      {
+        pre = origin "-decision-"
+        if ($0 in seen || (length($0) > length(pre) && substr($0, 1, length(pre)) == pre && (substr($0, length(pre) + 1) in seen))) print
+      }
+    ' <(printf '%s\n' "$tokens") <(printf '%s\n' "$ids"))
+    [ -n "$cands" ] || continue
     while IFS= read -r id; do
       [ -n "$id" ] || continue
       # The keys that could name this task in THIS log: the collapsed identity
@@ -2108,7 +2119,7 @@ command_diverged() {
 $keys
 INNER
     done <<EOF
-$ids
+$cands
 EOF
   done
 }
