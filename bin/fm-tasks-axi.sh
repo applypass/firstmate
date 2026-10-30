@@ -203,4 +203,11 @@ if [ "$RC" -eq 0 ] && "$SCRIPT_DIR/fm-shortcut-ticket.sh" --enabled; then
       printf 'fm-tasks-axi: warning: no Shortcut ticket for %s; retry with bin/fm-shortcut-ticket.sh %s\n' "$NEW_ID" "$NEW_ID" >&2
   fi
 fi
+# Fork-only: filing a task starts its ledger (intake-start, once; best-effort).
+if [ "$RC" -eq 0 ]; then
+  LEDGER_ID=$(printf '%s\n' "$OUT" | sed -n 's/^  id: *//p' | head -1)
+  [ -n "$LEDGER_ID" ] || LEDGER_ID=$(printf '%s\n' "$OUT" | jq -r '.task.id // empty' 2>/dev/null)
+  [ -z "$LEDGER_ID" ] || "$SCRIPT_DIR/fm-task-ledger.sh" record "$LEDGER_ID" intake-start --once >/dev/null 2>&1 || true
+fi
+# Fork-only end
 exit "$RC"

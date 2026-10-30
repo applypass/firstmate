@@ -2036,6 +2036,13 @@ fm_task_id_creation_valid "$ID" || {
   echo "error: invalid task id" >&2
   exit 2
 }
+# Fork-only: task ledger gate. A fresh ship or scout launch is refused until
+# its intake and planning events are recorded (bin/fm-task-ledger.sh); a
+# relaunch is running work and a secondmate is not a ticket.
+if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ]; then
+  FM_HOME=$FM_HOME FM_DATA_OVERRIDE=${FM_DATA_OVERRIDE:-$FM_HOME/data} "$SCRIPT_DIR/fm-task-ledger.sh" require spawn "$ID" || exit 1
+fi
+# Fork-only end
 if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" = ship ]; then
   BRANCH="$BRANCH_PREFIX$ID"
   if ! git check-ref-format --branch "$BRANCH" >/dev/null 2>&1; then
@@ -7590,4 +7597,6 @@ SPAWN_ACCOUNT=
 # Opt-in Herdr project groups (docs/herdr-backend.md "Project groups") tag the
 # new endpoint now rather than at the next watcher poll; off costs one file test.
 [ ! -e "$CONFIG/herdr-project-groups" ] || [ "$BACKEND" != herdr ] || FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE FM_CONFIG_OVERRIDE=$CONFIG "$SCRIPT_DIR/fm-herdr-groups.sh" sync "$ID" || true
+# Fork-only: the launch is a ledger event (best-effort; the gate above already passed).
+[ "$RELAUNCH" -eq 1 ] || [ "$KIND" = secondmate ] || FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA "$SCRIPT_DIR/fm-task-ledger.sh" record "$ID" spawn || true
 echo "spawned $ID harness=$HARNESS kind=$KIND$SPAWN_DELIVERY window=$META_WINDOW worktree=$WT$SPAWN_ACCOUNT"

@@ -36,6 +36,8 @@ export FM_SHORTCUT_TICKETS=off
 export FM_DAILY_QUOTA_STOP=off
 # Fork-only: the hourly /stow reminder prints on primary prompts; fixtures expect silence.
 export FM_CLEAR_REMINDER=off
+# Fork-only: the task ledger gates (spawn, merge) refuse tasks with no recorded events; fixtures do not model them.
+export FM_TASK_LEDGER=off
 # Fork-only end
 
 # Pin the fixture umask. Firstmate's state-root and process-event contracts
