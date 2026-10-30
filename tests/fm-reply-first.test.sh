@@ -76,6 +76,22 @@ test_substantial_text_is_a_reply_and_narration_is_not() {
   pass "an answer of a paragraph closes the window, a line of narration does not"
 }
 
+test_short_captain_reply_closes_the_window() {
+  make_home short mate
+  arm
+  call 'ls'; call 'ls'
+  say 'Captain, shipshape.'
+  call 'ls'; expect_code 0 "$RC" "call 3"
+  call 'ls'; expect_code 0 "$RC" "a short reply to the captain closes the window, call 4 runs"
+  make_home short2 mate
+  arm
+  say 'let me check'
+  call 'ls'; call 'ls'; call 'ls'
+  call 'ls'; expect_code 2 "$RC" "short narration does not close the window"
+  call 'ls'; expect_code 0 "$RC" "refused once"
+  pass "a short reply addressing the captain closes the window, short narration does not"
+}
+
 test_text_from_before_the_message_does_not_count() {
   make_home old mate
   say "$(printf 'An earlier reply to a different message, long enough to count as an answer on its own. %.0s' 1 2 3)"
@@ -149,6 +165,7 @@ test_scripts_are_shellcheck_clean() {
 test_refuses_the_fourth_call_once
 test_a_parent_report_is_a_reply
 test_substantial_text_is_a_reply_and_narration_is_not
+test_short_captain_reply_closes_the_window
 test_text_from_before_the_message_does_not_count
 test_new_message_resets_the_count
 test_clear_closes_the_window
