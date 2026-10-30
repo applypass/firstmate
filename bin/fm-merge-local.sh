@@ -32,7 +32,8 @@ if [ "$#" -ne 1 ] || ! fm_pr_task_id_valid "$1"; then
 fi
 ID=$1
 # Fork-only: task ledger gate. A landing needs the task's ready and captain-approval times recorded (bin/fm-task-ledger.sh).
-FM_HOME=$FM_HOME FM_DATA_OVERRIDE=${FM_DATA_OVERRIDE:-$FM_HOME/data} "$SCRIPT_DIR/fm-task-ledger.sh" require merge "$ID" || exit 1
+LEDGER_DATA=${FM_DATA_OVERRIDE:-$FM_HOME/data}
+FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$LEDGER_DATA "$SCRIPT_DIR/fm-task-ledger.sh" require merge "$ID" || exit 1
 # Fork-only end
 fm_backlog_directory_present "$STATE" "state directory" || {
   echo "error: local merge refused: $FM_BACKLOG_TRANSITION_ERROR" >&2
@@ -150,4 +151,4 @@ echo "merged $BRANCH into local $DEFAULT ($before -> $after) in $PROJ"
 # Fork-only (applypass): a landed local-only child ends a piece of work, so ask for a fresh session.
 FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE "$SCRIPT_DIR/fm-secondmate-fresh-session.sh" request --source child --verb "done" "merged $BRANCH into local $DEFAULT ($before -> $after)" >/dev/null 2>&1 || true
 # Fork-only: the landing closes the ledger (best-effort).
-FM_HOME=$FM_HOME FM_DATA_OVERRIDE=${FM_DATA_OVERRIDE:-$FM_HOME/data} "$SCRIPT_DIR/fm-task-ledger.sh" record "$ID" merged --once >/dev/null 2>&1 || true
+FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$LEDGER_DATA "$SCRIPT_DIR/fm-task-ledger.sh" record "$ID" merged --once >/dev/null 2>&1 || true

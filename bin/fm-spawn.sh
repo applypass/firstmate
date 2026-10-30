@@ -2040,7 +2040,7 @@ fm_task_id_creation_valid "$ID" || {
 # its intake and planning events are recorded (bin/fm-task-ledger.sh); a
 # relaunch is running work and a secondmate is not a ticket.
 if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" != secondmate ]; then
-  FM_HOME=$FM_HOME FM_DATA_OVERRIDE=${FM_DATA_OVERRIDE:-$FM_HOME/data} "$SCRIPT_DIR/fm-task-ledger.sh" require spawn "$ID" || exit 1
+  FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA "$SCRIPT_DIR/fm-task-ledger.sh" require spawn "$ID" || exit 1
 fi
 # Fork-only end
 if [ "$RELAUNCH" -eq 0 ] && [ "$KIND" = ship ]; then
