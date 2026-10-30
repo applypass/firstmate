@@ -1708,3 +1708,23 @@ test_branch_prefix_is_refused_where_it_does_not_apply
 test_branch_prefix_value_is_validated
 test_branch_prefix_command_is_shell_safe
 test_crewmate_scaffolds_forbid_pool_administration
+
+# Fork-only: every generated brief variant carries the temporary-object cleanup line exactly once.
+test_every_brief_variant_carries_cleanup_line() {
+  local home variant id brief count
+  home="$TMP_ROOT/cleanup-line-home"
+  write_registry "$home"
+  for variant in "ship-nm:--mode no-mistakes" "ship-dp:--mode direct-PR" "ship-lo:--mode local-only" \
+    "scout:--scout" "herdr:--mode no-mistakes --herdr-lab"; do
+    id="brief-cleanup-${variant%%:*}"
+    # shellcheck disable=SC2086
+    FM_HOME="$home" "$ROOT/bin/fm-brief.sh" "$id" some-proj ${variant#*:} >/dev/null 2>&1 \
+      || fail "$id: scaffold exited non-zero"
+    brief="$home/data/$id/brief.md"
+    count=$(grep -c "^Before you create any temporary object (table, schema, file, test account, branch, channel)" "$brief")
+    [ "$count" = 1 ] || fail "$id: cleanup line appears $count times, want exactly 1"
+    assert_grep "drop command and a drop date" "$brief" "$id: cleanup line missing the drop command and date"
+  done
+  pass "fm-brief.sh: every brief variant carries the temporary-object cleanup line once"
+}
+test_every_brief_variant_carries_cleanup_line
