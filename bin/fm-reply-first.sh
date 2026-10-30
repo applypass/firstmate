@@ -215,6 +215,7 @@ cmd_prompt() {
   text=$(printf '%s\n' "$parsed" | sed '1d')
   text=${text#"${text%%[![:space:]]*}"}
   text=${text%"${text##*[![:space:]]}"}
+  case "$text" in '<task-notification>'*) exit 0 ;; esac
   if text_is_captain "$text"; then
     if [ -n "$transcript" ]; then cmd_arm --transcript "$transcript"; else cmd_arm; fi
   else

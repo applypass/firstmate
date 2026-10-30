@@ -39,7 +39,10 @@ def ts(s):
 
 recs = []
 for line in open(path):
-    d = json.loads(line)
+    try:
+        d = json.loads(line)
+    except ValueError:
+        continue
     if 'timestamp' in d and isinstance(d['timestamp'], str):
         d['_t'] = ts(d['timestamp'])
     recs.append(d)
@@ -65,7 +68,6 @@ def is_abs(t):
     i = bisect.bisect_left(att, t - 0.01)
     return i < len(att) and abs(att[i] - t) < 0.01
 pend = []
-unmatched = 0
 for d in recs:
     if d.get('type') == 'queue-operation' and d.get('operation') == 'enqueue' and not str(d.get('content') or '').startswith('<task'):
         if not is_abs(d['_t']):
@@ -73,9 +75,7 @@ for d in recs:
     if d.get('type') == 'user' and is_human(d):
         c = [x for x in pend if x <= d['_t'] + 0.01]
         human_enq[d['uuid']] = c[-1] if c else d['_t']
-        unmatched += 0 if c else 1
         pend = []
-print('pending left', len(pend), 'unmatched', unmatched, file=sys.stderr)
 # build turns: split at turn_duration
 turns = []
 cur = []

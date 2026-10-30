@@ -246,6 +246,33 @@ test_main_machine_prompt_closes_an_open_window() {
   pass "a machine prompt or the Stop hook closes a captain window"
 }
 
+test_main_task_notification_leaves_the_window_alone() {
+  make_home mnote main
+  prompt 'status of PR 77?'
+  call 'ls'; call 'ls'
+  prompt '<task-notification><task-id>spawn</task-id></task-notification>'
+  [ "$(sed -n 's/^count=//p' "$H/state/.reply-first")" = 2 ] || fail "a task notification changed the count"
+  call 'ls'; expect_code 0 "$RC" "the third call still runs"
+  call 'ls'; expect_code 2 "$RC" "the fourth call is still refused after a task notification"
+  pass "a task notification in the main home neither closes nor resets the window"
+}
+
+test_latency_measure_skips_unparsable_lines() {
+  local t="$TMP_ROOT/latency.jsonl" out err
+  {
+    printf '%s\n' '{"type":"user","uuid":"u1","timestamp":"2026-10-30T10:00:00Z","origin":{"kind":"human"},"message":{"content":"status?"}}'
+    printf '\n'
+    printf '%s\n' '{"type":"assistant","timestamp":"2026-10-30T10:00:05Z","message":{"content":[{"type":"text","text":"All green."}]}}'
+    printf '%s\n' '{"type":"system","subtype":"turn_duration","timestamp":"2026-10-30T10:00:06Z"}'
+    printf '%s' '{"type":"assistant","timestamp":"2026-10-30T10:0'
+  } > "$t"
+  out=$(python3 "$ROOT/bin/fm-reply-latency.py" "$t" 2>"$TMP_ROOT/latency.err") || fail "the measure failed on a blank or truncated line"
+  err=$(cat "$TMP_ROOT/latency.err")
+  assert_contains "$out" "captain messages with a reply: 1" "the measure did not count the one answered message"
+  [ -z "$err" ] || fail "the measure wrote to stderr: $err"
+  pass "the latency measure skips blank and half-written lines and writes nothing to stderr"
+}
+
 test_main_reply_closes_and_handoffs_are_free() {
   make_home mreply main
   prompt 'what is the status?'
@@ -346,6 +373,8 @@ test_main_captain_prompt_opens_a_window
 test_main_slash_command_never_arms
 test_main_machine_prompts_never_arm
 test_main_machine_prompt_closes_an_open_window
+test_main_task_notification_leaves_the_window_alone
+test_latency_measure_skips_unparsable_lines
 test_main_reply_closes_and_handoffs_are_free
 test_installer_registers_main_hooks_once
 test_text_flushed_a_moment_late_still_counts

@@ -45,6 +45,7 @@ Routing order for a question about a second mate's work: the owning mate, then a
 After 3 calls without a reply, the next call is refused once with "answer now with what you have, hand the rest off".
 The window opens only for a message the captain typed into the pane, and not for a slash command such as `/afk`, which runs a skill rather than asks a question.
 Every other prompt (the steering doorbell, a `[fm-from-firstmate]` message, operational input, a Stop hook wake, a harness notification) closes any open window, so work routed to the agent is never refused its fourth command.
+In the primary home a task notification leaves the window alone: a background launch that finishes mid-answer does not switch the count off.
 A reply is a `bin/fm-secondmate-report.sh` call, assistant text of 200 characters or more, or shorter text that addresses the captain.
 Text addresses the captain when "captain" (any case) stands as its own word, not inside a name or path such as `fm-captain-hold.sh`, with a comma before it or `, . ! ? : ;` or the end of the text after it.
 So "Captain, shipshape.", "Aye, captain - done." and "Done, captain." count; "Let me see what the captain asked" does not.
