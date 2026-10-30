@@ -170,6 +170,10 @@ esac
 . "$SCRIPT_DIR/fm-dod-lib.sh"
 # shellcheck source=bin/fm-role-lib.sh
 . "$SCRIPT_DIR/fm-role-lib.sh"
+# Fork-only: handbook pointer block for firstmate-repo briefs.
+# shellcheck source=bin/fm-handbook-lib.sh
+. "$SCRIPT_DIR/fm-handbook-lib.sh"
+# Fork-only end
 PAUSED_VERB=${FM_CLASSIFY_PAUSED_VERB:-$FM_CLASSIFY_PAUSED_VERB_DEFAULT}
 IFS= read -r -d '' CREWMATE_PAUSE_INSTRUCTIONS <<EOF || true
    Use \`$PAUSED_VERB: {why}\` - distinct from \`blocked:\` - when deliberately waiting for work or an external condition expected to clear on its own, including your own validation round.
@@ -345,8 +349,9 @@ if [ "$KIND" != ship ]; then
     echo "error: --upstream-consent applies only to ship briefs; a scout publishes nothing and a charter is not a delivery contract" >&2
     exit 1
   }
-  [ "$PROJECT_DIR_SET" -eq 0 ] || {
-    echo "error: --project applies only to ship briefs" >&2
+  # Fork-only: a scout may pass --project; it only selects the handbook pointer block.
+  [ "$PROJECT_DIR_SET" -eq 0 ] || [ "$KIND" = scout ] || {
+    echo "error: --project applies only to ship and scout briefs" >&2
     exit 1
   }
 fi
@@ -741,6 +746,7 @@ Before reporting done, read and follow \`$FM_ROOT/.agents/skills/captain-hold-li
 When the report is complete, append \`done [at=<epoch>]: {one-line conclusion}\` to the status file and stop.
 If your findings reveal work that should ship (e.g. you reproduced a bug and the fix is clear), say so in the report; firstmate may promote this task in place, and you would then receive mode-specific ship instructions as a follow-up message.
 EOF
+fm_handbook_brief_block "$FM_HOME" "$PROJECT_DIR" "$FM_ROOT" >> "$BRIEF"  # Fork-only
 append_brief_include
 echo "scaffolded: $BRIEF (scout; replace {TASK} and {FIRSTMATE_SPEC})"
 exit 0
@@ -821,6 +827,7 @@ A correction edits only the wrong text: do not run \`$FM_ROOT/bin/fm-ensure-agen
 
 $DOD
 EOF
+fm_handbook_brief_block "$FM_HOME" "$PROJECT_DIR" "$FM_ROOT" >> "$BRIEF"  # Fork-only
 append_brief_include
 if [ "$FORGE" = none ]; then
   echo "scaffolded: $BRIEF (ship, mode=$MODE; replace {TASK} and {FIRSTMATE_SPEC})"
