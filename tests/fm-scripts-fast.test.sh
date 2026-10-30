@@ -9,8 +9,8 @@
 # times (a loaded CI host still passes) and far below the times the slow paths
 # took on the same fixture, so a regression to a whole-log fold or a synchronous
 # network call fails here without making the suite flaky. The drain's bound is
-# looser, since most of its time goes to the unread-status walk; its check
-# against a whole-log fold is the number of bytes the warm drain reads.
+# check against a whole-log fold is the number of bytes the warm drain reads,
+# and a second drain case pins the walk over a long unread status span.
 # Nothing here reaches a real home, Shortcut, 1Password or a terminal.
 set -u
 
@@ -24,6 +24,7 @@ TMP_ROOT=$(fm_test_tmproot fm-scripts-fast)
 LOG_LINES=${FM_FAST_TEST_LOG_LINES:-2500}
 SEND_BOUND=${FM_FAST_TEST_SEND_BOUND:-6}
 DRAIN_BOUND=${FM_FAST_TEST_DRAIN_BOUND:-30}
+UNREAD_DRAIN_BOUND=${FM_FAST_TEST_UNREAD_DRAIN_BOUND:-6}
 DECIDE_BOUND=${FM_FAST_TEST_DECIDE_BOUND:-3}
 TOKEN=tok-secret-123
 OWNER=11111111-2222-4333-8444-555555555555
@@ -141,6 +142,47 @@ test_warm_drain_reads_only_appended_bytes_on_a_long_log() {
   pass "a warm fm-wake-drain folds only the appended ${read} bytes and finishes in ${ms} ms on a ${LOG_LINES}-line status log"
 }
 
+# A drain whose open-decision cursors are warm but whose status lines are still
+# unread (the state between a drain and its acknowledgement, when every drain
+# re-walks the unread span) must print each unread note and pending-reply
+# resolution once, and stay under UNREAD_DRAIN_BOUND across two long logs. A
+# fork per unread line took about 10 s on this fixture.
+test_drain_over_a_long_unread_span_stays_fast() {
+  local dir state t log start end rc ms
+  dir="$TMP_ROOT/unread"; state="$dir/state"
+  mkdir -p "$state" "$dir/root" "$dir/fakebin"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$dir/fakebin/tmux"
+  chmod +x "$dir/fakebin/tmux"
+  for t in t1 t2; do printf 'working [at=1789999999]: started\n' > "$state/$t.status"; done
+  # The first drain registers both logs with the presentation cursor, so every
+  # line appended below is unread.
+  env PATH="$dir/fakebin:$PATH" FM_ROOT_OVERRIDE="$dir/root" FM_STATE_OVERRIDE="$state" \
+    "$ROOT/bin/fm-wake-drain.sh" >/dev/null 2>"$dir/err" || fail "the first drain failed: $(cat "$dir/err")"
+  for t in t1 t2; do
+    log="$state/$t.status"
+    make_log "$dir/$t.more" "$LOG_LINES"
+    cat "$dir/$t.more" >> "$log"
+    printf 'note [at=1790020000]: %s heads-up for the captain\n' "$t" >> "$log"
+    printf 'resolved [key=pending-reply-%s0] [at=1790020001]: pending-reply-resolved: task=%s via=status\n' "$t" "$t" >> "$log"
+    printf 'resolved [key=pending-reply-%s1] [at=1790020002]: answered: not a reserved close\n' "$t" >> "$log"
+    bash -c '. "$1"; status_open_decisions_incremental "$2" >/dev/null' _ "$ROOT/bin/fm-classify-lib.sh" "$log"
+  done
+  start=$(now_ms)
+  env PATH="$dir/fakebin:$PATH" FM_ROOT_OVERRIDE="$dir/root" FM_STATE_OVERRIDE="$state" \
+    "$ROOT/bin/fm-wake-drain.sh" >"$dir/out" 2>"$dir/err"
+  rc=$?
+  end=$(now_ms)
+  ms=$((end - start))
+  expect_code 0 "$rc" "the drain should succeed: $(cat "$dir/err")"
+  for t in t1 t2; do
+    assert_equals 1 "$(grep -cF "$t heads-up for the captain" "$dir/out")" "the drain should print $t's unread note once"
+    assert_equals 1 "$(grep -cF "[key=pending-reply-${t}0]" "$dir/out")" "the drain should print $t's pending-reply resolution once"
+    assert_equals 0 "$(grep -cF "[key=pending-reply-${t}1]" "$dir/out")" "a reserved key closed without its reserved note is not an unread surface"
+  done
+  [ "$ms" -lt $((UNREAD_DRAIN_BOUND * 1000)) ] || fail "fm-wake-drain took ${ms} ms over two unread ${LOG_LINES}-line logs (bound ${UNREAD_DRAIN_BOUND} s)"
+  pass "fm-wake-drain walks two unread ${LOG_LINES}-line status logs in ${ms} ms"
+}
+
 # decide_case <name>: a home with a Shortcut config and a fake curl that waits
 # FAKE_CURL_DELAY seconds before it answers. Echoes the case dir.
 decide_case() {
@@ -238,6 +280,7 @@ fm_test_run \
   test_fast_fold_matches_full_fold \
   test_resolve_key_send_stays_fast_on_a_long_log \
   test_warm_drain_reads_only_appended_bytes_on_a_long_log \
+  test_drain_over_a_long_unread_span_stays_fast \
   test_decide_returns_before_shortcut_answers \
   test_decide_without_story_files_a_chore_in_the_background \
   test_decide_final_failure_queues_a_note_and_sync_recovers

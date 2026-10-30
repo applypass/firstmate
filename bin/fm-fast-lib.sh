@@ -11,6 +11,8 @@
 #
 #   _fm_open_decisions_file_ident   one stat instead of three
 #   _fm_open_decisions_cursor_path  parameter expansion instead of dirname and basename
+#   status_line_is_unread_surface   no fork per line; the drain runs it on every
+#                                   unread status line, thousands per drain
 #   fm_fast_status_open_decisions   the open set read through the per-log cursor
 #                                   (status_open_decisions_incremental), not a
 #                                   bash fold over the whole log; fm-send's
@@ -75,6 +77,40 @@ _fm_open_decisions_cursor_path() {  # <status-file>
   esac
   base=${f##*/}
   printf '%s/.%s.open-decisions-cursor' "$dir" "${base%.status}"
+}
+
+# Same answer as upstream. The verb comes back through an out-var, and the key
+# and note forks run only for a resolve or captain-held line whose unstamped
+# text holds a "[key=<reserved prefix>" token: _fm_decision_key reads the key
+# after "[key=" in that same unstamped text, so a line without such a token can
+# never carry a reserved key.
+status_line_is_unread_surface() {  # <status-line>
+  local line=$1 _fm_fast_verb key note resolve held prefix unstamped found=''
+  [ -n "$line" ] || return 1
+  status_line_verb "$line" _fm_fast_verb
+  [ "$_fm_fast_verb" = note ] && return 0
+  resolve=${FM_CLASSIFY_RESOLVE_VERB:-$FM_CLASSIFY_RESOLVE_VERB_DEFAULT}
+  held=${FM_CLASSIFY_CAPTAIN_HELD_VERB:-$FM_CLASSIFY_CAPTAIN_HELD_VERB_DEFAULT}
+  case "$_fm_fast_verb" in
+    "$resolve"|"$held") ;;
+    *) return 1 ;;
+  esac
+  _fm_status_unstamped "$line" unstamped
+  for prefix in ${FM_CLASSIFY_RESERVED_KEY_PREFIXES:-$FM_CLASSIFY_RESERVED_KEY_PREFIXES_DEFAULT}; do
+    case "$unstamped" in *"[key=$prefix"*) found=1; break ;; esac
+  done
+  [ -n "$found" ] || return 1
+  key=$(_fm_decision_key "$line") || return 1
+  for prefix in ${FM_CLASSIFY_RESERVED_KEY_PREFIXES:-$FM_CLASSIFY_RESERVED_KEY_PREFIXES_DEFAULT}; do
+    case "$key" in
+      "$prefix"*)
+        note=$(status_line_note "$line")
+        _fm_decision_key_transition_allowed "$key" "$note"
+        return
+        ;;
+    esac
+  done
+  return 1
 }
 
 # The open set of one status log, read through its cursor: only bytes appended
