@@ -1,0 +1,4 @@
+== --harness claude
+- Reply first: answer the captain in plain words before digging; after 3 commands without a reply the hook refuses the next. Hand digging to a worker or second mate. Run bin/fm-spawn.sh, bin/fm-dispatch-resolve.sh, and bin/fm-shortcut-ticket.sh with the Bash tool run_in_background (never shell &) so the reply is not held behind them.
+== --harness codex
+(no reply-first line)

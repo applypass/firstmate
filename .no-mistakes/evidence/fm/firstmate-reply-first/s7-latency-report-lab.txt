@@ -1,0 +1,5 @@
+captain messages with a reply: 5
+more than 3 commands before the reply: 4 of 5 (80%)
+all                    n=5  median wait 15 s  p90 wait 17 s  summed 1 min
+more than 3 commands   n=4  median wait 16 s  p90 wait 17 s  summed 1 min
+3 commands or fewer    n=1  median wait 11 s  p90 wait 11 s  summed 0 min
