@@ -127,7 +127,9 @@ test_reply_window_is_armed() {
   hook 'are you on PR 73?'
   hook "$(printf 'wake now' | "$ROOT/bin/fm-operational-input.sh" encode watcher)"
   [ ! -e "$MATE/state/.reply-first" ] || fail "operational input left the window open"
-  pass "a captain message opens the reply window; every other prompt closes it"
+  hook '/afk'
+  [ ! -e "$MATE/state/.reply-first" ] || fail "a slash command opened the reply window"
+  pass "a captain message opens the reply window; a slash command and every other prompt close it"
 }
 
 test_installer() {

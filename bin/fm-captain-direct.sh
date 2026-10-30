@@ -105,7 +105,7 @@ REPORTED=yes
   . "$SCRIPT_DIR/fm-parent-channel-lib.sh"
   fm_parent_channel_report "$FM_HOME" "$STATE" "captain-direct: $SHORT"
 ) >/dev/null 2>&1 || REPORTED=no
-arm
+case "$TEXT" in /*) ;; *) arm ;; esac
 
 NOTE="[captain-direct] The captain typed the message above straight into your pane. It is not a Firstmate message. Answer him here, now, in plain captain style: lead with the answer, short sentences, the outcome and what it means for him, no internal jargon."
 if [ "$REPORTED" = yes ]; then

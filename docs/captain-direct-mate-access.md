@@ -43,18 +43,18 @@ Routing order for a question about a second mate's work: the owning mate, then a
 
 `bin/fm-reply-first.sh` counts tool calls after a message that expects an answer.
 After 3 calls without a reply, the next call is refused once with "answer now with what you have, hand the rest off".
-The window opens only for a message the captain typed into the pane.
+The window opens only for a message the captain typed into the pane, and not for a slash command such as `/afk`, which runs a skill rather than asks a question.
 Every other prompt (the steering doorbell, a `[fm-from-firstmate]` message, operational input, a Stop hook wake, a harness notification) closes any open window, so work routed to the agent is never refused its fourth command.
 A reply is a `bin/fm-secondmate-report.sh` call, assistant text of 200 characters or more, or shorter text that addresses the captain.
 Text addresses the captain when "captain" (any case) stands as its own word, not inside a name or path such as `fm-captain-hold.sh`, with a comma before it or `, . ! ? : ;` or the end of the text after it.
 So "Captain, shipshape.", "Aye, captain - done." and "Done, captain." count; "Let me see what the captain asked" does not.
-`bin/fm-send.sh`, `bin/fm-spawn.sh`, `bin/fm-dispatch-resolve.sh`, and `bin/fm-brief.sh` are never counted or refused: handing the rest off is what the refusal asks for.
+A command that runs `bin/fm-send.sh`, `bin/fm-spawn.sh`, `bin/fm-dispatch-resolve.sh`, or `bin/fm-brief.sh` (the first word of a segment split at `;`, `&`, `|`) is never counted or refused; reading one of those scripts counts: handing the rest off is what the refusal asks for.
 `FM_REPLY_FIRST_LIMIT` and `FM_REPLY_FIRST_MIN_CHARS` tune it; the word `off` in `config/reply-first` turns it off for a home.
 The latency report of 2026-10-30 found the main firstmate broke this budget on 52-55% of captain messages, and those replies were 85% of all waiting time.
 
 It runs in a second mate home and in the primary home.
 In the primary home the prompt hook is `bin/fm-reply-first.sh prompt`, and a Stop hook runs `bin/fm-reply-first.sh clear` so a wake turn after a finished captain turn is never counted.
-The supervision instructions carry one rule line: answer first, hand digging to a worker or second mate, and run `bin/fm-spawn.sh`, `bin/fm-dispatch-resolve.sh`, and `bin/fm-shortcut-ticket.sh` with the Bash tool's `run_in_background` so the reply is not held behind them.
+For a Claude primary session the supervision instructions carry one rule line: answer first, hand digging to a worker or second mate, and run `bin/fm-spawn.sh`, `bin/fm-dispatch-resolve.sh`, and `bin/fm-shortcut-ticket.sh` with the Bash tool's `run_in_background` so the reply is not held behind them.
 The Bash tool returns at once, keeps the command's own guards and output, and wakes the agent when it exits.
 
 Measure it with the latency report's method on a main session transcript:

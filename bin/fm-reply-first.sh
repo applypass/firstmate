@@ -93,12 +93,32 @@ text_is_captain() {  # <trimmed prompt text>
   local text=$1
   [ -n "$text" ] || return 1
   case "$text" in
+    /*) return 1 ;;
     '<task-notification>'*|'<system-reminder>'*|'Stop hook feedback'*|'firstmate watcher '*) return 1 ;;
     ': Firstmate instruction waiting:'*|'[fm-from-firstmate]'*|*$'\xE2\x81\xA3''[fm-from-firstmate]'*) return 1 ;;
   esac
   printf '%s' "$text" | "$SCRIPT_DIR/fm-operational-input.sh" classify >/dev/null 2>&1 && return 1
   printf '%s' "$text" | FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-operational-input.sh" doorbell-kind >/dev/null 2>&1 && return 1
   return 0
+}
+
+# 0 when a segment of the shell command runs one of the named scripts: its
+# first word after any VAR=value assignments, split at ; & | and newlines.
+command_runs() {  # <command> <script name>...
+  local cmd=$1 seg word name words
+  shift
+  cmd=${cmd//[;&|]/$'\n'}
+  while IFS= read -r seg; do
+    read -r -a words <<< "$seg" || true
+    for word in "${words[@]+"${words[@]}"}"; do
+      case "$word" in [A-Za-z_]*=*) continue ;; esac
+      for name in "$@"; do
+        [ "${word##*/}" = "$name" ] && return 0
+      done
+      break
+    done
+  done <<< "$cmd"
+  return 1
 }
 
 lock_take() {
@@ -200,8 +220,8 @@ cmd_pretool() {
   payload=$(cat 2>/dev/null || true)
   [ -n "$payload" ] || exit 0
   command -v jq >/dev/null 2>&1 || exit 0
-  enabled || exit 0
   [ -f "$WINDOW" ] || exit 0
+  enabled || exit 0
   command=$(printf '%s' "$payload" | jq -r '(.tool_input.command // .toolInput.command // empty)' 2>/dev/null) || exit 0
   transcript=$(printf '%s' "$payload" | jq -r '(.transcript_path // empty)' 2>/dev/null) || transcript=
   lock_take || exit 0
@@ -213,18 +233,16 @@ cmd_pretool() {
     lock_drop
     exit 0
   fi
-  case "$command" in
-    *fm-send.sh*|*fm-spawn.sh*|*fm-dispatch-resolve.sh*|*fm-brief.sh*)
-      lock_drop
-      exit 0
-      ;;
-    *fm-secondmate-report.sh*)
-      w_replied=1
-      win_write
-      lock_drop
-      exit 0
-      ;;
-  esac
+  if command_runs "$command" fm-send.sh fm-spawn.sh fm-dispatch-resolve.sh fm-brief.sh; then
+    lock_drop
+    exit 0
+  fi
+  if command_runs "$command" fm-secondmate-report.sh; then
+    w_replied=1
+    win_write
+    lock_drop
+    exit 0
+  fi
   [ -n "$transcript" ] || transcript=$w_transcript
   if transcript_replied "$transcript" "$w_base"; then
     w_replied=1

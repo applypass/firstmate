@@ -191,6 +191,19 @@ test_main_captain_prompt_opens_a_window() {
   pass "a captain prompt in the main home gets the fourth call refused once"
 }
 
+test_main_slash_command_never_arms() {
+  make_home mslash main
+  prompt '  /afk'
+  call 'ls'; call 'ls'; call 'ls'; call 'ls'; call 'ls'
+  expect_code 0 "$RC" "no refusal after a slash command"
+  [ ! -e "$H/state/.reply-first" ] || fail "a slash command opened a window"
+  prompt 'what is the status?'
+  [ -e "$H/state/.reply-first" ] || fail "a plain question did not open a window"
+  call 'ls'; call 'ls'; call 'ls'
+  call 'ls'; expect_code 2 "$RC" "a plain question still gets the fourth call refused"
+  pass "a slash command never opens a window and a plain question still does"
+}
+
 test_main_machine_prompts_never_arm() {
   local text
   while IFS= read -r text; do
@@ -247,6 +260,15 @@ test_main_reply_closes_and_handoffs_are_free() {
   call 'ls'; call 'ls'; call 'ls'
   expect_code 0 "$RC" "hand-off commands are not counted"
   call 'ls'; expect_code 2 "$RC" "the fourth counted call is refused"
+  make_home mchain main
+  prompt 'dig into the logs'
+  call 'cd /tmp && FM_X=1 bin/fm-send.sh task-a "go"'; call 'true; bin/fm-spawn.sh ship foo'
+  call 'ls'; call 'ls'; call 'ls'
+  expect_code 0 "$RC" "a hand-off after && or ; is not counted"
+  make_home mread main
+  prompt 'dig into the logs'
+  call 'sed -n 1,80p bin/fm-spawn.sh'; call 'grep -n arm bin/fm-send.sh'; call 'cat bin/fm-brief.sh'
+  call 'cat bin/fm-secondmate-report.sh'; expect_code 2 "$RC" "reading hand-off or report scripts counts as digging"
   pass "a reply closes the window and hand-off commands are never counted or refused"
 }
 
@@ -306,6 +328,7 @@ test_clear_closes_the_window
 test_no_window_no_refusal
 test_scope_is_mates_and_the_primary_home
 test_main_captain_prompt_opens_a_window
+test_main_slash_command_never_arms
 test_main_machine_prompts_never_arm
 test_main_machine_prompt_closes_an_open_window
 test_main_reply_closes_and_handoffs_are_free

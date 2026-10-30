@@ -16,7 +16,7 @@ messages and split by that share. --since keeps only messages that started at or
 after the given time, so a transcript from before and after the hook can be
 compared with one command each.
 """
-import json, sys, re, collections, datetime as dt, statistics
+import bisect, json, sys, re, collections, datetime as dt, statistics
 
 args = sys.argv[1:]
 since = None
@@ -59,32 +59,7 @@ def is_tool_result(d):
 def is_human(d):
     return (d.get('origin') or {}).get('kind') == 'human'
 
-def tool_label(name, inp):
-    if name == 'Bash':
-        c = inp.get('command', '')
-        m = re.findall(r'(fm-[a-z0-9-]+\.sh|psql-?\d*|gh-axi|gh |herdr|tasks-axi|lavish-axi|quota-axi|curl|git |python3?|sleep|op read|doctl|jq|grep|rg|cat|sed|ls|tail|head|find)', c)
-        key = m[0].strip() if m else c.split()[0] if c.split() else 'bash'
-        return 'Bash:' + key
-    return name
-
-# enqueue times by content
-enq = collections.defaultdict(list)
-for d in recs:
-    if d.get('type') == 'queue-operation' and d.get('operation') == 'enqueue' and 'content' in d:
-        enq[d['content']].append(d['_t'])
-
-def arrival(content, t_proc):
-    lst = enq.get(content) or []
-    cands = [x for x in lst if x <= t_proc + 1]
-    if cands:
-        x = cands[-1] if len(cands) == 1 else min(cands, key=lambda v: t_proc - v)
-        # prefer the earliest unconsumed enqueue
-        lst.remove(x)
-        return x
-    return t_proc
-
 human_enq = {}
-import bisect
 att = sorted(d['_t'] for d in recs if d.get('type') == 'attachment' and d['attachment'].get('type') == 'queued_command')
 def is_abs(t):
     i = bisect.bisect_left(att, t - 0.01)
@@ -135,23 +110,20 @@ def analyze(turn, t_from=None, t_to=None):
     """Attribute wall time between consecutive timestamped records in [t_from, t_to]."""
     ev = [d for d in turn if '_t' in d and d.get('type') in ('assistant', 'user', 'attachment', 'system')]
     out = collections.Counter()
-    tools = collections.Counter(); tool_n = collections.Counter()
     pending = {}
-    calls = []
+    ncalls = 0
     for d in ev:
         if d['type'] == 'assistant':
             for x in d['message']['content']:
                 if x.get('type') == 'tool_use':
-                    pending[x['id']] = (d['_t'], tool_label(x['name'], x.get('input', {})), x)
+                    pending[x['id']] = d['_t']
         elif d['type'] == 'user' and is_tool_result(d):
             for x in d['message']['content']:
                 if x.get('type') == 'tool_result' and x.get('tool_use_id') in pending:
-                    t0, lab, inp = pending.pop(x['tool_use_id'])
+                    t0 = pending.pop(x['tool_use_id'])
                     if t_from is not None and t0 < t_from: continue
                     if t_to is not None and t0 > t_to: continue
-                    dur = d['_t'] - t0
-                    tools[lab] += dur; tool_n[lab] += 1
-                    calls.append((dur, lab, inp, t0, x.get('is_error')))
+                    ncalls += 1
     prev = None
     for d in ev:
         t = d['_t']
@@ -170,14 +142,13 @@ def analyze(turn, t_from=None, t_to=None):
             else:
                 out['other'] += gap
         prev = d
-    return out, tools, tool_n, calls
+    return out, ncalls
 
 caps = []  # captain messages
 for i, turn in enumerate(turns):
     k = tkind(turn)
     texts = [d for d in turn if d.get('type') == 'assistant' and any(x.get('type') == 'text' and x.get('text', '').strip() for x in d['message']['content'])]
     last_text = texts[-1]['_t'] if texts else None
-    first_text = texts[0]['_t'] if texts else None
     msgs = []
     s = starter(turn)
     if k == 'captain':
@@ -194,15 +165,7 @@ for i, turn in enumerate(turns):
         # reply = last text in this turn after tproc
         after = [x['_t'] for x in texts if x['_t'] >= tproc]
         reply = after[-1] if after else None
-        first = after[0] if after else None
-        caps.append(dict(turn=i, kind=kind, tkind=k, t0=t0, tproc=tproc, reply=reply, first=first, text=text, turn_end=turn[-1].get('_t')))
-
-# blocked-behind wait: time from t0 to tproc, attributed to the turn(s) running in between
-turn_spans = []
-for i, turn in enumerate(turns):
-    tt = [d['_t'] for d in turn if '_t' in d]
-    if tt:
-        turn_spans.append((min(tt), max(tt), i, tkind(turn)))
+        caps.append(dict(turn=i, kind=kind, tkind=k, t0=t0, tproc=tproc, reply=reply, text=text, turn_end=turn[-1].get('_t')))
 
 res = []
 for c in caps:
@@ -210,17 +173,8 @@ for c in caps:
         continue
     lat = c['reply'] - c['t0']
     wait = c['tproc'] - c['t0']
-    out, tools, tool_n, calls = analyze(turns[c['turn']], c['tproc'], c['reply'])
-    blockers = [s for s in turn_spans if s[1] > c['t0'] and s[0] < c['tproc'] and s[2] != c['turn']]
-    blk_kind = collections.Counter()
-    for s in blockers:
-        blk_kind[s[3]] += min(s[1], c['tproc']) - max(s[0], c['t0'])
-    # time in own turn before absorbing (absorbed msgs wait on current turn's tool/model work)
-    if c['kind'] == 'absorbed':
-        blk_kind['own-turn-before-absorb:' + c['tkind']] += c['tproc'] - max(c['t0'], min(d['_t'] for d in turns[c['turn']] if '_t' in d))
-    ncalls = len(calls)
-    res.append(dict(c, lat=lat, wait=wait, out=dict(out), tools=dict(tools), tool_n=dict(tool_n), ncalls=ncalls,
-                    calls=sorted(calls, key=lambda x: -x[0])[:5], blk=dict(blk_kind)))
+    out, ncalls = analyze(turns[c['turn']], c['tproc'], c['reply'])
+    res.append(dict(c, lat=lat, wait=wait, out=dict(out), ncalls=ncalls))
 
 if since is not None:
     res = [r for r in res if r['t0'] >= since]
