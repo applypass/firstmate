@@ -4723,14 +4723,14 @@ set_proof_case() {  # <case_dir> <body file> <head> <check name>...
 }
 
 PROOF_HEAD=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-PROOF_411_LINE='- Not checked here: an end-to-end resume against api-test on test-app (real refresh mid-upload to DigitalOcean Spaces).'
+PROOF_411_LINE='- Not checked here: an end-to-end resume against the staging service (real restart mid-transfer).'
 PROOF_SKIP_LINE='**Test** - skipped'
 
 test_proof_gate_refuses_pr_411_body() {
   local case_dir rc
   case_dir=$(make_case proof-411)
   mkdir -p "$case_dir/wt"
-  set_proof_case "$case_dir" "$ROOT/tests/fixtures/pr-411-body.md" "$PROOF_HEAD" ci
+  set_proof_case "$case_dir" "$ROOT/tests/fixtures/pr-merge-proof-body.md" "$PROOF_HEAD" ci
   set +e
   run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/90 \
     > "$case_dir/stdout" 2> "$case_dir/stderr"
@@ -4801,7 +4801,7 @@ test_proof_gate_waiver_merges_and_records() {
   local case_dir rc
   case_dir=$(make_case proof-waiver)
   mkdir -p "$case_dir/wt"
-  set_proof_case "$case_dir" "$ROOT/tests/fixtures/pr-411-body.md" "$PROOF_HEAD" ci
+  set_proof_case "$case_dir" "$ROOT/tests/fixtures/pr-merge-proof-body.md" "$PROOF_HEAD" ci
   run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/92 \
     --waive-proof "$PROOF_411_LINE" "captain accepted the gap" \
     --waive-proof "$PROOF_SKIP_LINE" "captain accepted the gap" \
@@ -4815,7 +4815,7 @@ test_proof_gate_waiver_merges_and_records() {
 
   case_dir=$(make_case proof-waiver-bad)
   mkdir -p "$case_dir/wt"
-  set_proof_case "$case_dir" "$ROOT/tests/fixtures/pr-411-body.md" "$PROOF_HEAD" ci
+  set_proof_case "$case_dir" "$ROOT/tests/fixtures/pr-merge-proof-body.md" "$PROOF_HEAD" ci
   set +e
   run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/93 \
     --waive-proof "$PROOF_411_LINE" "   " > "$case_dir/stdout" 2> "$case_dir/stderr"
