@@ -69,8 +69,8 @@ The boundary covers only traffic that writes to the upstream repository.
 
 Follow the [role inheritance and receipt limits](../../../docs/configuration.md#firstmate-role-configfirstmate-role); supported propagation must never grant a child a role the primary does not resolve.
 Deliberately forged local records are outside this accidental-publication safeguard, not a provenance guarantee.
-
 <!-- Fork-only (applypass): handbook pointer for firstmate-repo tasks -->
+
 ## Handbook for firstmate-repo tasks
 
 A worker's worktree has an empty `data/`, so the dispatching home's private handbook is out of its sight.
