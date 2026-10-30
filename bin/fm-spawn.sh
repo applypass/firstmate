@@ -6590,6 +6590,11 @@ claude*)
   # daily quota stop is in force (bin/fm-daily-quota-pretool-check.sh).
   "$SCRIPT_DIR/fm-daily-quota-guard-install.sh" "$WT" --home "$FM_HOME" \
     --status-file "$STATE/$ID.status" || echo "warning: could not register the daily quota guard in $WT/.claude/settings.local.json" >&2
+  # Fork-only: a secondmate also gets the captain-direct and reply-first hooks
+  # (bin/fm-mate-hooks-install.sh, docs/captain-direct-mate-access.md).
+  if [ "$KIND" = secondmate ]; then
+    "$SCRIPT_DIR/fm-mate-hooks-install.sh" "$WT" || echo "warning: could not register the captain-direct and reply-first hooks in $WT/.claude/settings.local.json" >&2
+  fi
   ;;
 esac
 # Fork-only end

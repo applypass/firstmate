@@ -465,6 +465,15 @@ A budget record that cannot be written refuses too, with its own message.
 `FM_DAILY_QUOTA_STOP=off` disables the gate; `tests/lib.sh` sets it so fixtures never read quota-axi.
 <!-- Fork-only end -->
 
+<!-- Fork-only: reply-first switch; bin/fm-reply-first.sh owns the contract. -->
+
+### Reply first (applypass fork)
+
+`config/reply-first` holds `on`, `off`, or nothing.
+`on` enables the reply-first hook in this home, `off` disables it, and an absent file enables it only in a second mate home.
+[`docs/captain-direct-mate-access.md`](captain-direct-mate-access.md) owns the behavior.
+<!-- Fork-only end -->
+
 <!-- Fork-only: task ledger and never-wait config; bin/fm-task-ledger.sh and bin/fm-never-wait.sh own the contracts. -->
 
 ### Task ledger (applypass fork)
