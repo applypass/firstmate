@@ -1,0 +1,18 @@
+fm-fork-footprint: tests/fm-brief.test.sh:291: removes or rewrites 2 upstream line(s)
+fm-fork-footprint: tests/fm-brief.test.sh:301: added lines are not opened by a Fork-only marker comment
+fm-fork-footprint: tests/fm-brief.test.sh:1073: added lines are not opened by a Fork-only marker comment
+fm-fork-footprint: tests/fm-brief.test.sh:1171: added lines are not opened by a Fork-only marker comment
+fm-fork-footprint: tests/fm-brief.test.sh:1264: added lines are not opened by a Fork-only marker comment
+fm-fork-footprint: tests/fm-brief.test.sh:1645: added lines are not opened by a Fork-only marker comment
+fm-fork-footprint: tests/fm-brief.test.sh:1675: added lines are not opened by a Fork-only marker comment
+fm-fork-footprint: tests/fm-brief.test.sh:1698: added lines are not opened by a Fork-only marker comment
+fm-fork-footprint: tests/fm-brief.test.sh:1701: added lines are not opened by a Fork-only marker comment
+## Fork footprint vs upstream main
+
+- Upstream files touched by this change: 2 (+263/-15 lines vs upstream)
+  - bin/fm-brief.sh (+114/-13): on the fork ledger
+  - tests/fm-brief.test.sh (+149/-2): NOT ALLOWED
+- Upstream files the fork already modifies on 91e4d276: 300 of 560 changed files (+84170/-3613 lines, includes fork-only files)
+- Result: FAIL, 1 upstream file(s) changed outside a Fork-only block
+  Fix: move the behaviour into a fork-only file, or wrap the addition in a short '# Fork-only:' block.
+  Last resort: add "- `path` - reason" to .fork/ledger.md in its own PR; it applies once merged.

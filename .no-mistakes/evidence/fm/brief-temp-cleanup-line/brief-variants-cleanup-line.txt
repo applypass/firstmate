@@ -1,0 +1,45 @@
+=== $ bin/fm-brief.sh cleanup-ship-nm some-proj --mode no-mistakes
+scaffolded: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.lFfP5U/data/cleanup-ship-nm/brief.md (ship, mode=no-mistakes; replace {TASK} and {FIRSTMATE_SPEC})
+exit=0
+--- occurrences of cleanup line: 1
+--- '# Temporary objects' section through end of brief:
+# Temporary objects
+Before you create any temporary object (table, schema, file, test account, branch, channel), name it in your first status or plan.
+In your final report list each one with its exact drop command and a drop date; never leave one unannounced.
+
+=== $ bin/fm-brief.sh cleanup-ship-dp some-proj --mode direct-PR
+scaffolded: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.lFfP5U/data/cleanup-ship-dp/brief.md (ship, mode=direct-PR; replace {TASK} and {FIRSTMATE_SPEC})
+exit=0
+--- occurrences of cleanup line: 1
+--- '# Temporary objects' section through end of brief:
+# Temporary objects
+Before you create any temporary object (table, schema, file, test account, branch, channel), name it in your first status or plan.
+In your final report list each one with its exact drop command and a drop date; never leave one unannounced.
+
+=== $ bin/fm-brief.sh cleanup-ship-lo some-proj --mode local-only
+scaffolded: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.lFfP5U/data/cleanup-ship-lo/brief.md (ship, mode=local-only; replace {TASK} and {FIRSTMATE_SPEC})
+exit=0
+--- occurrences of cleanup line: 1
+--- '# Temporary objects' section through end of brief:
+# Temporary objects
+Before you create any temporary object (table, schema, file, test account, branch, channel), name it in your first status or plan.
+In your final report list each one with its exact drop command and a drop date; never leave one unannounced.
+
+=== $ bin/fm-brief.sh cleanup-scout some-proj --scout
+scaffolded: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.lFfP5U/data/cleanup-scout/brief.md (scout; replace {TASK} and {FIRSTMATE_SPEC})
+exit=0
+--- occurrences of cleanup line: 1
+--- '# Temporary objects' section through end of brief:
+# Temporary objects
+Before you create any temporary object (table, schema, file, test account, branch, channel), name it in your first status or plan.
+In your final report list each one with its exact drop command and a drop date; never leave one unannounced.
+
+=== $ bin/fm-brief.sh cleanup-herdr some-proj --mode no-mistakes --herdr-lab
+scaffolded: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.lFfP5U/data/cleanup-herdr/brief.md (ship, mode=no-mistakes; replace {TASK} and {FIRSTMATE_SPEC})
+exit=0
+--- occurrences of cleanup line: 1
+--- '# Temporary objects' section through end of brief:
+# Temporary objects
+Before you create any temporary object (table, schema, file, test account, branch, channel), name it in your first status or plan.
+In your final report list each one with its exact drop command and a drop date; never leave one unannounced.
+
