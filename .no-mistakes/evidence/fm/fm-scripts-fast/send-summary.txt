@@ -1,0 +1,18 @@
+base plain rc=0 wall=0.379
+base plain rc=0 wall=0.361
+base plain rc=0 wall=0.356
+base resolve-key open-k wall=6.132 closed=1
+base resolve-key k2496 wall=6.150 closed=1
+base resolve-key k2491 wall=3.487 closed=1
+base closed-key rc=1
+/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fmbench/send-bench.sh: line 35: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.KrNtkR/pane-t1.txt: No such file or directory
+base inbox records: 5  doorbells in pane: 
+target plain rc=0 wall=0.401
+target plain rc=0 wall=0.416
+target plain rc=0 wall=0.425
+target resolve-key open-k wall=0.560 closed=1
+target resolve-key k2496 wall=0.579 closed=1
+target resolve-key k2491 wall=0.536 closed=1
+target closed-key rc=1
+/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fmbench/send-bench.sh: line 35: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.XsvkPX/pane-t1.txt: No such file or directory
+target inbox records: 5  doorbells in pane: 

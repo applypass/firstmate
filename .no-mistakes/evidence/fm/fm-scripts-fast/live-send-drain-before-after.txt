@@ -1,0 +1,12 @@
+=== base ===
+warm fm-wake-drain (4 logs x 2,500 lines, one new line): 31470ms(rc=0) 42028ms(rc=0) 24884ms(rc=0)
+  drain shows open-k on t1: 1  new-k on t2: 0
+fm-send t1 --resolve-key open-k: 16933ms(rc=0) 15494ms(rc=0) 16614ms(rc=0)
+  t1 log last line: resolved [key=open-k] [at=1793395718]: answered: take the first option
+=== target ===
+warm fm-wake-drain (4 logs x 2,500 lines, one new line): 34373ms(rc=0) 25834ms(rc=0) 31348ms(rc=0)
+  drain shows open-k on t1: 1  new-k on t2: 0
+fm-send t1 --resolve-key open-k: 2091ms(rc=0) 736ms(rc=0) 1424ms(rc=0)
+  t1 log last line: resolved [key=open-k] [at=1793396013]: answered: take the first option
+=== drain output identical between base and target (ignoring ack generation ids)? ===
+identical

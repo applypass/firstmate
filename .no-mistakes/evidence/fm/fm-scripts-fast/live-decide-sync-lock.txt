@@ -1,0 +1,19 @@
+=== record dd-live-3 (no --story) with Shortcut answering after 3 s, then the operator runs 'sync' while the job is mid-post ===
+fm-decide: recorded dd-live-3 locally; posting to Shortcut in the background
+lock held: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-live.e8UiDn/home-race/data/.decided-sync.dd-live-3.lock pid=54059
+--- operator: fm-decide.sh sync (all pending) ---
+fm-decide: another run is posting dd-live-3; skipped
+sync exit=0
+--- operator: fm-decide.sh sync dd-live-3 ---
+fm-decide: another run is posting dd-live-3; skipped
+sync exit=0
+--- decided.md ---
+- [dd-live-3] 2026-10-31 Rotate the key. (shortcut: sc-7777 https://app.shortcut.com/applypass/story/7777)
+--- Shortcut calls (expect one story, one comment) ---
+POST https://api.app.shortcut.com/api/v3/stories
+POST https://api.app.shortcut.com/api/v3/stories/7777/comments
+lock left behind: none
+=== stale lock from a dead job is taken over ===
+fm-decide: posted dd-live-4
+sync exit=0
+- [dd-live-4] 2026-10-31 Stale lock case. (shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523)

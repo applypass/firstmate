@@ -1,0 +1,6 @@
+1 logs x 2500 lines, warm drain after 1 new line, base: 9642ms 11751ms 13762ms
+1 logs x 2500 lines, warm drain after 1 new line, target: 6565ms 9607ms 22600ms
+4 logs x 200 lines, warm drain after 1 new line, base: 6575ms 9188ms 5097ms
+4 logs x 200 lines, warm drain after 1 new line, target: 7671ms 5851ms 3957ms
+8 logs x 60 lines, warm drain after 1 new line, base: 6879ms 4139ms 6486ms
+8 logs x 60 lines, warm drain after 1 new line, target: 4980ms 5845ms 3467ms

@@ -1,0 +1,19 @@
+=== base: fm-decide record dd-live-1 "Ship option B." (no --story; fake Shortcut answers each call after 3 s) ===
+fm-decide: recorded dd-live-1 on sc-7777
+exit=0 wall=6.87s
+decided.md right after record returns:
+- [dd-live-1] 2026-10-31 Ship option B. (shortcut: sc-7777 https://app.shortcut.com/applypass/story/7777)
+=== target: fm-decide record dd-live-1 "Ship option B." (no --story; fake Shortcut answers each call after 3 s) ===
+fm-decide: recorded dd-live-1 locally; posting to Shortcut in the background
+exit=0 wall=0.33s
+decided.md right after record returns:
+- [dd-live-1] 2026-10-31 Ship option B. (shortcut: pending)
+--- target: waiting for the background job ---
+stamped 6.6s after record returned
+target decided.md after job:
+- [dd-live-1] 2026-10-31 Ship option B. (shortcut: sc-7777 https://app.shortcut.com/applypass/story/7777)
+target sync log:
+fm-decide: posted dd-live-1
+target Shortcut calls:
+POST https://api.app.shortcut.com/api/v3/stories
+POST https://api.app.shortcut.com/api/v3/stories/7777/comments

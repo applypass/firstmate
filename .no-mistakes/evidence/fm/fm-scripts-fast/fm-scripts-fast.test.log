@@ -1,0 +1,10 @@
+1..7
+ok - the cursor-backed open-decision fold equals the whole-log fold
+ok - fm-send --resolve-key answers in 3116 ms on a 2500-line status log
+ok - a warm fm-wake-drain folds only the appended 61 bytes and finishes in 2790 ms on a 2500-line status log
+ok - fm-wake-drain walks two unread 2500-line status logs in 4412 ms
+ok - fm-decide record returns in 117 ms and the background job stamps the entry
+ok - a decision with no story is recorded at once and gets its chore story from the background job
+ok - a failed post leaves the entry pending, queues one note for the primary, and sync posts it later
+FM_TEST_COMPLETE
+bash tests/fm-scripts-fast.test.sh  22.55s user 39.79s system 68% cpu 1:30.50 total

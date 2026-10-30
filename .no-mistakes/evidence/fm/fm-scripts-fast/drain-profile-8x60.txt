@@ -1,0 +1,92 @@
+== base
+wall span 6.96 pids 2
+-- script
+   5.55 fm-classify-lib.sh
+   0.92 fm-wake-drain.sh
+   0.47 fm-wake-lib.sh
+   0.15 fm-supervision-engine-lib.sh
+   0.01 fm-guard.sh
+   0.01 fm-afk-contract.sh
+   0.01 fm-tangle-lib.sh
+   0.01 fm-parent-channel-lib.sh
+   0.01 fm-lease-lib.sh
+   0.01 fm-path-lib.sh
+-- func
+   1.74 fm-classify-lib.sh:_fm_open_decisions_file_ident
+   0.54 fm-classify-lib.sh:status_presentation_cursor_offset
+   0.53 fm-classify-lib.sh:status_new_lines_since_cursor
+   0.52 fm-wake-drain.sh:print_record_divergence_section
+   0.48 fm-classify-lib.sh:_fm_status_file_size
+   0.42 fm-classify-lib.sh:status_line_is_unread_surface
+   0.35 fm-classify-lib.sh:status_open_decisions_incremental
+   0.30 fm-classify-lib.sh:_fm_open_decisions_cursor_path
+   0.30 fm-classify-lib.sh:status_outcome_backstop_cursor_offset
+   0.22 fm-classify-lib.sh:status_line_verb
+-- line
+   0.60 fm-classify-lib.sh:1234
+   0.54 fm-classify-lib.sh:1236
+   0.52 fm-wake-drain.sh:540
+   0.46 fm-classify-lib.sh:1253
+   0.46 fm-classify-lib.sh:1235
+   0.28 fm-classify-lib.sh:2036
+   0.26 fm-classify-lib.sh:2052
+   0.22 fm-wake-drain.sh:248
+   0.15 fm-classify-lib.sh:689
+   0.15 fm-classify-lib.sh:1199
+-- cmd
+   1.94 stat
+   0.90 '['
+   0.52 fm_run_timed
+   0.50 _fm_status_read_span
+   0.48 printf
+   0.30 fm-harness.sh
+   0.24 command
+   0.22 fm-guard.sh
+   0.18 rm
+   0.17 basename
+== target
+wall span 4.23 pids 2
+-- script
+   1.69 fm-classify-lib.sh
+   1.14 fm-fast-lib.sh
+   0.92 fm-wake-drain.sh
+   0.58 fm-wake-lib.sh
+   0.30 fm-supervision-engine-lib.sh
+   0.03 fm-guard.sh
+   0.02 fm-tangle-lib.sh
+   0.01 fm-supervision-lib.sh
+   0.01 fm-lease-lib.sh
+   0.01 fm-afk-contract.sh
+-- func
+   0.67 fm-fast-lib.sh:_fm_open_decisions_file_ident
+   0.50 fm-wake-drain.sh:assert_watcher_liveness
+   0.44 fm-classify-lib.sh:_fm_status_file_size
+   0.37 fm-wake-lib.sh:fm_supervision_model
+   0.32 fm-classify-lib.sh:status_open_decisions_incremental
+   0.31 fm-wake-drain.sh:print_record_divergence_section
+   0.30 fm-classify-lib.sh:status_new_lines_since_cursor
+   0.29 fm-supervision-engine-lib.sh:fm_supervision_host_primary
+   0.22 fm-classify-lib.sh:status_snapshot_latest_event
+   0.19 fm-fast-lib.sh:status_presentation_cursor_offset
+-- line
+   0.55 fm-fast-lib.sh:59
+   0.50 fm-wake-drain.sh:248
+   0.42 fm-classify-lib.sh:1253
+   0.37 fm-wake-lib.sh:256
+   0.31 fm-wake-drain.sh:540
+   0.29 fm-supervision-engine-lib.sh:64
+   0.18 fm-classify-lib.sh:2036
+   0.10 fm-classify-lib.sh:1375
+   0.09 fm-fast-lib.sh:114
+   0.09 fm-classify-lib.sh:1488
+-- cmd
+   1.03 stat
+   0.66 fm-harness.sh
+   0.50 fm-guard.sh
+   0.37 _fm_status_read_span
+   0.31 fm_run_timed
+   0.30 '['
+   0.21 command
+   0.17 printf
+   0.14 rm
+   0.06 read

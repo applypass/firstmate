@@ -1,0 +1,28 @@
+base record --story wall=4.723s entry-now: - [live-1] 2026-10-31 Ship option B. (shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523)
+base record (chore) wall=6.399s entry-now: - [live-2] 2026-10-31 No story yet. (shortcut: sc-7777 https://app.shortcut.com/applypass/story/7777)
+target record --story wall=0.561s entry-now: - [live-1] 2026-10-31 Ship option B. (shortcut: pending sc-6523)
+target record (chore) wall=0.052s entry-now: - [live-2] 2026-10-31 No story yet. (shortcut: pending)
+target after background: 2 lines
+- [live-1] 2026-10-31 Ship option B. (shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523)
+- [live-2] 2026-10-31 No story yet. (shortcut: sc-7777 https://app.shortcut.com/applypass/story/7777)
+target curl calls:
+POST https://api.app.shortcut.com/api/v3/stories
+POST https://api.app.shortcut.com/api/v3/stories/6523/comments
+BODY {"name":"Decision: live-2","description":"Captain decision live-2: No story yet.","story_type":"chore","group_id":"649562cb-7f18-471f-835f-7ed28a5abf0a","workflow_state_id":500000006,"owner_ids":["11111111-2222-4333-8444-555555555555"]}
+BODY {"text":"Captain decision [live-1]: Ship option B."}
+POST https://api.app.shortcut.com/api/v3/stories/7777/comments
+BODY {"text":"Captain decision [live-2]: No story yet."}
+fail: job gave up
+fail: entry: - [live-3] 2026-10-31 Will not post. (shortcut: pending sc-6523)
+fail: inbox notes for main:
+1793398535-BHazq1.note
+id=1793398535-BHazq1
+at=2026-10-30T22:15:35Z
+source=text
+announce_marker=1
+request_id=fm-decide-sync-live-3
+fail: audit rc: 1
+race: sync A: fm-decide: posted live-3 
+race: sync B: fm-decide: another run is posting live-3; skipped 
+race: comment POSTs on sc-6523: 1
+race: entry: - [live-3] 2026-10-31 Will not post. (shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523)

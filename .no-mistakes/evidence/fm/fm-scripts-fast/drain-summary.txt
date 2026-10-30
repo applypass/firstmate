@@ -1,0 +1,18 @@
+m8x60 base mates=8 lines=60 unread_span_ms=6654 warm_ms: 3252 14523 5668
+m8x60 target mates=8 lines=60 unread_span_ms=9226 warm_ms: 4469 4285 5429
+m6x400 base mates=6 lines=400 unread_span_ms=16801 warm_ms: 2372 2271 2434
+m6x400 target mates=6 lines=400 unread_span_ms=12512 warm_ms: 2612 2651 2915
+m4x2500 base mates=4 lines=2500 unread_span_ms=49117 warm_ms: 3409 3645 2844
+m4x2500 target mates=4 lines=2500 unread_span_ms=30380 warm_ms: 2122 2184 1977
+m8x60 cold identical
+m8x60 warm1 identical
+m8x60 warm2 identical
+m8x60 warm3 identical
+m6x400 cold identical
+m6x400 warm1 identical
+m6x400 warm2 identical
+m6x400 warm3 identical
+m4x2500 cold identical
+m4x2500 warm1 identical
+m4x2500 warm2 identical
+m4x2500 warm3 identical

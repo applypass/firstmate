@@ -1,0 +1,12 @@
+q6x400 base mates=6 lines=400 unread_span_ms=8026 warm_ms: 1779 1590 1611
+q6x400 target mates=6 lines=400 unread_span_ms=6328 warm_ms: 1649 2021 2059
+q4x2500 base mates=4 lines=2500 unread_span_ms=34112 warm_ms: 1413 1387 1354
+q4x2500 target mates=4 lines=2500 unread_span_ms=23162 warm_ms: 1777 1683 1228
+q6x400 cold identical
+q6x400 warm1 identical
+q6x400 warm2 identical
+q6x400 warm3 identical
+q4x2500 cold identical
+q4x2500 warm1 identical
+q4x2500 warm2 identical
+q4x2500 warm3 identical

@@ -1,0 +1,4 @@
+ok - a status resolution over a still-open captain-held task is signalled, not closed
+fm-decide: warning: Shortcut ticket sync is off in this home, so a decision cannot be given a story; turn it on (see docs/configuration.md)
+ok - a captain call with no routed work, a verified transfer, an open decision, and an answered call all stay silent
+ok - cleanup preserves every byte of a retained body's non-ASCII characters

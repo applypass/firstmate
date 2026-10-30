@@ -1,0 +1,25 @@
+=== record dd-live-2 --story sc-6523 while Shortcut answers 500 to every call (3 tries, 1 s then 3 s waits) ===
+fm-decide: recorded dd-live-2 locally; posting to Shortcut in the background
+record returned in 0.19s
+- [dd-live-2] 2026-10-31 Keep the old flow. (shortcut: pending sc-6523)
+job gave up 5.1s after record
+--- sync log ---
+fm-shortcut-ticket: could not comment on sc-6523 (HTTP 500) (queued for retry: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-live.e8UiDn/home-fail/state/shortcut-pending)
+fm-shortcut-ticket: could not comment on sc-6523 (HTTP 500) (queued for retry: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-live.e8UiDn/home-fail/state/shortcut-pending)
+fm-shortcut-ticket: could not comment on sc-6523 (HTTP 500) (queued for retry: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-live.e8UiDn/home-fail/state/shortcut-pending)
+fm-decide: decision dd-live-2 is recorded locally but could not be posted to Shortcut after 3 tries
+--- decided.md (still pending) ---
+- [dd-live-2] 2026-10-31 Keep the old flow. (shortcut: pending sc-6523)
+--- audit ---
+- [dd-live-2] 2026-10-31 Keep the old flow. (shortcut: pending sc-6523)
+audit exit=1
+--- comment attempts made ---
+grep: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-live.e8UiDn/home-fail/curl.log: No such file or directory
+=== the primary's next wake drain (fm-wake-drain.sh, FM_HOME=lab) ===
+1793395347	1	check	inbox:1793395347-aYeL7q	check: captain inbox note 1793395347-aYeL7q - Decision dd-live-2 is in data/decided.md but is not on Shortcut after 3 tries. Run: '/var/folders/vr
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 32485.1793395347.CAfJ2i
+=== Shortcut is back: fm-decide.sh sync dd-live-2 ===
+fm-decide: posted dd-live-2
+sync exit=0
+- [dd-live-2] 2026-10-31 Keep the old flow. (shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523)
+audit exit=0

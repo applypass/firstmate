@@ -1,0 +1,17 @@
+fm-decide: recorded live-3 locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.hN6clr/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fmbench/target/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
