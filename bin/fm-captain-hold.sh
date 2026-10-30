@@ -2190,9 +2190,15 @@ shortcut_comment_answer() {  # <task-id>
   ( task_show "$1" && FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA "$SCRIPT_DIR/fm-decide.sh" record "$1-$(resolution_record_count "$(show_field "$TASK_SHOW_OUTPUT" body)")" "$DECISION_TEXT" --item "$1" --best-effort ) || true
 }
 
+# Fork-only: the captain wait clock runs from the recorded hold to the recorded answer (bin/fm-task-ledger.sh; best-effort).
+ledger_wait() {  # <start|end> <task-id> ...
+  FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA "$SCRIPT_DIR/fm-task-ledger.sh" "wait-$1" "$2" >/dev/null 2>&1 || true
+}
+# Fork-only end
+
 case "${1:-}" in
-  hold) shift; command_hold "$@" ;;
-  answer) shift; command_answer "$@"; shortcut_comment_answer "$@" ;;
+  hold) shift; command_hold "$@"; ledger_wait start "$@" ;;
+  answer) shift; command_answer "$@"; shortcut_comment_answer "$@"; ledger_wait end "$@" ;;
   answers) shift; command_answers "$@" ;;
   reconcile-requests) shift; command_reconcile_requests "$@" ;;
   bind) shift; command_bind "$@" ;;

@@ -130,6 +130,54 @@ test_merge_refusals() {
   pass "merge and local landing are refused without pr-ready and captain-approval"
 }
 
+test_captain_wait_clock_includes_away_time() {
+  local out
+  "$LEDGER" record w1 intake-start --at 1000
+  "$LEDGER" wait-start w1 --at 1100 --note "design pick"
+  # A second ask before the first answer does not restart the clock.
+  "$LEDGER" wait-start w1 --at 1200
+  : > "$FM/state/.afk"
+  "$LEDGER" wait-end w1 --at 5000
+  rm -f "$FM/state/.afk"
+  out=$("$LEDGER" summary w1 --now 9000)
+  assert_contains "$out" "captain_wait_seconds=3900" "the clock runs from the first ask to the answer, away time included"
+  assert_contains "$out" "open_captain_wait=0" "answered wait is closed"
+  "$LEDGER" wait-start w1 --at 6000
+  out=$("$LEDGER" summary w1 --now 7000)
+  assert_contains "$out" "captain_wait_seconds=4900" "an open ask counts up to now"
+  assert_contains "$out" "open_captain_wait=1" "open ask is reported"
+  pass "captain wait clock runs from recorded ask to recorded answer"
+}
+
+test_wait_end_after_pr_ready_records_approval() {
+  "$LEDGER" record w2 pr-ready --at 100
+  "$LEDGER" wait-start w2 --at 200
+  "$LEDGER" wait-end w2 --at 300
+  "$LEDGER" has w2 captain-approval || fail "answer to the post-ready ask is the approval"
+  assert_equals "300" "$(jq -r 'select(.event == "captain-approval") | .at' "$(ledger_file w2)")" "approval time is the answer time"
+  "$LEDGER" record w3 intake-start --at 1
+  "$LEDGER" wait-start w3 --at 2
+  "$LEDGER" wait-end w3 --at 3
+  "$LEDGER" has w3 captain-approval && fail "a pre-ready answer is not a merge approval"
+  pass "an answer to an ask opened after pr-ready records captain-approval"
+}
+
+test_captain_hold_records_the_wait() {
+  local fm="$TMP_ROOT/holdhome"
+  mkdir -p "$fm/data" "$fm/state"
+  # Drive the real hold and answer commands against a fixture backlog.
+  command -v tasks-axi >/dev/null 2>&1 || { pass "fm-captain-hold records the wait around hold and answer (skipped: tasks-axi absent)"; return 0; }
+  printf '## In flight\n\n## Queued\n\n## Done\n' > "$fm/data/backlog.md"
+  FM_HOME=$fm "$ROOT/bin/fm-tasks-axi.sh" add hold-t "Hold test" --kind ship >/dev/null 2>&1
+  FM_HOME=$fm "$ROOT/bin/fm-captain-hold.sh" hold hold-t --reason "pick one" >/dev/null 2>&1
+  printf 'option a\n' > "$fm/decision.txt"
+  FM_HOME=$fm "$ROOT/bin/fm-captain-hold.sh" answer hold-t --decision-file "$fm/decision.txt" --release >/dev/null 2>&1
+  local f="$fm/data/ticket-ledger/hold-t.jsonl"
+  assert_contains "$(jq -r .event "$f" | tr '\n' ' ')" "captain-wait-start" "hold recorded the ask"
+  assert_contains "$(jq -r .event "$f" | tr '\n' ' ')" "captain-wait-end" "answer recorded the answer"
+  pass "fm-captain-hold records the wait around hold and answer"
+}
+
 fm_test_run \
   test_record_appends_json_lines \
   test_record_rejects_unknown_event \
@@ -139,4 +187,7 @@ fm_test_run \
   test_record_once_skips_a_repeat \
   test_require_off_switch \
   test_spawn_refuses_without_intake_and_planning \
-  test_merge_refusals
+  test_merge_refusals \
+  test_captain_wait_clock_includes_away_time \
+  test_wait_end_after_pr_ready_records_approval \
+  test_captain_hold_records_the_wait
