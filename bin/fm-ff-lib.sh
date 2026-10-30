@@ -27,7 +27,7 @@
 # The seeded .fm-secondmate-home identity marker is gitignored too; the local
 # sync tolerates only that marker during the one-time upgrade of pre-ignore
 # linked-worktree homes.
-# A clean secondmate divergence is reconciled only when a three-way tree proof
+# A clean secondmate divergence is reconciled only when a content merge proof
 # shows that its complete local result is already present in the target, as
 # happens after an upstream squash merge. Every other divergence stays put and
 # records an inspectable state/.secondmate-update-reconcile/<id>.pending marker
@@ -323,12 +323,22 @@ secondmate_update_reconcile_clear() { # <state> <id>
   rm -f -- "$marker"
 }
 
-# Prove that merging LOCAL into TARGET from their real merge base adds no tree
-# change to TARGET. A temporary index performs the three-way comparison without
-# touching the worktree or writing a merge commit. Conflicts or any remaining
-# content difference are not redundant and therefore stay diverged.
+# Prove that merging LOCAL into TARGET adds no tree change to TARGET. The proof is
+# a content merge (git merge-tree --write-tree), so a file both sides edited in
+# different places still counts as redundant. It writes only loose objects: no
+# worktree, no index, no merge commit. Conflicts or any remaining content
+# difference are not redundant and therefore stay diverged. A git without
+# merge-tree --write-tree (before 2.38) falls back to a stricter file-level
+# three-way read-tree in a temporary index.
 divergence_is_redundant() { # <dir> <local-commit> <target-commit>
-  local dir=$1 local_commit=$2 target_commit=$3 ancestor scratch index result=1
+  local dir=$1 local_commit=$2 target_commit=$3 ancestor scratch index result=1 merged rc
+  merged=$(git -C "$dir" merge-tree --write-tree "$target_commit" "$local_commit" 2>/dev/null)
+  rc=$?
+  if [ "$rc" -eq 0 ]; then
+    [ "$(printf '%s\n' "$merged" | head -1)" = "$(git -C "$dir" rev-parse --verify "$target_commit^{tree}" 2>/dev/null)" ]
+    return
+  fi
+  [ "$rc" -eq 1 ] && return 1
   ancestor=$(git -C "$dir" merge-base "$local_commit" "$target_commit" 2>/dev/null) || return 1
   scratch=$(mktemp -d "${TMPDIR:-/tmp}/fm-ff-redundant.XXXXXX" 2>/dev/null) || return 1
   index="$scratch/index"
