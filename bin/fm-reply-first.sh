@@ -10,13 +10,16 @@
 # usage:
 #   <PreToolUse JSON on stdin> | fm-reply-first.sh pretool [--claude]
 #   fm-reply-first.sh arm <captain-direct|firstmate> [--transcript <path>]
+#   fm-reply-first.sh clear
 #   fm-reply-first.sh enabled
 #
 # arm      opens a reply window: the message arrived, no command has run, no
 #          reply was seen. bin/fm-captain-direct.sh calls it for a message the
-#          captain typed into the pane and for Firstmate traffic (the steering
-#          doorbell or a [fm-from-firstmate] message). A new message replaces
-#          the old window.
+#          captain typed into the pane. A new message replaces the old window.
+# clear    closes the window. bin/fm-captain-direct.sh calls it when Firstmate
+#          traffic (the steering doorbell or a [fm-from-firstmate] message)
+#          arrives: routed work is not a question to answer first, and a mate
+#          doing it must not be refused its fourth command.
 # pretool  runs on every tool call. While a window is open and unanswered it
 #          counts the call. The call after the limit (default 3,
 #          FM_REPLY_FIRST_LIMIT) is refused once (exit 2, the reason on
@@ -85,6 +88,13 @@ lock_take() {
   done
 }
 lock_drop() { rmdir "$LOCK" 2>/dev/null || true; }
+
+cmd_clear() {
+  enabled || exit 0
+  lock_take || exit 0
+  rm -f "$WINDOW"
+  lock_drop
+}
 
 win_get() {  # <key>
   [ -f "$WINDOW" ] || return 0
@@ -193,6 +203,7 @@ cmd_pretool() {
 case "${1:-}" in
   pretool) shift; cmd_pretool "$@" ;;
   arm) shift; cmd_arm "$@" ;;
+  clear) cmd_clear ;;
   enabled) enabled; exit $? ;;
   -h|--help) usage; exit 0 ;;
   *) usage >&2; exit 2 ;;

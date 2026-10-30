@@ -41,6 +41,8 @@ Routing order for a question about a second mate's work: the owning mate, then a
 
 `bin/fm-reply-first.sh` counts tool calls after a message that expects an answer.
 After 3 calls without a reply, the next call is refused once with "answer now with what you have, hand the rest off".
+The window opens only for a message the captain typed into the pane.
+Routed work from the main firstmate (the steering doorbell or a `[fm-from-firstmate]` message) closes any open window, so a mate doing routed work is never refused its fourth command.
 A reply is a `bin/fm-secondmate-report.sh` call, or assistant text of 200 characters or more.
 `FM_REPLY_FIRST_LIMIT` and `FM_REPLY_FIRST_MIN_CHARS` tune it.
 The latency report of 2026-10-30 found the main firstmate broke this budget on 55% of captain messages.

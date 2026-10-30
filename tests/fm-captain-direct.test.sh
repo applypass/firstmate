@@ -117,9 +117,11 @@ test_reply_window_is_armed() {
   hook 'quick question'
   grep -q '^source=captain-direct$' "$MATE/state/.reply-first" || fail "captain-direct did not arm the reply window"
   hook ': Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your '"'mate-a.inbox'"' steering inbox'
-  grep -q '^source=firstmate$' "$MATE/state/.reply-first" || fail "the doorbell did not re-arm the window as firstmate"
-  grep -q '^count=0$' "$MATE/state/.reply-first" || fail "a new message did not reset the count"
-  pass "captain-direct and doorbell messages open a fresh reply window"
+  [ ! -e "$MATE/state/.reply-first" ] || fail "the doorbell did not close the captain's reply window"
+  hook 'quick question'
+  hook "$(printf '[fm-from-firstmate]\xE2\x81\xA3 audit the invoice queue')"
+  [ ! -e "$MATE/state/.reply-first" ] || fail "a from-firstmate message did not close the reply window"
+  pass "a captain message opens the reply window; firstmate traffic closes it"
 }
 
 test_installer() {

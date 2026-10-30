@@ -12,8 +12,9 @@
 #   Firstmate traffic - the steering doorbell (": Firstmate ..."), a
 #   [fm-from-firstmate] message, any operational input (bin/fm-operational-input.sh),
 #   or a harness <task-notification> - is not the captain. It adds nothing to the
-#   conversation. A doorbell or from-firstmate message opens a reply window for
-#   bin/fm-reply-first.sh.
+#   conversation. A doorbell or from-firstmate message closes any open reply
+#   window of bin/fm-reply-first.sh, because routed work is not a question to
+#   answer first.
 #
 #   Anything else a human typed is captain-direct. The hook appends one line to
 #   the mate's parent channel (the file bin/fm-secondmate-report.sh writes,
@@ -71,22 +72,23 @@ TEXT=${PROMPT#"${PROMPT%%[![:space:]]*}"}
 TEXT=${TEXT%"${TEXT##*[![:space:]]}"}
 [ -n "$TEXT" ] || exit 0
 
-arm() {  # <captain-direct|firstmate>
-  local args=("$1")
+arm() {
+  local args=(captain-direct)
   [ -z "$TRANSCRIPT" ] || args+=(--transcript "$TRANSCRIPT")
   "$SCRIPT_DIR/fm-reply-first.sh" arm "${args[@]}" >/dev/null 2>&1 || true
 }
+disarm() { "$SCRIPT_DIR/fm-reply-first.sh" clear >/dev/null 2>&1 || true; }
 
 # Firstmate's own traffic, never the captain.
 case "$TEXT" in
   '<task-notification>'*) exit 0 ;;
   ': Firstmate instruction waiting:'*|'[fm-from-firstmate]'*|*$'\xE2\x81\xA3''[fm-from-firstmate]'*)
-    arm firstmate
+    disarm
     exit 0
     ;;
 esac
 kind=$(printf '%s' "$TEXT" | "$SCRIPT_DIR/fm-operational-input.sh" classify 2>/dev/null) && {
-  [ "$kind" != from-firstmate ] || arm firstmate
+  [ "$kind" != from-firstmate ] || disarm
   exit 0
 }
 if printf '%s' "$TEXT" | FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-operational-input.sh" doorbell-kind >/dev/null 2>&1; then
@@ -105,7 +107,7 @@ REPORTED=yes
   . "$SCRIPT_DIR/fm-parent-channel-lib.sh"
   fm_parent_channel_report "$FM_HOME" "$STATE" "captain-direct: $SHORT"
 ) >/dev/null 2>&1 || REPORTED=no
-arm captain-direct
+arm
 
 NOTE="[captain-direct] The captain typed the message above straight into your pane. It is not a Firstmate message. Answer him here, now, in plain captain style: lead with the answer, short sentences, the outcome and what it means for him, no internal jargon."
 if [ "$REPORTED" = yes ]; then

@@ -97,6 +97,24 @@ test_new_message_resets_the_count() {
   pass "a new message opens a fresh window"
 }
 
+test_clear_closes_the_window() {
+  make_home clear mate
+  arm captain-direct
+  call 'ls'; call 'ls'; call 'ls'
+  FM_HOME="$H" "$RF" clear
+  call 'ls'; expect_code 0 "$RC" "a closed window refuses nothing"
+  pass "clear closes the window, so routed work is never refused"
+}
+
+test_clear_closes_the_window() {
+  make_home clear mate
+  arm captain-direct
+  call 'ls'; call 'ls'; call 'ls'
+  FM_HOME="$H" "$RF" clear
+  call 'ls'; expect_code 0 "$RC" "a closed window refuses nothing"
+  pass "clear closes the window, so routed work is never refused"
+}
+
 test_no_window_no_refusal() {
   make_home idle mate
   local i
@@ -151,6 +169,7 @@ test_a_parent_report_is_a_reply
 test_substantial_text_is_a_reply_and_narration_is_not
 test_text_from_before_the_message_does_not_count
 test_new_message_resets_the_count
+test_clear_closes_the_window
 test_no_window_no_refusal
 test_switch_is_per_home
 test_limit_is_tunable_and_broken_input_fails_open
