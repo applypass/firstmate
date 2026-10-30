@@ -452,7 +452,8 @@ EOF
 # In no-mistakes mode the body may come from the pipeline's pr.template or from the worker's own
 # gh-axi call, and either may lack these parts, so the rule also has the worker read the finished
 # body back (`gh-axi pr view --full`, since the plain view truncates) and rewrite it whole.
-fm_dod_pr_description_block() {  # <direct-PR|no-mistakes>
+# On Forgejo the read-back and rewrite use tea, never gh-axi.
+fm_dod_pr_description_block() {  # <direct-PR|no-mistakes> [<forge>]
   cat <<'EOF'
 ## PR description
 Write every PR body in three parts, in this order, so a non-developer can follow the first two.
@@ -461,12 +462,21 @@ Write every PR body in three parts, in this order, so a non-developer can follow
 3. Technical details: Problem / Fix / Proof as tight bullets, never prose blobs. Name files, functions, tests and commands here.
 EOF
   if [ "$1" = no-mistakes ]; then
-    cat <<'EOF'
+    if [ "${2:-}" = forgejo ]; then
+      cat <<'EOF'
+Whoever wrote the PR body, you or the pipeline from the project's own template, it may lack these parts.
+After /no-mistakes reports CI green, read the body back from the `body` field of `tea api --repo <owner>/<repo> /repos/{owner}/{repo}/pulls/<number>`.
+If the plain "Why" or "What this changes" section, the worked example, the before/after block, or the technical details is missing or out of order, write the complete body (every existing section, including the Pipeline section the pipeline appended, plus the additions) to a file and apply it with `tea pulls edit <number> --repo <owner>/<repo> --description "$(cat <file>)"`, which replaces the whole body.
+A PR body edit is not a commit, so it does not break the pushed-head check.
+EOF
+    else
+      cat <<'EOF'
 Whoever wrote the PR body, you or the pipeline from the project's own template, it may lack these parts.
 After /no-mistakes reports CI green, read the body back with `gh-axi pr view <number> --full`; the plain view truncates long bodies and would hide these sections at the end.
 If the plain "Why" or "What this changes" section, the worked example, the before/after block, or the technical details is missing or out of order, write the complete body (every existing section, including the Pipeline section the pipeline appended, plus the additions) to a file and apply it with `gh-axi pr edit <number> --body-file <file>`, which replaces the whole body.
 A PR body edit is not a commit, so it does not break the pushed-head check.
 EOF
+    fi
   fi
 }
 # Fork-only end
@@ -631,7 +641,7 @@ EOF
       fi
       fm_nm_driving_block "$forge"
       echo  # Fork-only
-      fm_dod_pr_description_block no-mistakes  # Fork-only
+      fm_dod_pr_description_block no-mistakes "$forge"  # Fork-only
       cat <<EOF
 
 After /no-mistakes reports CI green (the CI-ready return point - do not wait for it to keep monitoring in the background until merge), read the PR back from the forge and confirm it is not a draft $draft_check
