@@ -9,17 +9,17 @@
 #
 # usage:
 #   <PreToolUse JSON on stdin> | fm-reply-first.sh pretool [--claude]
-#   fm-reply-first.sh arm <captain-direct|firstmate> [--transcript <path>]
+#   fm-reply-first.sh arm [--transcript <path>]
 #   fm-reply-first.sh clear
 #   fm-reply-first.sh enabled
 #
 # arm      opens a reply window: the message arrived, no command has run, no
 #          reply was seen. bin/fm-captain-direct.sh calls it for a message the
 #          captain typed into the pane. A new message replaces the old window.
-# clear    closes the window. bin/fm-captain-direct.sh calls it when Firstmate
-#          traffic (the steering doorbell or a [fm-from-firstmate] message)
-#          arrives: routed work is not a question to answer first, and a mate
-#          doing it must not be refused its fourth command.
+# clear    closes the window. bin/fm-captain-direct.sh calls it for every
+#          other prompt (Firstmate traffic, operational input, a harness
+#          notification): each new prompt ends the turn that answered the
+#          captain, and routed work is not a question to answer first.
 # pretool  runs on every tool call. While a window is open and unanswered it
 #          counts the call. The call after the limit (default 3,
 #          FM_REPLY_FIRST_LIMIT) is refused once (exit 2, the reason on
@@ -33,18 +33,15 @@
 # Only a call after a message that opened a window is ever refused, and the
 # parent report call is never counted or refused.
 #
-# SWITCH. config/reply-first: "on" enables the hook in every home, "off"
-# disables it everywhere, and absent (or "mates") enables it only in a secondmate
-# home (a home with a .fm-secondmate-home marker). A main home stays off until
-# its operator writes "on"; nothing else is needed to adopt it there.
+# SCOPE. Only a secondmate home (a home with a .fm-secondmate-home marker).
 #
-# FILES. state/.reply-first holds the window as key=value lines (epoch, source,
-# count, replied, fired, transcript, base); state/.reply-first.lock is a mkdir
+# FILES. state/.reply-first holds the window as key=value lines (epoch, count,
+# replied, fired, transcript, base); state/.reply-first.lock is a mkdir
 # lock around each read-modify-write. The hook is silent and allows the call
 # when anything is unreadable or not in scope: a broken hook never blocks work.
 #
 # Callers: bin/fm-mate-hooks-install.sh registers pretool in a secondmate's
-# untracked .claude/settings.local.json; bin/fm-captain-direct.sh calls arm.
+# untracked .claude/settings.local.json; bin/fm-captain-direct.sh calls arm and clear.
 # docs/captain-direct-mate-access.md owns the operator view.
 set -u
 
@@ -52,7 +49,6 @@ SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P) || e
 FM_ROOT=${FM_ROOT_OVERRIDE:-$(CDPATH='' cd -- "$SCRIPT_DIR/.." && pwd -P)} || exit 0
 FM_HOME=${FM_HOME:-${CLAUDE_PROJECT_DIR:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}}
 STATE=${FM_STATE_OVERRIDE:-$FM_HOME/state}
-CONFIG=${FM_CONFIG_OVERRIDE:-$FM_HOME/config}
 WINDOW="$STATE/.reply-first"
 LOCK="$STATE/.reply-first.lock"
 LIMIT=${FM_REPLY_FIRST_LIMIT:-3}
@@ -67,14 +63,7 @@ usage() { sed -n '2,/^set -u/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; }
 
 # 0 when the hook is on for this home.
 enabled() {
-  local mode=
-  [ -d "$STATE" ] || return 1
-  [ ! -f "$CONFIG/reply-first" ] || read -r mode < "$CONFIG/reply-first" 2>/dev/null || true
-  case "$mode" in
-    on) return 0 ;;
-    off) return 1 ;;
-  esac
-  fm_root_is_secondmate_home "$FM_HOME"
+  [ -d "$STATE" ] && fm_root_is_secondmate_home "$FM_HOME"
 }
 
 lock_take() {
@@ -105,8 +94,8 @@ win_get() {  # <key>
 win_write() {
   local tmp
   tmp=$(mktemp "$WINDOW.XXXXXX") || return 1
-  if printf 'epoch=%s\nsource=%s\ncount=%s\nreplied=%s\nfired=%s\ntranscript=%s\nbase=%s\n' \
-    "$w_epoch" "$w_source" "$w_count" "$w_replied" "$w_fired" "$w_transcript" "$w_base" > "$tmp"; then
+  if printf 'epoch=%s\ncount=%s\nreplied=%s\nfired=%s\ntranscript=%s\nbase=%s\n' \
+    "$w_epoch" "$w_count" "$w_replied" "$w_fired" "$w_transcript" "$w_base" > "$tmp"; then
     mv -f "$tmp" "$WINDOW"
   else
     rm -f "$tmp"
@@ -115,9 +104,7 @@ win_write() {
 }
 
 cmd_arm() {
-  local source=${1:-} transcript=
-  case "$source" in captain-direct|firstmate) ;; *) usage >&2; exit 2 ;; esac
-  shift
+  local transcript=
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --transcript) transcript=${2:-}; shift 2 || break ;;
@@ -130,7 +117,7 @@ cmd_arm() {
     w_base=$(wc -l < "$transcript" 2>/dev/null | tr -d ' ')
     case "$w_base" in ''|*[!0-9]*) w_base=0 ;; esac
   fi
-  w_epoch=$(date +%s) w_source=$source w_count=0 w_replied=0 w_fired=0 w_transcript=$transcript
+  w_epoch=$(date +%s) w_count=0 w_replied=0 w_fired=0 w_transcript=$transcript
   lock_take || exit 0
   win_write
   lock_drop
@@ -159,7 +146,7 @@ cmd_pretool() {
   command=$(printf '%s' "$payload" | jq -r '(.tool_input.command // .toolInput.command // empty)' 2>/dev/null) || exit 0
   transcript=$(printf '%s' "$payload" | jq -r '(.transcript_path // empty)' 2>/dev/null) || transcript=
   lock_take || exit 0
-  w_epoch=$(win_get epoch) w_source=$(win_get source) w_count=$(win_get count)
+  w_epoch=$(win_get epoch) w_count=$(win_get count)
   w_replied=$(win_get replied) w_fired=$(win_get fired) w_transcript=$(win_get transcript) w_base=$(win_get base)
   case "$w_count" in ''|*[!0-9]*) lock_drop; exit 0 ;; esac
   case "$w_base" in ''|*[!0-9]*) w_base=0 ;; esac
@@ -191,9 +178,7 @@ cmd_pretool() {
   w_fired=1
   win_write
   lock_drop
-  local who="the captain's message"
-  [ "$w_source" = captain-direct ] || who="the message from firstmate"
-  local reason="[reply-first] You have run $LIMIT commands since $who and have not answered yet. This call was not run. Answer now, in plain words, with what you have so far, and hand the rest off: name what is still open and who or what will do it (a status line to the parent with bin/fm-secondmate-report.sh, or a crewmate). Dig further only after the answer is out."
+  local reason="[reply-first] You have run $LIMIT commands since the captain's message and have not answered yet. This call was not run. Answer now, in plain words, with what you have so far, and hand the rest off: name what is still open and who or what will do it (a status line to the parent with bin/fm-secondmate-report.sh, or a crewmate). Dig further only after the answer is out."
   local escaped
   escaped=$(printf '%s' "$reason" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' | tr '\n' ' ')
   printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"%s"}\n' "$escaped" >&2

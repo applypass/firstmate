@@ -28,6 +28,8 @@ It runs in an empty scratch directory with only the user's settings, so the home
 The session answers from the home's records, reports, and status.
 A PreToolUse hook (`bin/fm-ask-pretool-check.sh`, decision in `bin/fm-ask-command-policy.mjs`) allows only read tools and a list of read-only commands.
 Every other command is refused, including send, spawn, merge, drain, hold, decide, teardown, and backlog writes.
+A read outside the home is refused too: every absolute, `~`, or `..` path in a command must be under the home, and arguments must be written out, not built from variables.
+Git runs only read subcommands, with no `-c` and no option that runs a program.
 The check stops safely: a payload it cannot read or parse is refused.
 
 For a second mate home there is one exception.
@@ -42,14 +44,11 @@ Routing order for a question about a second mate's work: the owning mate, then a
 `bin/fm-reply-first.sh` counts tool calls after a message that expects an answer.
 After 3 calls without a reply, the next call is refused once with "answer now with what you have, hand the rest off".
 The window opens only for a message the captain typed into the pane.
-Routed work from the main firstmate (the steering doorbell or a `[fm-from-firstmate]` message) closes any open window, so a mate doing routed work is never refused its fourth command.
+Every other prompt (the steering doorbell, a `[fm-from-firstmate]` message, operational input, a harness notification) closes any open window, so a mate doing routed work is never refused its fourth command.
 A reply is a `bin/fm-secondmate-report.sh` call, or assistant text of 200 characters or more.
 `FM_REPLY_FIRST_LIMIT` and `FM_REPLY_FIRST_MIN_CHARS` tune it.
 The latency report of 2026-10-30 found the main firstmate broke this budget on 55% of captain messages.
-
-`config/reply-first` is the per-home switch.
-`on` enables the hook in that home, `off` disables it, and an absent file enables it only in a second mate home.
-To adopt it in the main session, write `on` in the main home's `config/reply-first`.
+Reply-first runs only in a second mate home; the main session does not have it.
 
 ## Registration
 

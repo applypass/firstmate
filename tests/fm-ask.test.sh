@@ -78,12 +78,38 @@ test_reads_are_allowed() {
   for c in 'cat data/backlog.md' 'ls state | head -5' 'grep -r audit data' 'jq . data/x.json' 'tail -n 3 state/a.status' \
     'find data -name "*.md"' 'git log --oneline -3' 'git -C . status' 'bin/fm-crew-state.sh mate-a' 'bin/fm-fleet-view.sh --json' \
     'bin/fm-peek.sh mate-a 20' 'bin/fm-tasks-axi.sh list --state queued' 'bin/fm-tasks-axi.sh show x' 'echo hi 2>/dev/null' \
-    'cat a 2>&1 | wc -l' 'for f in a b; do cat $f; done' 'date +%s' 'cat <<EOF
+    'cat a 2>&1 | wc -l' 'for f in a b; do echo $f; done' 'date +%s' "cat $HOME_DIR/data/backlog.md" \
+    "git -C $HOME_DIR log --oneline -3" 'git --no-pager show HEAD' "grep -rn audit $HOME_DIR/data" 'cut -d/ -f2 x' 'cat <<EOF
 hi
 EOF'; do
     assert_allowed "$c"
   done
   pass "read commands, pipelines, and fm read scripts run"
+}
+
+test_git_cannot_run_a_program_or_leave_the_home() {
+  local c
+  for c in "git -c core.fsmonitor='touch /tmp/pwned' status" 'git -ccore.pager=sh log' 'git --config-env=core.pager=X log' \
+    'git --exec-path=/tmp status' 'git --git-dir=/etc/x log' 'git --work-tree=/ status' 'git -C /etc log' 'git -C ../.. log' \
+    'git diff --ext-diff' 'git show --textconv HEAD' 'git cat-file --filters HEAD:x' 'git grep -Ovim x' \
+    'git grep --open-files-in-pager=sh x' 'git diff --no-index /etc/hosts x'; do
+    bash_cmd "$c"
+    expect_code 2 "$RC" "refused: $c"
+  done
+  pass "git takes no -c, no repo or exec override, no program-running option, and no path outside the home"
+}
+
+test_bash_reads_outside_the_home_are_refused() {
+  local c
+  ln -sfn /etc "$HOME_DIR/link"
+  for c in 'cat ~/.ssh/id_ed25519' 'cat /etc/hosts' 'grep -r token ~' "find / -name '*.age'" 'cat ../../etc/hosts' \
+    'cat < /etc/hosts' 'grep --file=/etc/hosts x' 'grep -f/etc/hosts x' 'cat ~root/x' "cat $HOME_DIR/.env" \
+    "cat $HOME_DIR/link/hosts" 'cat $HOME/.ssh/id_rsa' 'x=/etc/hosts; cat $x' 'cat $(echo /etc/hosts)' 'cat {/etc/hosts,x}' \
+    'for f in /etc/hosts; do cat $f; done'; do
+    bash_cmd "$c"
+    expect_code 2 "$RC" "refused: $c"
+  done
+  pass "a Bash read outside the home, of a secret, or through a path the guard cannot see is refused"
 }
 
 test_the_queued_order_is_the_only_exception() {
@@ -244,6 +270,8 @@ test_scripts_are_shellcheck_clean() {
 test_every_named_mutation_is_refused
 test_writes_and_shell_escapes_are_refused
 test_reads_are_allowed
+test_git_cannot_run_a_program_or_leave_the_home
+test_bash_reads_outside_the_home_are_refused
 test_the_queued_order_is_the_only_exception
 test_other_tools_and_paths
 test_the_guard_fails_closed_and_is_inert_elsewhere

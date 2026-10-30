@@ -115,13 +115,19 @@ test_unwritable_parent_channel_is_said() {
 test_reply_window_is_armed() {
   make_world arm
   hook 'quick question'
-  grep -q '^source=captain-direct$' "$MATE/state/.reply-first" || fail "captain-direct did not arm the reply window"
+  grep -q '^count=0$' "$MATE/state/.reply-first" || fail "captain-direct did not arm the reply window"
   hook ': Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your '"'mate-a.inbox'"' steering inbox'
   [ ! -e "$MATE/state/.reply-first" ] || fail "the doorbell did not close the captain's reply window"
   hook 'quick question'
   hook "$(printf '[fm-from-firstmate]\xE2\x81\xA3 audit the invoice queue')"
   [ ! -e "$MATE/state/.reply-first" ] || fail "a from-firstmate message did not close the reply window"
-  pass "a captain message opens the reply window; firstmate traffic closes it"
+  hook 'are you on PR 73?'
+  hook '<task-notification><task-id>x</task-id></task-notification>'
+  [ ! -e "$MATE/state/.reply-first" ] || fail "a task notification after a short reply left the window open"
+  hook 'are you on PR 73?'
+  hook "$(printf 'wake now' | "$ROOT/bin/fm-operational-input.sh" encode watcher)"
+  [ ! -e "$MATE/state/.reply-first" ] || fail "operational input left the window open"
+  pass "a captain message opens the reply window; every other prompt closes it"
 }
 
 test_installer() {

@@ -4,8 +4,7 @@
 #
 # The hook counts tool calls after a message that expects an answer and refuses
 # the call after the limit, once. It is driven with real PreToolUse payloads and
-# real transcript files; no harness runs. A second mate home has it on by
-# default, a main home only with config/reply-first "on".
+# real transcript files; no harness runs. Only a second mate home has it.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -23,7 +22,7 @@ make_home() {
   : > "$TRANSCRIPT"
 }
 
-arm() { FM_HOME="$H" "$RF" arm "$1" --transcript "$TRANSCRIPT"; }
+arm() { FM_HOME="$H" "$RF" arm --transcript "$TRANSCRIPT"; }
 
 # call <command>: one Bash PreToolUse; exit code in RC, stderr in ERR.
 call() {
@@ -38,7 +37,7 @@ say() {  # <text>: the assistant writes text into the transcript
 
 test_refuses_the_fourth_call_once() {
   make_home four mate
-  arm captain-direct
+  arm
   call 'ls'; expect_code 0 "$RC" "call 1"
   call 'cat a'; expect_code 0 "$RC" "call 2"
   call 'cat b'; expect_code 0 "$RC" "call 3"
@@ -53,7 +52,7 @@ test_refuses_the_fourth_call_once() {
 
 test_a_parent_report_is_a_reply() {
   make_home report mate
-  arm firstmate
+  arm
   call 'ls'; call 'ls'
   call 'bin/fm-secondmate-report.sh working abcdef0123456789 "on it, audit half done"'
   expect_code 0 "$RC" "the report call itself runs"
@@ -64,12 +63,12 @@ test_a_parent_report_is_a_reply() {
 
 test_substantial_text_is_a_reply_and_narration_is_not() {
   make_home text mate
-  arm captain-direct
+  arm
   say 'Let me check that.'
   call 'ls'; call 'ls'; call 'ls'
   call 'ls'; expect_code 2 "$RC" "a line of narration is not an answer"
   make_home text2 mate
-  arm captain-direct
+  arm
   call 'ls'
   say "$(printf 'The audit is half done: 40 of 80 invoices are checked, 3 need a fix, and I will report the rest when it finishes. %.0s' 1 2)"
   call 'ls'; call 'ls'; call 'ls'; call 'ls'; call 'ls'
@@ -80,7 +79,7 @@ test_substantial_text_is_a_reply_and_narration_is_not() {
 test_text_from_before_the_message_does_not_count() {
   make_home old mate
   say "$(printf 'An earlier reply to a different message, long enough to count as an answer on its own. %.0s' 1 2 3)"
-  arm captain-direct
+  arm
   call 'ls'; call 'ls'; call 'ls'
   call 'ls'; expect_code 2 "$RC" "text written before the message is ignored"
   pass "only text after the message opens the window counts"
@@ -88,9 +87,9 @@ test_text_from_before_the_message_does_not_count() {
 
 test_new_message_resets_the_count() {
   make_home reset mate
-  arm captain-direct
+  arm
   call 'ls'; call 'ls'; call 'ls'
-  arm firstmate
+  arm
   call 'ls'; call 'ls'; call 'ls'
   expect_code 0 "$RC" "three calls after the new message"
   call 'ls'; expect_code 2 "$RC" "the fourth after the new message is refused"
@@ -99,16 +98,7 @@ test_new_message_resets_the_count() {
 
 test_clear_closes_the_window() {
   make_home clear mate
-  arm captain-direct
-  call 'ls'; call 'ls'; call 'ls'
-  FM_HOME="$H" "$RF" clear
-  call 'ls'; expect_code 0 "$RC" "a closed window refuses nothing"
-  pass "clear closes the window, so routed work is never refused"
-}
-
-test_clear_closes_the_window() {
-  make_home clear mate
-  arm captain-direct
+  arm
   call 'ls'; call 'ls'; call 'ls'
   FM_HOME="$H" "$RF" clear
   call 'ls'; expect_code 0 "$RC" "a closed window refuses nothing"
@@ -122,35 +112,27 @@ test_no_window_no_refusal() {
   pass "calls with no open window are never refused"
 }
 
-test_switch_is_per_home() {
+test_only_a_mate_home_has_it() {
   make_home main main
-  arm captain-direct
-  call 'ls'; call 'ls'; call 'ls'; call 'ls'
-  expect_code 0 "$RC" "a main home is off by default"
-  [ ! -e "$H/state/.reply-first" ] || fail "an off home wrote a window"
   printf 'on\n' > "$H/config/reply-first"
-  arm captain-direct
+  arm
   call 'ls'; call 'ls'; call 'ls'; call 'ls'
-  expect_code 2 "$RC" "config/reply-first on enables a main home"
-  make_home matoff mate
-  printf 'off\n' > "$H/config/reply-first"
-  arm captain-direct
-  call 'ls'; call 'ls'; call 'ls'; call 'ls'
-  expect_code 0 "$RC" "config/reply-first off disables a mate"
-  FM_HOME="$H" "$RF" enabled && fail "enabled reported on for an off mate"
+  expect_code 0 "$RC" "a main home never refuses"
+  [ ! -e "$H/state/.reply-first" ] || fail "a main home wrote a window"
+  FM_HOME="$H" "$RF" enabled && fail "enabled reported on for a main home"
   make_home mate2 mate
-  FM_HOME="$H" "$RF" enabled || fail "a mate home is not on by default"
-  pass "the switch is per home: mates on by default, main off until config says on, off wins"
+  FM_HOME="$H" "$RF" enabled || fail "a mate home is not on"
+  pass "reply-first runs in a second mate home only"
 }
 
 test_limit_is_tunable_and_broken_input_fails_open() {
   make_home limit mate
-  arm captain-direct
+  arm
   FM_REPLY_FIRST_LIMIT=1 call 'ls'
   FM_REPLY_FIRST_LIMIT=1 call 'ls'
   expect_code 2 "$RC" "limit 1 refuses the second call"
   make_home broken mate
-  arm captain-direct
+  arm
   printf 'epoch=x\ncount=zzz\n' > "$H/state/.reply-first"
   call 'ls'; expect_code 0 "$RC" "an unreadable window allows the call"
   printf 'not json' | FM_HOME="$H" "$RF" pretool --claude; expect_code 0 $? "malformed payload allows"
@@ -171,6 +153,6 @@ test_text_from_before_the_message_does_not_count
 test_new_message_resets_the_count
 test_clear_closes_the_window
 test_no_window_no_refusal
-test_switch_is_per_home
+test_only_a_mate_home_has_it
 test_limit_is_tunable_and_broken_input_fails_open
 test_scripts_are_shellcheck_clean

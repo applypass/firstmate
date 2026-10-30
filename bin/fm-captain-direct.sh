@@ -12,9 +12,11 @@
 #   Firstmate traffic - the steering doorbell (": Firstmate ..."), a
 #   [fm-from-firstmate] message, any operational input (bin/fm-operational-input.sh),
 #   or a harness <task-notification> - is not the captain. It adds nothing to the
-#   conversation. A doorbell or from-firstmate message closes any open reply
-#   window of bin/fm-reply-first.sh, because routed work is not a question to
-#   answer first.
+#   conversation.
+#
+#   Every prompt first closes any open reply window of bin/fm-reply-first.sh: a
+#   new prompt means the turn that answered the captain is over, and routed work
+#   is not a question to answer first. Only a captain-direct prompt opens a new one.
 #
 #   Anything else a human typed is captain-direct. The hook appends one line to
 #   the mate's parent channel (the file bin/fm-secondmate-report.sh writes,
@@ -60,6 +62,7 @@ fm_hook_payload_is_foreign_host "$PAYLOAD" && exit 0
 . "$SCRIPT_DIR/fm-primary-scope-lib.sh"
 fm_root_is_secondmate_home "$FM_HOME" || exit 0
 [ -d "$STATE" ] || exit 0
+"$SCRIPT_DIR/fm-reply-first.sh" clear >/dev/null 2>&1 || true
 
 PARSED=$(printf '%s' "$PAYLOAD" | jq -r '
   if type != "object" or ((.hook_event_name // "UserPromptSubmit") != "UserPromptSubmit") then empty
@@ -73,24 +76,19 @@ TEXT=${TEXT%"${TEXT##*[![:space:]]}"}
 [ -n "$TEXT" ] || exit 0
 
 arm() {
-  local args=(captain-direct)
-  [ -z "$TRANSCRIPT" ] || args+=(--transcript "$TRANSCRIPT")
-  "$SCRIPT_DIR/fm-reply-first.sh" arm "${args[@]}" >/dev/null 2>&1 || true
+  if [ -n "$TRANSCRIPT" ]; then
+    "$SCRIPT_DIR/fm-reply-first.sh" arm --transcript "$TRANSCRIPT"
+  else
+    "$SCRIPT_DIR/fm-reply-first.sh" arm
+  fi >/dev/null 2>&1 || true
 }
-disarm() { "$SCRIPT_DIR/fm-reply-first.sh" clear >/dev/null 2>&1 || true; }
 
 # Firstmate's own traffic, never the captain.
 case "$TEXT" in
   '<task-notification>'*) exit 0 ;;
-  ': Firstmate instruction waiting:'*|'[fm-from-firstmate]'*|*$'\xE2\x81\xA3''[fm-from-firstmate]'*)
-    disarm
-    exit 0
-    ;;
+  ': Firstmate instruction waiting:'*|'[fm-from-firstmate]'*|*$'\xE2\x81\xA3''[fm-from-firstmate]'*) exit 0 ;;
 esac
-kind=$(printf '%s' "$TEXT" | "$SCRIPT_DIR/fm-operational-input.sh" classify 2>/dev/null) && {
-  [ "$kind" != from-firstmate ] || disarm
-  exit 0
-}
+printf '%s' "$TEXT" | "$SCRIPT_DIR/fm-operational-input.sh" classify >/dev/null 2>&1 && exit 0
 if printf '%s' "$TEXT" | FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-operational-input.sh" doorbell-kind >/dev/null 2>&1; then
   exit 0
 fi
