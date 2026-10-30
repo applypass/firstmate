@@ -69,3 +69,12 @@ The boundary covers only traffic that writes to the upstream repository.
 
 Follow the [role inheritance and receipt limits](../../../docs/configuration.md#firstmate-role-configfirstmate-role); supported propagation must never grant a child a role the primary does not resolve.
 Deliberately forged local records are outside this accidental-publication safeguard, not a provenance guarantee.
+<!-- Fork-only (applypass): handbook pointer for firstmate-repo tasks -->
+
+## Handbook for firstmate-repo tasks
+
+A worker's worktree has an empty `data/`, so the dispatching home's private handbook is out of its sight.
+`bin/fm-brief.sh --project <dir>` adds the absolute path of `$FM_HOME/data/firstmate-handbook/INDEX.md` to the brief of any firstmate-repo ship or scout when that file exists; when you write such a brief by hand, add the same path, read-only, to consult before researching firstmate internals.
+The handbook stays private and is never committed.
+The worker's PR body or report names the handbook topic file its change makes stale (or "none"); route a refresh of that file back to the home that owns it.
+<!-- Fork-only end -->
