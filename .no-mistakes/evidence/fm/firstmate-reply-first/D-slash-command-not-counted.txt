@@ -1,0 +1,9 @@
+❯ /labping
+  Ran 5 shell commands
+⏺ labping done, captain. All five commands ran in order and printed s1 through s5. None was refused.
+✻ Brewed for 10s · done 2:10 AM
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx 6% | HEAD | Base directory for this skill: /private/var/folder...
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents

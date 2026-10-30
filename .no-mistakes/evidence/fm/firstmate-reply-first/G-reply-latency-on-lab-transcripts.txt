@@ -1,0 +1,22 @@
+== 2064c667-91b8-497e-bfb1-0ab2fb0798e8.jsonl
+pending left 0 unmatched 3
+captain messages with a reply: 3
+more than 3 commands before the reply: 3 of 3 (100%)
+all                    n=3  median wait 17 s  p90 wait 20 s  summed 1 min
+more than 3 commands   n=3  median wait 17 s  p90 wait 20 s  summed 1 min
+3 commands or fewer    n=0
+== b1e3d78b-c35b-4426-b15e-d0970bfde8d8.jsonl
+pending left 0 unmatched 3
+captain messages with a reply: 3
+more than 3 commands before the reply: 3 of 3 (100%)
+all                    n=3  median wait 12 s  p90 wait 18 s  summed 1 min
+more than 3 commands   n=3  median wait 12 s  p90 wait 18 s  summed 1 min
+3 commands or fewer    n=0
+pending left 0 unmatched 3
+captain messages with a reply: 2
+more than 3 commands before the reply: 2 of 2 (100%)
+all                    n=2  median wait 15 s  p90 wait 17 s  summed 1 min
+more than 3 commands   n=2  median wait 15 s  p90 wait 17 s  summed 1 min
+3 commands or fewer    n=0
+5 calls  [fm-from-firstmate] task-x: status ping. Run echo m1, echo m
+6 calls  Quick check of the hand-off tools. Do not write any text to 

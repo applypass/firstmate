@@ -1,0 +1,38 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M677HFEKX7XNGZV00DQGJ2CC/bin/fm-reply-first.sh prompt --claude",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M677HFEKX7XNGZV00DQGJ2CC/bin/fm-reply-first.sh pretool --claude",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M677HFEKX7XNGZV00DQGJ2CC/bin/fm-reply-first.sh clear",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+❯ What is a reply-first rule? First write me a plain answer of three or four sentences (at least 300 characters) as text, and only after that text is out run these five separate sequential Bash
+  calls: echo r1, echo r2, echo r3, echo r4, echo r5.
+⏺ Captain, a reply-first rule tells an agent to write its answer to the user as plain text before it makes any tool calls. The user sees the substance right away instead of waiting behind a run of
+  commands. If a tool then fails or hangs, the answer is already on screen. Take this turn as the example: you asked what the rule means, so this paragraph goes out first, and the five echo commands
+  r1 to r5 run only after it.
+  captain asks "What is a reply-first rule?"
+    -> agent writes these sentences as chat text   (step 1: reply)
+    -> Bash: echo r1                               (step 2: tools, one call at a time)
+    -> Bash: echo r2
+    -> Bash: echo r3
+    -> Bash: echo r4
+    -> Bash: echo r5
+    -> agent reports how the calls went            (step 3: recap)
+  Ran 5 shell commands
+⏺ Captain, a reply-first rule tells an agent to write its answer as plain text before it makes any tool calls. That way the answer reaches you even if a later command fails or hangs. This turn
+  followed it: the explanation and diagram went out first, then the five commands ran one at a time and printed r1, r2, r3, r4 and r5. None was refused.
+  I drew the diagram straight into the reply instead of loading the diagram skill first, because loading it would have meant a tool call before any text, which this rule forbids.
+✻ Sautéed for 18s · done 2:11 AM
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx 7% | HEAD | What is a reply-first rule? First write me a plain...
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents
