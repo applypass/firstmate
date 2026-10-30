@@ -125,6 +125,7 @@ Keep every `data/learnings.md` fully local by captain decision; route fleet-gene
 <!-- Fork-only: inherited data directories; bin/fm-handbook-inherit-lib.sh owns the contract. -->
 The directories named in `FM_INHERITABLE_DATA_DIRS` (default `firstmate-handbook`, the private handbook under `data/`) are inherited like `data/captain-shared.md`, one read-only (444) copy per regular, non-hidden, non-symlink file directly inside the directory, on the local and the remote route alike.
 A changed file updates, a file the primary removed is removed, and a source directory proven absent removes the inherited copies; a file a mate wrote into that directory is never touched, and an inspection error leaves the destination unchanged.
+A source file that is hardlinked, over 1 MiB, or unreadable is skipped with a warning on both routes and keeps any copy already published, so it never fails the push or blocks other inherited items.
 <!-- Fork-only end -->
 No AGENTS.md reread nudge is needed at spawn or respawn because the agent reads instructions fresh on launch; only the bootstrap sweep's running-home instruction-surface advance needs that AGENTS.md re-read.
 Bootstrap reports successful AGENTS.md re-read sends as `BOOTSTRAP_INFO:` and only emits `NUDGE_SECONDMATES:` when that send fails and needs retry.
