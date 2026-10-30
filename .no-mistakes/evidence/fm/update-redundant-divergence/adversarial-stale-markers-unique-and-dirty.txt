@@ -1,0 +1,37 @@
+== Same world the pre-fix run left behind (7 pending markers). sm6 gets unique local work; sm7 gets an uncommitted edit.
+sm6 HEAD=13ee73d3 (5e84d9ce + 1 unique commit); sm7 dirty:  M README.md
+== markers before: sm1.pending sm2.pending sm3.pending sm4.pending sm5.pending sm6.pending sm7.pending 
+== fixed fm-update.sh output:
+firstmate: already current
+secondmate sm1: reconciled redundant divergence 5e84d9ce..09bc0053 (instructions changed: AGENTS.md, bin, .agents/skills)
+no watches registered
+secondmate sm2: reconciled redundant divergence 5e84d9ce..09bc0053 (instructions changed: AGENTS.md, bin, .agents/skills)
+no watches registered
+secondmate sm3: reconciled redundant divergence 5e84d9ce..09bc0053 (instructions changed: AGENTS.md, bin, .agents/skills)
+no watches registered
+secondmate sm4: reconciled redundant divergence 5e84d9ce..09bc0053 (instructions changed: AGENTS.md, bin, .agents/skills)
+no watches registered
+secondmate sm5: reconciled redundant divergence 5e84d9ce..09bc0053 (instructions changed: AGENTS.md, bin, .agents/skills)
+no watches registered
+secondmate sm6: skipped: diverged from origin/main; reconciliation required (record: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-repro.cOtuTz/run-base/home/state/.secondmate-update-reconcile/sm6.pending)
+secondmate sm7: skipped: dirty working tree
+reread-firstmate: no
+restart-secondmates: fm-sm1 fm-sm2 fm-sm3 fm-sm4 fm-sm5
+nudge-secondmates: none
+== AFTER:
+sm1 HEAD=09bc0053
+sm2 HEAD=09bc0053
+sm3 HEAD=09bc0053
+sm4 HEAD=09bc0053
+sm5 HEAD=09bc0053
+sm6 HEAD=13ee73d3
+sm7 HEAD=5e84d9ce
+sm6 LOCAL-ONLY.md: unique captain note
+sm7 status:  M README.md
+== markers after: sm6.pending sm7.pending 
+schema=fm-secondmate-update-reconcile.v1
+id=sm6
+status=diverged
+local_commit=13ee73d368fc0f5fd38834c584259ae123563bbf
+target_commit=09bc00534900dc072a8ae1fa703943f95729a6a1
+target=origin/main

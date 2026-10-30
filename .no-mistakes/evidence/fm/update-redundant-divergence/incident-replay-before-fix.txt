@@ -1,0 +1,24 @@
+== BEFORE: sm1 HEAD=5e84d9ce origin/main=09bc0053 status=''
+== git diff 6123b021 HEAD in sm1: 0 lines
+== fm-update.sh output (run-base):
+firstmate: already current
+secondmate sm1: skipped: diverged from origin/main; reconciliation required (record: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-repro.cOtuTz/run-base/home/state/.secondmate-update-reconcile/sm1.pending)
+secondmate sm2: skipped: diverged from origin/main; reconciliation required (record: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-repro.cOtuTz/run-base/home/state/.secondmate-update-reconcile/sm2.pending)
+secondmate sm3: skipped: diverged from origin/main; reconciliation required (record: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-repro.cOtuTz/run-base/home/state/.secondmate-update-reconcile/sm3.pending)
+secondmate sm4: skipped: diverged from origin/main; reconciliation required (record: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-repro.cOtuTz/run-base/home/state/.secondmate-update-reconcile/sm4.pending)
+secondmate sm5: skipped: diverged from origin/main; reconciliation required (record: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-repro.cOtuTz/run-base/home/state/.secondmate-update-reconcile/sm5.pending)
+secondmate sm6: skipped: diverged from origin/main; reconciliation required (record: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-repro.cOtuTz/run-base/home/state/.secondmate-update-reconcile/sm6.pending)
+secondmate sm7: skipped: diverged from origin/main; reconciliation required (record: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-repro.cOtuTz/run-base/home/state/.secondmate-update-reconcile/sm7.pending)
+reread-firstmate: no
+restart-secondmates: none
+nudge-secondmates: none
+== exit=0
+== AFTER:
+sm1 HEAD=5e84d9ce detached=yes
+sm2 HEAD=5e84d9ce detached=yes
+sm3 HEAD=5e84d9ce detached=yes
+sm4 HEAD=5e84d9ce detached=yes
+sm5 HEAD=5e84d9ce detached=yes
+sm6 HEAD=5e84d9ce detached=yes
+sm7 HEAD=5e84d9ce detached=yes
+== pending markers: sm1.pending sm2.pending sm3.pending sm4.pending sm5.pending sm6.pending sm7.pending 

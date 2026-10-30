@@ -1,0 +1,31 @@
+== BEFORE: sm1 HEAD=5e84d9ce origin/main=09bc0053 status=''
+== git diff 6123b021 HEAD in sm1: 0 lines
+== fm-update.sh output (run-fix):
+firstmate: already current
+secondmate sm1: reconciled redundant divergence 5e84d9ce..09bc0053 (instructions changed: AGENTS.md, bin, .agents/skills)
+no watches registered
+secondmate sm2: reconciled redundant divergence 5e84d9ce..09bc0053 (instructions changed: AGENTS.md, bin, .agents/skills)
+no watches registered
+secondmate sm3: reconciled redundant divergence 5e84d9ce..09bc0053 (instructions changed: AGENTS.md, bin, .agents/skills)
+no watches registered
+secondmate sm4: reconciled redundant divergence 5e84d9ce..09bc0053 (instructions changed: AGENTS.md, bin, .agents/skills)
+no watches registered
+secondmate sm5: reconciled redundant divergence 5e84d9ce..09bc0053 (instructions changed: AGENTS.md, bin, .agents/skills)
+no watches registered
+secondmate sm6: reconciled redundant divergence 5e84d9ce..09bc0053 (instructions changed: AGENTS.md, bin, .agents/skills)
+no watches registered
+secondmate sm7: reconciled redundant divergence 5e84d9ce..09bc0053 (instructions changed: AGENTS.md, bin, .agents/skills)
+no watches registered
+reread-firstmate: no
+restart-secondmates: fm-sm1 fm-sm2 fm-sm3 fm-sm4 fm-sm5 fm-sm6 fm-sm7
+nudge-secondmates: none
+== exit=0
+== AFTER:
+sm1 HEAD=09bc0053 detached=yes
+sm2 HEAD=09bc0053 detached=yes
+sm3 HEAD=09bc0053 detached=yes
+sm4 HEAD=09bc0053 detached=yes
+sm5 HEAD=09bc0053 detached=yes
+sm6 HEAD=09bc0053 detached=yes
+sm7 HEAD=09bc0053 detached=yes
+== pending markers: 

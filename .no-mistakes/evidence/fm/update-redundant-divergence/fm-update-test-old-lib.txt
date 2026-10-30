@@ -1,0 +1,17 @@
+ok - T1 main + secondmate fast-forward (single-parent), reread + restart signalled
+ok - T3 a non-instruction advance still restarts the live secondmate
+ok - T3b a bin/-only advance restarts the secondmate
+ok - T3c an unverifiable secondmate receives the fallback nudge
+ok - T3d an already-stopped secondmate is left to startup recovery
+ok - T3e a legacy remote advance still restarts the live remote mate
+ok - T4 dirty secondmate skipped, local edit preserved
+ok - T5 diverged secondmate is preserved and durably actionable
+ok - T5b squash-merged divergence heals and rejoins live convergence
+not ok - squash-merged content followed by a same-file main edit was not recognised as redundant (missing: 'secondmate sm1: reconciled redundant divergence')
+--- output ---
+firstmate: updated b1cd43e..c046de4
+no watches registered
+secondmate sm1: skipped: diverged from origin/main; reconciliation required (record: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-update-tests.cFW8Jf/t5c/home/state/.secondmate-update-reconcile/sm1.pending)
+reread-firstmate: no
+restart-secondmates: none
+nudge-secondmates: none
