@@ -194,6 +194,9 @@ fi
 # checkout has the two equal. Child worktrees never carry the gitignored marker,
 # so this exempts them while guarding every real secondmate home.
 fm_primary_scope_matches "$FM_ROOT" "$STATE" || exit 0
+# Fork-only: charge this primary turn to the open task or fleet overhead (bin/fm-task-ledger.sh charge; best-effort).
+FM_HOME=$FM_HOME "$SCRIPT_DIR/fm-task-ledger.sh" charge --payload "$PAYLOAD" >/dev/null 2>&1 || true
+# Fork-only end
 
 # --- the actual predicate ----------------------------------------------------
 # shellcheck source=bin/fm-wake-lib.sh

@@ -9,6 +9,10 @@
 #   fm-task-ledger.sh wait-start <id> [--at EPOCH] [--note TEXT]
 #   fm-task-ledger.sh wait-end <id> [--at EPOCH]
 #   fm-task-ledger.sh summary <id> [--now EPOCH]
+#   fm-task-ledger.sh focus <id>
+#   fm-task-ledger.sh charge [--payload JSON]
+#   fm-task-ledger.sh tokens <id>
+#   fm-task-ledger.sh sessions <id>
 #
 # record   appends one JSON line {at, event, session, note} to
 #          data/ticket-ledger/<id>.jsonl in the firstmate home. The file is
@@ -36,6 +40,22 @@
 #          open_captain_wait, grill_seconds, blocked_seconds, planning_seconds
 #          (intake-start to planning-done, less the grill and captain wait
 #          inside it). An open interval counts up to --now (default now).
+# focus    makes <id> the open task: the one every turn is charged to.
+#          intake-start, grill-start and captain-wait-end focus their task by
+#          themselves; merged releases it. The pointer is state/ticket-ledger-open
+#          in the home, so a second-mate home keeps its own.
+# charge   is the turn-end hook (bin/fm-turnend-guard.sh runs it for every main
+#          and second-mate turn). It reads the Stop payload (JSON on stdin, or
+#          --payload), and appends a turn event {session, turn_seconds,
+#          tokens{input,output,cache_read,cache_create}} to the open task's
+#          ledger, or to _fleet-overhead.jsonl when none is open. The numbers
+#          come from the transcript lines added since this session's last
+#          charge (offset in state/ticket-ledger-offsets/<session>), with
+#          repeated assistant message blocks counted once. It never fails the
+#          turn end, and a payload without a session id records nothing.
+# tokens   sums a task's turn events as input=N output=N cache_read=N cache_create=N.
+# sessions lists the distinct session ids a task's events carry: the keys a
+#          cost report joins other token sources on.
 #
 # Events: intake-start grill-start grill-end planning-done spawn first-action
 # pr-open check-start pr-ready captain-approval captain-wait-start
@@ -89,6 +109,17 @@ fm_ledger_record() {  # <id> <event> [--at E] [--session S] [--note T]
   # One short write to an O_APPEND descriptor is atomic, so concurrent
   # recorders never interleave lines and no lock is needed.
   printf '%s\n' "$line" >> "$file"
+  case "$event" in
+    intake-start | grill-start | captain-wait-end) fm_ledger_focus "$id" ;;
+    merged) [ "$(fm_ledger_focused)" != "$id" ] || rm -f "$(fm_ledger_pointer)" ;;
+  esac
+}
+
+fm_ledger_pointer() { printf '%s/ticket-ledger-open' "${FM_STATE_OVERRIDE:-$(fm_ledger_home)/state}"; }
+fm_ledger_focused() { cat "$(fm_ledger_pointer)" 2>/dev/null || true; }
+fm_ledger_focus() {  # <id>
+  mkdir -p "$(dirname "$(fm_ledger_pointer)")" 2>/dev/null || return 0
+  printf '%s\n' "$1" > "$(fm_ledger_pointer)" 2>/dev/null || true
 }
 
 fm_ledger_has() {  # <id> <event>
@@ -182,6 +213,65 @@ fm_ledger_summary() {  # <id> [--now E]
       "planning_seconds=\($plan)"' "$file"
 }
 
+fm_ledger_charge() {  # [--payload JSON]
+  local payload='' session transcript target offset_file offset size end lines at row tmp
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --payload) [ "$#" -gt 1 ] || die_usage "--payload needs a value"; payload=$2; shift 2 ;;
+      *) die_usage "unknown argument: $1" ;;
+    esac
+  done
+  [ "${FM_TASK_LEDGER:-}" != off ] || return 0
+  [ -n "$payload" ] || payload=$(cat 2>/dev/null || true)
+  command -v jq >/dev/null 2>&1 || return 0
+  session=$(printf '%s' "$payload" | jq -r '.session_id // empty' 2>/dev/null) || return 0
+  transcript=$(printf '%s' "$payload" | jq -r '.transcript_path // empty' 2>/dev/null) || return 0
+  [ -n "$session" ] || return 0
+  case "$session" in *[!A-Za-z0-9._-]*) return 0 ;; esac
+  offset_file="${FM_STATE_OVERRIDE:-$(fm_ledger_home)/state}/ticket-ledger-offsets/$session"
+  offset=$(cat "$offset_file" 2>/dev/null || true)
+  case "$offset" in '' | *[!0-9]*) offset=0 ;; esac
+  row='{"turn_seconds":0,"tokens":{"input":0,"output":0,"cache_read":0,"cache_create":0}}'
+  if [ -n "$transcript" ] && [ -f "$transcript" ]; then
+    size=$(wc -c < "$transcript" | tr -d ' ')
+    [ "$offset" -le "$size" ] || offset=0
+    tmp=$(mktemp "${TMPDIR:-/tmp}/fm-ledger-charge.XXXXXX") || return 0
+    tail -c +"$((offset + 1))" "$transcript" > "$tmp" 2>/dev/null || true
+    # Keep complete lines only; the offset then moves past exactly what was read.
+    lines=$(wc -l < "$tmp" | tr -d ' ')
+    end=0
+    [ "$lines" -eq 0 ] || end=$(head -n "$lines" "$tmp" | wc -c | tr -d ' ')
+    head -c "$end" "$tmp" > "$tmp.lines" 2>/dev/null || true
+    row=$(jq -sc '
+      def secs: sub("\\.[0-9]+Z$"; "Z") | fromdateiso8601;
+      ([.[] | .timestamp? // empty | secs] | if length > 1 then (max - min) else 0 end) as $dur
+      | ([.[] | select(.type == "assistant" and (.message.usage? != null)) | {id: (.message.id // ""), u: .message.usage}]
+         | group_by(.id) | map(.[-1].u)) as $u
+      | {turn_seconds: $dur,
+         tokens: {input: ([$u[].input_tokens // 0] | add // 0),
+                  output: ([$u[].output_tokens // 0] | add // 0),
+                  cache_read: ([$u[].cache_read_input_tokens // 0] | add // 0),
+                  cache_create: ([$u[].cache_creation_input_tokens // 0] | add // 0)}}' "$tmp.lines" 2>/dev/null) || row='{"turn_seconds":0,"tokens":{"input":0,"output":0,"cache_read":0,"cache_create":0}}'
+    rm -f "$tmp" "$tmp.lines"
+    mkdir -p "$(dirname "$offset_file")" 2>/dev/null && printf '%s\n' "$((offset + end))" > "$offset_file" 2>/dev/null
+  fi
+  target=$(fm_ledger_focused)
+  [ -n "$target" ] && valid_id "$target" || target=_fleet-overhead
+  at=$(date +%s)
+  mkdir -p "$(fm_ledger_dir)" || return 0
+  printf '%s\n' "$row" | jq -c --argjson at "$at" --arg session "$session" \
+    '{at: $at, event: "turn", session: $session} + .' >> "$(fm_ledger_file "$target")" 2>/dev/null || true
+}
+
+fm_ledger_tokens() {  # <id>
+  local file
+  valid_id "$1" || die_usage "invalid task id: $1"
+  file=$(fm_ledger_file "$1")
+  [ -s "$file" ] || { echo "input=0 output=0 cache_read=0 cache_create=0"; return 0; }
+  jq -rs '[.[] | select(.event == "turn") | .tokens] as $t
+    | "input=\([$t[].input // 0] | add // 0) output=\([$t[].output // 0] | add // 0) cache_read=\([$t[].cache_read // 0] | add // 0) cache_create=\([$t[].cache_create // 0] | add // 0)"' "$file"
+}
+
 CMD=${1:-}
 [ -n "$CMD" ] || { usage >&2; exit 2; }
 shift
@@ -218,6 +308,22 @@ case "$CMD" in
   summary)
     [ "$#" -ge 1 ] || die_usage "summary needs <id>"
     fm_ledger_summary "$@"
+    ;;
+  focus)
+    [ "$#" -eq 1 ] || die_usage "focus needs <id>"
+    valid_id "$1" || die_usage "invalid task id: $1"
+    fm_ledger_focus "$1"
+    ;;
+  charge) fm_ledger_charge "$@"; exit 0 ;;
+  tokens)
+    [ "$#" -eq 1 ] || die_usage "tokens needs <id>"
+    fm_ledger_tokens "$1"
+    ;;
+  sessions)
+    [ "$#" -eq 1 ] || die_usage "sessions needs <id>"
+    valid_id "$1" || die_usage "invalid task id: $1"
+    [ -s "$(fm_ledger_file "$1")" ] && jq -rs '[.[].session] | unique | .[]' "$(fm_ledger_file "$1")"
+    exit 0
     ;;
   *) usage >&2; exit 2 ;;
 esac

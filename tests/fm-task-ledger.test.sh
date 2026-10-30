@@ -178,6 +178,80 @@ test_captain_hold_records_the_wait() {
   pass "fm-captain-hold records the wait around hold and answer"
 }
 
+# A two-line Claude transcript fragment: one user prompt and one assistant reply
+# whose usage repeats across content blocks (same message id).
+write_transcript() {  # <file> <t0 ISO> <t1 ISO> <msg-id> <in> <out>
+  local reply
+  reply=$(jq -nc --arg t "$3" --arg id "$4" --argjson i "$5" --argjson o "$6" \
+    '{type: "assistant", timestamp: $t, message: {id: $id, role: "assistant", usage: {input_tokens: $i, output_tokens: $o, cache_read_input_tokens: 7, cache_creation_input_tokens: 3}}}')
+  {
+    jq -nc --arg t "$2" '{type: "user", timestamp: $t, message: {role: "user", content: "go"}}'
+    printf '%s\n%s\n' "$reply" "$reply"
+  } >> "$1"
+}
+
+charge() {  # <home> <session> <transcript>
+  FM_HOME=$1 "$LEDGER" charge --payload "$(jq -nc --arg s "$2" --arg t "$3" '{session_id: $s, transcript_path: $t}')"
+}
+
+test_charge_bills_the_open_task_then_fleet_overhead() {
+  local fm="$TMP_ROOT/chargehome" tr="$TMP_ROOT/chargehome/transcript.jsonl" f out
+  mkdir -p "$fm/data" "$fm/state"
+  # No open task: the turn goes to fleet overhead.
+  write_transcript "$tr" 2026-10-27T10:00:00.000Z 2026-10-27T10:01:30.000Z msg-a 100 40
+  charge "$fm" sess-1 "$tr" || fail "charge failed"
+  f="$fm/data/ticket-ledger/_fleet-overhead.jsonl"
+  [ -s "$f" ] || fail "no overhead record: $(ls "$fm/data/ticket-ledger")"
+  assert_equals "turn" "$(jq -r .event "$f")" "event kind"
+  assert_equals "sess-1" "$(jq -r .session "$f")" "session id kept for the token join"
+  assert_equals "90" "$(jq -r .turn_seconds "$f")" "turn length from the transcript timestamps"
+  assert_equals "100" "$(jq -r .tokens.input "$f")" "duplicate message blocks count once"
+  assert_equals "40" "$(jq -r .tokens.output "$f")" "output tokens"
+  # Filing a task opens it: the next turn is charged to it, and only the new transcript lines count.
+  FM_HOME=$fm "$LEDGER" record open-t intake-start --at 1
+  write_transcript "$tr" 2026-10-27T11:00:00.000Z 2026-10-27T11:00:20.000Z msg-b 5 6
+  charge "$fm" sess-1 "$tr" || fail "charge failed"
+  f="$fm/data/ticket-ledger/open-t.jsonl"
+  assert_equals "20" "$(jq -rs '[.[] | select(.event == "turn")][0].turn_seconds' "$f")" "second charge reads only the new region"
+  assert_equals "5" "$(jq -rs '[.[] | select(.event == "turn")][0].tokens.input' "$f")" "second charge tokens"
+  out=$(FM_HOME=$fm "$LEDGER" tokens open-t)
+  assert_contains "$out" "input=5" "tokens sums the task's turns"
+  assert_contains "$out" "output=6" "tokens sums output"
+  assert_contains "$(FM_HOME=$fm "$LEDGER" sessions open-t)" "sess-1" "sessions lists the join keys"
+  # The merge closes the task: later turns return to fleet overhead.
+  FM_HOME=$fm "$LEDGER" record open-t merged --at 9
+  write_transcript "$tr" 2026-10-27T12:00:00.000Z 2026-10-27T12:00:10.000Z msg-c 1 1
+  charge "$fm" sess-1 "$tr"
+  [ "$(jq -rs '[.[] | select(.event == "turn")] | length' "$fm/data/ticket-ledger/open-t.jsonl")" -eq 1 ] || fail "a merged task kept getting charged"
+  [ "$(jq -rs 'length' "$fm/data/ticket-ledger/_fleet-overhead.jsonl")" -eq 2 ] || fail "the post-merge turn did not reach fleet overhead"
+  pass "charge bills the open task, falls back to fleet overhead, and joins tokens by session id"
+}
+
+test_charge_is_a_noop_without_a_session() {
+  local fm="$TMP_ROOT/nosessionhome"
+  mkdir -p "$fm/data" "$fm/state"
+  FM_HOME=$fm "$LEDGER" charge --payload '{}' || fail "charge must not fail the turn end"
+  [ ! -e "$fm/data/ticket-ledger" ] || fail "a payload with no session wrote a record"
+  FM_TASK_LEDGER=off FM_HOME=$fm "$LEDGER" charge --payload '{"session_id":"x","transcript_path":"/nope"}' || fail "off switch"
+  pass "charge never blocks a turn end and respects the off switch"
+}
+
+test_turnend_guard_charges_a_primary_turn() {
+  local dir="$TMP_ROOT/guardprimary" tr="$TMP_ROOT/guard-transcript.jsonl"
+  mkdir -p "$dir/state"
+  git init -q "$dir"
+  fm_git_identity fmtest fmtest@example.invalid
+  git -C "$dir" commit -q --allow-empty -m init
+  : > "$dir/AGENTS.md"
+  cp -R "$ROOT/bin" "$dir/bin"
+  write_transcript "$tr" 2026-10-27T10:00:00.000Z 2026-10-27T10:00:05.000Z msg-g 9 4
+  jq -nc --arg t "$tr" '{session_id: "sess-guard", transcript_path: $t}' \
+    | CLAUDECODE=1 FM_HOME="$dir" bash "$dir/bin/fm-turnend-guard.sh" --claude >/dev/null 2>&1
+  assert_equals "turn" "$(jq -r .event "$dir/data/ticket-ledger/_fleet-overhead.jsonl" 2>/dev/null)" "the guard charged the turn"
+  assert_equals "9" "$(jq -r .tokens.input "$dir/data/ticket-ledger/_fleet-overhead.jsonl")" "with the transcript tokens"
+  pass "the turn-end guard charges a primary session's turn"
+}
+
 fm_test_run \
   test_record_appends_json_lines \
   test_record_rejects_unknown_event \
@@ -190,4 +264,7 @@ fm_test_run \
   test_merge_refusals \
   test_captain_wait_clock_includes_away_time \
   test_wait_end_after_pr_ready_records_approval \
-  test_captain_hold_records_the_wait
+  test_captain_hold_records_the_wait \
+  test_charge_bills_the_open_task_then_fleet_overhead \
+  test_charge_is_a_noop_without_a_session \
+  test_turnend_guard_charges_a_primary_turn
