@@ -49,6 +49,10 @@ EMPTY="$TMP/empty"
 EMPTY_HASH=$(sha256_file "$EMPTY") || die "cannot hash empty inheritance payload"
 
 ITEMS=$(fm_config_inherit_items)
+# Fork-only: add one item per file of each inherited data directory (bin/fm-handbook-inherit-lib.sh).
+HANDBOOK_ITEMS=$(fm_handbook_inherit_items "$DATA") || die "cannot inspect an inherited data directory under $DATA"
+[ -z "$HANDBOOK_ITEMS" ] || ITEMS=$(printf '%s\n%s' "$ITEMS" "$HANDBOOK_ITEMS")
+# Fork-only end
 # Phase 1 is local: every item is classified, validated, and snapshotted in
 # allowlist order before anything is sent, so a refusal here leaves the remote
 # home untouched. PLAN holds one record per item: skip, put, or absent.
@@ -183,4 +187,9 @@ while [ "$i" -le "$launched" ]; do
   fi
   i=$((i + 1))
 done
+# Fork-only: remove inherited data-directory copies the primary no longer has.
+if [ "$status" -eq 0 ]; then
+  fm_handbook_inherit_push_prune "$SCRIPT_DIR" "$ID" "$GENERATION" "$DATA" "$TMP" || status=$?
+fi
+# Fork-only end
 exit "$status"

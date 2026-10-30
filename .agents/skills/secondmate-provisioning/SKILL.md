@@ -122,6 +122,10 @@ Never copy any secondmate `data/captain-shared.md` back into the primary.
 Keep each home's `data/captain.md` domain-local.
 After first propagation to an existing home, trim that home's local `data/captain.md` by hand to domain-specific content plus pointers to `data/captain-shared.md`; do not automate or silently delete private content.
 Keep every `data/learnings.md` fully local by captain decision; route fleet-general machinery facts into tracked documentation through the normal firstmate repo path rather than inventing shared learnings propagation.
+<!-- Fork-only: inherited data directories; bin/fm-handbook-inherit-lib.sh owns the contract. -->
+The directories named in `FM_INHERITABLE_DATA_DIRS` (default `firstmate-handbook`, the private handbook under `data/`) are inherited like `data/captain-shared.md`, one read-only (444) copy per regular, non-hidden, non-symlink file directly inside the directory, on the local and the remote route alike.
+A changed file updates, a file the primary removed is removed, and a source directory proven absent removes the inherited copies; a file a mate wrote into that directory is never touched, and an inspection error leaves the destination unchanged.
+<!-- Fork-only end -->
 No AGENTS.md reread nudge is needed at spawn or respawn because the agent reads instructions fresh on launch; only the bootstrap sweep's running-home instruction-surface advance needs that AGENTS.md re-read.
 Bootstrap reports successful AGENTS.md re-read sends as `BOOTSTRAP_INFO:` and only emits `NUDGE_SECONDMATES:` when that send fails and needs retry.
 A separate, literal-content config reread is required whenever inherited `config/*` material changes under an already-running secondmate.
