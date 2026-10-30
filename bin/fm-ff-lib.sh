@@ -27,7 +27,7 @@
 # The seeded .fm-secondmate-home identity marker is gitignored too; the local
 # sync tolerates only that marker during the one-time upgrade of pre-ignore
 # linked-worktree homes.
-# A clean secondmate divergence is reconciled only when a three-way tree proof
+# A clean secondmate divergence is reconciled only when a content merge proof
 # shows that its complete local result is already present in the target, as
 # happens after an upstream squash merge. Every other divergence stays put and
 # records an inspectable state/.secondmate-update-reconcile/<id>.pending marker
