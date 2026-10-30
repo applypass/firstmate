@@ -43,6 +43,11 @@ EOF
   return 1
 }
 
+# Fork-only: inherited data-directory items are handled by bin/fm-remote-inherit-handbook.sh.
+if [ "$#" -eq 5 ] && { fm_handbook_inherit_rel_file_ok "$2" || fm_handbook_inherit_rel_dir_ok "$2"; }; then
+  exec "$SCRIPT_DIR/fm-remote-inherit-handbook.sh" "$@"
+fi
+# Fork-only end
 [ "$#" -eq 5 ] || usage
 COMMAND=$1
 REL=$2
