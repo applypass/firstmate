@@ -6,7 +6,8 @@
 # Merges two hooks into <dir>/.claude/settings.local.json, keeping every other setting:
 #   UserPromptSubmit  bin/fm-captain-direct.sh --claude   the captain typing into the mate's pane
 #   PreToolUse (.*)   bin/fm-reply-first.sh pretool --claude   answer first, then dig
-# Both scripts stay silent outside a secondmate home, so a stray registration is harmless.
+# fm-captain-direct.sh stays silent outside a secondmate home and fm-reply-first.sh outside
+# a secondmate or primary home, so a stray registration is harmless.
 # --main registers the primary home's set instead (bin/fm-session-start.sh runs it; a
 # secondmate home is skipped):
 #   UserPromptSubmit  bin/fm-reply-first.sh prompt --claude   opens a window for the captain's words only
