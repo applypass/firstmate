@@ -1708,7 +1708,6 @@ test_branch_prefix_is_refused_where_it_does_not_apply
 test_branch_prefix_value_is_validated
 test_branch_prefix_command_is_shell_safe
 test_crewmate_scaffolds_forbid_pool_administration
-
 # Fork-only: every generated brief variant carries the temporary-object cleanup line exactly once.
 test_every_brief_variant_carries_cleanup_line() {
   local home variant id brief count
