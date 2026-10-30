@@ -45,7 +45,9 @@ Routing order for a question about a second mate's work: the owning mate, then a
 After 3 calls without a reply, the next call is refused once with "answer now with what you have, hand the rest off".
 The window opens only for a message the captain typed into the pane.
 Every other prompt (the steering doorbell, a `[fm-from-firstmate]` message, operational input, a harness notification) closes any open window, so a mate doing routed work is never refused its fourth command.
-A reply is a `bin/fm-secondmate-report.sh` call, or assistant text of 200 characters or more.
+A reply is a `bin/fm-secondmate-report.sh` call, assistant text of 200 characters or more, or shorter text that addresses the captain.
+Text addresses the captain when "captain" (any case) stands as its own word, not inside a name or path such as `fm-captain-hold.sh`, with a comma before it or `, . ! ? : ;` or the end of the text after it.
+So "Captain, shipshape.", "Aye, captain - done." and "Done, captain." count; "Let me see what the captain asked" does not.
 `FM_REPLY_FIRST_LIMIT` and `FM_REPLY_FIRST_MIN_CHARS` tune it.
 The latency report of 2026-10-30 found the main firstmate broke this budget on 55% of captain messages.
 Reply-first runs only in a second mate home; the main session does not have it.

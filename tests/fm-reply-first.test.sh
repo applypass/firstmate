@@ -92,6 +92,26 @@ test_short_captain_reply_closes_the_window() {
   pass "a short reply addressing the captain closes the window, short narration does not"
 }
 
+# expect_captain_reply <text> <want_code>: the call after the third, once <text> is said.
+expect_captain_reply() {
+  make_home "addr$((++ADDR_N))" mate
+  arm
+  call 'ls'
+  say "$1"
+  call 'ls'; call 'ls'
+  call 'ls'; expect_code "$2" "$RC" "after '$1', call 4"
+}
+
+test_only_text_addressed_to_the_captain_counts() {
+  ADDR_N=0
+  expect_captain_reply 'Captain, shipshape.' 0
+  expect_captain_reply 'Aye, captain - done.' 0
+  expect_captain_reply 'Done, captain.' 0
+  expect_captain_reply 'Let me see what the captain asked' 2
+  expect_captain_reply 'Checking bin/fm-captain-hold.sh for X.' 2
+  pass "text addressed to the captain closes the window, narration naming the captain or a captain script does not"
+}
+
 test_text_from_before_the_message_does_not_count() {
   make_home old mate
   say "$(printf 'An earlier reply to a different message, long enough to count as an answer on its own. %.0s' 1 2 3)"
@@ -166,6 +186,7 @@ test_refuses_the_fourth_call_once
 test_a_parent_report_is_a_reply
 test_substantial_text_is_a_reply_and_narration_is_not
 test_short_captain_reply_closes_the_window
+test_only_text_addressed_to_the_captain_counts
 test_text_from_before_the_message_does_not_count
 test_new_message_resets_the_count
 test_clear_closes_the_window

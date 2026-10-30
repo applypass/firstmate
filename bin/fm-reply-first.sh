@@ -29,9 +29,11 @@
 #     parent channel);
 #   - assistant text since the window opened, read from the transcript the
 #     harness names in the payload, that is FM_REPLY_FIRST_MIN_CHARS (default
-#     200, about a short paragraph) or longer, or that addresses the captain
-#     (the word "captain", any case): every captain-facing message does, so a
-#     short "Captain, shipshape." counts and "let me check" narration does not.
+#     200, about a short paragraph) or longer, or that addresses the captain:
+#     "captain" (any case) as a word of its own, not part of a name or path
+#     such as fm-captain-hold.sh, set off by a comma before it or by , . ! ? : ;
+#     or the end of the text after it. So "Captain, shipshape." and "Aye,
+#     captain - done." count, and "let me see what the captain asked" does not.
 # Only a call after a message that opened a window is ever refused, and the
 # parent report call is never counted or refused.
 #
@@ -126,14 +128,14 @@ cmd_arm() {
 }
 
 # 0 when the assistant wrote MIN_CHARS or more of text after the window opened,
-# or text that addresses the captain (the word "captain", any case).
+# or text that addresses the captain (see the header for the rule).
 transcript_replied() {  # <path> <base>
   local path=$1 base=$2 longest
   [ -n "$path" ] && [ -f "$path" ] || return 1
   command -v jq >/dev/null 2>&1 || return 1
   longest=$(tail -n "+$((base + 1))" "$path" 2>/dev/null | jq -R -r '
       fromjson? | select(type == "object" and .type == "assistant")
-      | [.message.content[]? | select(.type == "text") | .text | gsub("^\\s+|\\s+$"; "") | if test("\\bcaptain\\b"; "i") then 1000000 + length else length end] | max // 0' 2>/dev/null \
+      | [.message.content[]? | select(.type == "text") | .text | gsub("^\\s+|\\s+$"; "") | if test("(^|[^\\w./-])captain(?![\\w/-]|\\.\\w)\\s*([,!?:;]|\\.(?!\\w)|$)|,\\s*captain(?![\\w/-]|\\.\\w)"; "i") then 1000000 + length else length end] | max // 0' 2>/dev/null \
     | sort -n | tail -n 1)
   case "$longest" in ''|*[!0-9]*) return 1 ;; esac
   [ "$longest" -ge "$MIN_CHARS" ] || [ "$longest" -ge 1000000 ]
