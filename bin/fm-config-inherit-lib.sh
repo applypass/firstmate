@@ -83,6 +83,10 @@
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-startup-memory-budget-lib.sh"
 # shellcheck source=bin/fm-role-lib.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-role-lib.sh"
+# Fork-only: inherited data directories (the firstmate handbook), owned by bin/fm-handbook-inherit-lib.sh.
+# shellcheck source=bin/fm-handbook-inherit-lib.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/fm-handbook-inherit-lib.sh"
+# Fork-only end
 
 # The one shared data file in this inheritance contract. There is deliberately
 # no shared learnings file.
@@ -666,6 +670,9 @@ propagate_secondmate_inheritance() {
   rc=0
   propagate_inheritable_config "$src_config" "$dest_home/config" "$src_home" || rc=1
   propagate_shared_captain_preferences "$src_data" "$dest_home/data" || rc=1
+  # Fork-only: inherited data directories (bin/fm-handbook-inherit-lib.sh).
+  propagate_handbook_dirs "$src_data" "$dest_home/data" || rc=1
+  # Fork-only end
   return "$rc"
 }
 

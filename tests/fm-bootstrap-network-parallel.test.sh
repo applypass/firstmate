@@ -540,6 +540,12 @@ test_inherit_push_overlaps_items_and_replays_in_order() {
   [ "$(max_inherit_overlap "$CF_LOG")" -le 4 ] \
     || fail "more than the default four inheritance items were in flight"$'\n'"$(cat "$CF_LOG")"
   order=$(printf '%s\n' "$out" | sed -n 's/^unchanged: //p' | tr '\n' ' ')
+  # Fork-only: the inherited handbook directory item (bin/fm-handbook-inherit-lib.sh) replays last.
+  case "$order" in
+    *" data/firstmate-handbook ") order=${order%data/firstmate-handbook } ;;
+    *) fail "the inherited handbook item did not replay last: $order"$'\n'"$out" ;;
+  esac
+  # Fork-only end
   [ "$order" = "config/item-a config/item-b config/item-c config/item-d config/item-e config/item-f data/captain-shared.md " ] \
     || fail "the push output was not replayed in allowlist order: $order"$'\n'"$out"
 
