@@ -1,0 +1,12 @@
+ ▐▛███▛█   Claude Code v2.1.314
+▝▜██████▀  Sonnet 5.5 · Claude Team
+ ▝▝   ▝▝   /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.A55Ih3/mate
+❯ what is the state of the invoice bug? one or two sentences, from data/backlog.md
+  Searched for 1 pattern
+⏺ The invoice bug is in flight. The duplicate invoice email on retry has a fix in PR #4412, which is open and waiting on CI.
+✻ Cooked for 6s · done 12:57 AM
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Sonnet 5.5 | ctx 6% | no-git | what is the state of the invoice bug? one or two s...
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 5 agents

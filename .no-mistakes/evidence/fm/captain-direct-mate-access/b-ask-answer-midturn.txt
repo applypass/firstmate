@@ -1,0 +1,4 @@
+Mate-a's backlog lists `invoice-bug` as in flight. That task is the fix for the duplicate invoice email on retry. PR #4412 is open and waiting on CI (`data/backlog.md`). Next is `audit-cleanup`, which removes the stale audit cron (`data/backlog.md`).
+
+I can't confirm `invoice-bug` is live. `fm-crew-state.sh` reports no metadata for it, and the task list is empty, so the backlog line is all I have.
+elapsed: 20s

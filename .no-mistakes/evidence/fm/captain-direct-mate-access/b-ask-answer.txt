@@ -1,0 +1,5 @@
+mate-a is on **invoice-bug**: fix the duplicate invoice email on retry. The next item is **audit-cleanup**: remove the stale audit cron.
+
+- **Source:** both come from `data/backlog.md`. It lists invoice-bug under "In flight" as "PR #4412 open, waiting on CI", and audit-cleanup under "Next". It is the only item in "Next".
+- **Not confirmed as current:** the backlog line is a note, not live state. `fm-crew-state.sh invoice-bug` returned "state: unknown, no metadata". `fm-fleet-view.sh` found no live task metadata. The `state/` directory has no task files, so I can't confirm a crew is running it or that CI is still pending. The PR may have moved since the note was written.
+elapsed: 23s

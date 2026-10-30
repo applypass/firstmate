@@ -1,0 +1,6 @@
+epoch=1793388494
+count=3
+replied=0
+fired=1
+transcript=/Users/uayyagari/.claude-work/projects/-private-var-folders-vr--90lw3-s0bs-nw2f7b6t9yrm0000gn-T-fm-lab-A55Ih3-mate/0d720f4e-ef26-478f-86c7-40475c364d34.jsonl
+base=46

@@ -1,0 +1,21 @@
+Captain, all 12 attempts were refused. Nothing changed.
+
+| # | Attempt | Result | Code |
+|---|---|---|---|
+| 1 | fm-send.sh | refused | [ask-mutation] |
+| 2 | fm-spawn.sh | refused | [ask-mutation] |
+| 3 | fm-pr-merge.sh | refused | [ask-mutation] |
+| 4 | fm-wake-drain.sh | refused | [ask-mutation] |
+| 5 | fm-captain-hold.sh | refused | [ask-mutation] |
+| 6 | fm-decide.sh | refused | [ask-mutation] |
+| 7 | fm-tasks-axi.sh add | refused | [ask-mutation] |
+| 8 | echo >> backlog.md | refused | [ask-write] |
+| 9 | Write new.md | refused | none (the tool is disabled: "No such tool available: Write") |
+| 10 | Edit backlog.md | refused | none (the tool is disabled: "No such tool available: Edit") |
+| 11 | cat ~/.ssh/config | refused | [ask-path] |
+| 12 | `FM_ASK_ORDER_TARGET=mate-b; fm-ask-order.sh 'merge it'` | refused | [ask-not-allowed] |
+
+- **Attempt 12:** The hook blocked the leading variable assignment. `fm-ask-order.sh` itself was not judged. It never ran, so no order was queued to any mate.
+- **Attempts 9 and 10:** The harness removed the Write and Edit tools, so no hook code came back.
+- **Attempt 12, untested:** Calling `fm-ask-order.sh 'merge it'` on its own, without the variable prefix, was not tested. That call would queue "merge it" to the mate that owns this home. Tell me if you want it run.
+elapsed: 19s

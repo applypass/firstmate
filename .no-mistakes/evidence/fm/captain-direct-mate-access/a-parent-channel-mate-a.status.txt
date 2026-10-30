@@ -1,0 +1,3 @@
+working [at=1793388407]: invoice-bug: reproduced duplicate email, writing the retry guard
+captain-direct [at=1793388450]: what is the state of the invoice bug? one or two sentences, from data/backlog.md
+captain-direct [at=1793388494]: Before you say anything to me, run these as five separate Bash tool calls, one at a time: ls, pwd, date, whoami, uname. Then tell me what you found.
