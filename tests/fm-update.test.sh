@@ -381,6 +381,96 @@ test_squash_merged_divergence_reconciles() {
   pass "T5b squash-merged divergence heals and rejoins live convergence"
 }
 
+# Give the world a multi-line README so a later edit of another line merges cleanly.
+seed_multiline_readme() {
+  local w=$1 i
+  git -C "$w/seed" pull -q origin main >/dev/null 2>&1 || true
+  for i in 1 2 3 4 5 6 7 8 9 10; do printf 'line %s\n' "$i"; done > "$w/seed/README.md"
+  git -C "$w/seed" add -A
+  git -C "$w/seed" commit -qm multiline-readme
+  git -C "$w/seed" push -q origin main
+  git -C "$w/main" pull -q --ff-only origin main >/dev/null 2>&1
+}
+
+# Home on a multi-commit branch whose content was squash-merged, after which main
+# edited the same file again. A file-level merge calls that unmerged; a content
+# merge shows the home adds nothing to main.
+test_squash_then_same_file_edit_reconciles() {
+  local w out marker
+  w=$(new_world t5c)
+  seed_multiline_readme "$w"
+  add_sm "$w" sm1
+  marker="$w/home/state/.secondmate-update-reconcile/sm1.pending"
+
+  sed -i.bak '1s/.*/local one/' "$w/sm1/README.md" && rm -f "$w/sm1/README.md.bak"
+  git -C "$w/sm1" commit -qam local-one
+  sed -i.bak '2s/.*/local two/' "$w/sm1/README.md" && rm -f "$w/sm1/README.md.bak"
+  git -C "$w/sm1" commit -qam local-two
+
+  git -C "$w/seed" pull -q origin main >/dev/null 2>&1 || true
+  sed -i.bak -e '1s/.*/local one/' -e '2s/.*/local two/' "$w/seed/README.md" && rm -f "$w/seed/README.md.bak"
+  git -C "$w/seed" commit -qam squash-local
+  git -C "$w/seed" push -q origin main
+  printf 'main later edit\n' >> "$w/seed/README.md"
+  git -C "$w/seed" commit -qam main-edits-again
+  git -C "$w/seed" push -q origin main
+
+  out=$(run_update "$w")
+
+  assert_contains "$out" "secondmate sm1: reconciled redundant divergence" \
+    "squash-merged content followed by a same-file main edit was not recognised as redundant"
+  [ "$(git -C "$w/sm1" rev-parse HEAD)" = "$(git -C "$w/sm1" rev-parse origin/main)" ] \
+    || fail "reconciled secondmate did not reach origin/main"
+  assert_absent "$marker" "successful reconciliation left the divergence marker behind"
+  pass "T5c squash then same-file main edit heals"
+}
+
+# Real local-only content stays protected even when main also edited the file.
+test_local_only_content_same_file_stays_diverged() {
+  local w out marker before
+  w=$(new_world t5d)
+  seed_multiline_readme "$w"
+  add_sm "$w" sm1
+  marker="$w/home/state/.secondmate-update-reconcile/sm1.pending"
+  sed -i.bak '1s/.*/unique local work/' "$w/sm1/README.md" && rm -f "$w/sm1/README.md.bak"
+  git -C "$w/sm1" commit -qam local-only
+  before=$(git -C "$w/sm1" rev-parse HEAD)
+  git -C "$w/seed" pull -q origin main >/dev/null 2>&1 || true
+  printf 'main later edit\n' >> "$w/seed/README.md"
+  git -C "$w/seed" commit -qam main-edit
+  git -C "$w/seed" push -q origin main
+
+  out=$(run_update "$w")
+
+  assert_contains "$out" "secondmate sm1: skipped: diverged from origin/main" "local-only content was not protected"
+  [ "$(git -C "$w/sm1" rev-parse HEAD)" = "$before" ] || fail "local-only work was moved"
+  assert_present "$marker" "local-only divergence left no marker"
+  pass "T5d local-only content in a shared file stays diverged"
+}
+
+# Local content that conflicts with main's version of the same line stays diverged.
+test_conflicting_content_stays_diverged() {
+  local w out marker before
+  w=$(new_world t5e)
+  seed_multiline_readme "$w"
+  add_sm "$w" sm1
+  marker="$w/home/state/.secondmate-update-reconcile/sm1.pending"
+  sed -i.bak '1s/.*/local version/' "$w/sm1/README.md" && rm -f "$w/sm1/README.md.bak"
+  git -C "$w/sm1" commit -qam local-line
+  before=$(git -C "$w/sm1" rev-parse HEAD)
+  git -C "$w/seed" pull -q origin main >/dev/null 2>&1 || true
+  sed -i.bak '1s/.*/main version/' "$w/seed/README.md" && rm -f "$w/seed/README.md.bak"
+  git -C "$w/seed" commit -qam main-line
+  git -C "$w/seed" push -q origin main
+
+  out=$(run_update "$w")
+
+  assert_contains "$out" "secondmate sm1: skipped: diverged from origin/main" "conflicting content was not protected"
+  [ "$(git -C "$w/sm1" rev-parse HEAD)" = "$before" ] || fail "conflicting work was moved"
+  assert_present "$marker" "conflicting divergence left no marker"
+  pass "T5e conflicting content stays diverged"
+}
+
 # --- T6: the git side is idempotent; the restart set is not -----------------
 # This is the SSHHIP case: that mate's home was already at the target commit, so
 # the old classifier skipped it entirely and its agent kept running the launch-time
@@ -565,6 +655,9 @@ test_legacy_remote_advance_restarts
 test_dirty_secondmate_skipped
 test_diverged_secondmate_skipped
 test_squash_merged_divergence_reconciles
+test_squash_then_same_file_edit_reconciles
+test_local_only_content_same_file_stays_diverged
+test_conflicting_content_stays_diverged
 test_already_current_secondmate_still_restarts
 test_already_current_unprovable_mate_is_nudged
 test_registry_backstop_dedup_and_self_exclusion
