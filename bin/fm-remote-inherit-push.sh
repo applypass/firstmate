@@ -189,7 +189,7 @@ while [ "$i" -le "$launched" ]; do
 done
 # Fork-only: remove inherited data-directory copies the primary no longer has.
 if [ "$status" -eq 0 ]; then
-  fm_handbook_inherit_push_prune "$SCRIPT_DIR" "$ID" "$GENERATION" "$HANDBOOK_ITEMS" "$TMP" || status=$?
+  fm_handbook_inherit_push_prune "$SCRIPT_DIR" "$ID" "$GENERATION" "$DATA" "$TMP" || status=$?
 fi
 # Fork-only end
 exit "$status"

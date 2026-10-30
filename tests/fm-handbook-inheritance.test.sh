@@ -235,6 +235,63 @@ test_hardlinked_and_oversize_sources_skipped_on_both_routes() {
   pass "both routes: hardlinked and oversize handbook files are skipped with a warning; everything else arrives"
 }
 
+add_published_extras() {  # adds topic-b, topic-c, topic-d to the primary handbook
+  printf 'topic b\n' > "$P/data/$DIR/topic-b.md"
+  printf 'topic c\n' > "$P/data/$DIR/topic-c.md"
+  printf 'topic d\n' > "$P/data/$DIR/topic-d.md"
+}
+
+make_published_sources_skipped() {  # hardlink topic-a, grow topic-b, lock topic-c, delete topic-d
+  ln "$P/data/$DIR/topic-a.md" "$TMP_ROOT/${P//\//_}.hardlink"
+  head -c 1048577 /dev/zero > "$P/data/$DIR/topic-b.md"
+  chmod 000 "$P/data/$DIR/topic-c.md"
+  rm -f "$P/data/$DIR/topic-d.md"
+}
+
+assert_published_copies_kept() {  # <home> <output> <route>
+  assert_equals "topic a" "$(cat "$1/data/$DIR/topic-a.md")" "$3: a published copy of a now-hardlinked file is kept"
+  assert_equals "topic b" "$(cat "$1/data/$DIR/topic-b.md")" "$3: a published copy of a now-oversize file is kept"
+  assert_equals "topic c" "$(cat "$1/data/$DIR/topic-c.md")" "$3: a published copy of a now-unreadable file is kept"
+  [ ! -e "$1/data/$DIR/topic-d.md" ] || fail "$3: a deleted source file should still be removed"
+  assert_contains "$2" "skipping hardlinked inherited file $P/data/$DIR/topic-a.md" "$3: hardlink skip should warn"
+  assert_contains "$2" "bytes $P/data/$DIR/topic-b.md" "$3: oversize skip should warn"
+  assert_contains "$2" "skipping unreadable inherited file $P/data/$DIR/topic-c.md" "$3: unreadable skip should warn"
+}
+
+remove_skipped_sources() {
+  rm -f "$P/data/$DIR/topic-a.md" "$P/data/$DIR/topic-b.md" "$P/data/$DIR/topic-c.md"
+}
+
+assert_skipped_copies_removed() {  # <home> <route>
+  for n in topic-a.md topic-b.md topic-c.md; do
+    [ ! -e "$1/data/$DIR/$n" ] || fail "$2: $n should be removed once its source is gone"
+  done
+  assert_equals "index v1" "$(cat "$1/data/$DIR/INDEX.md")" "$2: INDEX.md stays"
+}
+
+test_skipped_sources_keep_published_copies_on_both_routes() {
+  [ "$(id -u)" != 0 ] || { pass "skipped: root can read a mode-000 file"; return; }
+  new_pair local-skip-published
+  add_published_extras
+  push_local || fail "local propagation failed: $LOCAL_OUT"
+  make_published_sources_skipped
+  push_local || fail "local propagation should not fail on skipped handbook files: $LOCAL_OUT"
+  assert_published_copies_kept "$S" "$LOCAL_OUT" local
+  remove_skipped_sources
+  push_local || fail "local propagation failed: $LOCAL_OUT"
+  assert_skipped_copies_removed "$S" local
+  setup_remote remote-skip-published
+  add_published_extras
+  push_remote 1 || fail "remote push failed: $REMOTE_OUT"
+  make_published_sources_skipped
+  push_remote 2 || fail "remote push should not fail on skipped handbook files: $REMOTE_OUT"
+  assert_published_copies_kept "$R" "$REMOTE_OUT" remote
+  remove_skipped_sources
+  push_remote 3 || fail "remote push failed: $REMOTE_OUT"
+  assert_skipped_copies_removed "$R" remote
+  pass "both routes: a published file that becomes hardlinked, oversize or unreadable keeps its copy; a deleted one is removed"
+}
+
 test_declared_items_are_per_file_and_data_dirs_override() {
   new_pair items
   items=$(fm_handbook_inherit_items "$P/data")
@@ -257,4 +314,5 @@ fm_test_run \
   test_remote_source_dir_absent_removes_only_inherited \
   test_receiver_refuses_traversal_and_undeclared_names \
   test_hardlinked_and_oversize_sources_skipped_on_both_routes \
+  test_skipped_sources_keep_published_copies_on_both_routes \
   test_declared_items_are_per_file_and_data_dirs_override

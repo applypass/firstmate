@@ -8,8 +8,10 @@
 # each regular, non-symlink, non-hidden file directly inside such a directory of
 # the primary home becomes the inherited item data/<dir>/<file>. A file with more
 # than one hard link or over FM_HANDBOOK_INHERIT_MAX_BYTES (the remote
-# receiver's byte bound) is skipped with a warning on both routes, so one such
-# file never fails the push or blocks the other inherited items. Copies are
+# receiver's byte bound), or that cannot be read, is skipped with a warning on
+# both routes, so one such file never fails the push or blocks the other
+# inherited items; a copy it already published is kept, since the source file
+# still exists. Copies are
 # read-only (mode 444) and written atomically (temp file + mv). Local and remote
 # routes both derive their items from fm_handbook_inherit_items, so the sender
 # and the receiver cannot disagree about which names are legal.
@@ -18,9 +20,9 @@
 # data/.<dir>.inherited, and the remote receiver keeps one generation record per
 # file (bin/fm-remote-inherit-handbook.sh). A file the primary no longer has is
 # removed from the secondmate only when it was published by inheritance, so a
-# file a mate wrote into that directory is never touched. A source directory
-# proven absent removes every previously inherited copy; an inspection error
-# preserves the destination.
+# file a mate wrote into that directory is never touched. Only proven absence
+# removes a copy: a source directory proven absent removes every previously
+# inherited copy, and an inspection error or a skipped file preserves it.
 
 # Space-separated, data-dir-relative directory names. Override only in tests.
 FM_INHERITABLE_DATA_DIRS="${FM_INHERITABLE_DATA_DIRS:-firstmate-handbook}"
@@ -61,25 +63,39 @@ fm_handbook_inherit_rel_dir_ok() {  # <rel>
   fm_handbook_inherit_dir_declared "${1#data/}"
 }
 
-# The source files of one declared dir, names only, one per line, sorted.
+# The safe-named entries present in one declared dir of the primary, names
+# only, one per line, sorted: the names whose inherited copies must be kept.
 # Prints nothing and returns 0 when the dir is proven absent; returns 1 when the
-# dir cannot be inspected or is not a real directory. Warns on stderr for each
-# hardlinked, oversize or unreadable file it skips.
-fm_handbook_inherit_source_files() {  # <src-data> <dir>
-  local path=$1/$2 present entry name bytes
+# dir cannot be inspected or is not a real directory.
+fm_handbook_inherit_present_names() {  # <src-data> <dir>
+  local path=$1/$2 present entry name
   present=$(fm_config_source_present "$path") || return 1
   [ "$present" = 1 ] || return 0
   [ -d "$path" ] && [ ! -L "$path" ] || return 1
   for entry in "$path"/*; do
     [ -e "$entry" ] || [ -L "$entry" ] || continue
     name=${entry##*/}
-    fm_handbook_inherit_name_ok "$name" || continue
+    fm_handbook_inherit_name_ok "$name" && printf '%s\n' "$name"
+  done | LC_ALL=C sort
+}
+
+# The inheritable source files of one declared dir, names only, one per line,
+# sorted: the present names that are regular, non-symlink, single-link, readable
+# files within the byte bound. Same return contract as
+# fm_handbook_inherit_present_names. Warns on stderr for each hardlinked,
+# oversize or unreadable file it skips.
+fm_handbook_inherit_source_files() {  # <src-data> <dir>
+  local names name entry bytes
+  names=$(fm_handbook_inherit_present_names "$1" "$2") || return 1
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    entry=$1/$2/$name
     [ -f "$entry" ] && [ ! -L "$entry" ] || continue
     if [ "$(fm_inherit_file_link_count "$entry")" != 1 ]; then
       echo "fm-config-inherit: warning: skipping hardlinked inherited file $entry" >&2
       continue
     fi
-    bytes=$(LC_ALL=C wc -c < "$entry" 2>/dev/null | tr -d ' ')
+    bytes=$(LC_ALL=C wc -c 2>/dev/null < "$entry" | tr -d ' ')
     case "$bytes" in
       ''|*[!0-9]*)
         echo "fm-config-inherit: warning: skipping unreadable inherited file $entry" >&2
@@ -91,7 +107,9 @@ fm_handbook_inherit_source_files() {  # <src-data> <dir>
       continue
     fi
     printf '%s\n' "$name"
-  done | LC_ALL=C sort
+  done <<EOF
+$names
+EOF
 }
 
 # Per-file items for every declared dir of the primary: data/<dir>/<file> lines.
@@ -170,10 +188,11 @@ fm_handbook_inherit_fail() {  # <item> <path> <reason>
 # Converge one declared dir: <src-data>/<dir> into <dest-data>/<dir>. Returns 1
 # on any error; every error leaves the affected destination files unchanged.
 fm_handbook_inherit_propagate_dir() {  # <src-data> <dest-data> <dir>
-  local src_data=$1 dest_data=$2 dir=$3 dest_dir names published name item src dest rc=0 keep
+  local src_data=$1 dest_data=$2 dir=$3 dest_dir names present published name item src dest rc=0 keep
   dest_dir=$dest_data/$dir
   item=data/$dir
-  if ! names=$(fm_handbook_inherit_source_files "$src_data" "$dir"); then
+  if ! present=$(fm_handbook_inherit_present_names "$src_data" "$dir") \
+    || ! names=$(fm_handbook_inherit_source_files "$src_data" "$dir"); then
     fm_handbook_inherit_fail "$item" "$src_data/$dir" "cannot inspect primary source directory"
     return 1
   fi
@@ -235,6 +254,11 @@ $names
 " in *"
 $name
 "*) continue ;; esac
+    case "
+$present
+" in *"
+$name
+"*) keep="$keep$name"$'\n'; continue ;; esac
     dest=$dest_dir/$name
     item=data/$dir/$name
     if [ ! -e "$dest" ] && [ ! -L "$dest" ]; then
@@ -275,20 +299,19 @@ propagate_handbook_dirs() {  # <src-data> <dest-data>
 
 # Remote route: after the per-file puts, tell the receiver which names the
 # primary still has, so it removes the inherited copies of files that are gone
-# (and, with an absent or empty source dir, all of them). <items> is the
-# data/<dir>/<file> list the puts were planned from, so puts and prune agree.
-# The receiver removes only files it published. Prints the receiver's output;
-# non-zero on failure.
-fm_handbook_inherit_push_prune() {  # <script-dir> <id> <generation> <items> <tmp-dir>
-  local script_dir=$1 id=$2 generation=$3 items=$4 tmp=$5 dir list item bytes hash rc=0
+# (and, with an absent or empty source dir, all of them). A skipped file is
+# still present, so its copy is kept. The receiver removes only files it
+# published. Prints the receiver's output; non-zero on failure.
+fm_handbook_inherit_push_prune() {  # <script-dir> <id> <generation> <src-data> <tmp-dir>
+  local script_dir=$1 id=$2 generation=$3 src_data=$4 tmp=$5 dir names list bytes hash rc=0
   for dir in $FM_INHERITABLE_DATA_DIRS; do
     fm_handbook_inherit_name_ok "$dir" || continue
+    names=$(fm_handbook_inherit_present_names "$src_data" "$dir") || {
+      printf 'error: cannot inspect inherited source directory: %s\n' "$src_data/$dir" >&2
+      return 1
+    }
     list=$tmp/handbook-prune.$dir
-    while IFS= read -r item; do
-      case "$item" in "data/$dir/"*) printf '%s\n' "${item#"data/$dir/"}" ;; esac
-    done > "$list" <<EOF
-$items
-EOF
+    if [ -n "$names" ]; then printf '%s\n' "$names" > "$list"; else : > "$list"; fi
     bytes=$(LC_ALL=C wc -c < "$list" | tr -d ' ')
     hash=$(fm_inherit_sha256 "$list") || return 1
     "$script_dir/fm-on.sh" --stdin "$id" fm-remote-inherit.sh prune "data/$dir" "$bytes" "$hash" "$generation" \
