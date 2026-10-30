@@ -7,8 +7,9 @@
 # the Stop hooks. These tests drive the real teardown and spawn scripts:
 #   (1) retiring a leased second-mate home leaves no marker or lock in the slot;
 #   (2) a refused retirement keeps the home intact;
-#   (3) spawn refuses a slot carrying a second-mate marker or home lock, launches
-#       nothing there, and still launches a clean slot.
+#   (3) spawn refuses a slot carrying a live second-mate marker or a home lock
+#       whose pid is alive, launches nothing there, accepts a lock whose pid is
+#       dead, and still launches a clean slot.
 set -u
 
 # shellcheck source=tests/fixtures.sh
@@ -151,7 +152,7 @@ $rec
 REC
     case $leftover in
       marker) printf 'autoapply\n' > "$pool/.fm-secondmate-home"; want="$pool/.fm-secondmate-home" ;;
-      lock) mkdir -p "$pool/state"; printf '1\n' > "$pool/state/.lock"; want="$pool/state/.lock" ;;
+      lock) mkdir -p "$pool/state"; printf '%s\n' "$$" > "$pool/state/.lock"; want="$pool/state/.lock" ;;
     esac
     out=$(fm_test_run_spawn "$home" "$pool" "$fakebin" "$id" "$project" --scout); status=$?
     [ "$status" -ne 0 ] || fail "spawn into a slot with a second-mate $leftover should refuse"$'\n'"$out"
@@ -160,6 +161,24 @@ REC
     assert_present "$want" "a refused spawn must not delete another home's $leftover"
   done
   pass "spawn refuses a slot carrying a second-mate marker or home lock and launches nothing"
+}
+
+test_spawn_accepts_a_slot_with_a_dead_pid_lock() {
+  local content id=slot-home-deadlock rec case_dir home project pool fakebin out status dead
+  sh -c 'exit 0' & dead=$!
+  wait "$dead"
+  for content in "$dead" "" "not-a-pid"; do
+    rec=$(make_spawn_case "spawn-deadlock-${content:-empty}" "$id")
+    IFS='|' read -r case_dir home project pool fakebin <<REC
+$rec
+REC
+    mkdir -p "$pool/state"
+    printf '%s\n' "$content" > "$pool/state/.lock"
+    out=$(fm_test_run_spawn "$home" "$pool" "$fakebin" "$id" "$project" --scout); status=$?
+    expect_code 0 "$status" "a slot whose lock holds '$content' should launch"$'\n'"$out"
+    assert_present "$pool/state/.lock" "spawn must leave the dead lock for firstmate to retire"
+  done
+  pass "spawn accepts a slot whose lock pid is dead, empty or malformed"
 }
 
 test_spawn_accepts_a_renamed_marker_slot() {
@@ -192,6 +211,7 @@ test_retiring_a_leased_home_renames_its_markers
 test_markers_are_renamed_before_the_return_call
 test_failed_return_stops_with_a_manual_cleanup_message
 test_spawn_refuses_a_slot_with_home_leftovers
+test_spawn_accepts_a_slot_with_a_dead_pid_lock
 test_spawn_accepts_a_renamed_marker_slot
 test_spawn_still_launches_a_clean_slot
 
