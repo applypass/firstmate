@@ -456,15 +456,15 @@ fm_dod_pr_description_block() {  # <direct-PR|no-mistakes>
   cat <<'EOF'
 ## PR description
 Write every PR body in three parts, in this order, so a non-developer can follow the first two.
-1. What was wrong: plain words, no jargon. Say who or what is affected and why it matters, then walk one real worked example step by step with real names, ids and values from this task.
-2. What this changes: plain words again. Walk the same example after the change, then add a plain-text before/after flow in a ```text block.
+1. Why: plain words, no jargon - for a fix, what was wrong; for a new feature, what users or the team could not do before and why it matters; for a refactor or tooling change, what was slow, risky or costly. Walk one real worked example step by step with real names, ids and values from this task.
+2. What this changes: plain words again, for every kind of PR. Walk the same example after the change (for a feature, the same example with the new feature), then add a plain-text before/after flow in a ```text block.
 3. Technical details: Problem / Fix / Proof as tight bullets, never prose blobs. Name files, functions, tests and commands here.
 EOF
   if [ "$1" = no-mistakes ]; then
     cat <<'EOF'
 Whoever wrote the PR body, you or the pipeline from the project's own template, it may lack these parts.
 After /no-mistakes reports CI green, read the body back with `gh-axi pr view <number> --full`; the plain view truncates long bodies and would hide these sections at the end.
-If the plain "What was wrong" or "What this changes" section, the worked example, the before/after block, or the technical details is missing or out of order, write the complete body (every existing section, including the Pipeline section the pipeline appended, plus the additions) to a file and apply it with `gh-axi pr edit <number> --body-file <file>`, which replaces the whole body.
+If the plain "Why" or "What this changes" section, the worked example, the before/after block, or the technical details is missing or out of order, write the complete body (every existing section, including the Pipeline section the pipeline appended, plus the additions) to a file and apply it with `gh-axi pr edit <number> --body-file <file>`, which replaces the whole body.
 A PR body edit is not a commit, so it does not break the pushed-head check.
 EOF
   fi
