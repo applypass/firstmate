@@ -3902,6 +3902,15 @@ fi
   echo "error: task $ID has no brief at inaccessible data path $BRIEF" >&2
   exit 1
 }
+# Fork-only: never-wait brief check. A fresh ship or scout brief that sets up a wait the worker can end itself,
+# or hands over access expiring within 2 hours, is refused (bin/fm-never-wait.sh brief-check).
+if [ "$RELAUNCH" -eq 0 ] && { [ "$KIND" = ship ] || [ "$KIND" = scout ]; }; then
+  "$SCRIPT_DIR/fm-never-wait.sh" brief-check "$BRIEF" >&2 || {
+    echo "error: spawn refused - task $ID's brief breaks the never-wait rule (see the lines above)" >&2
+    exit 1
+  }
+fi
+# Fork-only end
 if [ "$KIND" = ship ] || [ "$KIND" = scout ]; then
   HERDR_LIFECYCLE_BRIEF_GUARD=$(fm_config_source_present "$CONFIG/herdr-lifecycle-spawn-guard") || exit 1
   if [ "$HERDR_LIFECYCLE_BRIEF_GUARD" = 1 ]; then

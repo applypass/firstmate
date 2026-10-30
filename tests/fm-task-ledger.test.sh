@@ -6,15 +6,17 @@
 # charge, and the never-wait checks. No network, no real harness.
 set -u
 
-# shellcheck source=tests/lib.sh
-. "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
+# shellcheck source=tests/fixtures.sh
+. "$(dirname "${BASH_SOURCE[0]}")/fixtures.sh"
 
 # tests/lib.sh turns the ledger gates off for fixtures; this suite tests them.
-unset FM_TASK_LEDGER
+unset FM_TASK_LEDGER FM_NEVER_WAIT
+export FM_NEVER_WAIT_UNTHROTTLED=1
 export TZ=UTC
 
 TMP_ROOT=$(fm_test_tmproot fm-task-ledger)
 LEDGER="$ROOT/bin/fm-task-ledger.sh"
+NEVER="$ROOT/bin/fm-never-wait.sh"
 FM="$TMP_ROOT/home"
 mkdir -p "$FM/data" "$FM/state"
 export FM_HOME="$FM"
@@ -252,6 +254,149 @@ test_turnend_guard_charges_a_primary_turn() {
   pass "the turn-end guard charges a primary session's turn"
 }
 
+# A fake unsigned JWT whose exp claim is $1.
+fake_jwt() {
+  local payload
+  payload=$(printf '{"sub":"user","exp":%s}' "$1" | base64 | tr -d '=\n' | tr '+/' '-_')
+  printf 'eyJhbGciOiJub25lIn0.%s.sig' "$payload"
+}
+
+brief_with() {  # <file> <line>
+  printf '# Task\n## Captain'"'"'s intent\nship it\n\n## Firstmate spec\n%s\n' "$2" > "$1"
+}
+
+test_brief_check_refuses_report_blocked_asking_for_self_obtainable() {
+  local f="$TMP_ROOT/brief.md" out rc line
+  for line in \
+    "If the share link expires, report blocked asking for a new Vercel share link." \
+    "When you need a Clerk session JWT, append blocked and wait for the captain." \
+    "Report blocked asking for test database access." \
+    "If you cannot see the logs, report blocked asking for SigNoz access."; do
+    brief_with "$f" "$line"
+    out=$("$NEVER" brief-check "$f" --now 1000 2>&1); rc=$?
+    expect_code 1 "$rc" "refused: $line"
+    assert_contains "$out" "fix:" "names the way to get it: $line"
+  done
+  brief_with "$f" "Mint your own Vercel share link with the Vercel MCP; if the page 403s, mint another and continue."
+  "$NEVER" brief-check "$f" --now 1000 >/dev/null 2>&1 || fail "a brief that says how to self-serve was refused"
+  brief_with "$f" "If you need the production admin password, report blocked: captain-credential."
+  "$NEVER" brief-check "$f" --now 1000 >/dev/null 2>&1 || fail "asking for a captain credential was refused"
+  pass "brief-check refuses report-blocked-asking for a self-obtainable item"
+}
+
+test_brief_check_refuses_access_expiring_within_two_hours() {
+  local f="$TMP_ROOT/brief-exp.md" out rc now=1800000000
+  brief_with "$f" "Use this Clerk token: $(fake_jwt $((now + 3600)))"
+  out=$("$NEVER" brief-check "$f" --now $now 2>&1); rc=$?
+  expect_code 1 "$rc" "a JWT with 1 h left is refused"
+  assert_contains "$out" "expires" "says why"
+  brief_with "$f" "Use this Clerk token: $(fake_jwt $((now + 86400)))"
+  "$NEVER" brief-check "$f" --now $now >/dev/null 2>&1 || fail "a JWT with 24 h left was refused"
+  brief_with "$f" "The share link expires in 30 minutes."
+  "$NEVER" brief-check "$f" --now $now >/dev/null 2>&1 && fail "expires in 30 minutes was accepted"
+  brief_with "$f" "The share link expires in 24 hours."
+  "$NEVER" brief-check "$f" --now $now >/dev/null 2>&1 || fail "expires in 24 hours was refused"
+  brief_with "$f" "Access expires at 2027-01-15T08:30:00Z."
+  "$NEVER" brief-check "$f" --now "$(date -u -j -f %Y-%m-%dT%H:%M:%SZ 2027-01-15T07:00:00Z +%s 2>/dev/null || date -u -d 2027-01-15T07:00:00Z +%s)" >/dev/null 2>&1 && fail "an ISO expiry 90 minutes away was accepted"
+  brief_with "$f" "Access exp=$((now + 600))"
+  "$NEVER" brief-check "$f" --now $now >/dev/null 2>&1 && fail "an epoch expiry 10 minutes away was accepted"
+  pass "brief-check refuses handed-over access that expires within 2 hours"
+}
+
+test_spawn_refuses_a_never_wait_violation() {
+  local home="$TMP_ROOT/nwspawn" out rc
+  fm_test_spawn_home "$home"
+  fm_git_identity fmtest fmtest@example.invalid
+  fm_git_init_commit "$home/projects/p" >/dev/null 2>&1 || { git init -q "$home/projects/p" && git -C "$home/projects/p" commit -q --allow-empty -m init; }
+  fm_test_spawn_brief "$home" nw-task "If the link expires, report blocked asking for a new Vercel share link."
+  FM_HOME=$home "$LEDGER" record nw-task intake-start --at 1
+  FM_HOME=$home "$LEDGER" record nw-task planning-done --at 2
+  out=$(FM_HOME=$home FM_DATA_OVERRIDE="$home/data" "$ROOT/bin/fm-spawn.sh" nw-task "$home/projects/p" --scout 2>&1); rc=$?
+  expect_code 1 "$rc" "spawn is refused"
+  assert_contains "$out" "never wait" "the refusal names the rule"
+  pass "spawn refuses a brief that sets up a self-fixable wait"
+}
+
+# status_block <home> <id> <epoch> <text>: append a blocked line.
+status_block() { printf 'blocked [at=%s]: %s\n' "$3" "$4" >> "$1/state/$2.status"; }
+
+test_sweep_rejects_a_block_without_a_legal_reason() {
+  local home="$TMP_ROOT/nwsweep1" out
+  mkdir -p "$home/state" "$home/data"
+  status_block "$home" bad-task 1000 "waiting on someone to send me a fresh Vercel share link"
+  out=$(FM_HOME=$home "$NEVER" sweep --now 1100)
+  assert_contains "$out" "SELF-FIX bad-task" "rejected and routed as a self-fix"
+  assert_contains "$out" "Vercel MCP" "with the playbook step for the blocker"
+  out=$(FM_HOME=$home "$NEVER" sweep --now 1200)
+  assert_not_contains "$out" "SELF-FIX" "the same block is routed once"
+  status_block "$home" ok1 1000 "captain-credential: need the prod admin password"
+  status_block "$home" ok2 1000 "captain-decision: pick option a or b"
+  status_block "$home" ok3 1000 "resource-exhausted: OpenAI credit is gone"
+  status_block "$home" ok4 1000 "external-wait until=2027-01-01T00:00Z: vendor fix"
+  out=$(FM_HOME=$home "$NEVER" sweep --now 1300)
+  assert_not_contains "$out" "SELF-FIX" "the four legal reasons are accepted"
+  status_block "$home" bad2 1000 "external-wait: vendor fix with no end time"
+  out=$(FM_HOME=$home "$NEVER" sweep --now 1400)
+  assert_contains "$out" "SELF-FIX bad2" "external-wait without an end time is rejected"
+  assert_contains "$(FM_HOME=$home "$NEVER" playbook "unknown thing")" "no known playbook" "unknown blockers get the generic self-fix"
+  pass "sweep rejects blocks without a legal reason and routes them with the playbook"
+}
+
+test_sweep_alarms_a_stale_block_and_counts_blocked_time() {
+  local home="$TMP_ROOT/nwsweep2" out
+  mkdir -p "$home/state" "$home/data"
+  status_block "$home" stuck 1000 "captain-decision: pick option a or b"
+  out=$(FM_HOME=$home "$NEVER" sweep --now $((1000 + 600)))
+  assert_not_contains "$out" "ALARM" "a 10 minute block is not yet an alarm"
+  out=$(FM_HOME=$home "$NEVER" sweep --now $((1000 + 901)))
+  assert_contains "$out" "ALARM stuck" "a 15 minute block with no action alarms"
+  assert_contains "$out" "tell the captain" "the alarm reaches the captain through main"
+  out=$(FM_HOME=$home "$NEVER" sweep --now $((1000 + 1000)))
+  assert_not_contains "$out" "ALARM" "one alarm per threshold"
+  out=$(FM_HOME=$home "$NEVER" sweep --now $((1000 + 1900)))
+  assert_contains "$out" "ALARM stuck" "it repeats each threshold until someone acts"
+  # A steer is action: the next threshold stays quiet.
+  mkdir -p "$home/state/stuck.inbox"
+  printf 'try the other link\n' > "$home/state/stuck.inbox/1.msg"
+  out=$(FM_HOME=$home "$NEVER" sweep --now $((1000 + 3000)))
+  assert_not_contains "$out" "ALARM" "a steer after the block counts as action"
+  # The block is blocked time in the ledger, closed when the worker moves on.
+  printf 'working [at=%s]: carrying on\n' 4000 >> "$home/state/stuck.status"
+  FM_HOME=$home "$NEVER" sweep --now 4100 >/dev/null
+  out=$(FM_HOME=$home "$LEDGER" summary stuck --now 5000)
+  assert_contains "$out" "blocked_seconds=3000" "blocked time runs from the block to the next status line"
+  pass "sweep alarms a block that sits 15 minutes with no action and counts it as blocked time"
+}
+
+test_brief_teaches_the_block_reasons() {
+  local home="$TMP_ROOT/nwbrief" mode brief
+  mkdir -p "$home/data" "$home/state"
+  for mode in no-mistakes direct-PR local-only; do
+    FM_HOME=$home "$ROOT/bin/fm-brief.sh" "brief-$mode" some-proj --mode "$mode" >/dev/null 2>&1 || fail "brief scaffold failed for $mode"
+    brief="$home/data/brief-$mode/brief.md"
+    assert_grep "captain-credential, captain-decision, resource-exhausted, or external-wait until=" "$brief" "$mode brief lists the four reasons"
+  done
+  pass "ship briefs teach the four legal block reasons"
+}
+
+test_watcher_wakes_on_a_never_wait_finding() {
+  local home="$TMP_ROOT/nwwatch" out="$TMP_ROOT/nwwatch.out" pid i=0 now
+  mkdir -p "$home/state" "$home/config" "$home/data"
+  now=$(date +%s)
+  status_block "$home" wtask $((now - 1200)) "waiting on someone to send me a fresh Vercel share link"
+  : > "$home/state/wtask.meta"
+  FM_HOME=$home FM_STATE_OVERRIDE="$home/state" FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 \
+    FM_HEARTBEAT=999999 FM_SECONDMATE_LIVENESS_SECS=99999999 bash "$ROOT/bin/fm-watch.sh" > "$out" 2>&1 &
+  pid=$!
+  while [ "$i" -lt 150 ] && kill -0 "$pid" 2>/dev/null; do sleep 0.1; i=$((i + 1)); done
+  if kill -0 "$pid" 2>/dev/null; then kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; fail "watcher never surfaced the finding: $(cat "$out")"; fi
+  wait "$pid" 2>/dev/null
+  assert_contains "$(cat "$out")" "check: never-wait" "the watcher wakes with the never-wait reason"
+  assert_contains "$(cat "$out")" "SELF-FIX wtask" "and names the self-fix"
+  assert_contains "$(cat "$out")" "ALARM wtask" "and the stale-block alarm"
+  pass "the watcher wakes the supervisor on a never-wait finding"
+}
+
 fm_test_run \
   test_record_appends_json_lines \
   test_record_rejects_unknown_event \
@@ -267,4 +412,11 @@ fm_test_run \
   test_captain_hold_records_the_wait \
   test_charge_bills_the_open_task_then_fleet_overhead \
   test_charge_is_a_noop_without_a_session \
-  test_turnend_guard_charges_a_primary_turn
+  test_turnend_guard_charges_a_primary_turn \
+  test_brief_check_refuses_report_blocked_asking_for_self_obtainable \
+  test_brief_check_refuses_access_expiring_within_two_hours \
+  test_spawn_refuses_a_never_wait_violation \
+  test_sweep_rejects_a_block_without_a_legal_reason \
+  test_sweep_alarms_a_stale_block_and_counts_blocked_time \
+  test_brief_teaches_the_block_reasons \
+  test_watcher_wakes_on_a_never_wait_finding

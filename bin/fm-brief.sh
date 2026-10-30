@@ -723,6 +723,7 @@ The report is the only thing that survives, so anything worth keeping must be in
    copies that URL from your line rather than assembling one.
 $CREWMATE_PAUSE_INSTRUCTIONS
 5. If you hit the same obstacle twice, append \`blocked [at=<epoch>]: {why}\` and stop; firstmate will help.
+   Start the {why} with one reason: captain-credential, captain-decision, resource-exhausted, or external-wait until=<UTC time, such as 2026-10-30T12:00Z>. A blocker you can clear yourself (an expired test link, a missing test token, database or log access) is not a reason: get it yourself and keep going. A block with no legal reason is rejected, and one older than 15 minutes with no action alarms the captain.
 6. If a decision belongs to a human (product choices, destructive actions),
    append \`needs-decision [at=<epoch>]: {summary of options}\` and stop. Firstmate will reply with the decision.
    A decision or blocker you opened stays open until a \`resolved\` line carrying its exact key lands; a later \`done:\` or \`working:\` line never closes it, even when the answer is what started that work.
@@ -803,6 +804,7 @@ $RULE1
    turn after it; continue the same stage until a defined \`done:\` gate under Definition of done.
 $CREWMATE_PAUSE_INSTRUCTIONS
 5. If you hit the same obstacle twice, append \`blocked [at=<epoch>]: {why}\` and stop; firstmate will help.
+   Start the {why} with one reason: captain-credential, captain-decision, resource-exhausted, or external-wait until=<UTC time, such as 2026-10-30T12:00Z>. A blocker you can clear yourself (an expired test link, a missing test token, database or log access) is not a reason: get it yourself and keep going. A block with no legal reason is rejected, and one older than 15 minutes with no action alarms the captain.
 6. If a decision belongs above the implementation worker (product choices, destructive actions),
    append \`needs-decision [at=<epoch>]: {summary of options}\` and stop. Firstmate will reply with the decision.
 $ASK_USER_BLOCK

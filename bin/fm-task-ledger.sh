@@ -2,7 +2,7 @@
 # Fork-only: fm-task-ledger.sh - the append-only per-task event ledger (applypass fork).
 #
 # usage:
-#   fm-task-ledger.sh record <id> <event> [--at EPOCH] [--session ID] [--note TEXT] [--once]
+#   fm-task-ledger.sh record <id> <event> [--at EPOCH] [--session ID] [--note TEXT] [--once] [--dedupe]
 #   fm-task-ledger.sh show <id>
 #   fm-task-ledger.sh require <spawn|merge> <id>
 #   fm-task-ledger.sh has <id> <event>
@@ -13,13 +13,16 @@
 #   fm-task-ledger.sh charge [--payload JSON]
 #   fm-task-ledger.sh tokens <id>
 #   fm-task-ledger.sh sessions <id>
+#   fm-task-ledger.sh path <id>
+#   fm-task-ledger.sh open-block <id>
 #
 # record   appends one JSON line {at, event, session, note} to
 #          data/ticket-ledger/<id>.jsonl in the firstmate home. The file is
 #          append-only, lives in data/ rather than state/, and so outlives the
 #          task's cleanup. --session defaults to $FM_LEDGER_SESSION, then
 #          $CLAUDE_SESSION_ID, then "none"; --at defaults to now. --once
-#          appends nothing when the task already has that event.
+#          appends nothing when the task already has that event; --dedupe
+#          appends nothing when it has that event at that same --at time.
 # show     prints the task's events, oldest first.
 # require  exits 0 when the events a step needs are all recorded and 1 when one
 #          is missing. The refusal names each missing event and the one command
@@ -54,6 +57,8 @@
 #          repeated assistant message blocks counted once. It never fails the
 #          turn end, and a payload without a session id records nothing.
 # tokens   sums a task's turn events as input=N output=N cache_read=N cache_create=N.
+# path     prints the ledger file path.
+# open-block prints the start time of a blocked-start with no blocked-end after it, if any.
 # sessions lists the distinct session ids a task's events carry: the keys a
 #          cost report joins other token sources on.
 #
@@ -83,7 +88,7 @@ valid_event() { case " $EVENTS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 die_usage() { echo "error: $1" >&2; exit 2; }
 
 fm_ledger_record() {  # <id> <event> [--at E] [--session S] [--note T]
-  local id=$1 event=$2 at='' session='' note='' once=0 file line
+  local id=$1 event=$2 at='' session='' note='' once=0 dedupe=0 file line
   shift 2
   while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -91,6 +96,7 @@ fm_ledger_record() {  # <id> <event> [--at E] [--session S] [--note T]
       --session) [ "$#" -gt 1 ] || die_usage "--session needs a value"; session=$2; shift 2 ;;
       --note) [ "$#" -gt 1 ] || die_usage "--note needs a value"; note=$2; shift 2 ;;
       --once) once=1; shift ;;
+      --dedupe) dedupe=1; shift ;;
       *) die_usage "unknown argument: $1" ;;
     esac
   done
@@ -103,6 +109,7 @@ fm_ledger_record() {  # <id> <event> [--at E] [--session S] [--note T]
   command -v jq >/dev/null 2>&1 || { echo "fm-task-ledger: jq is required" >&2; exit 1; }
   file=$(fm_ledger_file "$id")
   [ "$once" -eq 0 ] || ! fm_ledger_has "$id" "$event" || return 0
+  [ "$dedupe" -eq 0 ] || ! { [ -s "$file" ] && jq -e --arg e "$event" --argjson at "$at" 'select(.event == $e and .at == $at)' "$file" >/dev/null 2>&1; } || return 0
   mkdir -p "$(dirname "$file")" || exit 1
   line=$(jq -nc --argjson at "$at" --arg event "$event" --arg session "$session" --arg note "$note" \
     '{at: $at, event: $event, session: $session} + (if $note == "" then {} else {note: $note} end)') || exit 1
@@ -308,6 +315,19 @@ case "$CMD" in
   summary)
     [ "$#" -ge 1 ] || die_usage "summary needs <id>"
     fm_ledger_summary "$@"
+    ;;
+  path)
+    [ "$#" -eq 1 ] || die_usage "path needs <id>"
+    valid_id "$1" || die_usage "invalid task id: $1"
+    fm_ledger_file "$1"
+    ;;
+  open-block)
+    [ "$#" -eq 1 ] || die_usage "open-block needs <id>"
+    valid_id "$1" || die_usage "invalid task id: $1"
+    [ -s "$(fm_ledger_file "$1")" ] || exit 0
+    jq -rs 'sort_by(.at) | reduce .[] as $e (null;
+      if $e.event == "blocked-start" then (. // $e.at)
+      elif $e.event == "blocked-end" then null else . end) // empty' "$(fm_ledger_file "$1")"
     ;;
   focus)
     [ "$#" -eq 1 ] || die_usage "focus needs <id>"
