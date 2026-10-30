@@ -1,0 +1,33 @@
+=== Scenario: short captain reply closes window (HEAD 41a2bb49, real Claude in fm-lab secondmate home) ===
+--- pane ---
+ ▐▛███▛█   Claude Code v2.1.314
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.iOZXPr
+❯ Test of a hook. First write exactly this text reply, alone, before any tool call: Captain, shipshape.  Then run these five Bash commands one at a time, each in its own separate tool call (no
+  batching): echo one, echo two, echo three, echo four, echo five. If any call is refused, report the refusal text verbatim and stop.
+⏺ Captain, shipshape.
+  Ran 5 shell commands
+⏺ All five commands ran, one per call, and none were refused. They printed one, two, three, four and five.
+  The hook also said its note to the parent firstmate could not be written, and asked me to add a captain-direct line with your words myself. It didn't say which file that line goes in, so I didn't
+  add it. Tell me the path and I'll add it.
+✻ Sautéed for 26s · done 1:44 AM
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx 5% | no-git | Test of a hook. First write exactly this text repl...
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← 5 agents
+--- state/.reply-first after run ---
+epoch=1793391245
+count=1
+replied=1
+fired=0
+transcript=/Users/uayyagari/.claude-work/projects/-private-var-folders-vr--90lw3-s0bs-nw2f7b6t9yrm0000gn-T-fm-lab-iOZXPr/7d3f5c42-8069-4413-96e1-c478723cea1c.jsonl
+base=0
+--- transcript assistant blocks ---
+{"type":"text","text":"Captain, shipshape."}
+{"type":"tool_use","text":"echo one"}
+{"type":"tool_use","text":"echo two"}
+{"type":"tool_use","text":"echo three"}
+{"type":"tool_use","text":"echo four"}
+{"type":"tool_use","text":"echo five"}
+{"type":"text","text":"All five commands ran, one per call, and none were refused. They printed one, two, three, four and five.\n\nThe hook also said its note to the parent firstmate could not be written, and asked me to add a captain-direct line with your words myself. It didn't say which file that line goes in, so I didn't add it. Tell me the path and I'll add it."}

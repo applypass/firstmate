@@ -1,0 +1,20 @@
+$ bash tests/fm-reply-first.test.sh   # HEAD 41a2bb49
+ok - the call after the third command is refused once, then work resumes
+ok - a status append to the parent counts as the reply
+ok - an answer of a paragraph closes the window, a line of narration does not
+ok - a short reply addressing the captain closes the window, short narration does not
+ok - text addressed to the captain closes the window, narration naming the captain or a captain script does not
+ok - only text after the message opens the window counts
+ok - a new message opens a fresh window
+ok - clear closes the window, so routed work is never refused
+ok - calls with no open window are never refused
+ok - reply-first runs in a second mate home only
+ok - the limit is tunable and broken input never blocks work
+ok - reply-first is clean under bin/fm-lint.sh
+
+$ same test file with bin/fm-reply-first.sh from base 91e4d276
+ok - the call after the third command is refused once, then work resumes
+ok - a status append to the parent counts as the reply
+ok - an answer of a paragraph closes the window, a line of narration does not
+not ok - a short reply to the captain closes the window, call 4 runs: expected exit 0, got 2
+exit=1
