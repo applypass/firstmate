@@ -161,10 +161,12 @@ test_drain_over_a_long_unread_span_stays_fast() {
   for t in t1 t2; do
     log="$state/$t.status"
     make_log "$dir/$t.more" "$LOG_LINES"
-    cat "$dir/$t.more" >> "$log"
-    printf 'note [at=1790020000]: %s heads-up for the captain\n' "$t" >> "$log"
-    printf 'resolved [key=pending-reply-%s0] [at=1790020001]: pending-reply-resolved: task=%s via=status\n' "$t" "$t" >> "$log"
-    printf 'resolved [key=pending-reply-%s1] [at=1790020002]: answered: not a reserved close\n' "$t" >> "$log"
+    {
+      cat "$dir/$t.more"
+      printf 'note [at=1790020000]: %s heads-up for the captain\n' "$t"
+      printf 'resolved [key=pending-reply-%s0] [at=1790020001]: pending-reply-resolved: task=%s via=status\n' "$t" "$t"
+      printf 'resolved [key=pending-reply-%s1] [at=1790020002]: answered: not a reserved close\n' "$t"
+    } >> "$log"
     bash -c '. "$1"; status_open_decisions_incremental "$2" >/dev/null' _ "$ROOT/bin/fm-classify-lib.sh" "$log"
   done
   start=$(now_ms)
