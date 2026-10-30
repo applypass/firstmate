@@ -8,6 +8,19 @@ set -u
 TMP_ROOT=$(fm_test_tmproot fm-supervision-instructions)
 RENDER="$ROOT/bin/fm-supervision-instructions.sh"
 
+# Fork-only: the reply-first rule line rides a locked claude block and is absent from a read-only or other-harness one.
+test_reply_first_rule_line_in_a_locked_block_only() {
+  local out
+  out=$("$RENDER" --harness claude)
+  assert_contains "$out" "- Reply first:" "a locked block lacks the reply-first rule"
+  assert_contains "$out" "run_in_background" "the reply-first rule does not name the background form"
+  out=$("$RENDER" --harness claude --read-only 1)
+  assert_not_contains "$out" "- Reply first:" "a read-only block carries the reply-first rule"
+  out=$("$RENDER" --harness codex)
+  assert_not_contains "$out" "- Reply first:" "a codex block carries the claude-only reply-first rule"
+  pass "the reply-first rule renders in a locked claude block only"
+}
+
 test_selected_harness_block_only() {
   local out
   out=$("$RENDER" --harness codex)
@@ -334,6 +347,8 @@ test_pi_snippet_uses_effective_extension_path() {
 
 test_supervision_host_protocol_on_a_claude_home_unless_off
 test_supervision_host_protocol_on_every_arm_owner
+# Fork-only: reply-first rule
+test_reply_first_rule_line_in_a_locked_block_only
 test_selected_harness_block_only
 test_unknown_fallback
 test_conditional_stanzas

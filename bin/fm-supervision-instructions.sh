@@ -294,6 +294,10 @@ if [ -n "$HOST_SNIPPET" ]; then
   printf '%s\n' '- Supervision host: on; it takes away-posture wakes and, where the dialog mirror is verified, eligible attended wakes itself, and hands the rest to you (protocol at the end of this block).'
 fi
 ordinary_wake_line
+# Fork-only: reply-first rule (bin/fm-reply-first.sh enforces it with a Claude hook)
+if [ "$READ_ONLY" -eq 0 ] && [ "$HARNESS" = claude ]; then
+  printf '%s\n' '- Reply first: answer the captain in plain words before digging; after 3 commands without a reply the hook refuses the next. Hand digging to a worker or second mate. Run bin/fm-spawn.sh, bin/fm-dispatch-resolve.sh, and bin/fm-shortcut-ticket.sh with the Bash tool run_in_background (never shell &) so the reply is not held behind them.'
+fi
 printf '\n'
 render_snippet
 printf '\n'
