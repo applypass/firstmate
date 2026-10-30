@@ -4,7 +4,8 @@
 #
 # The hook counts tool calls after a message that expects an answer and refuses
 # the call after the limit, once. It is driven with real PreToolUse payloads and
-# real transcript files; no harness runs. Only a second mate home has it.
+# real transcript files; no harness runs. A second mate home and the primary
+# home have it; a linked task worktree does not.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -17,7 +18,12 @@ RF="$ROOT/bin/fm-reply-first.sh"
 make_home() {
   H="$TMP_ROOT/$1"
   mkdir -p "$H/state" "$H/config"
-  [ "$2" != mate ] || printf 'mate-a\n' > "$H/.fm-secondmate-home"
+  if [ "$2" = mate ]; then
+    printf 'mate-a\n' > "$H/.fm-secondmate-home"
+  elif [ "$2" = main ]; then
+    mkdir -p "$H/bin"; : > "$H/AGENTS.md"
+    git -C "$H" init -q
+  fi
   TRANSCRIPT="$H/transcript.jsonl"
   : > "$TRANSCRIPT"
 }
@@ -148,17 +154,124 @@ test_no_window_no_refusal() {
   pass "calls with no open window are never refused"
 }
 
-test_only_a_mate_home_has_it() {
+test_scope_is_mates_and_the_primary_home() {
   make_home main main
-  printf 'on\n' > "$H/config/reply-first"
-  arm
-  call 'ls'; call 'ls'; call 'ls'; call 'ls'
-  expect_code 0 "$RC" "a main home never refuses"
-  [ ! -e "$H/state/.reply-first" ] || fail "a main home wrote a window"
-  FM_HOME="$H" "$RF" enabled && fail "enabled reported on for a main home"
+  FM_HOME="$H" "$RF" enabled || fail "the primary home is not on by default"
   make_home mate2 mate
   FM_HOME="$H" "$RF" enabled || fail "a mate home is not on"
-  pass "reply-first runs in a second mate home only"
+  make_home off main
+  printf 'off\n' > "$H/config/reply-first"
+  FM_HOME="$H" "$RF" enabled && fail "config/reply-first off did not turn it off"
+  arm
+  call 'ls'; call 'ls'; call 'ls'; call 'ls'
+  expect_code 0 "$RC" "a home that is off never refuses"
+  [ ! -e "$H/state/.reply-first" ] || fail "a home that is off wrote a window"
+  make_home wt main
+  git -C "$H" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
+  git -C "$H" worktree add -q "$TMP_ROOT/wt-linked" 2>/dev/null
+  mkdir -p "$TMP_ROOT/wt-linked/state" "$TMP_ROOT/wt-linked/bin"; : > "$TMP_ROOT/wt-linked/AGENTS.md"
+  FM_HOME="$TMP_ROOT/wt-linked" "$RF" enabled && fail "a linked task worktree is not a primary home"
+  pass "it runs in a mate home and the primary home, honours config/reply-first off, and skips task worktrees"
+}
+
+# prompt <text>: one UserPromptSubmit through the main prompt hook.
+prompt() {
+  jq -cn --arg p "$1" --arg t "$TRANSCRIPT" '{hook_event_name:"UserPromptSubmit",prompt:$p,transcript_path:$t}' \
+    | FM_HOME="$H" "$RF" prompt --claude
+}
+
+test_main_captain_prompt_opens_a_window() {
+  make_home mcap main
+  prompt 'how are the reply-first tests going?'
+  call 'ls'; call 'ls'; call 'ls'
+  call 'ls'; expect_code 2 "$RC" "the fourth call after a captain message is refused"
+  assert_contains "$ERR" "Answer now" "answer-now reason"
+  assert_contains "$ERR" "worker or second mate" "main hand-off wording"
+  call 'ls'; expect_code 0 "$RC" "the refusal fires once"
+  pass "a captain prompt in the main home gets the fourth call refused once"
+}
+
+test_main_machine_prompts_never_arm() {
+  local text
+  while IFS= read -r text; do
+    make_home mwake main
+    prompt "$text"
+    call 'ls'; call 'ls'; call 'ls'; call 'ls'; call 'ls'
+    expect_code 0 "$RC" "no refusal after: $text"
+    [ ! -e "$H/state/.reply-first" ] || fail "armed by: $text"
+  done <<'EOF2'
+Stop hook feedback: firstmate watcher wake - one supervision event needs a handling turn now.
+firstmate watcher wake - one supervision event needs a handling turn now.
+<task-notification><task-id>abc</task-id></task-notification>
+: Firstmate instruction waiting: read the inbox
+[fm-from-firstmate] steer text
+EOF2
+  make_home mdoor main
+  local bell
+  bell=$(printf 'wake now' | FM_HOME="$H" "$ROOT/bin/fm-operational-input.sh" record watcher) || fail "could not write a doorbell record"
+  prompt "$bell"
+  call 'ls'; call 'ls'; call 'ls'; call 'ls'; call 'ls'
+  expect_code 0 "$RC" "no refusal after an operational doorbell"
+  make_home menc main
+  prompt "$(printf 'wake now' | "$ROOT/bin/fm-operational-input.sh" encode away-supervisor)"
+  call 'ls'; call 'ls'; call 'ls'; call 'ls'; call 'ls'
+  expect_code 0 "$RC" "no refusal after encoded operational input"
+  pass "wakes, task notifications, and firstmate doorbells never open a window"
+}
+
+test_main_machine_prompt_closes_an_open_window() {
+  make_home mclose main
+  prompt 'what is the status?'
+  call 'ls'; call 'ls'; call 'ls'
+  prompt 'Stop hook feedback: firstmate watcher wake'
+  call 'ls'; expect_code 0 "$RC" "a wake prompt closes the captain window"
+  make_home mstop main
+  prompt 'what is the status?'
+  call 'ls'; call 'ls'; call 'ls'
+  FM_HOME="$H" "$RF" clear
+  call 'ls'; expect_code 0 "$RC" "the Stop hook closes the window"
+  pass "a machine prompt or the Stop hook closes a captain window"
+}
+
+test_main_reply_closes_and_handoffs_are_free() {
+  make_home mreply main
+  prompt 'what is the status?'
+  call 'ls'
+  say "$(printf 'Two workers are running: the hook change is in review and the measure is done. Nothing needs you yet. %.0s' 1 2)"
+  call 'ls'; call 'ls'; call 'ls'; call 'ls'
+  expect_code 0 "$RC" "a written answer closes the window"
+  make_home mhand main
+  prompt 'dig into the logs'
+  call 'bin/fm-spawn.sh ship foo'; call 'bin/fm-send.sh task-a "go"'
+  call 'bin/fm-dispatch-resolve.sh brief.md'; call 'bin/fm-brief.sh --help'
+  call 'ls'; call 'ls'; call 'ls'
+  expect_code 0 "$RC" "hand-off commands are not counted"
+  call 'ls'; expect_code 2 "$RC" "the fourth counted call is refused"
+  pass "a reply closes the window and hand-off commands are never counted or refused"
+}
+
+test_installer_registers_main_hooks_once() {
+  make_home minst main
+  "$ROOT/bin/fm-mate-hooks-install.sh" --main "$H" || fail "main install failed"
+  "$ROOT/bin/fm-mate-hooks-install.sh" --main "$H" || fail "second main install failed"
+  local f="$H/.claude/settings.local.json"
+  [ "$(jq '[.hooks.UserPromptSubmit[].hooks[] | select(.command | contains("fm-reply-first.sh") and contains("prompt"))] | length' "$f")" = 1 ] || fail "prompt hook not registered once"
+  [ "$(jq '[.hooks.PreToolUse[].hooks[] | select(.command | contains("fm-reply-first.sh"))] | length' "$f")" = 1 ] || fail "pretool hook not registered once"
+  [ "$(jq '[.hooks.Stop[].hooks[] | select(.command | contains("fm-reply-first.sh"))] | length' "$f")" = 1 ] || fail "stop hook not registered once"
+  make_home minst2 mate
+  "$ROOT/bin/fm-mate-hooks-install.sh" --main "$H" || fail "main install in a mate home failed"
+  [ ! -e "$H/.claude/settings.local.json" ] || fail "--main wrote into a second mate home"
+  pass "the main installer registers prompt, pretool, and Stop once and skips a mate home"
+}
+
+test_text_flushed_a_moment_late_still_counts() {
+  make_home late main
+  prompt 'what is the status?'
+  call 'ls'; call 'ls'; call 'ls'
+  ( sleep 0.5; say "$(printf 'The harness writes this answer to the transcript just after the tool call starts, so the hook must look again before it refuses. %.0s' 1 2)" ) &
+  call 'ls'; expect_code 0 "$RC" "an answer flushed during the recheck closes the window"
+  wait
+  pass "an answer the harness flushes a moment late is not refused"
 }
 
 test_limit_is_tunable_and_broken_input_fails_open() {
@@ -191,6 +304,12 @@ test_text_from_before_the_message_does_not_count
 test_new_message_resets_the_count
 test_clear_closes_the_window
 test_no_window_no_refusal
-test_only_a_mate_home_has_it
+test_scope_is_mates_and_the_primary_home
+test_main_captain_prompt_opens_a_window
+test_main_machine_prompts_never_arm
+test_main_machine_prompt_closes_an_open_window
+test_main_reply_closes_and_handoffs_are_free
+test_installer_registers_main_hooks_once
+test_text_flushed_a_moment_late_still_counts
 test_limit_is_tunable_and_broken_input_fails_open
 test_scripts_are_shellcheck_clean
