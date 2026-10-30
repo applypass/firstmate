@@ -265,10 +265,25 @@ test_main_reply_closes_and_handoffs_are_free() {
   call 'cd /tmp && FM_X=1 bin/fm-send.sh task-a "go"'; call 'true; bin/fm-spawn.sh ship foo'
   call 'ls'; call 'ls'; call 'ls'
   expect_code 0 "$RC" "a hand-off after && or ; is not counted"
+  make_home mwrap main
+  prompt 'dig into the logs'
+  call '"$FM_HOME/bin/fm-send.sh" task-a go'; call 'bash bin/fm-spawn.sh ship foo'
+  call 'timeout 30 bin/fm-send.sh task-a go'; call 'env X=1 bin/fm-spawn.sh ship foo'
+  call 'ls'; call 'ls'; call 'ls'
+  expect_code 0 "$RC" "quoted or wrapped hand-offs are not counted"
+  make_home mqrep mate
+  arm
+  call "'bin/fm-secondmate-report.sh' working abc \"on it\""
+  call 'ls'; call 'ls'; call 'ls'; call 'ls'
+  expect_code 0 "$RC" "a quoted parent report is a reply"
   make_home mread main
   prompt 'dig into the logs'
   call 'sed -n 1,80p bin/fm-spawn.sh'; call 'grep -n arm bin/fm-send.sh'; call 'cat bin/fm-brief.sh'
   call 'cat bin/fm-secondmate-report.sh'; expect_code 2 "$RC" "reading hand-off or report scripts counts as digging"
+  make_home mread2 main
+  prompt 'dig into the logs'
+  call 'timeout 5 cat bin/fm-spawn.sh'; call 'env X=1 sed -n 1p bin/fm-send.sh'; call 'bash -n bin/fm-brief.sh'
+  call 'ls'; expect_code 2 "$RC" "wrapped reads of hand-off scripts still count"
   pass "a reply closes the window and hand-off commands are never counted or refused"
 }
 

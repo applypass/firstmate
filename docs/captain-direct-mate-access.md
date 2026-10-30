@@ -48,7 +48,7 @@ Every other prompt (the steering doorbell, a `[fm-from-firstmate]` message, oper
 A reply is a `bin/fm-secondmate-report.sh` call, assistant text of 200 characters or more, or shorter text that addresses the captain.
 Text addresses the captain when "captain" (any case) stands as its own word, not inside a name or path such as `fm-captain-hold.sh`, with a comma before it or `, . ! ? : ;` or the end of the text after it.
 So "Captain, shipshape.", "Aye, captain - done." and "Done, captain." count; "Let me see what the captain asked" does not.
-A command that runs `bin/fm-send.sh`, `bin/fm-spawn.sh`, `bin/fm-dispatch-resolve.sh`, or `bin/fm-brief.sh` (the first word of a segment split at `;`, `&`, `|`) is never counted or refused; reading one of those scripts counts: handing the rest off is what the refusal asks for.
+A command that runs `bin/fm-send.sh`, `bin/fm-spawn.sh`, `bin/fm-dispatch-resolve.sh`, or `bin/fm-brief.sh` (the first word of a segment split at `;`, `&`, `|`, after any `VAR=value` and a `bash`, `sh`, `env`, or `timeout N` wrapper, quotes stripped) is never counted or refused; reading one of those scripts counts: handing the rest off is what the refusal asks for.
 `FM_REPLY_FIRST_LIMIT` and `FM_REPLY_FIRST_MIN_CHARS` tune it; the word `off` in `config/reply-first` turns it off for a home.
 The latency report of 2026-10-30 found the main firstmate broke this budget on 52-55% of captain messages, and those replies were 85% of all waiting time.
 

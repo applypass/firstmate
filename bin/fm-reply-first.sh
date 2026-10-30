@@ -103,15 +103,23 @@ text_is_captain() {  # <trimmed prompt text>
 }
 
 # 0 when a segment of the shell command runs one of the named scripts: its
-# first word after any VAR=value assignments, split at ; & | and newlines.
+# first word, unquoted, after any VAR=value assignments and a bash, sh, env, or
+# timeout N wrapper, split at ; & | and newlines.
 command_runs() {  # <command> <script name>...
-  local cmd=$1 seg word name words
+  local cmd=$1 seg word name words skip
   shift
   cmd=${cmd//[;&|]/$'\n'}
   while IFS= read -r seg; do
     read -r -a words <<< "$seg" || true
+    skip=0
     for word in "${words[@]+"${words[@]}"}"; do
-      case "$word" in [A-Za-z_]*=*) continue ;; esac
+      [ "$skip" = 1 ] && { skip=0; continue; }
+      word=${word#[\"\']}
+      word=${word%[\"\']}
+      case "$word" in
+        [A-Za-z_]*=*|bash|sh|env) continue ;;
+        timeout) skip=1; continue ;;
+      esac
       for name in "$@"; do
         [ "${word##*/}" = "$name" ] && return 0
       done
