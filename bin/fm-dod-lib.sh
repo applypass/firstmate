@@ -455,14 +455,16 @@ EOF
 fm_dod_pr_description_block() {  # <direct-PR|no-mistakes>
   cat <<'EOF'
 ## PR description
-Keep Problem / Fix / Proof as tight bullets, never prose blobs.
-For each change add one real worked example, walked step by step with real names, ids and values from this task, then a plain-text before/after flow in a ```text block.
+Write every PR body in three parts, in this order, so a non-developer can follow the first two.
+1. What was wrong: plain words, no jargon. Say who or what is affected and why it matters, then walk one real worked example step by step with real names, ids and values from this task.
+2. What this changes: plain words again. Walk the same example after the change, then add a plain-text before/after flow in a ```text block.
+3. Technical details: Problem / Fix / Proof as tight bullets, never prose blobs. Name files, functions, tests and commands here.
 EOF
   if [ "$1" = no-mistakes ]; then
     cat <<'EOF'
 Whoever wrote the PR body, you or the pipeline from the project's own template, it may lack these parts.
 After /no-mistakes reports CI green, read the body back with `gh-axi pr view <number> --full`; the plain view truncates long bodies and would hide these sections at the end.
-If the worked example or the before/after block is missing, write the complete body (every existing section, including the Pipeline section the pipeline appended, plus the additions) to a file and apply it with `gh-axi pr edit <number> --body-file <file>`, which replaces the whole body.
+If the plain "What was wrong" or "What this changes" section, the worked example, the before/after block, or the technical details is missing or out of order, write the complete body (every existing section, including the Pipeline section the pipeline appended, plus the additions) to a file and apply it with `gh-axi pr edit <number> --body-file <file>`, which replaces the whole body.
 A PR body edit is not a commit, so it does not break the pushed-head check.
 EOF
   fi
