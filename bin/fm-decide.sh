@@ -18,9 +18,9 @@
 # FM_DECIDE_SYNC_DELAY seconds (default 10) tripled between tries. After the last
 # failure it queues one note for the primary (bin/fm-inbox.sh, request id
 # fm-decide-sync-<key>), presented at its next drain; `sync` then retries by hand.
-# `audit` lists pending entries too. --sync (or FM_DECIDE_SYNC=1) keeps the old
-# order: post first, record only when the comment landed, and record nothing if
-# it fails. The story is --story, else the story --item's backlog body names,
+# `audit` lists pending entries too. Only one run posts a key at a time: a run
+# that finds the key's sync lock held by a live process skips that key. The
+# story is --story, else the story --item's backlog body names,
 # else a new Engineering/Backlog chore story filed through bin/fm-shortcut-ticket.sh (its settings, token
 # path, and API base; nothing is duplicated here). A story the item does not own
 # is only commented on, never moved or edited. Recording the same key and exact
@@ -41,7 +41,6 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 DECIDED="$DATA/decided.md"
 TICKET="$SCRIPT_DIR/fm-shortcut-ticket.sh"
 BEST_EFFORT=0
-SYNC=${FM_DECIDE_SYNC:-0}
 
 usage() {
   awk '
@@ -128,6 +127,15 @@ command_guard_hook() {
 }
 
 LOCKDIR=''
+SYNCLOCK=''
+TMPENTRY=''
+cleanup() {
+  [ -z "$LOCKDIR" ] || rmdir "$LOCKDIR" 2>/dev/null
+  [ -z "$SYNCLOCK" ] || rm -rf "$SYNCLOCK"
+  [ -z "$TMPENTRY" ] || rm -f "$TMPENTRY"
+}
+trap cleanup EXIT
+
 take_lock() {
   local i=0
   mkdir -p "$DATA" || die "cannot create $DATA"
@@ -137,7 +145,6 @@ take_lock() {
     [ "$i" -le 2400 ] || die "another fm-decide has held $LOCKDIR for 2 minutes"
     sleep 0.05
   done
-  trap 'rmdir "$LOCKDIR" 2>/dev/null; [ -z "${TMPENTRY:-}" ] || rm -f "$TMPENTRY"' EXIT
 }
 
 release_lock() {
@@ -204,11 +211,39 @@ sync_once() {
   set_stamp "$key" "$story $url"
 }
 
-# sync_key <key>: sync_once with bounded retries; one note for the primary when
-# the last try fails.
+# take_sync_lock <key>: the key's sync lock, so one run posts it at a time. A
+# lock whose holder is gone is taken over. Nonzero while a live run holds it.
+take_sync_lock() {
+  local lock="$DATA/.decided-sync.$1.lock" pid
+  if ! mkdir "$lock" 2>/dev/null; then
+    pid=$(cat "$lock/pid" 2>/dev/null)
+    case "$pid" in '' | *[!0-9]*) return 1 ;; esac
+    ! kill -0 "$pid" 2>/dev/null || return 1
+    rm -rf "$lock"
+    mkdir "$lock" 2>/dev/null || return 1
+  fi
+  SYNCLOCK=$lock
+  printf '%s\n' "$$" >"$lock/pid"
+}
+
+release_sync_lock() {
+  [ -z "$SYNCLOCK" ] || rm -rf "$SYNCLOCK"
+  SYNCLOCK=''
+}
+
+# sync_key <key>: sync_once under the key's sync lock, with bounded retries; one
+# note for the primary when the last try fails.
 sync_key() {
-  local key=$1 attempts=${FM_DECIDE_SYNC_ATTEMPTS:-4} delay=${FM_DECIDE_SYNC_DELAY:-10} i=1
-  while ! sync_once "$key"; do
+  local key=$1 attempts=${FM_DECIDE_SYNC_ATTEMPTS:-4} delay=${FM_DECIDE_SYNC_DELAY:-10} i=1 rc
+  while :; do
+    if ! take_sync_lock "$key"; then
+      printf 'fm-decide: another run is posting %s; skipped\n' "$key"
+      return 0
+    fi
+    sync_once "$key"
+    rc=$?
+    release_sync_lock
+    [ "$rc" != 0 ] || break
     if [ "$i" -ge "$attempts" ]; then
       FM_HOME=$FM_HOME "$SCRIPT_DIR/fm-inbox.sh" note --request-id "fm-decide-sync-$key" -- \
         "Decision $key is in data/decided.md but is not on Shortcut after $attempts tries. Run: '$SCRIPT_DIR/fm-decide.sh' sync $key" >/dev/null 2>&1 || true
@@ -258,7 +293,7 @@ guard_warning() {
 }
 
 command_record() {
-  local key=${1:-} text='' story='' item='' file='' url='' line=''
+  local key=${1:-} text='' story='' item='' file='' stamp=pending
   [ -n "$key" ] || die "usage: record <key> <text> [--story sc-NNNN] [--item <task-id>]"
   shift
   while [ "$#" -gt 0 ]; do
@@ -299,31 +334,11 @@ command_record() {
   if [ -z "$story" ] && [ -n "$item" ]; then
     story=$(ticket --linked "$item" 2>/dev/null || true)
   fi
-  if [ "$SYNC" != 1 ]; then
-    local stamp=pending
-    [ -z "$story" ] || stamp="pending $story"
-    append_entry "- [$key] ${FM_DECIDE_DATE:-$(date +%F)} $text (shortcut: $stamp)" || die "cannot write $DECIDED"
-    release_lock
-    launch_sync "$key"
-    printf 'fm-decide: recorded %s locally; posting to Shortcut in the background\n' "$key"
-    guard_warning
-    return 0
-  fi
-  if [ -z "$story" ]; then
-    local created
-    created=$(ticket chore "Decision: $key" "Captain decision $key: $text") || die "could not file a chore story for decision $key"
-    story=${created%% *}
-    url=${created#* }
-  fi
-  local comment_url
-  comment_url=$(ticket comment "$story" "Captain decision [$key]: $text" --print-url) ||
-    die "could not post decision $key to $story; nothing was recorded"
-  [ -n "$url" ] || url="https://app.shortcut.com/applypass/story/${story#sc-}"
-  [ -z "$comment_url" ] || url=$comment_url
-
-  line="- [$key] ${FM_DECIDE_DATE:-$(date +%F)} $text (shortcut: $story $url)"
-  append_entry "$line" || die "posted to $story but could not write $DECIDED; re-run to record it"
-  printf 'fm-decide: recorded %s on %s\n' "$key" "$story"
+  [ -z "$story" ] || stamp="pending $story"
+  append_entry "- [$key] ${FM_DECIDE_DATE:-$(date +%F)} $text (shortcut: $stamp)" || die "cannot write $DECIDED"
+  release_lock
+  launch_sync "$key"
+  printf 'fm-decide: recorded %s locally; posting to Shortcut in the background\n' "$key"
   guard_warning
 }
 
@@ -331,7 +346,6 @@ ARGS=()
 for arg in "$@"; do
   case "$arg" in
     --best-effort) BEST_EFFORT=1 ;;
-    --sync) SYNC=1 ;;
     *) ARGS+=("$arg") ;;
   esac
 done

@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Behavior tests for bin/fm-decide.sh (applypass fork): the only writer of
-# data/decided.md, which posts every decision to a Shortcut story. Shortcut is
-# stubbed with a fake curl on PATH; no test reaches the real API, 1Password, or
-# any real home's decided.md.
+# data/decided.md, which records every decision at once and posts it to a
+# Shortcut story from a detached job. Shortcut is stubbed with a fake curl on
+# PATH; no test reaches the real API, 1Password, or any real home's decided.md.
+# FAKE_CURL_GATE names a file the fake curl waits on while it exists, so a test
+# can see the pending entry before the job posts.
 set -u
 
 # shellcheck source=tests/secondmate-helpers.sh disable=SC1091
@@ -25,6 +27,14 @@ make_case() {  # <name>
   printf '## In flight\n\n## Queued\n\n## Done\n' > "$dir/home/data/backlog.md"
   printf 'owner_id=%s\ntoken_ref=op://v/i/f\n' "$OWNER" > "$dir/home/config/shortcut-tickets"
   fm_fake_shortcut_curl "$dir/fakebin"
+  mv "$dir/fakebin/curl" "$dir/fakebin/curl.fake"
+  cat > "$dir/fakebin/curl" <<'SH'
+#!/usr/bin/env bash
+i=0
+while [ -n "${FAKE_CURL_GATE:-}" ] && [ -e "$FAKE_CURL_GATE" ] && [ "$i" -lt 600 ]; do sleep 0.1; i=$((i + 1)); done
+exec "$(dirname "$0")/curl.fake" "$@"
+SH
+  chmod +x "$dir/fakebin/curl"
   fm_fake_exit0 "$dir/fakebin" tmux treehouse no-mistakes gh gh-axi
   : > "$dir/curl.log"
   printf '%s\n' "$dir"
@@ -35,7 +45,29 @@ decide() {  # <case-dir> <args...>
   shift
   (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
     SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" FM_DECIDE_DATE=2026-10-09 \
-    PATH="$dir/fakebin:$PATH" FM_DECIDE_SYNC=1 "$ROOT/bin/fm-decide.sh" "$@" 2>&1)
+    FM_DECIDE_SYNC_ATTEMPTS="${FM_DECIDE_SYNC_ATTEMPTS:-2}" FM_DECIDE_SYNC_DELAY=0 \
+    PATH="$dir/fakebin:$PATH" "$ROOT/bin/fm-decide.sh" "$@" 2>&1)
+}
+
+# wait_for <fixed-text> <file> [seconds]: poll until the file holds the text.
+wait_for() {
+  local n=$((${3:-30} * 10)) i
+  for ((i = 0; i < n; i++)); do
+    grep -qF -- "$1" "$2" 2>/dev/null && return 0
+    sleep 0.1
+  done
+  return 1
+}
+
+# wait_stamped <case-dir> <key>: poll until the background job stamps the entry.
+wait_stamped() {
+  wait_for "- [$2] " "$1/home/data/decided.md" 1 || fail "no entry for $2"
+  local i
+  for ((i = 0; i < 300; i++)); do
+    grep -F -- "- [$2] " "$1/home/data/decided.md" | grep -q '(shortcut: sc-[0-9]* ' && return 0
+    sleep 0.1
+  done
+  fail "the background job never stamped $2: $(cat "$1/home/data/.decided-sync.log" 2>/dev/null)"
 }
 
 install_guard() {  # <case-dir>
@@ -46,7 +78,14 @@ test_record_with_story_posts_then_stamps() {
   local dir out
   dir=$(make_case story)
   install_guard "$dir"
-  out=$(decide "$dir" record dd-1 "Ship option B." --story sc-6523) || fail "record failed: $out"
+  : > "$dir/gate"
+  out=$(FAKE_CURL_GATE="$dir/gate" decide "$dir" record dd-1 "Ship option B." --story sc-6523) || fail "record failed: $out"
+  assert_contains "$out" "posting to Shortcut in the background" "record did not say the post runs in the background"
+  assert_equals "- [dd-1] 2026-10-09 Ship option B. (shortcut: pending sc-6523)" \
+    "$(cat "$dir/home/data/decided.md")" "the entry is not written as pending before the post"
+  [ ! -s "$dir/curl.log" ] || fail "Shortcut was called while the gate was closed"
+  rm "$dir/gate"
+  wait_stamped "$dir" dd-1
   assert_grep 'POST https://api.app.shortcut.com/api/v3/stories/6523/comments' "$dir/curl.log" "the decision was not commented on the story"
   assert_grep 'Captain decision [dd-1]: Ship option B.' "$dir/curl.log" "the comment text is missing the key and words"
   assert_no_grep 'POST https://api.app.shortcut.com/api/v3/stories ' "$dir/curl.log" "a story was created although --story was given"
@@ -54,10 +93,10 @@ test_record_with_story_posts_then_stamps() {
   assert_equals "- [dd-1] 2026-10-09 Ship option B. (shortcut: sc-6523 https://app.shortcut.com/applypass/story/6523)" \
     "$(cat "$dir/home/data/decided.md")" "the entry is not in the decided.md format with a stamp"
   assert_not_contains "$out" "warning" "a home with the guard installed still warned"
-  pass "record posts to the named story, then appends a stamped entry without touching the story"
+  pass "record writes a pending entry at once; the job posts to the named story and stamps it without touching the story"
 }
 
-test_post_failure_records_nothing() {
+test_post_failure_leaves_the_entry_pending() {
   local dir out
   dir=$(make_case postfail)
   mkdir -p "$dir/failbin"
@@ -72,17 +111,22 @@ printf 500
 SH
   chmod +x "$dir/failbin/curl"
   out=$( (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
-    SHORTCUT_API_TOKEN="$TOKEN" PATH="$dir/failbin:$PATH" FM_DECIDE_SYNC=1 "$ROOT/bin/fm-decide.sh" record dd-2 "Words." --story sc-6523 2>&1)) \
-    && fail "record succeeded although the post failed: $out"
-  assert_contains "$out" "nothing was recorded" "the refusal does not say nothing was recorded"
-  assert_absent "$dir/home/data/decided.md" "a failed post left an entry behind"
-  pass "a failed post stops and records nothing"
+    SHORTCUT_API_TOKEN="$TOKEN" FM_DECIDE_DATE=2026-10-09 FM_DECIDE_SYNC_ATTEMPTS=2 FM_DECIDE_SYNC_DELAY=0 \
+    PATH="$dir/failbin:$PATH" "$ROOT/bin/fm-decide.sh" record dd-2 "Words." --story sc-6523 2>&1)) \
+    || fail "record failed although only the post fails: $out"
+  wait_for 'after 2 tries' "$dir/home/data/.decided-sync.log" || fail "the job never gave up: $(cat "$dir/home/data/.decided-sync.log" 2>/dev/null)"
+  assert_equals "- [dd-2] 2026-10-09 Words. (shortcut: pending sc-6523)" \
+    "$(cat "$dir/home/data/decided.md")" "a failed post did not leave the entry pending"
+  out=$(decide "$dir" audit) && fail "audit exited 0 with a pending entry"
+  assert_contains "$out" "dd-2" "audit did not list the pending entry"
+  pass "a failed post keeps the entry pending and audit lists it"
 }
 
 test_no_story_files_a_chore_then_posts() {
   local dir out
   dir=$(make_case chore)
   out=$(decide "$dir" record dd-3 "Operational call: rotate the key.") || fail "record failed: $out"
+  wait_stamped "$dir" dd-3
   assert_grep 'POST https://api.app.shortcut.com/api/v3/stories' "$dir/curl.log" "no chore story was filed"
   assert_grep '"story_type":"chore"' "$dir/curl.log" "the story is not a chore"
   assert_grep '"group_id":"649562cb-7f18-471f-835f-7ed28a5abf0a"' "$dir/curl.log" "the chore is not on the Engineering team"
@@ -96,6 +140,7 @@ test_same_decision_twice_is_a_noop_and_changed_text_refuses() {
   local dir out
   dir=$(make_case idem)
   decide "$dir" record dd-4 "Same." --story sc-6523 >/dev/null || fail "first record failed"
+  wait_stamped "$dir" dd-4
   : > "$dir/curl.log"
   out=$(decide "$dir" record dd-4 "Same." --story sc-6523) || fail "replay failed: $out"
   [ ! -s "$dir/curl.log" ] || fail "a replay called Shortcut again"
@@ -105,6 +150,7 @@ test_same_decision_twice_is_a_noop_and_changed_text_refuses() {
   out=$(decide "$dir" record dd-4 "Sam" --story sc-6523) && fail "a prefix of the recorded text counted as the same decision"
   assert_contains "$out" "different text" "a prefix of the recorded text was not refused"
   decide "$dir" record dd-4b "Ship option B." --story sc-6523 >/dev/null || fail "record dd-4b failed"
+  wait_stamped "$dir" dd-4b
   : > "$dir/curl.log"
   out=$(decide "$dir" record dd-4b "option B." --story sc-6523) && fail "a suffix of the recorded text counted as the same decision"
   assert_contains "$out" "different text" "a suffix of the recorded text was not refused"
@@ -117,6 +163,9 @@ test_audit_lists_unstamped_entries() {
   dir=$(make_case audit)
   printf '%s\n' '- [old-1] 2026-10-01 No story here.' > "$dir/home/data/decided.md"
   decide "$dir" record dd-5 "Stamped." --story sc-6523 >/dev/null || fail "record failed"
+  out=$(decide "$dir" audit) && fail "audit exited 0 with a pending entry"
+  assert_contains "$out" "dd-5" "audit missed a pending entry"
+  wait_stamped "$dir" dd-5
   out=$(decide "$dir" audit) && fail "audit exited 0 with an unstamped entry"
   assert_contains "$out" "old-1" "audit missed the unstamped entry"
   assert_not_contains "$out" "dd-5" "audit listed a stamped entry"
@@ -169,8 +218,31 @@ test_record_waits_for_a_slow_concurrent_record() {
   (sleep 6; rmdir "$dir/home/data/.decided.lock") &
   out=$(decide "$dir" record dd-9 "Wait your turn." --story sc-6523) || fail "record gave up on a lock held for 6s: $out"
   wait
-  assert_grep '- [dd-9] 2026-10-09 Wait your turn. (shortcut: sc-6523 ' "$dir/home/data/decided.md" "the waiting record was not written"
-  pass "record waits out a concurrent record that holds the lock across slow Shortcut calls"
+  assert_grep '- [dd-9] 2026-10-09 Wait your turn. (shortcut: pending sc-6523)' "$dir/home/data/decided.md" "the waiting record was not written"
+  wait_stamped "$dir" dd-9
+  pass "record waits out a concurrent writer that holds the lock"
+}
+
+test_second_sync_skips_a_key_another_run_is_posting() {
+  local dir out
+  dir=$(make_case syncrace)
+  : > "$dir/gate"
+  out=$(FAKE_CURL_GATE="$dir/gate" decide "$dir" record dd-10 "Only once." --story sc-6523) || fail "record failed: $out"
+  wait_for 'Only once.' "$dir/home/data/decided.md" 5 || fail "record wrote no entry"
+  local i
+  for ((i = 0; i < 100; i++)); do [ -s "$dir/home/data/.decided-sync.dd-10.lock/pid" ] && break; sleep 0.1; done
+  [ -s "$dir/home/data/.decided-sync.dd-10.lock/pid" ] || fail "the background job never took the key's sync lock"
+  out=$(decide "$dir" sync) || fail "a second sync failed: $out"
+  assert_contains "$out" "another run is posting dd-10" "a second sync did not skip the key the job is posting"
+  rm "$dir/gate"
+  wait_stamped "$dir" dd-10
+  assert_equals 1 "$(grep -c 'stories/6523/comments' "$dir/curl.log")" "the story got more than one comment for one decision"
+  mkdir "$dir/home/data/.decided-sync.dd-11.lock"
+  printf '999999\n' > "$dir/home/data/.decided-sync.dd-11.lock/pid"
+  printf '%s\n' '- [dd-11] 2026-10-09 Left by a dead job. (shortcut: pending sc-6523)' >> "$dir/home/data/decided.md"
+  out=$(decide "$dir" sync dd-11) || fail "sync over a dead job's lock failed: $out"
+  assert_grep '- [dd-11] 2026-10-09 Left by a dead job. (shortcut: sc-6523 ' "$dir/home/data/decided.md" "a lock left by a dead job blocked the key forever"
+  pass "a second sync skips a key another run is posting, so the story gets one comment, and a dead job's lock is taken over"
 }
 
 test_captain_hold_answer_calls_fm_decide() {
@@ -183,12 +255,15 @@ test_captain_hold_answer_calls_fm_decide() {
   printf 'Go with B.\n' > "$dir/decision.txt"
   hold() {
     (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" FM_DECIDE_DATE=2026-10-09 \
-      SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" FM_DECIDE_SYNC=1 \
-      "$ROOT/bin/fm-captain-hold.sh" "$@" 2>&1)
+      SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" FM_DECIDE_SYNC_DELAY=0 \
+      FAKE_CURL_GATE="${FAKE_CURL_GATE:-}" "$ROOT/bin/fm-captain-hold.sh" "$@" 2>&1)
   }
   out=$(hold hold dh-1 --reason "captain must choose") || fail "hold failed: $out"
-  out=$(hold answer dh-1 --decision-file "$dir/decision.txt") || fail "answer failed: $out"
-  assert_grep '- [dh-1-1] 2026-10-09 Go with B.' "$dir/home/data/decided.md" "answer did not record the decision through fm-decide"
+  : > "$dir/gate"
+  out=$(FAKE_CURL_GATE="$dir/gate" hold answer dh-1 --decision-file "$dir/decision.txt") || fail "answer failed: $out"
+  assert_grep '- [dh-1-1] 2026-10-09 Go with B. (shortcut: pending)' "$dir/home/data/decided.md" "answer did not record a pending decision through fm-decide"
+  rm "$dir/gate"
+  wait_stamped "$dir" dh-1-1
   assert_grep 'POST https://api.app.shortcut.com/api/v3/stories' "$dir/curl.log" "a decision-only item got no story"
   : > "$dir/curl.log"
   out=$(hold answer dh-1 --decision-file "$dir/decision.txt") || fail "answer replay failed: $out"
@@ -208,15 +283,17 @@ test_captain_hold_reanswer_records_each_occurrence() {
   printf 'Use B.\n' > "$dir/b.txt"
   hold() {
     (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" FM_DECIDE_DATE=2026-10-09 \
-      SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" FM_DECIDE_SYNC=1 \
+      SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" PATH="$dir/fakebin:$PATH" FM_DECIDE_SYNC_DELAY=0 \
       "$ROOT/bin/fm-captain-hold.sh" "$@" 2>&1)
   }
   out=$(hold hold rh-1 --reason "captain must choose") || fail "hold failed: $out"
   out=$(hold answer rh-1 --decision-file "$dir/a.txt" --release) || fail "first answer failed: $out"
+  wait_stamped "$dir" rh-1-1
   out=$(hold hold rh-1 --reason "captain must choose again") || fail "second hold failed: $out"
   : > "$dir/curl.log"
   out=$(hold answer rh-1 --decision-file "$dir/b.txt") || fail "second answer failed: $out"
   assert_not_contains "$out" "warning: a decision" "the second answer was refused as a key collision"
+  wait_stamped "$dir" rh-1-2
   assert_grep '- [rh-1-1] 2026-10-09 Use A.' "$dir/home/data/decided.md" "the first answer was not recorded"
   assert_grep '- [rh-1-2] 2026-10-09 Use B.' "$dir/home/data/decided.md" "the second answer was not recorded under its own key"
   assert_grep 'Captain decision [rh-1-2]: Use B.' "$dir/curl.log" "the second answer was not posted to Shortcut"
@@ -224,12 +301,13 @@ test_captain_hold_reanswer_records_each_occurrence() {
 }
 
 test_record_with_story_posts_then_stamps
-test_post_failure_records_nothing
+test_post_failure_leaves_the_entry_pending
 test_no_story_files_a_chore_then_posts
 test_same_decision_twice_is_a_noop_and_changed_text_refuses
 test_audit_lists_unstamped_entries
 test_missing_guard_warns_with_the_line_to_add
 test_guard_hook_blocks_direct_writes
 test_record_waits_for_a_slow_concurrent_record
+test_second_sync_skips_a_key_another_run_is_posting
 test_captain_hold_answer_calls_fm_decide
 test_captain_hold_reanswer_records_each_occurrence

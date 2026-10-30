@@ -577,7 +577,7 @@ Shortcut serves an uploaded `.md` as `text/html`, which the browser shows as one
 [`bin/fm-decide.sh`](../bin/fm-decide.sh) is the only writer of `data/decided.md`; its header owns the commands.
 `record <key> <text> [--story sc-NNNN]` appends `- [key] YYYY-MM-DD text (shortcut: pending)` at once and returns; a detached job then comments the decision on a Shortcut story and rewrites the stamp to `(shortcut: sc-NNNN <url>)`.
 The job retries a failed call `FM_DECIDE_SYNC_ATTEMPTS` times (default 4), waiting `FM_DECIDE_SYNC_DELAY` seconds (default 10) and tripling the wait each time; after the last failure it queues one `fm-inbox.sh` note, presented at the next drain, and `fm-decide.sh sync [<key>]` posts the entries still pending.
-`--sync` (or `FM_DECIDE_SYNC=1`) keeps the older order: post first, record only when the comment landed.
+One run posts a key at a time: a run that finds the key's sync lock held by a live process skips it.
 With no `--story` the job files an Engineering/Backlog chore story through `fm-shortcut-ticket.sh chore`, which reuses the settings, token path, and API base above, so every decision ends up on a story.
 A story the decision merely names is commented on and never moved or edited.
 `fm-captain-hold.sh answer` calls it for the held task with the key `<task-id>-<answer occurrence>`, so each answer to a task held more than once gets its own entry.

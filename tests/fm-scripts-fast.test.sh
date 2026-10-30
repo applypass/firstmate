@@ -8,7 +8,9 @@
 # fixture home with a long status log. The bounds sit far above the measured
 # times (a loaded CI host still passes) and far below the times the slow paths
 # took on the same fixture, so a regression to a whole-log fold or a synchronous
-# network call fails here without making the suite flaky.
+# network call fails here without making the suite flaky. The drain's bound is
+# looser, since most of its time goes to the unread-status walk; its check
+# against a whole-log fold is the number of bytes the warm drain reads.
 # Nothing here reaches a real home, Shortcut, 1Password or a terminal.
 set -u
 
@@ -21,6 +23,7 @@ command -v jq >/dev/null 2>&1 || { echo "skip: jq not found"; exit 0; }
 TMP_ROOT=$(fm_test_tmproot fm-scripts-fast)
 LOG_LINES=${FM_FAST_TEST_LOG_LINES:-2500}
 SEND_BOUND=${FM_FAST_TEST_SEND_BOUND:-6}
+DRAIN_BOUND=${FM_FAST_TEST_DRAIN_BOUND:-30}
 DECIDE_BOUND=${FM_FAST_TEST_DECIDE_BOUND:-3}
 TOKEN=tok-secret-123
 OWNER=11111111-2222-4333-8444-555555555555
@@ -107,6 +110,37 @@ test_resolve_key_send_stays_fast_on_a_long_log() {
   pass "fm-send --resolve-key answers in ${ms} ms on a ${LOG_LINES}-line status log"
 }
 
+# A drain over a home whose long log the previous drain already folded must read
+# only the bytes appended since (the open-decision cursor), still print the
+# buried open decision, and stay under DRAIN_BOUND. The bound is loose because
+# the drain also walks every unread status line, which this fixture keeps large.
+test_warm_drain_reads_only_appended_bytes_on_a_long_log() {
+  local dir state probe log start end rc ms appended read
+  dir="$TMP_ROOT/drain"; state="$dir/state"; probe="$dir/probe.tsv"
+  mkdir -p "$state" "$dir/root" "$dir/fakebin"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$dir/fakebin/tmux"
+  chmod +x "$dir/fakebin/tmux"
+  log="$state/t1.status"
+  make_log "$log" "$LOG_LINES"
+  : > "$probe"
+  env PATH="$dir/fakebin:$PATH" FM_ROOT_OVERRIDE="$dir/root" FM_STATE_OVERRIDE="$state" \
+    "$ROOT/bin/fm-wake-drain.sh" >/dev/null 2>"$dir/err" || fail "the cold drain failed: $(cat "$dir/err")"
+  appended=$(printf 'needs-decision [key=new-k] [at=1790020000]: a fresh question\n' | tee -a "$log" | LC_ALL=C wc -c | tr -d '[:space:]')
+  start=$(now_ms)
+  env PATH="$dir/fakebin:$PATH" FM_ROOT_OVERRIDE="$dir/root" FM_STATE_OVERRIDE="$state" \
+    FM_OPEN_DECISIONS_READ_PROBE="$probe" "$ROOT/bin/fm-wake-drain.sh" >"$dir/out" 2>"$dir/err"
+  rc=$?
+  end=$(now_ms)
+  ms=$((end - start))
+  expect_code 0 "$rc" "the warm drain should succeed: $(cat "$dir/err")"
+  grep -F 't1 [key=open-k]' "$dir/out" >/dev/null || fail "the warm drain dropped the buried open decision: $(cat "$dir/out")"
+  grep -F 't1 [key=new-k]' "$dir/out" >/dev/null || fail "the warm drain missed the appended decision"
+  read=$(grep -F "$(printf '%s\t' "$log")" "$probe" | tail -1 | cut -f2)
+  assert_equals "$appended" "$read" "the warm drain should fold only the appended bytes, not the whole log"
+  [ "$ms" -lt $((DRAIN_BOUND * 1000)) ] || fail "a warm fm-wake-drain took ${ms} ms on a ${LOG_LINES}-line log (bound ${DRAIN_BOUND} s)"
+  pass "a warm fm-wake-drain folds only the appended ${read} bytes and finishes in ${ms} ms on a ${LOG_LINES}-line status log"
+}
+
 # decide_case <name>: a home with a Shortcut config and a fake curl that waits
 # FAKE_CURL_DELAY seconds before it answers. Echoes the case dir.
 decide_case() {
@@ -137,11 +171,11 @@ SH
   printf '%s\n' "$dir"
 }
 
-# decide_run <case-dir> <args...>: fm-decide in background mode (the default).
+# decide_run <case-dir> <args...>: fm-decide with no wait between retries.
 decide_run() {
   local dir=$1
   shift
-  (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS -u FM_DECIDE_SYNC FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
+  (cd "$dir/code" && env -u FM_SHORTCUT_TICKETS FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/code" \
     SHORTCUT_API_TOKEN="$TOKEN" FAKE_CURL_LOG="$dir/curl.log" FM_DECIDE_DATE=2026-10-09 \
     FM_DECIDE_SYNC_ATTEMPTS="${FM_DECIDE_SYNC_ATTEMPTS:-3}" FM_DECIDE_SYNC_DELAY=0 \
     PATH="$dir/fakebin:$PATH" "$ROOT/bin/fm-decide.sh" "$@" 2>&1)
@@ -203,6 +237,7 @@ test_decide_final_failure_queues_a_note_and_sync_recovers() {
 fm_test_run \
   test_fast_fold_matches_full_fold \
   test_resolve_key_send_stays_fast_on_a_long_log \
+  test_warm_drain_reads_only_appended_bytes_on_a_long_log \
   test_decide_returns_before_shortcut_answers \
   test_decide_without_story_files_a_chore_in_the_background \
   test_decide_final_failure_queues_a_note_and_sync_recovers
