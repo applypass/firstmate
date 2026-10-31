@@ -575,11 +575,13 @@ Shortcut serves an uploaded `.md` as `text/html`, which the browser shows as one
 ### Decision record sync (applypass fork)
 
 [`bin/fm-decide.sh`](../bin/fm-decide.sh) is the only writer of `data/decided.md`; its header owns the commands.
-`record <key> <text> [--story sc-NNNN]` comments the decision on a Shortcut story and only then appends `- [key] YYYY-MM-DD text (shortcut: sc-NNNN <url>)`, so a failed post records nothing.
-With no `--story` it files an Engineering/Backlog chore story through `fm-shortcut-ticket.sh chore`, which reuses the settings, token path, and API base above; a decision is never recorded without a story.
+`record <key> <text> [--story sc-NNNN]` appends `- [key] YYYY-MM-DD text (shortcut: pending)` (`pending sc-NNNN` once the story is known) at once and returns; a detached job then comments the decision on a Shortcut story and rewrites the stamp to `(shortcut: sc-NNNN <url>)`.
+The job retries a failed call `FM_DECIDE_SYNC_ATTEMPTS` times (default 4), waiting `FM_DECIDE_SYNC_DELAY` seconds (default 10) and tripling the wait each time; after the last failure it queues one `fm-inbox.sh` note, presented at the next drain, and `fm-decide.sh sync [<key>]` posts the entries still pending.
+One run posts a key at a time: a run that finds the key's sync lock held by a live process skips it.
+With no `--story` the job files an Engineering/Backlog chore story through `fm-shortcut-ticket.sh chore`, which reuses the settings, token path, and API base above, so every decision ends up on a story.
 A story the decision merely names is commented on and never moved or edited.
 `fm-captain-hold.sh answer` calls it for the held task with the key `<task-id>-<answer occurrence>`, so each answer to a task held more than once gets its own entry.
-`audit` lists entries with no stamp.
+`audit` lists entries with no stamp, pending ones included.
 To block direct edits of `data/decided.md`, merge the output of `fm-decide.sh guard-line` into the home's untracked `.claude/settings.local.json`, never the shared `.claude/settings.json`; `record` warns with that line while it is missing.
 
 ### Captain holds on Beads

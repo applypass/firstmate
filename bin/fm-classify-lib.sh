@@ -2829,3 +2829,7 @@ stale_is_terminal() {  # <window> <state>
   last=$(last_status_line "$state/$(window_to_task "$win" "$state").status")
   [ -n "$last" ] && status_is_captain_relevant "$last"
 }
+# Fork-only (applypass): faster status-file primitives and the cursor-backed open-decision fold (bin/fm-fast-lib.sh).
+# shellcheck source=bin/fm-fast-lib.sh disable=SC1091
+. "$_FM_CLASSIFY_LIB_DIR/fm-fast-lib.sh"
+# Fork-only end
