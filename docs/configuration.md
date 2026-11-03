@@ -3397,5 +3397,5 @@ A pass deletes the marker; delete `state/meeting-pending/<id>` by hand to waive 
 
 The meeting-tool list is `config/meeting-transcript-tools` (one shell glob per line, `#` comments), falling back to the tracked default `bin/fm-meeting-transcript-tools.default` (Krisp and Granola tools).
 The hook is a no-op for unlisted tools, in child task worktrees, and in secondmate homes.
-Register it once in the primary home with `bin/fm-meeting-ticket-gate.sh install "$FM_HOME"`; that merges into the untracked `.claude/settings.local.json`.
+`bin/fm-session-start.sh` registers it on every locked start by running `bin/fm-meeting-ticket-gate.sh install "$FM_HOME"`, which merges one entry into the untracked `.claude/settings.local.json` and is idempotent.
 <!-- Fork-only end -->

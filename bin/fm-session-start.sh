@@ -732,6 +732,8 @@ if [ "$READ_ONLY" -eq 0 ]; then
   fm_trace_context_session_start "$CONFIG" "$STATE/.trace-context-effective"
   # Fork-only: reply-first hooks for the primary home (bin/fm-reply-first.sh); idempotent and untracked.
   "$SCRIPT_DIR/fm-mate-hooks-install.sh" --main "$FM_HOME" >/dev/null 2>&1 || true
+  # Fork-only: meeting-to-ticket PostToolUse hook for the primary home (bin/fm-meeting-ticket-gate.sh); idempotent and untracked.
+  "$SCRIPT_DIR/fm-meeting-ticket-gate.sh" install "$FM_HOME" >/dev/null 2>&1 || true
   # A full locked start publishes this home's current structured summary.
   # Publication is side-band and best-effort, so it can never change the
   # session-start result. A context re-emit is not another session start.

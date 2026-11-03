@@ -121,12 +121,20 @@ test_noop_outside_primary_home() {
   echo secondmate1 > "$h/.fm-secondmate-home"
   run_mark "$h" "$(payload mcp__krisp__get_multiple_documents "$(transcript_response)")"
   [ ! -e "$h/state/meeting-pending" ] || fail "secondmate home wrote a marker"
-  local wt="$TMP_ROOT/wt-main" ; mkdir -p "$wt/bin" "$wt/state"; : > "$wt/AGENTS.md"
-  git -C "$wt" init -q >/dev/null 2>&1; git -C "$wt" commit -q --allow-empty -m i >/dev/null 2>&1
-  git -C "$wt" worktree add -q "$TMP_ROOT/wt-child" -b child >/dev/null 2>&1 || true
-  mkdir -p "$TMP_ROOT/wt-child/state"
-  run_mark "$TMP_ROOT/wt-child" "$(payload mcp__krisp__get_multiple_documents "$(transcript_response)")"
-  [ ! -e "$TMP_ROOT/wt-child/state/meeting-pending" ] || fail "child task worktree wrote a marker"
+  local wt="$TMP_ROOT/wt-main" child="$TMP_ROOT/wt-child"
+  mkdir -p "$wt/bin" "$wt/state"; : > "$wt/AGENTS.md"; : > "$wt/bin/.keep"
+  git -C "$wt" init -q || fail "git init failed"
+  git -C "$wt" add AGENTS.md bin/.keep || fail "parent add failed"
+  git -C "$wt" commit -q -m i || fail "parent commit failed"
+  git -C "$wt" worktree add -q "$child" -b child || fail "git worktree add failed"
+  [ -f "$child/AGENTS.md" ] || fail "child worktree lacks AGENTS.md"
+  [ -d "$child/bin" ] || fail "child worktree lacks bin/"
+  [ "$(git -C "$child" rev-parse --git-dir)" != "$(git -C "$child" rev-parse --git-common-dir)" ] || fail "child is not a linked worktree"
+  mkdir -p "$wt/data" "$child/state"
+  run_mark "$wt" "$(payload mcp__krisp__get_multiple_documents "$(transcript_response)")"
+  [ -f "$wt/state/meeting-pending/$MID" ] || fail "parent home did not write a marker, so the child check proves nothing"
+  run_mark "$child" "$(payload mcp__krisp__get_multiple_documents "$(transcript_response)")"
+  [ ! -e "$child/state/meeting-pending" ] || fail "child task worktree wrote a marker"
   pass "no-op in a secondmate home and in a child task worktree"
 }
 
