@@ -3384,3 +3384,18 @@ A live lock, a missing `lsof`, any failed check, or any other fetch failure keep
 Every wait, retry, and removal is printed to stderr, and a successful recovery also prints one `recovered:` summary line to stdout so a session-start refresh - which discards fleet-sync stderr and relays only stdout - still surfaces it.
 
 The shared staleness proof lives in `bin/fm-lock-lib.sh`, which both `fm-teardown.sh` and `fm-fleet-sync.sh` use.
+
+<!-- Fork-only: meeting-to-ticket gate; bin/fm-meeting-ticket-gate.sh owns the contract. -->
+## Meeting-to-ticket gate (fork)
+
+Reading a meeting transcript in the primary session must end in tickets before the turn ends.
+A PostToolUse hook runs `bin/fm-meeting-ticket-gate.sh mark`. When the tool is on the meeting-tool list and its result holds a transcript (a bare meeting listing does not count), it writes `state/meeting-pending/<meeting-id>` with the id, date, and tool.
+`bin/fm-turnend-guard.sh` runs `bin/fm-meeting-ticket-gate.sh check` and blocks the turn end while a marker is unmet.
+The check passes when `data/meeting-<date>-<id>.md` or `data/standup-<date>.md` names the meeting id, has at least one table task row, and every task row carries an `sc-NNNN` story id, a `not ours` owner, a PR reference (`PR 826`, `BE 825`, `FE PR 444`, `PR auto_applier_py 127`), or a `done` owner or status.
+A row with `id pending`, `TBD`, or none of those fails; the block message names the file and each failing row.
+A pass deletes the marker; delete `state/meeting-pending/<id>` by hand to waive a meeting.
+
+The meeting-tool list is `config/meeting-transcript-tools` (one shell glob per line, `#` comments), falling back to the tracked default `bin/fm-meeting-transcript-tools.default` (Krisp and Granola tools).
+The hook is a no-op for unlisted tools, in child task worktrees, and in secondmate homes.
+Register it once in the primary home with `bin/fm-meeting-ticket-gate.sh install "$FM_HOME"`; that merges into the untracked `.claude/settings.local.json`.
+<!-- Fork-only end -->

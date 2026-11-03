@@ -1,0 +1,239 @@
+#!/usr/bin/env bash
+# Fork-only: meeting-to-ticket gate for the primary firstmate session (applypass fork).
+#
+# usage:
+#   fm-meeting-ticket-gate.sh mark            PostToolUse hook: read the payload on stdin
+#   fm-meeting-ticket-gate.sh check           Stop check: exit 2 + stderr message while a marker is unmet
+#   fm-meeting-ticket-gate.sh install <dir>   register the PostToolUse hook in <dir>/.claude/settings.local.json
+#
+# Why: reading a meeting transcript must end in tickets before the session moves on.
+#
+# mark: when the tool named in the payload is on the configured meeting-tool list and its
+# result holds a transcript, write state/meeting-pending/<meeting-id> (id, date, tool).
+# The list is $FM_HOME/config/meeting-transcript-tools, falling back to the tracked
+# default bin/fm-meeting-transcript-tools.default: one shell glob per line, '#' comments.
+# A bare meeting listing (no transcript text) writes nothing. No-op for any other tool,
+# in a child task worktree, and in a secondmate home.
+#
+# check: for each marker, pass when data/meeting-<date>-<id>.md or data/standup-<date>.md exists,
+# names the meeting id, has at least one table task row, and every task row carries evidence:
+# an sc-NNNN story id, an explicit 'not ours' owner, a PR reference (PR 826, BE 825, FE PR 444,
+# PR auto_applier_py 127, a /pull/N url), or a 'done' owner/status. A row with 'id pending',
+# 'TBD', or none of those fails. A passing marker is deleted; a failing one blocks the turn
+# end, and the message names the file checked and each failing row. Delete a marker by hand
+# to waive a meeting.
+#
+# Test seams: FM_HOME, FM_STATE_OVERRIDE, FM_CONFIG_OVERRIDE, FM_DATA_OVERRIDE.
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+FM_HOME="${FM_HOME:-$FM_ROOT}"
+STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
+CONFIG="${FM_CONFIG_OVERRIDE:-$FM_HOME/config}"
+DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
+MARKERS="$STATE/meeting-pending"
+DEFAULT_LIST="$SCRIPT_DIR/fm-meeting-transcript-tools.default"
+
+# shellcheck source=bin/fm-primary-scope-lib.sh
+. "$SCRIPT_DIR/fm-primary-scope-lib.sh"
+
+in_primary_home() {
+  fm_primary_scope_matches "$FM_ROOT" "$STATE" || return 1
+  fm_root_is_secondmate_home "$FM_ROOT" && return 1
+  return 0
+}
+
+tool_is_listed() {  # <tool-name>
+  local tool=$1 list=$CONFIG/meeting-transcript-tools pattern
+  [ -f "$list" ] || list=$DEFAULT_LIST
+  [ -f "$list" ] || return 1
+  while IFS= read -r pattern || [ -n "$pattern" ]; do
+    pattern=${pattern%%#*}
+    pattern=${pattern//[[:space:]]/}
+    [ -n "$pattern" ] || continue
+    # shellcheck disable=SC2254 # the list entry is a glob on purpose
+    case "$tool" in $pattern) return 0 ;; esac
+  done < "$list"
+  return 1
+}
+
+# Prints "<id>\t<date>" per meeting whose result holds a transcript. Strings that hold JSON
+# are parsed, so MCP content blocks ([{type:text,text:"{...}"}]) are searched too.
+extract_meetings() {  # <payload>
+  printf '%s' "$1" | jq -r --arg today "$(date +%F)" '
+    def parsed: walk(if type == "string" and (test("^\\s*[\\[{]")) then (try fromjson catch .) else . end);
+    def speaker_lines: [split("\n")[] | select(test("^\\s*(\\[?[0-9:.]+\\]?\\s*)?[A-Za-z][^:]{0,40}:\\s*\\S"))] | length;
+    def is_transcript($k; $v):
+      ($v | type) == "string"
+      and (($k | test("transcript"; "i")) and ($v | length) >= 200
+           or ($v | length) >= 1500 and ($v | speaker_lines) >= 5);
+    def idkey: test("^(id|meeting_?id|document_?id|ids|meeting_?ids|document_?ids)$"; "i");
+    def datekey: test("^(date|start(_?time|ed_?at)?|created_?at|meeting_?date|time)$"; "i");
+    def first_id: [.. | objects | to_entries[] | select(.key | idkey) | .value | if type == "array" then .[] else . end | select(type == "string" or type == "number") | tostring][0];
+    def first_date: [.. | objects | to_entries[] | select(.key | datekey) | .value | select(type == "string") | select(test("^[0-9]{4}-[0-9]{2}-[0-9]{2}")) | .[0:10]][0];
+    def has_transcript: any(.. | objects | to_entries[]; is_transcript(.key; .value))
+      or any(.. | strings; length >= 1500 and speaker_lines >= 5);
+    (.tool_input // {} | parsed) as $in
+    | (.tool_response // {} | parsed) as $out
+    | (if ($out | type) == "array" then $out else [$out] end) as $items
+    | ($in | first_id) as $input_id
+    | ($in | first_date) as $input_date
+    | [ $items[] | select(has_transcript) ] as $hits
+    | if ($hits | length) == 0 then empty
+      else $hits[]
+        | ((first_id) // $input_id // "") as $id
+        | ((first_date) // $input_date // $today) as $date
+        | "\($id)\t\($date)"
+      end' 2>/dev/null
+}
+
+safe_id() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_'; }
+
+cmd_mark() {
+  local payload tool id date n=0 tuse
+  payload=$(cat 2>/dev/null || true)
+  [ -n "$payload" ] || exit 0
+  # Cheap exit before any jq: pull tool_name with sed and test it against the list.
+  tool=$(printf '%s' "$payload" | sed -n 's/.*"tool_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)
+  [ -n "$tool" ] || exit 0
+  tool_is_listed "$tool" || exit 0
+  command -v jq >/dev/null 2>&1 || exit 0
+  in_primary_home || exit 0
+  tuse=$(printf '%s' "$payload" | jq -r '.tool_use_id // empty' 2>/dev/null)
+  while IFS=$'\t' read -r id date; do
+    [ -n "${date:-}" ] || continue
+    n=$((n + 1))
+    [ -n "$id" ] || id="unknown-$(safe_id "${tuse:-$(date +%s)-$n}")"
+    id=$(safe_id "$id")
+    mkdir -p "$MARKERS" 2>/dev/null || exit 0
+    printf 'id=%s\ndate=%s\ntool=%s\n' "$id" "$date" "$tool" > "$MARKERS/$id.tmp" \
+      && mv "$MARKERS/$id.tmp" "$MARKERS/$id"
+  done < <(extract_meetings "$payload")
+  exit 0
+}
+
+# Prints failing-row descriptions for one mapping file; prints nothing when the file passes.
+# Output lines: "ROW<TAB>text" per failing row, or "NOROWS" when no task row exists.
+file_failures() {  # <file>
+  awk '
+    function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
+    function ok(owner_cells, row,   low) {
+      low = tolower(owner_cells)
+      if (low ~ /id pending|tbd/) return 0
+      if (tolower(row) ~ /(^|[^a-z0-9])sc-[0-9]+/) return 1
+      if (low ~ /not ours/) return 1
+      if (low ~ /(^|[^a-z])done([^a-z]|$)/) return 1
+      if (owner_cells ~ /(^|[^A-Za-z])(PR|BE|FE)[ ]+([A-Za-z_]+[ ]+)*#?[0-9]+/) return 1
+      if (owner_cells ~ /\/pull\/[0-9]+/) return 1
+      return 0
+    }
+    /^[ \t]*\|/ {
+      line = $0
+      if (line ~ /^[ \t]*\|[ \t:|-]+\|[ \t]*$/) { next }       # separator
+      if (!in_table) { in_table = 1; next }                      # header row
+      n = split(line, c, "|")                                    # c[1] empty, c[2..n-1] cells
+      if (n < 5) next
+      rows++
+      owner = ""
+      for (i = 4; i < n; i++) owner = owner " | " c[i]
+      if (!ok(owner, line)) {
+        printf "%s\t%s\n", trim(c[2]), trim(c[3])
+        bad++
+      }
+      next
+    }
+    { in_table = 0 }
+    END { if (rows == 0) print "NOROWS" }
+  ' "$1"
+}
+
+check_marker() {  # <marker-file>; sets REPORT, returns 0 pass / 1 fail
+  local mf=$1 id='' date='' key val cand best='' failures names unknown=0
+  while IFS='=' read -r key val; do
+    case "$key" in id) id=$val ;; date) date=$val ;; esac
+  done < "$mf"
+  [ -n "$id" ] && [ -n "$date" ] || { rm -f "$mf"; return 0; }
+  case "$id" in unknown-*) unknown=1 ;; esac
+  names="data/meeting-$date-$id.md or data/standup-$date.md"
+  REPORT=''
+  for cand in "$DATA/meeting-$date-$id.md" "$DATA/standup-$date.md"; do
+    [ -f "$cand" ] || continue
+    [ -n "$best" ] || best=$cand
+    if [ "$unknown" -eq 0 ] && ! grep -qF -- "$id" "$cand"; then
+      [ "$best" = "$cand" ] && REPORT="$cand does not name meeting id $id (add a 'Source: ... meeting $id' line)."
+      continue
+    fi
+    failures=$(file_failures "$cand")
+    if [ -z "$failures" ]; then
+      rm -f "$mf"
+      return 0
+    fi
+    best=$cand
+    if [ "$failures" = NOROWS ]; then
+      REPORT="$cand has no task rows (a '| # | Task | Owner | Where |' table with one row per agreed task)."
+    else
+      REPORT="$cand has task rows with no ticket or owner:"
+      while IFS=$'\t' read -r row text; do
+        REPORT="$REPORT"$'\n'"  - row $row: $text"
+      done <<< "$failures"
+      REPORT="$REPORT"$'\n'"Each row needs an sc-NNNN story id, a 'not ours' owner, a PR reference, or a 'done' status."
+    fi
+    return 1
+  done
+  if [ -z "$best" ]; then
+    REPORT="No mapping file for meeting $id ($date). Create $names, name the meeting id in it, and give every agreed task a row with an sc-NNNN story id (file the tickets) or an explicit 'not ours' owner."
+  fi
+  return 1
+}
+
+cmd_check() {
+  local mf blocked=0 msg=''
+  in_primary_home || exit 0
+  [ -d "$MARKERS" ] || exit 0
+  for mf in "$MARKERS"/*; do
+    [ -f "$mf" ] || continue
+    case "$mf" in *.tmp) continue ;; esac
+    if ! check_marker "$mf"; then
+      blocked=1
+      msg="$msg"$'\n'"Meeting $(basename "$mf"): $REPORT"
+    fi
+  done
+  [ "$blocked" -eq 1 ] || exit 0
+  {
+    printf 'MEETING TRANSCRIPT READ, TICKETS NOT FILED. File every agreed task before ending the turn.%s\n' "$msg"
+    printf 'The check re-runs at turn end and clears the marker once the file passes (waive: delete state/meeting-pending/<id>).\n'
+  } >&2
+  exit 2
+}
+
+cmd_install() {  # <dir>
+  local dir file tmp hook
+  [ -d "${1:-}" ] || { echo "usage: fm-meeting-ticket-gate.sh install <dir>" >&2; exit 2; }
+  command -v jq >/dev/null 2>&1 || { echo "fm-meeting-ticket-gate: jq is required" >&2; exit 1; }
+  dir=$(CDPATH='' cd -- "$1" && pwd -P) || exit 1
+  file="$dir/.claude/settings.local.json"
+  hook="$(printf %q "$SCRIPT_DIR/fm-meeting-ticket-gate.sh") mark"
+  mkdir -p "$dir/.claude" || exit 1
+  [ -f "$file" ] || printf '{}\n' > "$file"
+  tmp=$(mktemp "$file.XXXXXX") || exit 1
+  if ! jq --arg cmd "$hook" '
+    .hooks //= {}
+    | .hooks.PostToolUse //= []
+    | if any(.hooks.PostToolUse[]?.hooks[]?; (.command // "") | contains("fm-meeting-ticket-gate.sh"))
+      then .
+      else .hooks.PostToolUse += [{"matcher":".*","hooks":[{"type":"command","command":$cmd,"timeout":10}]}]
+      end' "$file" > "$tmp"; then
+    rm -f "$tmp"
+    echo "fm-meeting-ticket-gate: could not merge into $file" >&2
+    exit 1
+  fi
+  mv "$tmp" "$file"
+}
+
+case "${1:-}" in
+  mark) cmd_mark ;;
+  check) cmd_check ;;
+  install) shift; cmd_install "${1:-}" ;;
+  *) echo "usage: fm-meeting-ticket-gate.sh mark|check|install <dir>" >&2; exit 2 ;;
+esac
