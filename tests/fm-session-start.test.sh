@@ -836,7 +836,6 @@ EOF
     || fail "session start did not register the meeting gate mark hook exactly once: $(cat "$f")"
   pass "a locked session start registers the meeting-to-ticket hook once"
 }
-# Fork-only end
 
 # --- lock refusal: read-only path --------------------------------------------
 
@@ -3115,7 +3114,7 @@ EOF
 }
 
 test_context_digest_absent_empty_present
-test_session_start_registers_meeting_ticket_hook
+test_session_start_registers_meeting_ticket_hook # Fork-only: meeting-to-ticket hook registration
 test_lock_refusal_read_only_path
 test_lock_write_failure_read_only_path
 test_trace_context_effective_state_is_frozen_after_lock
