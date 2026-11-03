@@ -1,0 +1,21 @@
+ok - listed tool with a transcript writes a marker (id and date)
+ok - Granola tool names match through the configured list
+ok - a non-listed tool writes no marker
+ok - config/meeting-transcript-tools replaces the tracked default
+ok - a listed tool with no transcript writes no marker
+ok - no-op in a secondmate home and in a child task worktree
+ok - the 3 Nov sample passes and the marker clears
+ok - an 'id pending' row blocks and the message names that row
+ok - TBD and empty rows fail
+ok - a missing mapping file blocks
+ok - a file naming a different meeting id blocks
+ok - a file with no task rows blocks
+ok - data/meeting-<date>-<id>.md is accepted
+ok - the turn-end guard blocks on a pending marker and allows after a pass
+ok - a multi-document read marks every meeting with its own date
+ok - transcripts with no ids mark every input id
+ok - an id-less transcript with no input id still writes a marker
+ok - 'not done' and 'maybe not ours' are not evidence
+ok - evidence in the Task cell does not count
+ok - PR shorthand needs 3+ digits; a /pull/N url passes
+ok - installer registers one PostToolUse hook and keeps other settings

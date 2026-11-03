@@ -1,0 +1,13 @@
+❯ Call the krisp MCP tool list_meetings once and tell me the meeting titles. Create no files.
+  ⎿  UserPromptSubmit says: This session is long and each turn re-reads it all. Run /stow, then /clear, to start fresh; the lock carries over.
+⏺ Loading the Krisp meeting list tool and calling it once, captain.
+  Called krisp
+⏺ Captain, Krisp lists one meeting:
+  - Engineering standup, dated 3 Nov 2026. This is the same meeting whose action items I listed earlier.
+  No files were created.
+✻ Baked for 6m 47s · done 7:01 PM
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Fable 5.1 | ctx 9% | HEAD | Call the krisp MCP tool list_meetings once and tel...
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents

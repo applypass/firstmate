@@ -1,0 +1,17 @@
+config/meeting-transcript-tools:
+# lab: only granola
+mcp__granola__*
+
+❯ Call krisp get_multiple_documents again with document_ids ["01a18b1ae757732f8c48b2ef9dfdbf54"] and reply with only the meeting title. Create no files.
+  Called krisp
+⏺ Engineering standup
+✻ Cogitated for 11s · done 7:01 PM
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Fable 5.1 | ctx 9% | HEAD | Call krisp get_multiple_documents again with docum...
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents
+state/meeting-pending:
+total 0
+drwxr-xr-x@  2 uayyagari  staff   64 Nov  3 17:09 .
+drwxr-xr-x@ 19 uayyagari  staff  608 Nov  3 19:01 ..
