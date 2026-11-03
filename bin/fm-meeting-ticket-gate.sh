@@ -16,10 +16,10 @@
 # in a child task worktree, and in a secondmate home.
 #
 # check: for each marker, pass when data/meeting-<date>-<id>.md or data/standup-<date>.md exists,
-# names the meeting id, has at least one table task row, and every task row carries evidence:
-# an sc-NNNN story id, an explicit 'not ours' owner, a PR reference (PR 826, BE 825, FE PR 444,
-# PR auto_applier_py 127, a /pull/N url), or a 'done' owner/status. A row with 'id pending',
-# 'TBD', or none of those fails. A passing marker is deleted; a failing one blocks the turn
+# names the meeting id, has at least one table task row, and every task row carries evidence in
+# a cell after the Task cell (Owner, Where): an sc-NNNN story id, a whole 'not ours' or 'done'
+# cell, or a PR reference (PR 826, BE 825, FE 445 with 3+ digits, or a /pull/N url). A row with
+# 'id pending', 'TBD', or none of those fails. A passing marker is deleted; a failing one blocks the turn
 # end, and the message names the file checked and each failing row. Delete a marker by hand
 # to waive a meeting.
 #
@@ -58,8 +58,10 @@ tool_is_listed() {  # <tool-name>
   return 1
 }
 
-# Prints "<id>\t<date>" per meeting whose result holds a transcript. Strings that hold JSON
-# are parsed, so MCP content blocks ([{type:text,text:"{...}"}]) are searched too.
+# Prints "<date>\t<id>" per meeting whose result holds a transcript. Strings that hold JSON
+# are parsed, so MCP content blocks ([{type:text,text:"{...}"}]) are searched too. Each
+# object that directly holds a transcript is one meeting, with its own id and date. When a
+# transcript object has no id, every id named in the tool input not already matched is marked.
 extract_meetings() {  # <payload>
   printf '%s' "$1" | jq -r --arg today "$(date +%F)" '
     def parsed: walk(if type == "string" and (test("^\\s*[\\[{]")) then (try fromjson catch .) else . end);
@@ -70,22 +72,21 @@ extract_meetings() {  # <payload>
            or ($v | length) >= 1500 and ($v | speaker_lines) >= 5);
     def idkey: test("^(id|meeting_?id|document_?id|ids|meeting_?ids|document_?ids)$"; "i");
     def datekey: test("^(date|start(_?time|ed_?at)?|created_?at|meeting_?date|time)$"; "i");
-    def first_id: [.. | objects | to_entries[] | select(.key | idkey) | .value | if type == "array" then .[] else . end | select(type == "string" or type == "number") | tostring][0];
-    def first_date: [.. | objects | to_entries[] | select(.key | datekey) | .value | select(type == "string") | select(test("^[0-9]{4}-[0-9]{2}-[0-9]{2}")) | .[0:10]][0];
-    def has_transcript: any(.. | objects | to_entries[]; is_transcript(.key; .value))
-      or any(.. | strings; length >= 1500 and speaker_lines >= 5);
+    def ids: [to_entries[] | select(.key | idkey) | .value | if type == "array" then .[] else . end | select(type == "string" or type == "number") | tostring];
+    def own_date: [to_entries[] | select(.key | datekey) | .value | select(type == "string") | select(test("^[0-9]{4}-[0-9]{2}-[0-9]{2}")) | .[0:10]][0];
     (.tool_input // {} | parsed) as $in
-    | (.tool_response // {} | parsed) as $out
-    | (if ($out | type) == "array" then $out else [$out] end) as $items
-    | ($in | first_id) as $input_id
-    | ($in | first_date) as $input_date
-    | [ $items[] | select(has_transcript) ] as $hits
-    | if ($hits | length) == 0 then empty
-      else $hits[]
-        | ((first_id) // $input_id // "") as $id
-        | ((first_date) // $input_date // $today) as $date
-        | "\($id)\t\($date)"
-      end' 2>/dev/null
+    | ({r: (.tool_response // {} | parsed)} | [.. | objects | select(any(to_entries[]; is_transcript(.key; .value)))]) as $hits
+    | ([$in | .. | objects | ids[]] | unique) as $input_ids
+    | ([$in | .. | objects | own_date | select(.)][0]) as $input_date
+    | [ $hits[] | {id: ids[0], date: (own_date // $input_date // $today)} ] as $found
+    | ([$found[] | .id | select(.)]) as $known
+    | ($found | map(select(.id == null)) | .[0].date) as $idless_date
+    | [ ($found[] | select(.id)),
+        (if $idless_date == null then empty
+         elif ($input_ids - $known | length) > 0 then ($input_ids - $known)[] | {id: ., date: $idless_date}
+         else {id: "", date: $idless_date} end) ]
+    | unique_by(.id)[]
+    | "\(.date)\t\(.id)"' 2>/dev/null
 }
 
 safe_id() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_'; }
@@ -101,7 +102,7 @@ cmd_mark() {
   command -v jq >/dev/null 2>&1 || exit 0
   in_primary_home || exit 0
   tuse=$(printf '%s' "$payload" | jq -r '.tool_use_id // empty' 2>/dev/null)
-  while IFS=$'\t' read -r id date; do
+  while IFS=$'\t' read -r date id; do
     [ -n "${date:-}" ] || continue
     n=$((n + 1))
     [ -n "$id" ] || id="unknown-$(safe_id "${tuse:-$(date +%s)-$n}")"
@@ -118,13 +119,15 @@ cmd_mark() {
 file_failures() {  # <file>
   awk '
     function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
-    function ok(owner_cells, row,   low) {
+    function ok(owner_cells, cells, nc,   low, i, cell) {
       low = tolower(owner_cells)
       if (low ~ /id pending|tbd/) return 0
-      if (tolower(row) ~ /(^|[^a-z0-9])sc-[0-9]+/) return 1
-      if (low ~ /not ours/) return 1
-      if (low ~ /(^|[^a-z])done([^a-z]|$)/) return 1
-      if (owner_cells ~ /(^|[^A-Za-z])(PR|BE|FE)[ ]+([A-Za-z_]+[ ]+)*#?[0-9]+/) return 1
+      if (low ~ /(^|[^a-z0-9])sc-[0-9]+/) return 1
+      for (i = 1; i <= nc; i++) {
+        cell = tolower(trim(cells[i]))
+        if (cell == "not ours" || cell == "done") return 1
+      }
+      if (owner_cells ~ /(^|[^A-Za-z])(PR|BE|FE) [0-9][0-9][0-9]+/) return 1
       if (owner_cells ~ /\/pull\/[0-9]+/) return 1
       return 0
     }
@@ -136,8 +139,9 @@ file_failures() {  # <file>
       if (n < 5) next
       rows++
       owner = ""
-      for (i = 4; i < n; i++) owner = owner " | " c[i]
-      if (!ok(owner, line)) {
+      nc = 0
+      for (i = 4; i < n; i++) { owner = owner " | " c[i]; oc[++nc] = c[i] }
+      if (!ok(owner, oc, nc)) {
         printf "%s\t%s\n", trim(c[2]), trim(c[3])
         bad++
       }

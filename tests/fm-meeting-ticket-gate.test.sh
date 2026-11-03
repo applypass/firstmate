@@ -221,6 +221,76 @@ test_turnend_guard_blocks_then_allows() {
   pass "the turn-end guard blocks on a pending marker and allows after a pass"
 }
 
+test_multi_document_read_marks_every_meeting() {
+  local h resp p; h=$(new_home multidoc)
+  resp=$(jq -cn --arg tr "$(transcript_text)" \
+    '[{type:"text",text:({documents:[{id:"aaa",date:"2026-11-03T09:30:00Z",transcript:$tr},{id:"bbb",date:"2026-11-02",transcript:$tr}]}|tostring)}]')
+  p=$(jq -cn --argjson r "$resp" '{tool_name:"mcp__krisp__get_multiple_documents",tool_use_id:"toolu_2",tool_input:{document_ids:["aaa","bbb"]},tool_response:$r}')
+  run_mark "$h" "$p"
+  assert_contains "$(cat "$h/state/meeting-pending/aaa" 2>/dev/null)" "date=2026-11-03" "first meeting marked with its date"
+  assert_contains "$(cat "$h/state/meeting-pending/bbb" 2>/dev/null)" "date=2026-11-02" "second meeting marked with its date"
+  pass "a multi-document read marks every meeting with its own date"
+}
+
+test_idless_transcripts_mark_every_input_id() {
+  local h resp p; h=$(new_home idless)
+  resp=$(jq -cn --arg tr "$(transcript_text)" '[{type:"text",text:({documents:[{transcript:$tr},{transcript:$tr}]}|tostring)}]')
+  p=$(jq -cn --argjson r "$resp" '{tool_name:"mcp__krisp__get_multiple_documents",tool_use_id:"toolu_3",tool_input:{document_ids:["aaa","bbb"],date:"2026-11-03"},tool_response:$r}')
+  run_mark "$h" "$p"
+  [ -f "$h/state/meeting-pending/aaa" ] || fail "input id aaa not marked"
+  [ -f "$h/state/meeting-pending/bbb" ] || fail "input id bbb not marked"
+  pass "transcripts with no ids mark every input id"
+}
+
+test_idless_transcript_without_input_id_marks_unknown() {
+  local h p; h=$(new_home unknownid)
+  p=$(jq -cn --arg tr "$(transcript_text)" '{tool_name:"mcp__granola__get_meeting_transcript",tool_use_id:"toolu_4",tool_input:{},tool_response:{transcript:$tr}}')
+  run_mark "$h" "$p"
+  local m; set -- "$h"/state/meeting-pending/unknown-*; m=$1
+  [ -f "$m" ] || fail "no unknown-id marker for an id-less transcript"
+  pass "an id-less transcript with no input id still writes a marker"
+}
+
+# row_check <home-name> <sed-expr> -> sets CHECK_RC/CHECK_ERR for the sample with row 6 rewritten
+row_check() {
+  local h; h=$(new_home "$1")
+  run_mark "$h" "$(payload mcp__krisp__get_multiple_documents "$(transcript_response)")"
+  write_sample "$h/data/standup-$DATE.md"
+  sed -i.bak "$2" "$h/data/standup-$DATE.md"
+  run_check "$h"
+}
+
+test_negated_done_and_not_ours_fail() {
+  row_check notdone 's#| Recording stage: no default, required | interview-recordings | sc-9109 |#| Recording stage required | interview-recordings | not done |#'
+  expect_code 2 "$CHECK_RC" "'not done' row blocks"
+  assert_contains "$CHECK_ERR" "row 6: Recording stage required" "names the 'not done' row"
+  row_check maybenot 's#| interview-recordings | sc-9109 |#| interview-recordings | maybe not ours |#'
+  expect_code 2 "$CHECK_RC" "'maybe not ours' row blocks"
+  assert_contains "$CHECK_ERR" "row 6:" "names the 'maybe not ours' row"
+  pass "'not done' and 'maybe not ours' are not evidence"
+}
+
+test_story_id_in_task_cell_only_fails() {
+  row_check taskcell 's#| Recording stage: no default, required | interview-recordings | sc-9109 |#| Recording stage (see sc-9109) | interview-recordings | later |#'
+  expect_code 2 "$CHECK_RC" "sc id only in the Task cell blocks"
+  assert_contains "$CHECK_ERR" "row 6:" "names the row whose id sits in the Task cell"
+  pass "evidence in the Task cell does not count"
+}
+
+test_short_pr_numbers_fail() {
+  row_check be2 's#| interview-recordings | sc-9109 |#| interview-recordings | BE 2 |#'
+  expect_code 2 "$CHECK_RC" "'BE 2' blocks"
+  row_check fe1 's#| interview-recordings | sc-9109 |#| interview-recordings | FE 1 |#'
+  expect_code 2 "$CHECK_RC" "'FE 1' blocks"
+  row_check pr12 's#| interview-recordings | sc-9109 |#| interview-recordings | PR 12 |#'
+  expect_code 2 "$CHECK_RC" "'PR 12' blocks"
+  row_check be825 's#| interview-recordings | sc-9109 |#| interview-recordings | BE 825 |#'
+  expect_code 0 "$CHECK_RC" "'BE 825' passes: $CHECK_ERR"
+  row_check pullurl 's#| interview-recordings | sc-9109 |#| interview-recordings | github.com/o/r/pull/9 |#'
+  expect_code 0 "$CHECK_RC" "a /pull/N url passes: $CHECK_ERR"
+  pass "PR shorthand needs 3+ digits; a /pull/N url passes"
+}
+
 test_installer_is_idempotent() {
   local d="$TMP_ROOT/inst" file
   mkdir -p "$d/.claude"
@@ -246,4 +316,10 @@ test_other_meeting_id_blocks
 test_file_without_rows_blocks
 test_meeting_named_file_passes
 test_turnend_guard_blocks_then_allows
+test_multi_document_read_marks_every_meeting
+test_idless_transcripts_mark_every_input_id
+test_idless_transcript_without_input_id_marks_unknown
+test_negated_done_and_not_ours_fail
+test_story_id_in_task_cell_only_fails
+test_short_pr_numbers_fail
 test_installer_is_idempotent

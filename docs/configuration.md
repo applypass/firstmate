@@ -3391,7 +3391,7 @@ The shared staleness proof lives in `bin/fm-lock-lib.sh`, which both `fm-teardow
 Reading a meeting transcript in the primary session must end in tickets before the turn ends.
 A PostToolUse hook runs `bin/fm-meeting-ticket-gate.sh mark`. When the tool is on the meeting-tool list and its result holds a transcript (a bare meeting listing does not count), it writes `state/meeting-pending/<meeting-id>` with the id, date, and tool.
 `bin/fm-turnend-guard.sh` runs `bin/fm-meeting-ticket-gate.sh check` and blocks the turn end while a marker is unmet.
-The check passes when `data/meeting-<date>-<id>.md` or `data/standup-<date>.md` names the meeting id, has at least one table task row, and every task row carries an `sc-NNNN` story id, a `not ours` owner, a PR reference (`PR 826`, `BE 825`, `FE PR 444`, `PR auto_applier_py 127`), or a `done` owner or status.
+The check passes when `data/meeting-<date>-<id>.md` or `data/standup-<date>.md` names the meeting id, has at least one table task row, and every task row carries evidence in a cell after the Task cell (Owner, Where): an `sc-NNNN` story id, a cell that reads exactly `not ours` or `done`, or a PR reference (`PR 826`, `BE 825`, `FE 445`, with at least 3 digits, or a `/pull/N` URL).
 A row with `id pending`, `TBD`, or none of those fails; the block message names the file and each failing row.
 A pass deletes the marker; delete `state/meeting-pending/<id>` by hand to waive a meeting.
 
