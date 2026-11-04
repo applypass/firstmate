@@ -1,0 +1,29 @@
+$ fm-meeting-todos-sync.sh 2026-11-04.md --dry-run   (Wed 4 Nov: today->Thu 5 Nov, week->Fri 6 Nov, later->18 Nov)
+would create label standup-2026-11-04
+would create label todo-today
+would create a story for row 1: Fix resume parser crash on PDF tables (deadline 2026-11-05, standup-2026-11-04 todo-today)
+would create label todo-week
+would create a story for row 2: Run job filter eval on new labels (deadline 2026-11-06, standup-2026-11-04 todo-week)
+would create label todo-later
+would create a story for row 3: Build SigNoz latency dashboard (deadline 2026-11-18, standup-2026-11-04 todo-later)
+would create the doc "Standup Wed 4 Nov - agreed to-dos"
+exit=0
+
+$ fm-meeting-todos-sync.sh 2026-10-30.md --dry-run   (Fri 30 Oct: today->Mon 2 Nov, week->Fri 30 Oct, later->13 Nov)
+would create label standup-2026-10-30
+would create label todo-today
+would create a story for row 1: Fix resume parser crash on PDF tables (deadline 2026-11-02, standup-2026-10-30 todo-today)
+would create label todo-week
+would create a story for row 2: Run job filter eval on new labels (deadline 2026-10-30, standup-2026-10-30 todo-week)
+would create label todo-later
+would create a story for row 3: Build SigNoz latency dashboard (deadline 2026-11-13, standup-2026-10-30 todo-later)
+would create the doc "Standup Fri 30 Oct - agreed to-dos"
+exit=0
+
+$ ADVERSARIAL: 4 Nov later row with 2026-11-11 placeholder
+$TMP/bad/2026-11-04.md:8: a later item has the placeholder deadline 2026-11-18, two weeks after the meeting (got 2026-11-11); when a transcript states a timing, write (moved: <why>)
+exit=2
+
+$ ADVERSARIAL: 30 Oct later row with 2026-11-20 placeholder
+$TMP/bad/2026-10-30.md:8: a later item has the placeholder deadline 2026-11-13, two weeks after the meeting (got 2026-11-20); when a transcript states a timing, write (moved: <why>)
+exit=2

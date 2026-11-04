@@ -1,0 +1,59 @@
+$ re-run on the unchanged record
+row 1: sc-9001 unchanged
+row 2: sc-9002 unchanged
+row 3: sc-9003 unchanged
+doc "Standup Wed 4 Nov - agreed to-dos" unchanged
+exit=0
+--- requests:
+GET /api/v3/labels
+GET /api/v3/stories/9001
+GET /api/v3/stories/9002
+GET /api/v3/stories/9003
+
+=== a later transcript (5 Nov) gives row 3 a date -> scope week, and row 1 slips a day ===
+| 1 | Fix resume parser crash on PDF tables | Uday | sc-9001 | today | 2026-11-06 (moved: PDF fixture missing, blocked one day) | open | "I'll have the parser fix by tomorrow" @03:12 |
+| 3 | Build SigNoz latency dashboard | Ravi | sc-9003 | week | 2026-11-06 (moved: Ravi said in the 5 Nov standup he can do it by Friday) | open | "would be nice to have a dashboard at some point" @11:02 |
+$ fm-meeting-todos-sync.sh 2026-11-04.md
+updated sc-9001: {"deadline":"2026-11-06T12:30:00Z"}
+commented on sc-9001: Deadline moved 2026-11-05 -> 2026-11-06
+row 2: sc-9002 unchanged
+updated sc-9003: {"deadline":"2026-11-06T12:30:00Z","labels":[{"name":"standup-2026-11-04"},{"name":"todo-week"}]}
+commented on sc-9003: Deadline moved 2026-11-18 -> 2026-11-06
+updated the doc "Standup Wed 4 Nov - agreed to-dos" (doc-0001)
+exit=0
+--- requests:
+GET /api/v3/labels 
+GET /api/v3/stories/9001 
+PUT /api/v3/stories/9001 {"deadline":"2026-11-06T12:30:00Z"}
+POST /api/v3/stories/9001/comments {"text":"Deadline moved 2026-11-05 -> 2026-11-06: PDF fixture missing, blocked one day"}
+GET /api/v3/stories/9002 
+GET /api/v3/stories/9003 
+PUT /api/v3/stories/9003 {"deadline":"2026-11-06T12:30:00Z","labels":[{"name":"standup-2026-11-04"},{"name":"todo-week"}]}
+POST /api/v3/stories/9003/comments {"text":"Deadline moved 2026-11-18 -> 2026-11-06: Ravi said in the 5 Nov standup he can do it by Friday"}
+PUT /api/v3/documents/doc-0001 {"title":"Standup Wed 4 Nov - agreed to-dos","content":"Krisp: https://app.krisp.ai/t/kr4nov\n\nAgreed to ship the resume parser fix and the job filter eval this week.\nThe SigNoz dashboard is a soft maybe with no date.\n\n| Story | Task | Owner | Scope | Deadline | Status |\n|---|---|---|---|---|---|\n| [sc-9001](https://app.shortcut.com/applypass/story/9001) | Fix resume parser crash on PDF tables | Uday | today | 2026-11-06 | open |\n| [sc-9002](https://app.shortcut.com/applypass/story/9002) | Run job filter eval on new labels | Priya | week | 2026-11-06 | open |\n| [sc-9003](https://app.shortcut.com/applypass/story/9003) | Build SigNoz latency dashboard | Ravi | week | 2026-11-06 | open |\n| - | Rotate old staging token | Uday | today | 2026-11-05 | done |","content_format":"markdown"}
+--- story 9003 now:
+{"deadline":"2026-11-06T12:30:00Z","labels":[{"name":"standup-2026-11-04"},{"name":"todo-week"}]}
+--- updated doc:
+Krisp: https://app.krisp.ai/t/kr4nov
+
+Agreed to ship the resume parser fix and the job filter eval this week.
+The SigNoz dashboard is a soft maybe with no date.
+
+| Story | Task | Owner | Scope | Deadline | Status |
+|---|---|---|---|---|---|
+| [sc-9001](https://app.shortcut.com/applypass/story/9001) | Fix resume parser crash on PDF tables | Uday | today | 2026-11-06 | open |
+| [sc-9002](https://app.shortcut.com/applypass/story/9002) | Run job filter eval on new labels | Priya | week | 2026-11-06 | open |
+| [sc-9003](https://app.shortcut.com/applypass/story/9003) | Build SigNoz latency dashboard | Ravi | week | 2026-11-06 | open |
+| - | Rotate old staging token | Uday | today | 2026-11-05 | done |
+
+=== row 1 marked done: no story write ===
+row 2: sc-9002 unchanged
+row 3: sc-9003 unchanged
+updated the doc "Standup Wed 4 Nov - agreed to-dos" (doc-0001)
+exit=0
+--- requests:
+GET /api/v3/stories/9001
+GET /api/v3/labels
+GET /api/v3/stories/9002
+GET /api/v3/stories/9003
+PUT /api/v3/documents/doc-0001

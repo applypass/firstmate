@@ -1,0 +1,29 @@
+=== ADVERSARIAL: synced heading hand-edited; Krisp link broken but doc suffix kept ===
+## Engineering standup - Krisp kr4nov not-a-link | doc doc-0001 2b60585095
+$ fm-meeting-todos-sync.sh
+$TMP/adv/2026-11-04.md:1: section heading must be: ## <meeting title> - Krisp <meeting id> <https link>
+exit=2
+
+=== ADVERSARIAL: second section with bad heading + doc suffix (would inherit first meeting id/link) ===
+## Engineering standup - Krisp kr4nov https://app.krisp.ai/t/kr4nov | doc doc-0001 b997569261
+## Design sync - Krisp abc not-a-link | doc d1 abc123
+$TMP/adv/two/2026-11-04.md:11: section heading must be: ## <meeting title> - Krisp <meeting id> <https link>
+exit=2
+
+Shortcut requests made by the two rejected runs: 0
+
+=== tickets off (FM_SHORTCUT_TICKETS=off) ===
+fm-meeting-todos-sync: Shortcut tickets are off (see bin/fm-shortcut-ticket.sh --enabled); nothing was synced
+exit=1
+Shortcut requests: 4
+
+=== raw api op refuses when off ===
+fm-shortcut-ticket: Shortcut tickets are off (enabled=off); the api call was not made
+exit=1
+=== same adversarial files through the validator at 5d715834 (before the fix) vs d959fe17 (this change) ===
+-- adv/2026-11-04.md
+before fix: accepted
+after fix:  $TMP/adv/2026-11-04.md:1: section heading must be: ## <meeting title> - Krisp <meeting id> <https link> rejected 
+-- adv/two/2026-11-04.md
+before fix: accepted
+after fix:  $TMP/adv/two/2026-11-04.md:11: section heading must be: ## <meeting title> - Krisp <meeting id> <https link> rejected 

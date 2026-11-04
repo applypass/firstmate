@@ -1,0 +1,56 @@
+$ fm-meeting-todos-sync.sh data/meeting-todos/2026-11-04.md
+created label standup-2026-11-04
+created label todo-today
+created sc-9001: Fix resume parser crash on PDF tables
+created label todo-week
+created sc-9002: Run job filter eval on new labels
+created label todo-later
+created sc-9003: Build SigNoz latency dashboard
+created the doc "Standup Wed 4 Nov - agreed to-dos" (doc-0001)
+exit=0
+
+--- record file after sync ---
+## Engineering standup - Krisp kr4nov https://app.krisp.ai/t/kr4nov | doc doc-0001 2b60585095
+> Agreed to ship the resume parser fix and the job filter eval this week.
+> The SigNoz dashboard is a soft maybe with no date.
+| # | Task | Owner | Story | Scope | Deadline | Status | Quote |
+|---|---|---|---|---|---|---|---|
+| 1 | Fix resume parser crash on PDF tables | Uday | sc-9001 | today | 2026-11-05 | open | "I'll have the parser fix by tomorrow" @03:12 |
+| 2 | Run job filter eval on new labels [agentic] | Priya | sc-9002 | week | 2026-11-06 | open | "eval done by Friday" @07:45 |
+| 3 | Build SigNoz latency dashboard | Ravi | sc-9003 | later | 2026-11-18 | open | "would be nice to have a dashboard at some point" @11:02 |
+| 4 | Rotate old staging token | Uday | | today | 2026-11-05 | done | "already rotated it this morning" @14:30 |
+
+--- requests Shortcut received (method path) ---
+GET /api/v3/labels
+POST /api/v3/labels
+POST /api/v3/labels
+POST /api/v3/stories
+POST /api/v3/labels
+POST /api/v3/stories
+POST /api/v3/labels
+POST /api/v3/stories
+POST /api/v3/documents
+
+--- story bodies POSTed ---
+{"name":"Fix resume parser crash on PDF tables","description":"Agreed in \"Engineering standup\" (https://app.krisp.ai/t/kr4nov).\nOwner: Uday. Scope: today, due 2026-11-05.\nQuote: \"I'll have the parser fix by tomorrow\" @03:12\n\nmeeting-todo: kr4nov/1","story_type":"feature","deadline":"2026-11-05T12:30:00Z","labels":[{"name":"standup-2026-11-04"},{"name":"todo-today"}],"group_id":"649562cb-7f18-471f-835f-7ed28a5abf0a","workflow_state_id":500000006}
+{"name":"Run job filter eval on new labels","description":"Agreed in \"Engineering standup\" (https://app.krisp.ai/t/kr4nov).\nOwner: Priya. Scope: week, due 2026-11-06.\nQuote: \"eval done by Friday\" @07:45\n\nmeeting-todo: kr4nov/2","story_type":"feature","deadline":"2026-11-06T12:30:00Z","labels":[{"name":"standup-2026-11-04"},{"name":"todo-week"}],"group_id":"649562cb-7f18-471f-835f-7ed28a5abf0a","workflow_state_id":500000006,"epic_id":6074}
+{"name":"Build SigNoz latency dashboard","description":"Agreed in \"Engineering standup\" (https://app.krisp.ai/t/kr4nov).\nOwner: Ravi. Scope: later, due 2026-11-18.\nQuote: \"would be nice to have a dashboard at some point\" @11:02\n\nmeeting-todo: kr4nov/3","story_type":"feature","deadline":"2026-11-18T12:30:00Z","labels":[{"name":"standup-2026-11-04"},{"name":"todo-later"}],"group_id":"649562cb-7f18-471f-835f-7ed28a5abf0a","workflow_state_id":500000006}
+
+--- doc POSTed ---
+TITLE: Standup Wed 4 Nov - agreed to-dos
+Krisp: https://app.krisp.ai/t/kr4nov
+
+Agreed to ship the resume parser fix and the job filter eval this week.
+The SigNoz dashboard is a soft maybe with no date.
+
+| Story | Task | Owner | Scope | Deadline | Status |
+|---|---|---|---|---|---|
+| [sc-9001](https://app.shortcut.com/applypass/story/9001) | Fix resume parser crash on PDF tables | Uday | today | 2026-11-05 | open |
+| [sc-9002](https://app.shortcut.com/applypass/story/9002) | Run job filter eval on new labels | Priya | week | 2026-11-06 | open |
+| - | Rotate old staging token | Uday | today | 2026-11-05 | done |
+
+Later - agreed softly or with no date; placeholder deadline two weeks out, worked after the dated items (not at risk):
+
+| Story | Task | Owner | Scope | Deadline | Status |
+|---|---|---|---|---|---|
+| [sc-9003](https://app.shortcut.com/applypass/story/9003) | Build SigNoz latency dashboard | Ravi | later | 2026-11-18 | open |
