@@ -54,7 +54,7 @@
 #
 # Overrides (tests): FM_RELEASE_GATE_GH (the gh command), FM_DATA_OVERRIDE,
 # FM_BACKLOG_OVERRIDE, FM_RELEASE_GATE_CONFIG.
-set -u
+set -uf
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FM_ROOT="${FM_ROOT_OVERRIDE:-$(cd "$SCRIPT_DIR/.." && pwd)}"

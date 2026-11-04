@@ -150,6 +150,16 @@ run_gate "$d" check
 echo audit > "$d/data/it/reader-writer-audit.md"
 run_gate "$d" check
 [ "$RC" -eq 0 ] || fail "data: audit file must pass: $OUT"
+# a glob stays a pattern even when the current directory holds a file it matches.
+mkpr "$d" 7 "Add col sc-100" "body" '[{"path":"scripts/b.sql"}]'
+mkdir -p "$d/cwd/scripts"
+: > "$d/cwd/scripts/a.sql"
+rm "$d/data/it/reader-writer-audit.md"
+OUT=$(cd "$d/cwd" && CASE_DIR="$d" PATH="$d/fakebin:$PATH" FM_HOME="$d" FM_DATA_OVERRIDE="$d/data" \
+  FM_RELEASE_GATE_CONFIG="$d/config/release-gate" "$GATE" check "$REL" 2>&1) && RC=0 || RC=$?
+[ "$RC" -eq 1 ] || fail "cwd glob: scripts/b.sql must count as a data change: $OUT"
+case "$OUT" in *"data/API change (scripts/b.sql)"*) ;; *) fail "cwd glob: reason missing: $OUT" ;; esac
+echo audit > "$d/data/it/reader-writer-audit.md"
 # config globs per repo override the default.
 printf 'acme/app custom/*.x\n' > "$d/config/release-gate"
 mkpr "$d" 7 "Add col sc-100" "body" '[{"path":"schema.sql"}]'
