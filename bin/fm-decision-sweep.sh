@@ -11,7 +11,8 @@
 # append, so the re-check items exist when `record` returns; run it by hand to
 # repeat the sweep (it opens nothing twice).
 #
-# Each ref expands to stories: a key gives the story in its Shortcut stamp plus
+# Each ref expands to stories: a key gives the story in its Shortcut stamp (posted
+# or pending) plus
 # the stories named by its backlog item (the item whose id is the key, the key
 # without its `plan-` prefix, or the key without a trailing -N); a PR gives the
 # stories its title, body and branch name carry. Then it lists
@@ -22,7 +23,8 @@
 #     that are open, merged to dev in the last FM_SWEEP_DAYS days (default 30),
 #     or carried by an open dev-to-main release PR. The repos are the origins of
 #     the clones of data/projects.md plus applypass/apply_pass_backend and
-#     applypass/apply_pass_frontend.
+#     applypass/apply_pass_frontend. A PR a ref names directly is added when
+#     open or merged even if no searched list holds it.
 # For every PR it opens one backlog item, kind recheck:
 #   id    recheck-<new-key>-<repo>-<pr-number>
 #   body  lines pr=<full PR URL>, old=<ref>, new=<new-key> (and release=<url>)
@@ -32,7 +34,7 @@
 # Shortcut story of their own. Once per run it comments on each story that got a
 # new re-check (best-effort; a repeat run with nothing new comments nowhere).
 # Output ends with one line: rechecks opened=<n> existing=<n>. Exit 1 when a
-# repo or the backlog could not be read; the re-checks it could open are open.
+# repo, a release PR's commits, or the backlog could not be read; the re-checks it could open are open.
 #
 # Overrides (tests): FM_SWEEP_GH (gh), FM_SWEEP_TASKS (fm-tasks-axi.sh),
 # FM_SWEEP_TICKET (fm-shortcut-ticket.sh), FM_SWEEP_SINCE (YYYY-MM-DD cutoff).
@@ -75,6 +77,7 @@ trap 'rm -rf "$WORK"' EXIT
 : >"$WORK/keys"    # <decided key>
 : >"$WORK/direct"  # <pr url> TAB <ref>
 : >"$WORK/items"   # <item id> TAB <why>
+: >"$WORK/named"   # <pr url> TAB <repo> TAB <pr view json>, for PRs named as refs
 
 entry_for() {  # <key>: its decided.md line
   FM_KEY=$1 awk 'BEGIN { p = "- [" ENVIRON["FM_KEY"] "] " } index($0, p) == 1 { print; exit }' "$DECIDED"
@@ -94,9 +97,10 @@ row_story_tokens() {  # <row>: story numbers named as whole sc-N tokens
 
 row_for_item() { grep -E "^  $(printf '%s' "$1" | sed 's/[][\.*^$/]/\\&/g')," "$ROWS" | head -n 1; }
 
-add_stories_of_pr() {  # <pr url> <ref>: the stories its title, body and branch name
-  local url=$1 ref=$2 json n
-  json=$("$GH" pr view "$url" --json title,body,headRefName 2>/dev/null) || { warn "could not read $url"; return 0; }
+add_stories_of_pr() {  # <pr url> <repo> <ref>: the stories its title, body and branch name
+  local url=$1 repo=$2 ref=$3 json n
+  json=$("$GH" pr view "$url" --json title,body,headRefName,state,mergedAt 2>/dev/null) || { warn "could not read $url"; return 0; }
+  printf '%s\t%s\t%s\n' "$url" "$repo" "$(jq -c . <<<"$json")" >>"$WORK/named"
   jq -r '[(.title // "") , (.body // "")] | map(gsub("https?://[^\\s)>]*"; "")) | join(" ") + " " + (.headRefName // "")' <<<"$json" |
     tr -c 'A-Za-z0-9_\n-' ' ' | tr ' ' '\n' | sed -nE 's/^[sS][cC]-([0-9]+)(-.*)?$/\1/p' |
     while IFS= read -r n; do printf '%s\t%s\n' "$n" "$ref" >>"$WORK/stories"; done
@@ -115,13 +119,13 @@ while IFS= read -r ref; do
       repo=${ref%%#*}; num=${ref##*#}
       url="https://github.com/$OWNER/$repo/pull/$num"
       printf '%s\t%s\n' "$url" "$ref" >>"$WORK/direct"
-      add_stories_of_pr "$url" "$ref"
+      add_stories_of_pr "$url" "$OWNER/$repo" "$ref"
       ;;
     *)
       printf '%s\n' "$ref" >>"$WORK/keys"
       old=$(entry_for "$ref")
       if [ -z "$old" ]; then warn "no decision [$ref] in $DECIDED"; continue; fi
-      printf '%s\n' "$old" | sed -n 's/.*(shortcut: sc-\([0-9]*\).*/\1/p' | while IFS= read -r n; do printf '%s\t%s\n' "$n" "$ref" >>"$WORK/stories"; done
+      printf '%s\n' "$old" | sed -n 's/.*(shortcut: \(pending \)\{0,1\}sc-\([0-9]*\).*/\2/p' | while IFS= read -r n; do printf '%s\t%s\n' "$n" "$ref" >>"$WORK/stories"; done
       for cand in "$ref" "${ref#plan-}" "$(printf '%s' "$ref" | sed -E 's/-[0-9]+$//')"; do
         row=$(row_for_item "$cand")
         [ -n "$row" ] || continue
@@ -188,12 +192,16 @@ for repo in $REPOS; do
     continue
   fi
   : >"$WORK/carried"
-  jq -r '.[] | select(.headRefName == "dev" and .baseRefName == "main") | "\(.number)\t\(.url)"' "$WORK/open.json" |
-    while IFS="$(printf '\t')" read -r rnum rurl; do
-      "$GH" api "repos/$repo/pulls/$rnum/commits" --paginate --jq '.[].commit.message | split("\n")[0]' 2>/dev/null |
-        grep -Eo '(\(#[0-9]+\)|Merge pull request #[0-9]+)' | grep -Eo '[0-9]+' | sort -u |
-        while IFS= read -r c; do printf '%s\t%s\n' "$c" "$rurl" >>"$WORK/carried"; done
-    done
+  jq -r '.[] | select(.headRefName == "dev" and .baseRefName == "main") | "\(.number)\t\(.url)"' "$WORK/open.json" >"$WORK/releases"
+  while IFS="$(printf '\t')" read -r rnum rurl; do
+    [ -n "$rnum" ] || continue
+    if ! "$GH" api "repos/$repo/pulls/$rnum/commits" --paginate --jq '.[].commit.message | split("\n")[0]' >"$WORK/commits.txt" 2>"$WORK/api.err"; then
+      warn "could not read the commits of release $rurl: $(head -n 1 "$WORK/api.err")"
+      continue
+    fi
+    grep -Eo '(\(#[0-9]+\)|Merge pull request #[0-9]+)' "$WORK/commits.txt" | grep -Eo '[0-9]+' | sort -u |
+      while IFS= read -r c; do printf '%s\t%s\n' "$c" "$rurl" >>"$WORK/carried"; done
+  done <"$WORK/releases"
   CARRIED_JSON=$(jq -R 'split("\t") | {(.[0]): .[1]}' "$WORK/carried" | jq -s 'add // {}')
   jq -s -r --argjson stories "$STORIES_JSON" --argjson direct "$DIRECT_JSON" --argjson carried "$CARRIED_JSON" \
     --arg since "$SINCE" --arg repo "$repo" '
@@ -208,6 +216,13 @@ for repo in $REPOS; do
              (.matched | join(",")), ($carried[(.number | tostring)] // "")] | @tsv' \
     "$WORK/open.json" "$WORK/merged.json" >>"$WORK/found" 2>"$WORK/jq.err" || warn "could not read the PR list of $repo: $(head -n 1 "$WORK/jq.err")"
 done
+while IFS="$(printf '\t')" read -r url repo json; do
+  [ -n "$url" ] || continue
+  cut -f1 "$WORK/found" | grep -qxF "$url" && continue
+  state=$(jq -r 'if .state == "OPEN" then "open" elif .state == "MERGED" then "merged " + ((.mergedAt // "")[0:10]) else "" end' <<<"$json")
+  [ -n "$state" ] || continue
+  printf '%s\t%s\t%s\t%s\t\t\n' "$url" "$repo" "${url##*/}" "$state" >>"$WORK/found"
+done <"$WORK/named"
 sort -u "$WORK/found" -o "$WORK/found"
 
 # 5. Print and open re-checks.

@@ -55,6 +55,7 @@ case "$1 $2" in
     n=${3##*/}
     if [ -f "$FX/view.$n.json" ]; then cat "$FX/view.$n.json"; else exit 1; fi ;;
   "api repos"*)
+    [ ! -e "$FX/api.fail" ] || { echo "HTTP 403: rate limit" >&2; exit 1; }
     f="$FX/commits.$(printf '%s' "$2" | tr / _).txt"
     [ ! -f "$f" ] || cat "$f" ;;
   *) exit 1 ;;
@@ -165,6 +166,43 @@ test_missing_suffix_and_unreadable_repo() {
   pass "a missing suffix, an unknown key and an unreadable repo are reported, not swept silently"
 }
 
+test_pending_story_stamp_counts() {
+  local dir out
+  dir=$(make_case pending)
+  {
+    printf -- '- [pills] 2026-10-30 several language pills (shortcut: pending sc-8740)\n'
+    printf -- '- [one-dropdown] 2026-11-03 one dropdown (supersedes: pills) (shortcut: pending)\n'
+  } >>"$dir/home/data/$DECISIONS"
+  out=$(sweep "$dir" one-dropdown) || fail "sweep failed: $out"
+  assert_contains "$out" "$FURL/443" "PR 443 on the pending story sc-8740 was missed"
+  assert_contains "$out" "$FURL/448" "PR 448 on the pending story sc-8740 was missed"
+  pass "an old decision whose story post is still pending gives its story to the sweep"
+}
+
+test_unreadable_release_commits_fail_the_sweep() {
+  local dir out
+  dir=$(make_case release-fail)
+  : >"$dir/fx/api.fail"
+  out=$(sweep "$dir" dropdown-again) && fail "a sweep that could not read the release's commits exited 0: $out"
+  assert_contains "$out" "could not read the commits of release $BURL/826" "the unreadable release was not named"
+  assert_not_contains "$out" "$BURL/91 (" "an old PR was reported as carried with no commit list"
+  pass "a release PR whose commits cannot be read fails the sweep instead of dropping its PRs"
+}
+
+test_named_pr_outside_the_lists_gets_a_recheck() {
+  local dir out body url=https://github.com/applypass/firstmate/pull/81
+  dir=$(make_case named)
+  printf -- '- [gate-again] 2026-11-04 new gate (supersedes: firstmate#81) (shortcut: pending)\n' >>"$dir/home/data/$DECISIONS"
+  printf '{"title":"Old gate","body":"","headRefName":"fm/gate","state":"MERGED","mergedAt":"2026-11-02T09:00:00Z"}\n' >"$dir/fx/view.81.json"
+  out=$(sweep "$dir" gate-again) || fail "sweep failed: $out"
+  assert_contains "$out" "$url (merged 2026-11-02)" "the named PR in an unsearched repo was not listed"
+  assert_contains "$out" "rechecks opened=1 existing=0" "the named PR got no re-check"
+  body=$(tasks "$dir" show recheck-gate-again-firstmate-81 --full) || fail "no re-check item for firstmate#81: $body"
+  assert_contains "$body" "pr=$url" "the re-check lacks the PR URL"
+  assert_contains "$body" "old=firstmate#81" "the re-check lacks the PR ref as old"
+  pass "a PR named as a ref gets a re-check even when no searched PR list holds it"
+}
+
 test_dry_run_opens_nothing() {
   local dir out
   dir=$(make_case dry)
@@ -179,4 +217,7 @@ test_refs_find_items_and_prs_and_open_rechecks
 test_second_run_opens_no_duplicates
 test_registered_project_repo_is_searched
 test_missing_suffix_and_unreadable_repo
+test_pending_story_stamp_counts
+test_unreadable_release_commits_fail_the_sweep
+test_named_pr_outside_the_lists_gets_a_recheck
 test_dry_run_opens_nothing
