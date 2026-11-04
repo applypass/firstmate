@@ -7,9 +7,10 @@
 // vault-scoped service account, so this policy denies a command whose executed
 // word is `op` unless that same command, or an earlier `export` on the same
 // command line, supplies OP_SERVICE_ACCOUNT_TOKEN. A literal non-empty value
-// counts. A command substitution can print nothing, and an empty token falls
-// back to the desktop app, so a substitution counts only as a plain assignment
-// chained with && to a name-only export and then to op:
+// counts; a value with any parameter expansion ($VAR, "$VAR", ${...}) never
+// does. A command substitution can print nothing, and an empty token falls
+// back to the desktop app, so a value that is only a substitution counts only
+// as a plain assignment chained with && to a name-only export and then to op:
 // TOKEN=$(helper) && export TOKEN && op ... (the && stops the line when the
 // helper fails; the value is not checked for emptiness). The environment check and the
 // harness transport live in bin/fm-op-pretool-check.sh.
@@ -57,14 +58,14 @@ const PASSTHROUGH = new Map([
 const RESERVED = new Set(["if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "select", "!"]);
 
 // True for a `TOKEN=value` word with a literal non-empty value. A value with a
-// substitution can be empty, so it never counts here.
+// substitution or parameter expansion can be empty, so it never counts here.
 function setsToken(word) {
-  return word.value.startsWith(`${TOKEN}=`) && word.value.length > TOKEN.length + 1 && word.subs.length === 0;
+  return word.value.startsWith(`${TOKEN}=`) && word.value.length > TOKEN.length + 1 && word.literal;
 }
 
-// True for a `TOKEN=value` word whose value holds a substitution.
+// True for a `TOKEN=value` word whose value is only command substitutions.
 function substitutesToken(word) {
-  return word.value.startsWith(`${TOKEN}=`) && word.subs.length > 0;
+  return word.value === `${TOKEN}=` && word.subs.length > 0;
 }
 
 function base(value) {

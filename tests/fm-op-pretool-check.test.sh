@@ -137,6 +137,7 @@ test_token_supplied_cases() {
     'OP_SERVICE_ACCOUNT_TOKEN=$(cat tok) && export OP_SERVICE_ACCOUNT_TOKEN && op read x' \
     'OP_SERVICE_ACCOUNT_TOKEN=$(cat tok) && export OP_SERVICE_ACCOUNT_TOKEN && echo $(op read x)' \
     'export OP_SERVICE_ACCOUNT_TOKEN="abc"; op read x' \
+    "export OP_SERVICE_ACCOUNT_TOKEN='a\$b'; op read x" \
     'export A=1 OP_SERVICE_ACCOUNT_TOKEN=abc; ls | op inject' \
     'export OP_SERVICE_ACCOUNT_TOKEN=abc && echo $(op read x)' \
     'export OP_SERVICE_ACCOUNT_TOKEN=abc && bash -c "op read x"' \
@@ -168,6 +169,12 @@ test_token_supplied_cases() {
     'OP_SERVICE_ACCOUNT_TOKEN=$(cat tok) op read x' \
     'env OP_SERVICE_ACCOUNT_TOKEN=$(cat tok) op read x' \
     'OP_SERVICE_ACCOUNT_TOKEN=$(cat tok) || export OP_SERVICE_ACCOUNT_TOKEN && op read x' \
+    'export OP_SERVICE_ACCOUNT_TOKEN="$EMPTY"; op read x' \
+    'OP_SERVICE_ACCOUNT_TOKEN=${X:-} && export OP_SERVICE_ACCOUNT_TOKEN; op read x' \
+    'OP_SERVICE_ACCOUNT_TOKEN=${X:-} && export OP_SERVICE_ACCOUNT_TOKEN && op read x' \
+    'OP_SERVICE_ACCOUNT_TOKEN=$X op read x' \
+    'env OP_SERVICE_ACCOUNT_TOKEN="$X" op read x' \
+    'OP_SERVICE_ACCOUNT_TOKEN=$X$(cat tok) && export OP_SERVICE_ACCOUNT_TOKEN && op read x' \
     'export OP_SERVICE_ACCOUNT_TOKEN=abc; OP_SERVICE_ACCOUNT_TOKEN=; op read x'; do
     assert_refused "$c"
   done
