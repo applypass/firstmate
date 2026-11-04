@@ -29,6 +29,9 @@
 # --best-effort turns a refusal into a warning, which is how
 # bin/fm-captain-hold.sh answer calls it, keyed <task-id>-<answer occurrence>.
 #
+# A plan-* key is a plan entry (the ship plan gate in bin/fm-task-ledger.sh):
+# its text must start with approved:, small: or waived:, or record refuses it.
+#
 # Guard: add the line `guard-line` prints to the home's untracked
 # .claude/settings.local.json (never the shared .claude/settings.json); record
 # warns with that instruction while it is missing.
@@ -312,6 +315,12 @@ command_record() {
   fi
   text=$(printf '%s' "$text" | tr '\n' ' ' | sed 's/  */ /g; s/^ //; s/ $//')
   [ -n "$text" ] || die "the decision text is empty"
+  case "$key" in
+    plan-*) case "$text" in
+      approved:* | small:* | waived:*) ;;
+      *) die "a plan-* decision must start with approved:, small: or waived: (the ship plan gate reads it)" ;;
+    esac ;;
+  esac
   [ -z "$story" ] || case "${story#sc-}" in "$story" | '' | *[!0-9]*) die "--story takes sc-NNNN" ;; esac
   command -v jq >/dev/null 2>&1 || die "jq is required"
   "$TICKET" --enabled || die "Shortcut ticket sync is off in this home, so a decision cannot be given a story; turn it on (see docs/configuration.md)"

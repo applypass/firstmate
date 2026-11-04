@@ -480,6 +480,9 @@ A missing record refuses the step that needs it, and each refusal names the miss
 - `bin/fm-spawn.sh` refuses a fresh ship or scout launch until intake-start and planning-done are recorded.
   A task with no ledger file was queued before the ledger existed, so spawn counts it as filed and records both events as grandfathered.
   Filing the task with `bin/fm-tasks-axi.sh add` records intake-start; `bin/fm-task-ledger.sh record <id> planning-done` records the end of planning.
+  A ship launch also needs the plan gate: `data/decided.md` must hold `[plan-<task-id>]`, or the key a `plan=<key>` in the planning-done note names, with text starting `approved:`, `small:` or `waived:`.
+  Grandfathering covers the events only, never the plan entry; scouts, second mates, relaunches and `FM_TASK_LEDGER=off` skip the gate.
+  `bin/fm-decide.sh record` refuses a `plan-*` key whose text starts with none of the three words, and the spawn refusal prints the three commands that clear it.
 - `bin/fm-pr-merge.sh` and `bin/fm-merge-local.sh` refuse a merge until pr-ready and captain-approval are recorded.
   `bin/fm-pr-check.sh` records pr-open and pr-ready when the PR is registered.
   Under `yolo`, or for a local-only ready branch, firstmate records the missing event by hand with the command the refusal prints.
