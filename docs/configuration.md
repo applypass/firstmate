@@ -524,6 +524,34 @@ Work never sits waiting unless the captain asked or a resource ran out.
 
 `bin/fm-watch.sh` runs the sweep on every poll and the sweep throttles itself to once a minute.
 `FM_NEVER_WAIT=off` turns all five checks off, and `tests/lib.sh` sets it for fixtures.
+
+Check 3 and 5 judge a worker's own lines only.
+A line the system wrote does not count: one whose note starts `system:` (the daily quota stop) or whose key is machine-written (`pending-reply-`, `remote-reply-continuity-`, `branch-outcome-`, `child-outcome-`, `captain-hold-`).
+The sweep judges the latest blocked line of an open block, so a worker that re-blocks with a legal reason is not rejected for its first line.
+The daily quota stop writes `system: resource-exhausted (daily quota cap) external-wait until=<UTC>: daily quota stop: ...` when it refuses.
+
+### Wake noise (applypass fork)
+
+Each wake costs the supervisor one turn, so `bin/fm-wake-noise-lib.sh` holds back wakes that add no new fact.
+`tests/fm-wake-noise-replay.test.sh` replays one real supervision day (`tests/fixtures/wake-noise/replay-day.tsv`) through the real producers and counts the wakes; each cut must lower that count.
+
+- A known wait is a blocked or paused line that names its end, as `external-wait until=<UTC>` or the daily quota stop's `until <UTC>`.
+  The watcher wakes the supervisor the first time it sees one, then stays quiet about the same wait until its end time.
+  The daily quota cap is one wait for the whole fleet; any other wait belongs to its task.
+  Records are plain files in `state/wake-noise/`.
+- A reply that is late is not missed while the mate is active.
+  Once a mate has acknowledged a request with a correlated `working` or `paused` line, the reply timer holds back the unreported escalation while the mate has a status line of its own, or a turn in its ledger, after the request arrived and within `FM_NOISE_ACTIVE_SECS` (default 1200).
+  The first repost and the missed-reply escalation do not wait on activity.
+  The system's own lines do not count as the mate's activity.
+- An open problem wakes once.
+  A `blocked` or `needs-decision` line with a `[key=...]` opens a problem.
+  A later line with the same key, verb, and note stays quiet while the shared decision fold (`status_open_decisions`) still holds the key open in the bytes before it, and is counted in `state/wake-noise/problem-*` (repeat count, key).
+  Whatever closes the key in that fold (`resolved`, `captain-held`, a ship or scout's terminal `done` or `failed`) or a new status file makes the next line a new problem; a changed verb or note is a new fact and wakes.
+  Outcome keys (`branch-outcome-`, `child-outcome-`) are one report each and never coalesce.
+- A routine notice rides the next real wake.
+  A `done` line for a child outcome (key `child-outcome-*`) needs no decision.
+  A span made only of such lines is marked seen but held: `state/wake-noise/held-<task>` records where it began, and the next span is read from there, so the held notices arrive with the next real event.
+  A hold ends after `FM_NOISE_HOLD_SECS` (default 1800): the watcher then reads the held span again even when the file got no new line, so a lone notice still arrives.
 <!-- Fork-only end -->
 
 ## Backlog backend (.tasks.toml / config/backlog-backend)

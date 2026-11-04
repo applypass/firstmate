@@ -310,6 +310,8 @@ test_secondmate_reports_to_parent_channel() {
   n=$(grep -c '^blocked ' "$parent/state/mate1.status")
   [ "$n" = 1 ] || fail "parent channel got $n lines, expected one"
   assert_grep "daily quota stop" "$parent/state/mate1.status" "line reaches the parent channel"
+  assert_grep "system: resource-exhausted (daily quota cap) external-wait until=" "$parent/state/mate1.status" "the line is system-labelled and names the cap and its clear time"
+  grep -Eq 'until=20[0-9]{2}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}Z: daily quota stop' "$parent/state/mate1.status" || fail "the clear time is a UTC stamp"
   [ ! -e "$mate/state/daily-quota-day-start" ] || fail "mate home kept its own baseline"
   pass "a secondmate home reports once to its parent channel and shares the main baseline"
 }

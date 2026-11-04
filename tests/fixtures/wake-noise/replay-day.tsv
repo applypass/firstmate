@@ -1,0 +1,850 @@
+# Sanitized replay of one real supervision day: wake-producing events only.
+# Neutral task names, ids and text; only line shapes, states and timing are kept.
+# offset_seconds<TAB>kind<TAB>mate<TAB>argument
+# kinds: line (status line), request (marked request sent), operator-resolve (supervisor closes a pending-reply decision),
+#        quota (daily quota stop hit: refuse|hold), turn (mate ledger turn event)
+9285	turn	mate2	
+9300	turn	mate2	
+9958	turn	mate4	
+9994	turn	mate1	
+13624	turn	mate2	
+13637	turn	mate4	
+13643	turn	mate5	
+14592	line	mate2	done [key=k-c64154]: neutral note
+15527	request	mate2	00000000000000ca
+17272	line	mate2	done [corr=00000000000000c7]: corr=00000000000000c7 neutral reply text
+17274	line	mate2	done [corr=00000000000000c8]: corr=00000000000000c8 neutral reply text
+17277	line	mate2	done [corr=00000000000000c9]: corr=00000000000000c9 neutral reply text
+18373	line	mate2	done [key=child-outcome-84ee-done]: neutral note
+18374	line	mate2	working [corr=00000000000000ca]: corr=00000000000000ca neutral reply text
+19295	turn	mate2	
+20245	turn	mate7	
+20245	turn	mate8	
+20252	turn	mate3	
+20257	turn	mate8	
+20955	turn	mate2	
+21007	line	mate2	working [corr=00000000000000ca]: corr=00000000000000ca neutral ack text
+24630	line	mate2	working [corr=00000000000000ca]: corr=00000000000000ca neutral reply text
+24637	turn	mate2	
+24642	line	mate2	done [key=child-outcome-fd17-done]: neutral note
+27022	turn	mate4	
+27028	line	mate5	done [key=k-38a7a9]: neutral note
+27044	line	mate5	done [key=k-e8c698]: neutral note
+28018	turn	mate5	
+28293	line	mate2	done [corr=00000000000000ca]: corr=00000000000000ca neutral reply text
+28297	line	mate2	done [corr=00000000000000ca]: corr=00000000000000ca neutral result text
+30895	turn	mate2	
+30901	turn	mate8	
+30920	line	mate5	ready [corr=0000000000000102]: corr=0000000000000102 neutral reply text
+30922	line	mate5	done [corr=0000000000000103]: corr=0000000000000103 neutral reply text
+30927	turn	mate2	
+30930	turn	mate5	
+31035	request	mate4	00000000000000f1
+31055	line	mate8	done [corr=0000000000000129]: corr=0000000000000129 neutral reply text
+31058	turn	mate8	
+31065	line	mate7	done [corr=0000000000000126]: corr=0000000000000126 neutral reply text
+31070	turn	mate7	
+31071	line	mate2	done [corr=00000000000000cb]: corr=00000000000000cb neutral reply text
+31072	line	mate6	done [corr=0000000000000114]: corr=0000000000000114 neutral reply text
+31076	turn	mate2	
+31078	line	mate3	needs-decision [key=captain-hold-91d8-1]: neutral note
+31079	turn	mate6	
+31080	line	mate3	needs-decision [key=captain-hold-4a20-1]: neutral note
+31080	line	mate5	done [corr=0000000000000104]: corr=0000000000000104 neutral reply text
+31082	line	mate3	needs-decision [key=captain-hold-6be3-1]: neutral note
+31083	line	mate1	needs-decision [key=captain-hold-872a-1]: neutral note
+31084	turn	mate5	
+31094	line	mate1	done [corr=00000000000000a0]: corr=00000000000000a0 neutral reply text
+31096	line	mate3	ready [corr=00000000000000e5]: corr=00000000000000e5 neutral reply text
+31099	turn	mate1	
+31100	turn	mate3	
+31140	turn	mate8	
+31173	turn	mate7	
+31275	turn	mate3	
+31278	turn	mate2	
+31320	turn	mate1	
+31375	turn	mate6	
+31395	turn	mate5	
+31568	line	mate4	done [corr=00000000000000f1]: corr=00000000000000f1 neutral reply text
+31570	line	mate4	done [corr=00000000000000f1]: corr=00000000000000f1 neutral result text
+31571	turn	mate4	
+31640	turn	mate4	
+32983	line	mate3	resolved [key=captain-hold-91d8-1]: neutral note
+32985	line	mate3	resolved [key=captain-hold-4a20-1]: neutral note
+33010	line	mate3	resolved [key=captain-hold-91d8-1]: neutral note
+33012	line	mate3	resolved [key=captain-hold-4a20-1]: neutral note
+33015	line	mate3	needs-decision [key=captain-hold-513f-1]: neutral note
+33027	line	mate3	needs-decision [key=captain-hold-513f-1]: corr=00000000000000e6 neutral reply text
+33034	turn	mate3	
+33056	line	mate2	needs-decision [key=captain-hold-6ee9-1]: neutral note
+33057	line	mate2	done [corr=00000000000000cc]: corr=00000000000000cc neutral reply text
+33064	turn	mate2	
+33842	line	mate3	resolved [key=captain-hold-513f-1]: neutral note
+33842	request	mate3	00000000000000e7
+33853	line	mate3	resolved [key=captain-hold-513f-1]: neutral note
+33909	line	mate3	done [key=k-193603]: neutral note
+33919	line	mate3	done [key=k-e91167]: neutral note
+33954	turn	mate3	
+34121	line	mate3	working [key=k-22f45c]: corr=00000000000000e7 neutral reply text
+34125	turn	mate3	
+34406	operator-resolve	mate3	00000000000000e7
+34423	turn	mate3	
+34720	line	mate3	ready [corr=00000000000000e7]: corr=00000000000000e7 neutral reply text
+34720	line	mate3	resolved [key=k-22f45c]: corr=00000000000000e7 neutral reply text
+34725	line	mate3	needs-decision [key=captain-hold-fee5-1]: neutral note
+34728	turn	mate3	
+34794	request	mate1	00000000000000a1
+34806	line	mate1	working [key=k-b67efe]: corr=00000000000000a1 neutral reply text
+34813	line	mate1	working [corr=00000000000000a1]: corr=00000000000000a1 neutral ack text
+34908	turn	mate1	
+34941	line	mate1	needs-decision [key=branch-outcome-1037]: captain outcome for mate1: neutral outcome
+34996	line	mate1	resolved [key=branch-outcome-1037]: captain outcome for mate1: neutral outcome
+35038	line	mate1	done [corr=00000000000000a2]: corr=00000000000000a2 neutral reply text
+35041	turn	mate1	
+35128	line	mate1	needs-decision [key=captain-hold-77c7-1]: corr=00000000000000a3 neutral reply text
+35128	line	mate1	done [corr=00000000000000a3]: corr=00000000000000a3 neutral reply text
+35131	turn	mate1	
+35361	line	mate3	resolved [key=captain-hold-fee5-1]: neutral note
+35401	line	mate3	resolved [key=captain-hold-fee5-1]: neutral note
+35403	line	mate3	done [key=k-0c6ef3]: neutral note
+35413	line	mate3	done [key=k-6420dc]: neutral note
+35418	request	mate1	00000000000000a4
+35431	line	mate1	working [corr=00000000000000a4]: corr=00000000000000a4 neutral reply text
+35456	line	mate1	working [corr=00000000000000a4]: corr=00000000000000a4 neutral ack text
+35460	line	mate3	working [key=k-2626e0]: corr=00000000000000e8 neutral reply text
+35469	line	mate1	working [key=k-b67efe]: neutral note
+35474	turn	mate1	
+35611	line	mate3	working [key=k-2626e0]: corr=00000000000000e8 neutral reply text
+35616	turn	mate3	
+35694	line	mate3	blocked [key=branch-outcome-223]: captain outcome for mate3: neutral blocked outcome
+35818	line	mate1	done [key=child-outcome-b99c-done]: neutral note
+35853	line	mate1	working [corr=00000000000000a5]: corr=00000000000000a5 neutral reply text
+35867	line	mate1	done [key=branch-outcome-1038]: captain outcome for mate1: neutral outcome
+35914	turn	mate1	
+35934	line	mate1	done [key=child-outcome-ffe3-done]: neutral note
+36017	line	mate1	done [key=branch-outcome-1040]: captain outcome for mate1: neutral outcome
+36583	line	mate3	needs-decision [key=captain-hold-fe31-1]: neutral note
+36583	line	mate3	needs-decision [key=captain-hold-fe31-1]: corr=00000000000000e8 neutral reply text
+36589	turn	mate3	
+37184	line	mate5	needs-decision [key=captain-hold-de25-1]: neutral note
+37193	line	mate5	ready [corr=0000000000000105]: corr=0000000000000105 neutral reply text
+37205	turn	mate5	
+37289	line	mate1	working [corr=00000000000000a6]: corr=00000000000000a6 neutral reply text
+37343	line	mate1	done [corr=00000000000000a5]: corr=00000000000000a5 neutral reply text
+37349	turn	mate1	
+37389	operator-resolve	mate1	00000000000000a1
+37416	operator-resolve	mate1	00000000000000a4
+37434	line	mate1	needs-decision [key=captain-hold-1bfd-1]: neutral note
+37531	line	mate1	done [key=child-outcome-66e3-done]: neutral note
+37552	line	mate1	needs-decision [key=k-ff1c97]: neutral note
+37590	line	mate1	done [corr=00000000000000a6]: corr=00000000000000a6 neutral reply text
+37594	line	mate1	done [key=branch-outcome-1041]: captain outcome for mate1: neutral outcome
+37604	turn	mate1	
+37810	request	mate1	00000000000000a7
+37822	line	mate1	working [corr=00000000000000a7]: corr=00000000000000a7 neutral reply text
+37841	line	mate1	working [corr=00000000000000a7]: corr=00000000000000a7 neutral ack text
+37915	turn	mate1	
+39251	line	mate1	done [key=child-outcome-5aec-done]: neutral note
+39320	line	mate1	done [key=branch-outcome-1042]: captain outcome for mate1: neutral outcome
+39703	operator-resolve	mate1	00000000000000a7
+39753	turn	mate1	
+40447	request	mate1	00000000000000a8
+40460	line	mate1	working [key=k-402d28]: corr=00000000000000a8 neutral reply text
+40464	request	mate1	00000000000000a9
+40483	line	mate1	working [corr=00000000000000a8]: corr=00000000000000a8 neutral ack text
+40562	line	mate1	working [key=k-402d28]: corr=00000000000000a9 neutral reply text
+40603	turn	mate1	
+40608	line	mate1	working [corr=00000000000000a9]: corr=00000000000000a9 neutral ack text
+40642	line	mate1	needs-decision [key=branch-outcome-1043]: captain outcome for mate1: neutral outcome
+40737	line	mate1	resolved [key=branch-outcome-1043]: captain outcome for mate1: neutral outcome
+40752	line	mate1	done [corr=00000000000000aa]: corr=00000000000000aa neutral reply text
+40804	turn	mate1	
+41701	request	mate3	00000000000000e9
+41702	line	mate3	resolved [key=captain-hold-fe31-1]: neutral note
+41718	line	mate3	resolved [key=captain-hold-fe31-1]: neutral note
+41736	turn	mate3	
+41892	line	mate3	needs-decision [key=branch-outcome-227]: captain outcome for mate3: neutral outcome
+41915	line	mate3	working [key=k-e32ee5]: corr=00000000000000e9 neutral reply text
+41921	turn	mate3	
+42012	line	mate3	needs-decision [key=branch-outcome-228]: captain outcome for mate3: neutral outcome
+42028	request	mate2	00000000000000cd
+42047	line	mate2	resolved [key=captain-hold-6ee9-1]: neutral note
+42073	line	mate1	done [key=child-outcome-8747-done]: neutral note
+42122	line	mate1	working [corr=00000000000000ab]: corr=00000000000000ab neutral reply text
+42141	line	mate1	done [key=branch-outcome-1046]: captain outcome for mate1: neutral outcome
+42142	line	mate1	done [key=child-outcome-1f95-done]: neutral note
+42173	turn	mate4	
+42193	turn	mate4	
+42194	line	mate2	working [corr=00000000000000cd]: corr=00000000000000cd neutral reply text
+42199	turn	mate2	
+42205	turn	mate4	
+42228	operator-resolve	mate3	00000000000000e9
+42254	line	mate3	needs-decision [key=captain-hold-f04f-1]: neutral note
+42254	line	mate3	needs-decision [key=captain-hold-f04f-1]: corr=00000000000000e9 neutral reply text
+42259	turn	mate3	
+42261	line	mate4	working [key=k-eb6ed8]: corr=00000000000000f2 neutral reply text
+42266	turn	mate4	
+42296	line	mate2	working [corr=00000000000000cd]: corr=00000000000000cd neutral reply text
+42301	turn	mate2	
+42338	line	mate2	working [corr=00000000000000cd]: corr=00000000000000cd neutral ack text
+42354	request	mate2	00000000000000ce
+42362	turn	mate1	
+42375	line	mate1	done [key=child-outcome-02f5-done]: neutral note
+42378	line	mate2	paused [corr=00000000000000ce]: corr=00000000000000ce neutral reply text
+42388	line	mate1	working [corr=00000000000000ac]: corr=00000000000000ac neutral reply text
+42388	turn	mate2	
+42414	operator-resolve	mate1	00000000000000a8
+42446	line	mate1	done [key=k-9bb33d]: neutral note
+42453	line	mate1	done [key=branch-outcome-1047]: captain outcome for mate1: neutral outcome
+42509	line	mate1	done [key=k-aaaf3c]: neutral note
+42535	line	mate1	done [key=k-402d28]: corr=00000000000000a8 neutral reply text
+42619	line	mate1	needs-decision [key=k-5f4961]: corr=00000000000000ac neutral reply text
+42632	turn	mate1	
+42658	line	mate2	working [corr=00000000000000ce]: corr=00000000000000ce neutral ack text
+42684	line	mate1	blocked [key=branch-outcome-1049]: captain outcome for mate1: neutral blocked outcome
+42707	operator-resolve	mate1	00000000000000a9
+42733	turn	mate1	
+42824	line	mate1	done [key=child-outcome-bcc4-done]: neutral note
+42883	line	mate4	done [key=child-outcome-fcac-done]: neutral note
+42891	line	mate1	done [key=branch-outcome-1050]: captain outcome for mate1: neutral outcome
+42933	line	mate4	done [key=branch-outcome-210]: captain outcome for mate4: neutral outcome
+42940	line	mate3	resolved [key=captain-hold-f04f-1]: neutral note
+42953	turn	mate3	
+43038	line	mate3	done [key=child-outcome-24d2-done]: neutral note
+43052	line	mate4	needs-decision [key=captain-hold-72fc-1]: neutral note
+43066	line	mate4	needs-decision [key=captain-hold-b607-1]: neutral note
+43067	line	mate4	needs-decision [key=captain-hold-d160-1]: neutral note
+43067	line	mate4	needs-decision [key=captain-hold-5bfc-1]: neutral note
+43068	line	mate4	needs-decision [key=captain-hold-bd8e-1]: neutral note
+43069	line	mate4	needs-decision [key=captain-hold-8cd2-1]: neutral note
+43070	line	mate4	needs-decision [key=captain-hold-2881-1]: neutral note
+43081	line	mate3	needs-decision [key=branch-outcome-230]: captain outcome for mate3: neutral outcome
+43084	line	mate4	resolved [key=captain-hold-6868-1]: neutral note
+43086	line	mate4	resolved [key=captain-hold-4fcb-1]: neutral note
+43087	line	mate4	resolved [key=captain-hold-faba-1]: neutral note
+43123	line	mate3	needs-decision [key=captain-hold-819e-1]: neutral note
+43124	line	mate3	needs-decision [corr=00000000000000ea]: corr=00000000000000ea neutral reply text
+43131	turn	mate3	
+43132	line	mate4	done [corr=00000000000000f2]: corr=00000000000000f2 neutral reply text
+43133	line	mate3	resolved [key=branch-outcome-230]: captain outcome for mate3: neutral outcome
+43133	request	mate3	00000000000000eb
+43139	line	mate4	done [corr=00000000000000f3]: corr=00000000000000f3 neutral reply text
+43143	request	mate3	00000000000000ec
+43156	line	mate3	resolved [key=captain-hold-819e-1]: neutral note
+43158	line	mate3	working [key=k-e32ee5]: corr=00000000000000eb neutral reply text
+43170	line	mate3	working [key=k-e32ee5]: corr=00000000000000ec neutral reply text
+43173	turn	mate4	
+43175	turn	mate3	
+43212	line	mate3	working [corr=00000000000000ec]: corr=00000000000000ec neutral ack text
+43219	line	mate3	working [corr=00000000000000eb]: corr=00000000000000eb neutral ack text
+43231	request	mate1	00000000000000ad
+43245	line	mate1	working [key=k-37b4be]: corr=00000000000000ad neutral reply text
+43257	line	mate4	needs-decision [key=captain-hold-6bf3-1]: neutral note
+43258	request	mate1	00000000000000ae
+43267	line	mate4	done [corr=00000000000000f4]: corr=00000000000000f4 neutral reply text
+43273	turn	mate4	
+43304	line	mate1	working [corr=00000000000000ad]: corr=00000000000000ad neutral ack text
+43331	line	mate1	working [key=k-ef0c25]: corr=00000000000000ae neutral reply text
+43340	turn	mate1	
+43343	request	mate1	00000000000000af
+43358	line	mate1	working [corr=00000000000000ae]: corr=00000000000000ae neutral ack text
+43365	line	mate1	working [key=k-37b4be]: corr=00000000000000af neutral reply text
+43372	turn	mate1	
+43374	line	mate1	working [corr=00000000000000af]: corr=00000000000000af neutral ack text
+43396	turn	mate4	
+43402	turn	mate4	
+43460	request	mate5	0000000000000106
+43465	request	mate2	00000000000000cf
+43480	line	mate5	resolved [key=captain-hold-de25-1]: neutral note
+43537	line	mate1	done [key=k-eb6ed8]: corr=00000000000000ab neutral reply text
+43563	line	mate1	needs-decision [key=captain-hold-7cb1-1]: neutral note
+43566	line	mate2	working [corr=00000000000000cf]: corr=00000000000000cf neutral reply text
+43614	line	mate2	working [corr=00000000000000cf]: corr=00000000000000cf neutral ack text
+43635	turn	mate1	
+43669	turn	mate2	
+43814	line	mate5	working [key=k-853f45]: corr=0000000000000106 neutral reply text
+43820	turn	mate5	
+43886	line	mate5	working [corr=0000000000000106]: corr=0000000000000106 neutral ack text
+43955	line	mate1	needs-decision [key=captain-hold-4cac-1]: neutral note
+43976	line	mate1	done [key=child-outcome-79a7-done]: neutral note
+43998	line	mate1	resolved [key=captain-hold-7cb1-1]: neutral note
+44001	line	mate1	resolved [key=k-5f4961]: corr=00000000000000b0 neutral reply text
+44010	line	mate1	resolved [corr=00000000000000b1]: corr=00000000000000b1 neutral reply text
+44015	turn	mate1	
+44062	line	mate1	done [key=branch-outcome-1051]: captain outcome for mate1: neutral outcome
+44178	request	mate1	00000000000000b2
+44265	line	mate1	working [key=k-f1140f]: corr=00000000000000b2 neutral reply text
+44268	line	mate1	done [corr=00000000000000b0]: corr=00000000000000b0 neutral reply text
+44268	line	mate1	done [corr=00000000000000b1]: corr=00000000000000b1 neutral reply text
+44273	turn	mate1	
+44324	operator-resolve	mate2	00000000000000cd
+44334	line	mate2	needs-decision [key=captain-hold-02a8-1]: neutral note
+44359	line	mate2	done [key=child-outcome-dd9b-done]: neutral note
+44403	line	mate5	done [key=child-outcome-51ce-done]: neutral note
+44445	line	mate2	done [corr=00000000000000d0]: corr=00000000000000d0 neutral reply text
+44459	turn	mate2	
+44476	line	mate2	done [key=branch-outcome-1272]: captain outcome for mate2: neutral outcome
+44506	line	mate5	done [key=branch-outcome-743]: captain outcome for mate5: neutral outcome
+44521	line	mate5	done [key=child-outcome-d3c0-done]: neutral note
+44545	line	mate1	working [corr=00000000000000b2]: corr=00000000000000b2 neutral ack text
+44559	line	mate5	done [key=child-outcome-b044-done]: neutral note
+44626	operator-resolve	mate2	00000000000000ce
+44720	turn	mate2	
+44735	line	mate5	blocked [key=branch-outcome-744]: captain outcome for mate5: neutral blocked outcome
+44752	request	mate2	00000000000000d1
+44763	line	mate5	blocked [key=branch-outcome-746]: captain outcome for mate5: neutral blocked outcome
+44914	line	mate2	working [corr=00000000000000d1]: corr=00000000000000d1 neutral reply text
+44927	turn	mate2	
+44929	line	mate5	done [corr=0000000000000107]: corr=0000000000000107 neutral reply text
+44933	line	mate2	working [corr=00000000000000d1]: corr=00000000000000d1 neutral ack text
+44953	line	mate1	done [key=child-outcome-8dfe-done]: neutral note
+45053	line	mate1	done [key=branch-outcome-1054]: captain outcome for mate1: neutral outcome
+45057	line	mate1	done [key=child-outcome-b4e5-done]: neutral note
+45066	turn	mate5	
+45087	request	mate1	00000000000000b3
+45170	request	mate2	00000000000000d2
+45198	line	mate1	working [key=k-856d69]: corr=00000000000000b3 neutral reply text
+45203	turn	mate1	
+45250	operator-resolve	mate3	00000000000000eb
+45274	line	mate1	working [corr=00000000000000b3]: corr=00000000000000b3 neutral ack text
+45278	line	mate3	paused [key=k-e32ee5]: neutral note
+45284	turn	mate3	
+45285	line	mate2	working [corr=00000000000000d2]: corr=00000000000000d2 neutral reply text
+45292	line	mate1	working [key=k-15729f]: corr=00000000000000b4 neutral reply text
+45297	line	mate1	resolved [key=captain-hold-4cac-1]: neutral note
+45303	turn	mate2	
+45332	line	mate2	working [corr=00000000000000d2]: corr=00000000000000d2 neutral ack text
+45387	line	mate1	working [key=k-221da5]: corr=00000000000000b5 neutral reply text
+45416	line	mate1	needs-decision [key=k-229aae]: corr=00000000000000b5 neutral reply text
+45419	turn	mate5	
+45434	line	mate1	resolved [key=captain-hold-4cac-1]: neutral note
+45443	turn	mate1	
+45476	request	mate4	00000000000000f5
+45504	line	mate1	working [key=k-3da15f]: corr=00000000000000b6 neutral reply text
+45506	request	mate2	00000000000000d3
+45547	line	mate4	resolved [key=captain-hold-bd8e-1]: neutral note
+45549	request	mate2	00000000000000d4
+45560	line	mate4	resolved [key=captain-hold-5bfc-1]: neutral note
+45562	line	mate2	working [corr=00000000000000d3]: corr=00000000000000d3 neutral reply text
+45569	line	mate4	resolved [key=captain-hold-2881-1]: neutral note
+45581	line	mate4	needs-decision [key=captain-hold-8cd2-1]: neutral note
+45586	line	mate4	needs-decision [key=captain-hold-72fc-1]: neutral note
+45590	line	mate2	working [corr=00000000000000d4]: corr=00000000000000d4 neutral reply text
+45591	line	mate4	needs-decision [key=captain-hold-d160-1]: neutral note
+45599	turn	mate2	
+45658	line	mate1	done [corr=00000000000000b7]: corr=00000000000000b7 neutral reply text
+45660	line	mate4	working [key=k-1df40c]: corr=00000000000000f5 neutral reply text
+45673	turn	mate4	
+45683	request	mate2	00000000000000d5
+45696	turn	mate4	
+45710	line	mate1	working [key=k-3da15f]: corr=00000000000000b6 neutral reply text
+45719	turn	mate1	
+45758	turn	mate4	
+45759	line	mate2	working [corr=00000000000000d4]: corr=00000000000000d4 neutral ack text
+45764	line	mate4	working [corr=00000000000000f5]: corr=00000000000000f5 neutral ack text
+45769	line	mate1	resolved [key=k-229aae]: neutral note
+45783	line	mate1	done [key=k-229aae]: corr=00000000000000b8 neutral reply text
+45783	line	mate2	working [corr=00000000000000d5]: corr=00000000000000d5 neutral reply text
+45785	operator-resolve	mate1	00000000000000ad
+45801	turn	mate2	
+45811	turn	mate1	
+45813	operator-resolve	mate1	00000000000000ae
+45820	line	mate1	done [key=child-outcome-5076-done]: neutral note
+45836	line	mate2	working [corr=00000000000000d3]: corr=00000000000000d3 neutral ack text
+45839	operator-resolve	mate1	00000000000000af
+45872	operator-resolve	mate3	00000000000000ec
+45900	turn	mate3	
+45996	line	mate2	working [corr=00000000000000d5]: corr=00000000000000d5 neutral ack text
+46066	line	mate1	working [key=k-4f14b5]: corr=00000000000000b9 neutral reply text
+46081	line	mate1	done [key=k-94c4ae]: neutral note
+46097	line	mate1	done [key=k-c98f68]: neutral note
+46122	turn	mate5	
+46251	turn	mate1	
+46254	line	mate2	working [corr=00000000000000d6]: corr=00000000000000d6 neutral reply text
+46264	turn	mate2	
+46294	line	mate1	done [key=k-15729f]: corr=00000000000000b4 neutral reply text
+46391	request	mate6	0000000000000118
+46427	request	mate6	0000000000000132
+46443	line	mate1	done [key=child-outcome-62d0-done]: neutral note
+46450	line	mate2	done [key=child-outcome-2f1f-done]: neutral note
+46656	line	mate2	done [key=branch-outcome-1283]: captain outcome for mate2: neutral outcome
+46660	line	mate2	done [key=child-outcome-3151-done]: neutral note
+46692	line	mate1	working [key=k-221da5]: corr=00000000000000b5 neutral reply text
+46700	turn	mate1	
+46717	line	mate1	done [key=child-outcome-3ca0-done]: neutral note
+46722	line	mate1	done [key=child-outcome-3ad5-done]: neutral note
+46743	line	mate1	done [key=k-3da15f]: corr=00000000000000b6 neutral reply text
+46797	request	mate6	0000000000000117
+46854	turn	mate1	
+46937	line	mate4	done [corr=00000000000000f6]: corr=00000000000000f6 neutral reply text
+46950	turn	mate4	
+47090	turn	mate1	
+47439	line	mate6	done [corr=0000000000000115]: corr=0000000000000115 neutral reply text
+47440	line	mate6	done [corr=0000000000000116]: corr=0000000000000116 neutral reply text
+47547	request	mate6	000000000000012f
+47592	turn	mate6	
+47632	line	mate1	blocked [key=branch-outcome-1058]: captain outcome for mate1: neutral blocked outcome
+47651	turn	mate6	
+47722	line	mate6	working [key=k-38e9bf]: corr=0000000000000117 neutral reply text
+47722	line	mate6	working [key=k-21c11b]: corr=0000000000000118 neutral reply text
+47724	line	mate6	working [corr=0000000000000118]: corr=0000000000000118 neutral ack text
+47737	turn	mate6	
+47746	line	mate1	needs-decision [key=captain-hold-39af-1]: neutral note
+47937	line	mate2	blocked [key=branch-outcome-1286]: captain outcome for mate2: neutral blocked outcome
+47968	line	mate1	done [key=child-outcome-08cf-done]: neutral note
+48002	line	mate1	done [key=branch-outcome-1060]: captain outcome for mate1: neutral outcome
+48047	line	mate5	done [key=child-outcome-f916-done]: neutral note
+48113	line	mate5	done [key=branch-outcome-756]: captain outcome for mate5: neutral outcome
+48166	line	mate6	blocked [key=branch-outcome-839]: captain outcome for mate6: neutral blocked outcome
+48173	line	mate6	working [corr=0000000000000132]: corr=0000000000000132 neutral ack text
+48200	line	mate6	working [corr=0000000000000117]: corr=0000000000000117 neutral ack text
+48314	line	mate6	resolved [key=branch-outcome-839]: captain outcome for mate6: neutral outcome
+48325	request	mate4	00000000000000f7
+48328	operator-resolve	mate4	00000000000000f5
+48352	operator-resolve	mate2	00000000000000d5
+48378	line	mate4	paused [key=k-1df40c]: corr=00000000000000f7 neutral reply text
+48382	turn	mate4	
+48402	line	mate2	done [key=child-outcome-330c-done]: neutral note
+48424	line	mate6	done [corr=0000000000000119]: corr=0000000000000119 neutral reply text
+48424	line	mate6	done [corr=000000000000011a]: corr=000000000000011a neutral reply text
+48429	turn	mate6	
+48432	line	mate2	done [corr=00000000000000d7]: corr=00000000000000d7 neutral reply text
+48444	line	mate4	done [key=branch-outcome-214]: captain outcome for mate4: neutral outcome
+48464	line	mate6	working [corr=000000000000012f]: corr=000000000000012f neutral ack text
+48529	line	mate2	needs-decision [corr=00000000000000d6]: corr=00000000000000d6 neutral reply text
+48538	line	mate2	done [key=child-outcome-9fa7-done]: neutral note
+48552	turn	mate2	
+48553	turn	mate5	
+48570	turn	mate1	
+48590	line	mate4	working [corr=00000000000000f7]: corr=00000000000000f7 neutral ack text
+48628	turn	mate2	
+48660	line	mate1	done [key=branch-outcome-1061]: captain outcome for mate1: neutral outcome
+48736	line	mate2	working: neutral note
+48742	turn	mate2	
+48749	operator-resolve	mate2	00000000000000cf
+48812	turn	mate6	
+48840	line	mate2	done [corr=00000000000000d8]: corr=00000000000000d8 neutral reply text
+48852	turn	mate2	
+48897	turn	mate2	
+48922	turn	mate1	
+48948	turn	mate6	
+49035	line	mate6	done [key=child-outcome-877a-done]: neutral note
+49066	turn	mate5	
+49073	request	mate4	00000000000000f8
+49091	turn	mate2	
+49092	line	mate4	paused [key=k-1df40c]: corr=00000000000000f5 neutral reply text
+49111	turn	mate6	
+49136	line	mate4	paused [key=k-b2be8f]: corr=00000000000000f8 neutral reply text
+49140	turn	mate4	
+49144	line	mate6	done [key=child-outcome-57c8-done]: neutral note
+49144	turn	mate6	
+49210	line	mate4	working [corr=00000000000000f8]: corr=00000000000000f8 neutral ack text
+49753	operator-resolve	mate5	0000000000000106
+49782	request	mate6	000000000000011b
+49785	operator-resolve	mate6	0000000000000118
+49819	line	mate5	ready [corr=0000000000000108]: corr=0000000000000108 neutral reply text
+49829	turn	mate5	
+49855	line	mate6	working [key=k-38e9bf]: corr=000000000000011b neutral reply text
+49861	turn	mate6	
+49903	line	mate6	working [corr=000000000000011b]: corr=000000000000011b neutral ack text
+50381	operator-resolve	mate1	00000000000000b2
+50434	operator-resolve	mate6	0000000000000117
+50438	turn	mate1	
+50445	line	mate2	done [key=child-outcome-8ce5-done]: neutral note
+50453	line	mate4	done [key=child-outcome-6d5b-done]: neutral note
+50484	turn	mate6	
+50583	line	mate4	done [key=branch-outcome-216]: captain outcome for mate4: neutral outcome
+50595	line	mate2	done [key=branch-outcome-1288]: captain outcome for mate2: neutral outcome
+50612	line	mate2	done [key=child-outcome-3819-done]: neutral note
+50748	line	mate6	done [key=child-outcome-07ea-done]: neutral note
+50801	operator-resolve	mate4	00000000000000f7
+50826	turn	mate6	
+50827	turn	mate4	
+50830	line	mate6	done [key=k-4e9502]: neutral note
+50843	line	mate6	done [key=k-f9993a]: neutral note
+50860	turn	mate6	
+50896	line	mate6	done [key=k-21c11b]: corr=0000000000000118 neutral reply text
+50910	turn	mate6	
+50915	line	mate1	done [key=child-outcome-2c95-done]: neutral note
+50982	line	mate1	done [key=k-c3e0dd]: neutral note
+50988	line	mate1	done [key=branch-outcome-1065]: captain outcome for mate1: neutral outcome
+51008	line	mate6	done [corr=0000000000000132]: corr=0000000000000132 neutral result text
+51071	line	mate2	working [corr=00000000000000d6]: corr=00000000000000d6 neutral reply text
+51077	turn	mate2	
+51120	line	mate1	needs-decision [key=branch-outcome-1067]: captain outcome for mate1: neutral outcome
+51203	line	mate1	resolved [key=branch-outcome-1067]: captain outcome for mate1: neutral outcome
+51236	line	mate1	done [key=k-e32ad1]: neutral note
+51293	turn	mate1	
+51305	line	mate1	done [corr=00000000000000b3]: corr=00000000000000b3 neutral result text
+51391	line	mate6	blocked [key=branch-outcome-843]: captain outcome for mate6: neutral blocked outcome
+51547	operator-resolve	mate4	00000000000000f8
+51561	line	mate6	resolved [key=branch-outcome-843]: captain outcome for mate6: neutral outcome
+51567	line	mate4	paused [key=k-b2be8f]: corr=00000000000000f8 neutral reply text
+51571	turn	mate4	
+51572	operator-resolve	mate2	00000000000000d2
+51578	line	mate6	done [corr=000000000000011c]: corr=000000000000011c neutral reply text
+51582	turn	mate6	
+51666	line	mate4	done [corr=00000000000000f9]: corr=00000000000000f9 neutral reply text
+51667	turn	mate1	
+51673	turn	mate4	
+51739	line	mate1	done [key=child-outcome-a6cc-done]: neutral note
+51762	line	mate2	working [corr=00000000000000d9]: corr=00000000000000d9 neutral reply text
+51768	turn	mate2	
+51784	line	mate2	done [key=k-31e403]: neutral note
+51791	line	mate2	done [key=branch-outcome-1290]: captain outcome for mate2: neutral outcome
+51802	line	mate1	done [key=k-f62a42]: neutral note
+51805	line	mate1	done [key=branch-outcome-1072]: captain outcome for mate1: neutral outcome
+51810	line	mate2	done [key=child-outcome-b539-done]: neutral note
+51816	operator-resolve	mate6	000000000000011b
+51843	line	mate2	done [key=branch-outcome-1293]: captain outcome for mate2: neutral outcome
+51869	turn	mate6	
+51885	turn	mate2	
+51897	line	mate2	done [key=branch-outcome-1294]: captain outcome for mate2: neutral outcome
+52032	line	mate1	resolved [key=k-e0293e]: neutral note
+52089	line	mate2	done [key=k-7bdb19]: neutral note
+52096	line	mate2	done [corr=00000000000000da]: corr=00000000000000da neutral reply text
+52110	turn	mate1	
+52111	turn	mate2	
+52144	line	mate1	done [key=child-outcome-02d8-done]: neutral note
+52200	line	mate1	done [key=branch-outcome-1076]: captain outcome for mate1: neutral outcome
+52242	request	mate2	00000000000000db
+52257	request	mate2	00000000000000de
+52297	line	mate2	working [corr=00000000000000db]: corr=00000000000000db neutral reply text
+52309	turn	mate2	
+52315	line	mate2	working [corr=00000000000000db]: corr=00000000000000db neutral ack text
+52386	turn	mate4	
+52388	line	mate2	blocked [corr=00000000000000d9]: neutral worker blocker text
+52395	turn	mate2	
+52407	turn	mate1	
+52448	request	mate2	00000000000000dc
+52474	line	mate2	working [corr=00000000000000dc]: corr=00000000000000dc neutral reply text
+52479	turn	mate2	
+52514	line	mate2	working [corr=00000000000000dc]: corr=00000000000000dc neutral ack text
+52651	line	mate6	needs-decision [key=k-38e9bf]: corr=0000000000000117 neutral reply text
+52664	turn	mate6	
+52727	turn	mate6	
+52788	line	mate2	done [key=child-outcome-f084-done]: neutral note
+52830	line	mate2	done [corr=00000000000000dd]: corr=00000000000000dd neutral reply text
+52836	line	mate2	done [key=child-outcome-af18-done]: neutral note
+52836	turn	mate2	
+52840	line	mate2	done [key=branch-outcome-1301]: captain outcome for mate2: neutral outcome
+52850	line	mate2	working [corr=00000000000000de]: corr=00000000000000de neutral reply text
+52856	turn	mate2	
+52872	turn	mate1	
+52885	line	mate2	blocked [corr=00000000000000d1]: neutral worker blocker text
+52892	turn	mate2	
+52958	line	mate2	needs-decision [key=branch-outcome-1302]: captain outcome for mate2: neutral outcome
+52960	line	mate2	blocked [corr=00000000000000df]: resource-exhausted (daily quota cap) external-wait until=@86400: neutral wait text
+52964	turn	mate2	
+53005	line	mate2	done [corr=00000000000000d1]: corr=00000000000000d1 neutral result text
+53081	line	mate1	done [key=child-outcome-6586-done]: neutral note
+53166	line	mate1	done [key=branch-outcome-1077]: captain outcome for mate1: neutral outcome
+53274	turn	mate2	
+53476	line	mate2	done [corr=00000000000000e0]: corr=00000000000000e0 neutral reply text
+53480	turn	mate2	
+53484	quota	mate1	refuse
+53496	turn	mate1	
+53780	turn	mate2	
+53893	line	mate2	done [key=child-outcome-552c-done]: neutral note
+53901	line	mate2	done [key=branch-outcome-1308]: captain outcome for mate2: neutral outcome
+53935	line	mate1	resolved [key=k-bb6f91]: neutral note
+54136	turn	mate1	
+54150	turn	mate1	
+54152	line	mate2	done [key=k-d16ff5]: neutral note
+54162	line	mate2	done [key=k-394eb1]: neutral note
+54170	line	mate2	done [corr=00000000000000e1]: corr=00000000000000e1 neutral reply text
+54170	line	mate2	done [corr=00000000000000d2]: corr=00000000000000d2 neutral reply text
+54175	turn	mate2	
+54301	operator-resolve	mate6	000000000000012f
+54333	operator-resolve	mate2	00000000000000db
+54335	turn	mate6	
+54373	turn	mate2	
+54425	operator-resolve	mate2	00000000000000dc
+54465	turn	mate2	
+54584	line	mate2	done [key=child-outcome-5ae2-done]: neutral note
+54628	line	mate2	done [key=branch-outcome-1311]: captain outcome for mate2: neutral outcome
+54658	request	mate2	00000000000000e2
+54682	line	mate2	needs-decision [key=branch-outcome-1312]: captain outcome for mate2: neutral outcome
+54687	line	mate2	working [corr=00000000000000e2]: corr=00000000000000e2 neutral reply text
+54691	turn	mate2	
+54713	quota	mate2	hold
+54719	turn	mate2	
+54743	line	mate2	working [corr=00000000000000e2]: corr=00000000000000e2 neutral ack text
+54836	line	mate2	done [key=branch-outcome-1315]: captain outcome for mate2: neutral outcome
+55698	turn	mate2	
+56593	operator-resolve	mate2	00000000000000e2
+56625	turn	mate2	
+56843	operator-resolve	mate2	00000000000000de
+56870	turn	mate2	
+57027	turn	mate6	
+57090	turn	mate6	
+57104	turn	mate8	
+57109	turn	mate6	
+57727	turn	mate5	
+57752	line	mate5	done [key=child-outcome-408d-done]: neutral note
+57809	line	mate5	done [key=k-66ab60]: neutral note
+57825	line	mate5	done [key=k-4758af]: neutral note
+57866	turn	mate5	
+58181	turn	mate7	
+58419	turn	mate5	
+58472	turn	mate5	
+58493	line	mate5	done [key=child-outcome-1103-done]: neutral note
+58545	line	mate5	done [key=k-893a4e]: neutral note
+58560	line	mate5	done [key=k-e2c7d0]: neutral note
+58587	turn	mate5	
+60464	turn	mate5	
+60577	turn	mate3	
+60583	line	mate4	done [corr=00000000000000f8]: corr=00000000000000f8 neutral reply text
+60589	turn	mate4	
+60625	line	mate4	needs-decision [key=captain-hold-4061-1]: neutral note
+60625	line	mate4	done [corr=00000000000000fa]: corr=00000000000000fa neutral reply text
+60629	turn	mate4	
+60721	turn	mate4	
+60732	turn	mate4	
+66316	line	mate1	needs-decision [key=branch-outcome-1078]: captain outcome for mate1: neutral outcome
+66403	line	mate1	resolved [key=branch-outcome-1078]: captain outcome for mate1: neutral outcome
+66528	turn	mate1	
+66590	turn	mate1	
+66761	turn	mate1	
+69559	turn	mate5	
+69690	line	mate5	done [key=child-outcome-cd7a-done]: neutral note
+69741	line	mate5	done [key=branch-outcome-765]: captain outcome for mate5: neutral outcome
+69844	line	mate5	done [key=k-52d3f1]: neutral note
+69854	line	mate5	done [key=k-1ffa90]: neutral note
+69881	line	mate5	done [corr=0000000000000109]: corr=0000000000000109 neutral reply text
+69894	turn	mate5	
+69940	line	mate4	done [corr=00000000000000fb]: corr=00000000000000fb neutral reply text
+69944	turn	mate4	
+69946	line	mate8	done [corr=000000000000012a]: corr=000000000000012a neutral reply text
+69949	turn	mate8	
+69958	line	mate6	needs-decision [key=captain-hold-46c9-1]: neutral note
+69961	line	mate7	done [corr=0000000000000127]: corr=0000000000000127 neutral reply text
+69963	line	mate6	done [corr=000000000000011d]: corr=000000000000011d neutral reply text
+69964	turn	mate7	
+69968	turn	mate6	
+69975	line	mate5	needs-decision [key=captain-hold-4a8b-1]: neutral note
+69982	line	mate1	resolved [key=captain-hold-39af-1]: neutral note
+69982	line	mate5	done [corr=000000000000010a]: corr=000000000000010a neutral reply text
+69987	turn	mate5	
+70025	turn	mate1	
+70027	line	mate2	resolved [key=captain-hold-02a8-1]: neutral note
+70037	line	mate2	done [corr=00000000000000e3]: corr=00000000000000e3 neutral reply text
+70046	turn	mate2	
+70050	turn	mate4	
+70070	line	mate3	needs-decision [key=captain-hold-e125-1]: neutral note
+70075	line	mate3	done [corr=00000000000000ed]: corr=00000000000000ed neutral reply text
+70081	turn	mate3	
+70137	turn	mate7	
+70183	turn	mate5	
+70241	turn	mate1	
+70272	turn	mate8	
+70343	turn	mate3	
+73390	line	mate8	done [corr=000000000000012b]: corr=000000000000012b neutral reply text
+73393	line	mate7	done [corr=0000000000000128]: corr=0000000000000128 neutral reply text
+73395	turn	mate8	
+73396	line	mate1	done [corr=00000000000000ba]: corr=00000000000000ba neutral reply text
+73397	line	mate5	done [corr=000000000000010b]: corr=000000000000010b neutral reply text
+73397	turn	mate7	
+73400	turn	mate1	
+73401	line	mate4	done [corr=00000000000000fc]: corr=00000000000000fc neutral reply text
+73401	turn	mate5	
+73406	line	mate3	done [corr=00000000000000ee]: corr=00000000000000ee neutral reply text
+73406	turn	mate4	
+73411	turn	mate3	
+74088	line	mate5	done [corr=000000000000010c]: corr=000000000000010c neutral reply text
+74256	turn	mate2	
+74308	line	mate5	done [corr=000000000000010d]: corr=000000000000010d neutral reply text
+74318	turn	mate5	
+74485	turn	mate6	
+74523	turn	mate6	
+74528	turn	mate5	
+74534	turn	mate3	
+75420	turn	mate5	
+75854	turn	mate7	
+75969	turn	mate1	
+76030	turn	mate8	
+76065	turn	mate3	
+76127	turn	mate6	
+76131	turn	mate4	
+76189	request	mate6	000000000000011e
+76193	request	mate1	00000000000000bb
+76196	turn	mate2	
+76334	turn	mate6	
+76355	turn	mate6	
+76366	turn	mate6	
+76376	turn	mate1	
+76394	turn	mate1	
+76423	turn	mate6	
+76434	turn	mate1	
+76459	line	mate4	done [corr=00000000000000fd]: corr=00000000000000fd neutral reply text
+76480	turn	mate4	
+76492	turn	mate1	
+76552	line	mate6	working [key=k-6e7528]: corr=000000000000011e neutral reply text
+76556	turn	mate6	
+76629	line	mate6	done [key=child-outcome-2043-done]: neutral note
+76712	line	mate6	done [key=branch-outcome-852]: captain outcome for mate6: neutral outcome
+76716	line	mate1	working [key=corr-00000000000000bb]: corr=00000000000000bb neutral reply text
+76718	line	mate1	needs-decision [key=captain-hold-b999-1]: neutral note
+76720	turn	mate1	
+76729	line	mate4	done [corr=00000000000000fe]: corr=00000000000000fe neutral reply text
+76732	turn	mate4	
+76743	line	mate1	done [key=child-outcome-3717-done]: neutral note
+76806	request	mate5	000000000000010e
+76826	line	mate1	needs-decision [key=branch-outcome-1079]: captain outcome for mate1: neutral outcome
+76859	turn	mate4	
+76877	turn	mate4	
+76952	turn	mate5	
+76977	turn	mate5	
+76986	line	mate6	done [corr=000000000000011f]: corr=000000000000011f neutral reply text
+77019	line	mate6	done [corr=000000000000011e]: corr=000000000000011e neutral reply text
+77035	turn	mate6	
+77046	operator-resolve	mate6	000000000000011e
+77073	operator-resolve	mate1	00000000000000bb
+77081	turn	mate6	
+77100	line	mate5	done [key=child-outcome-ef8c-done]: neutral note
+77130	line	mate1	done [key=child-outcome-abbf-done]: neutral note
+77147	line	mate1	done [key=corr-00000000000000bb]: corr=00000000000000bc neutral reply text
+77157	turn	mate1	
+77168	line	mate5	done [key=branch-outcome-768]: captain outcome for mate5: neutral outcome
+77172	line	mate5	done [key=child-outcome-cb7a-done]: neutral note
+77198	line	mate1	done [key=branch-outcome-1080]: captain outcome for mate1: neutral outcome
+77318	line	mate5	working [corr=000000000000010e]: corr=000000000000010e neutral reply text
+77329	turn	mate5	
+77382	request	mate5	0000000000000110
+77411	request	mate5	000000000000010f
+77536	turn	mate5	
+77646	operator-resolve	mate5	000000000000010e
+77674	line	mate6	resolved [key=captain-hold-46c9-1]: neutral note
+77674	request	mate6	0000000000000121
+77674	turn	mate5	
+77691	turn	mate5	
+77734	line	mate6	resolved [key=captain-hold-46c9-1]: neutral note
+77747	line	mate5	working [corr=000000000000010f]: corr=000000000000010f neutral reply text
+77747	line	mate5	working [corr=0000000000000110]: corr=0000000000000110 neutral reply text
+77751	turn	mate5	
+77770	turn	mate5	
+77772	line	mate5	done [key=child-outcome-f640-done]: neutral note
+77871	turn	mate6	
+77903	line	mate5	done [key=branch-outcome-769]: captain outcome for mate5: neutral outcome
+77908	turn	mate6	
+77936	request	mate5	0000000000000111
+78050	line	mate6	done [corr=0000000000000120]: corr=0000000000000120 neutral reply text
+78051	line	mate6	working [key=k-bdee06]: corr=0000000000000121 neutral reply text
+78058	turn	mate6	
+78225	line	mate6	done [key=child-outcome-5abf-done]: neutral note
+78230	line	mate5	working [corr=0000000000000111]: corr=0000000000000111 neutral reply text
+78243	turn	mate5	
+78253	line	mate6	working [corr=0000000000000121]: corr=0000000000000121 neutral ack text
+78339	request	mate1	00000000000000bd
+78391	line	mate6	done [key=branch-outcome-854]: captain outcome for mate6: neutral outcome
+78413	line	mate6	done [key=child-outcome-b13a-done]: neutral note
+78466	turn	mate5	
+78493	request	mate1	0000000000000130
+78605	line	mate6	blocked [key=branch-outcome-857]: captain outcome for mate6: neutral blocked outcome
+78613	line	mate5	needs-decision [key=branch-outcome-774]: captain outcome for mate5: neutral outcome
+78659	turn	mate1	
+78721	line	mate5	done [key=child-outcome-07ea-done]: neutral note
+78754	line	mate1	working [key=k-94943d]: corr=00000000000000bd neutral reply text
+78761	turn	mate1	
+78771	line	mate1	working [corr=0000000000000130]: corr=0000000000000130 neutral ack text
+78803	line	mate6	resolved [key=branch-outcome-857]: captain outcome for mate6: neutral outcome
+78818	line	mate5	done [key=branch-outcome-775]: captain outcome for mate5: neutral outcome
+78851	request	mate1	00000000000000be
+78884	line	mate6	done [corr=0000000000000122]: corr=0000000000000122 neutral reply text
+78893	turn	mate6	
+78899	line	mate1	working [key=k-94943d]: corr=00000000000000be neutral reply text
+78904	line	mate5	needs-decision [key=captain-hold-eda8-1]: neutral note
+78905	turn	mate1	
+78923	line	mate5	working [corr=0000000000000111]: corr=0000000000000111 neutral reply text
+78942	turn	mate5	
+79024	line	mate1	working [corr=00000000000000bd]: corr=00000000000000bd neutral ack text
+79042	line	mate6	needs-decision [key=branch-outcome-861]: captain outcome for mate6: neutral outcome
+79197	operator-resolve	mate5	000000000000010f
+79347	line	mate5	working [corr=0000000000000111]: corr=0000000000000111 neutral ack text
+79381	operator-resolve	mate5	0000000000000110
+79385	turn	mate5	
+79387	turn	mate6	
+79461	turn	mate5	
+79489	line	mate1	working [corr=00000000000000be]: corr=00000000000000be neutral ack text
+79542	request	mate6	0000000000000123
+79557	line	mate6	resolved [key=branch-outcome-861]: captain outcome for mate6: neutral outcome
+79596	line	mate1	done [corr=00000000000000bf]: corr=00000000000000bf neutral reply text
+79618	turn	mate1	
+79688	line	mate5	resolved [key=captain-hold-eda8-1]: neutral note
+79796	line	mate3	resolved [key=captain-hold-e125-1]: neutral note
+79799	line	mate6	working [key=k-867469]: corr=0000000000000123 neutral reply text
+79813	turn	mate6	
+79883	line	mate3	resolved [key=captain-hold-e125-1]: neutral note
+79959	turn	mate3	
+80011	line	mate1	done [corr=00000000000000c0]: corr=00000000000000c0 neutral reply text
+80117	turn	mate1	
+80231	line	mate1	working [key=k-58c2d2]: corr=00000000000000c1 neutral reply text
+80237	turn	mate1	
+80320	line	mate3	needs-decision [key=captain-hold-9be3-1]: neutral note
+80321	line	mate3	needs-decision [corr=00000000000000ef]: corr=00000000000000ef neutral reply text
+80340	turn	mate3	
+80392	turn	mate3	
+80581	line	mate4	done [corr=00000000000000ff]: corr=00000000000000ff neutral reply text
+80670	turn	mate1	
+80701	line	mate1	blocked [key=branch-outcome-1081]: captain outcome for mate1: neutral blocked outcome
+80759	turn	mate4	
+80771	line	mate6	working [corr=0000000000000123]: corr=0000000000000123 neutral ack text
+80780	line	mate1	done [corr=00000000000000c2]: corr=00000000000000c2 neutral reply text
+80817	line	mate3	resolved [key=captain-hold-9be3-1]: neutral note
+80819	turn	mate4	
+80964	line	mate1	working [key=k-9ed8b8]: corr=00000000000000c3 neutral reply text
+81012	turn	mate1	
+81017	line	mate4	working [key=k-b05608]: corr=0000000000000100 neutral reply text
+81031	turn	mate4	
+81038	turn	mate2	
+81057	line	mate6	blocked [key=k-b333a5]: resource-exhausted: neutral wait text
+81109	turn	mate2	
+81126	line	mate1	resolved [key=captain-hold-b999-1]: neutral note
+81155	turn	mate1	
+81156	turn	mate2	
+81200	line	mate5	done [key=branch-outcome-781]: captain outcome for mate5: neutral outcome
+81210	turn	mate6	
+81238	turn	mate1	
+81296	line	mate2	working [corr=00000000000000e4]: corr=00000000000000e4 neutral reply text
+81301	line	mate4	needs-decision [key=k-b05608]: corr=0000000000000101 neutral reply text
+81303	line	mate1	working [key=k-a4cc64]: corr=00000000000000c4 neutral reply text
+81305	turn	mate2	
+81309	turn	mate4	
+81319	line	mate1	done [key=branch-outcome-1083]: captain outcome for mate1: neutral outcome
+81385	line	mate5	done [corr=0000000000000112]: corr=0000000000000112 neutral reply text
+81387	line	mate1	done [corr=00000000000000c5]: corr=00000000000000c5 neutral reply text
+81400	turn	mate1	
+81432	line	mate5	resolved [key=captain-hold-eda8-1]: neutral note
+81467	line	mate1	done [key=child-outcome-84a2-done]: neutral note
+81553	line	mate1	done [key=branch-outcome-1087]: captain outcome for mate1: neutral outcome
+81571	line	mate5	working [corr=0000000000000113]: corr=0000000000000113 neutral reply text
+81573	line	mate1	done [key=child-outcome-3c42-done]: neutral note
+81633	turn	mate5	
+81715	line	mate1	resolved [key=branch-outcome-1081]: captain outcome for mate1: neutral outcome
+81736	operator-resolve	mate1	0000000000000130
+81764	line	mate1	working [key=k-94943d]: neutral note
+81770	turn	mate1	
+81789	operator-resolve	mate1	00000000000000bd
+81903	line	mate1	needs-decision [key=captain-hold-a219-1]: neutral note
+81915	turn	mate1	
+81980	turn	mate1	
+82019	line	mate6	done [corr=0000000000000124]: corr=0000000000000124 neutral reply text
+82019	line	mate6	done [corr=0000000000000125]: corr=0000000000000125 neutral reply text
+82025	line	mate6	resolved [key=k-b333a5]: neutral note
+82037	turn	mate6	
+82120	line	mate1	blocked: neutral worker blocker text
+82128	line	mate2	done [key=child-outcome-aba3-done]: neutral note
+82131	line	mate1	working [corr=00000000000000c6]: corr=00000000000000c6 neutral reply text
+82153	turn	mate1	
+82214	line	mate2	done [key=branch-outcome-1322]: captain outcome for mate2: neutral outcome
+82359	operator-resolve	mate5	0000000000000111
+82402	turn	mate5	
+82451	turn	mate2	
+82501	line	mate3	resolved [key=captain-hold-9be3-1]: neutral note
+82519	line	mate3	working [key=k-e40d68]: corr=00000000000000f0 neutral reply text
+82538	turn	mate3	
+82587	line	mate1	needs-decision [key=captain-hold-9cf0-1]: neutral note
+82592	turn	mate1	
+82635	line	mate1	done [key=child-outcome-5069-done]: neutral note
+82703	line	mate4	resolved [key=k-b05608]: neutral note
+82718	line	mate4	resolved [key=k-3d6a38]: neutral note

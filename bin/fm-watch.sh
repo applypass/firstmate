@@ -269,6 +269,10 @@ WATCH_HOME_EXISTED=0
 # and wake emission (secondmate_liveness_tick below).
 # shellcheck source=/dev/null # Analyzed separately as a canonical lint root.
 . "$SCRIPT_DIR/fm-secondmate-liveness-lib.sh"
+# Fork-only: wake-noise cuts (known waits stay quiet after their first announcement).
+# shellcheck source=bin/fm-wake-noise-lib.sh
+. "$SCRIPT_DIR/fm-wake-noise-lib.sh"
+# Fork-only end
 
 WATCH_LOCK="$STATE/.watch.lock"
 WATCH_PATH="$SCRIPT_DIR/fm-watch.sh"
@@ -2792,7 +2796,7 @@ age_of() {  # seconds since file mtime; "due immediately" if missing
 # The caller records reported state only after surfacing or intentional absorption,
 # and commits a status classification position only after a successful span read.
 scan_signals() {
-  local f sig sf exclude
+  local f sig sf exclude t
   # A remote mate's own parent channel is not a self-home task status log; the
   # home-shape-aware exclusion and its precedent live in
   # status_scan_parent_channel_exclude (fm-classify-lib.sh).
@@ -2806,7 +2810,8 @@ scan_signals() {
     [ -n "$sig" ] || continue
     sf=$(fm_wake_signal_seen_path "$STATE" "$f")
     case "$f" in
-      *.status) fm_wake_signal_seen_current "$STATE" "$f" && continue ;;
+      # Fork-only: a routine span held past its limit is read again with no new bytes (fm-wake-noise-lib.sh).
+      *.status) t=${f##*/}; fm_wake_signal_seen_current "$STATE" "$f" && ! fm_noise_held_expired "$STATE" "${t%.status}" && continue ;;
       *) [ "$sig" = "$(cat "$sf" 2>/dev/null)" ] && continue ;;
     esac
     printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"
@@ -3063,18 +3068,30 @@ fm_wait_tmp_cleanup() {
 # (docs/pi-supervision-branch.md). Stale and heartbeat rows retain their existing
 # eligibility rules.
 signal_files_actionable() {  # <status-file> ...
-  local f task record rest endpoint ident needs_decision rc found=1
+  local f task record rest endpoint ident needs_decision rc found=1 quiet_n=0 other_n=0 noise_start
   FM_SIGNAL_SURFACE_ENDPOINTS=''
   FM_SIGNAL_NEEDS_DECISION_FILES=''
+  FM_SIGNAL_QUIET_ONLY=0
   for f in "$@"; do
-    case "$f" in *.status) ;; *) continue ;; esac
+    case "$f" in *.status) ;; *) other_n=$((other_n + 1)); continue ;; esac
     [ -e "$f" ] || [ -L "$f" ] || continue
     task=$(basename "$f"); task="${task%.status}"
     record=''; needs_decision=0
-    status_span_first_actionable_record "$f" \
-      "$(fm_wake_signal_seen_size "$STATE" "$f")" record needs_decision
+    # Fork-only: a held routine span is read again with the next one (fm-wake-noise-lib.sh).
+    noise_start=$(fm_noise_held_start "$STATE" "$task" "$(fm_wake_signal_seen_size "$STATE" "$f")")
+    status_span_first_actionable_record "$f" "$noise_start" record needs_decision
     rc=$?
-    [ "$rc" -eq 1 ] && [ -z "$record" ] && continue
+    [ "$rc" -eq 1 ] && [ -z "$record" ] && { other_n=$((other_n + 1)); continue; }
+    # A span of only routine notices is held for the next real wake; a span of only known waits
+    # already announced is quiet. Either way no pane proof is needed to absorb it.
+    if [ "$rc" -eq 0 ] && ! fm_noise_span_held_by_captain "$STATE" "$task" "$f" "$noise_start" \
+      && { fm_noise_span_routine "$STATE" "$task" "${record#*$'\t'*$'\t'}" "$noise_start" \
+      || fm_noise_span_quiet "$STATE" "$task" "${record#*$'\t'*$'\t'}" "$noise_start"; } 2>/dev/null; then
+      rc=1; needs_decision=0; quiet_n=$((quiet_n + 1))
+    else
+      other_n=$((other_n + 1))
+    fi
+    # Fork-only end
     if [ "$rc" -eq 2 ]; then
       # Could not classify this log. Surface it rather than absorbing it, and
       # record NO classified endpoint for it below, so its content is classified
@@ -3092,6 +3109,9 @@ signal_files_actionable() {  # <status-file> ...
       found=0
     fi
   done
+  # Fork-only: every file's new span was a known wait already announced, so no pane proof is needed to absorb it.
+  [ "$quiet_n" -gt 0 ] && [ "$other_n" -eq 0 ] && FM_SIGNAL_QUIET_ONLY=1
+  # Fork-only end
   return "$found"
 }
 
@@ -3888,7 +3908,7 @@ EOF
     # bin/fm-supervise-daemon.sh).
     # shellcheck disable=SC2086  # same space-separated status-path list
     if afk_present || [ "$signal_actionable" -eq 0 ] \
-      || { ! signal_crew_provably_working $files && ! signal_turnend_panes_churned $files; }; then
+      || { [ "${FM_SIGNAL_QUIET_ONLY:-0}" -ne 1 ] && ! signal_crew_provably_working $files && ! signal_turnend_panes_churned $files; }; then
       while IFS=$(printf '\t') read -r sf sig f; do
         [ -n "$sf" ] || continue
         file_reason="$reason"

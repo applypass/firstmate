@@ -184,6 +184,10 @@ _FM_PENDING_REPLY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/n
 # bin/fm-wake-lib.sh's single directed expansion below; a second directive
 # here would re-expand the same transitive graph.
 . "$_FM_PENDING_REPLY_LIB_DIR/fm-classify-lib.sh"
+# Fork-only: wake-noise cuts (recent activity is not a missed reply).
+# shellcheck source=bin/fm-wake-noise-lib.sh
+. "$_FM_PENDING_REPLY_LIB_DIR/fm-wake-noise-lib.sh"
+# Fork-only end
 
 FM_PENDING_REPLY_SCHEMA='fm-pending-reply.v1'
 FM_PENDING_REPLY_CORR_RE='corr=[A-Fa-f0-9]{16}'
@@ -1484,6 +1488,10 @@ _fm_pending_reply_maybe_escalate_locked() {  # <state-dir> <corr_id>
       now=$(fm_pending_reply_now)
       age=$((now - completed))
       [ "$age" -ge "$(fm_pending_reply_ack_secs)" ] || return 1
+      # Fork-only: a mate active since the request arrived has not missed its reply (fm-wake-noise-lib.sh).
+      ! fm_noise_task_recently_active "$state" "$(fm_pending_reply_get "$rec" task_id)" "$now" \
+        "$(fm_pending_reply_get "$rec" delivered_epoch)" || return 1
+      # Fork-only end
       fm_pending_reply_missing_report_is_evidence "$state" \
         "$(fm_pending_reply_get "$rec" task_id)" "$completed" || return 1
       ;;

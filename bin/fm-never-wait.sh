@@ -155,6 +155,16 @@ line_at() { printf '%s' "$1" | sed -n 's/^[^[]*\[at=\([0-9]*\)\].*/\1/p' | head 
 line_text() { printf '%s' "$1" | sed -n 's/^[^:]*: *//p'; }
 line_verb() { printf '%s' "$1" | sed -n 's/^[[:space:]]*\([a-z-]*\).*/\1/p'; }
 
+# system_line <line>: 0 when the line was written by the system, not by a worker.
+# A system line has the note label "system:" or a machine-written key; it never starts or ends a block.
+system_line() {
+  case "$1" in
+    *\[key=pending-reply-* | *\[key=remote-reply-continuity-* | *\[key=branch-outcome-* | *\[key=child-outcome-* | *\[key=captain-hold-*) return 0 ;;
+  esac
+  case "$(line_text "$1")" in system:*) return 0 ;; esac
+  return 1
+}
+
 legal_reason() {  # <text>: 0 when the block carries one of the four reasons
   local text until
   text=$(printf '%s' "$1" | sed 's/^[[:space:]]*//' | tr '[:upper:]' '[:lower:]')
@@ -169,7 +179,7 @@ legal_reason() {  # <text>: 0 when the block carries one of the four reasons
 }
 
 sweep() {  # <now> <threshold>
-  local now=$1 threshold=$2 f id findings='' lines last_lines run_start first_line first_at text age
+  local now=$1 threshold=$2 f id findings='' lines last_lines run_start run_last first_line first_at last_at text age
   local dir="$STATE/never-wait" ref action marker last_alarm route step msg verb l ledger
   [ -d "$STATE" ] || return 0
   mkdir -p "$dir" 2>/dev/null || return 0
@@ -181,13 +191,15 @@ sweep() {  # <now> <threshold>
     [ "$lines" -gt 0 ] || continue
     # The trailing run of blocked lines (blank lines skipped) is the open block.
     last_lines=$(grep -n . "$f" | tail -50)
-    run_start=''
+    run_start=''; run_last=''
     while IFS= read -r l; do
+      system_line "${l#*:}" && continue
       verb=$(line_verb "${l#*:}")
       if [ "$verb" = blocked ]; then
         [ -n "$run_start" ] || run_start=$l
+        run_last=$l
       else
-        run_start=''
+        run_start=''; run_last=''
       fi
     done <<EOF
 $last_lines
@@ -200,12 +212,15 @@ EOF
     first_line=${run_start#*:}
     first_at=$(line_at "$first_line")
     [ -n "$first_at" ] || first_at=$(stat -f %m "$f" 2>/dev/null || stat -c %Y "$f" 2>/dev/null || echo "$now")
-    text=$(line_text "$first_line")
+    # The age counts from the first blocked line; the reason is judged on the latest one.
+    last_at=$(line_at "${run_last#*:}")
+    [ -n "$last_at" ] || last_at=$first_at
+    text=$(line_text "${run_last#*:}")
     age=$((now - first_at))
-    FM_HOME=$FM_HOME "$LEDGER" record "$id" blocked-start --at "$first_at" --dedupe --note "${text:0:200}" >/dev/null 2>&1 || true
+    FM_HOME=$FM_HOME "$LEDGER" record "$id" blocked-start --at "$first_at" --dedupe --note "$(line_text "$first_line" | cut -c1-200)" >/dev/null 2>&1 || true
     # 3 and 4: an illegal reason is rejected once and routed as a self-fix.
     if ! legal_reason "$text"; then
-      marker="$dir/$id.rejected-$first_at"
+      marker="$dir/$id.rejected-$last_at"
       if [ ! -e "$marker" ]; then
         : > "$marker"
         if route=$(route_for "$text"); then step=${route#*|}; else step=$SELF_FIX_FALLBACK; fi
