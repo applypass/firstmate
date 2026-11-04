@@ -1,0 +1,56 @@
+⏺ Write(/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.AhJS0R/data/standup-2026-11-04.md)
+  ⎿  Wrote 5 lines to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.AhJS0R/data/standup-2026-11-04.md
+      1 # Standup 2026-11-04
+      2
+      3 | # | Task | Owner | Where |
+      4 | --- | --- | --- | --- |
+      5 | 1 | Coach CSV export | coach-team | sc-9365 |
+⏺ Captain, the standup file is written as specified: a title line plus the one-row table for the coach CSV export (coach-team, sc-9365). Ending the turn now; if the stop hook blocks on the missing Due
+  column, I will fix only that file.
+⏺ Ran 5 stop hooks
+  ⎿  Stop hook error: [command hook 2]: MEETING TRANSCRIPT READ, TICKETS NOT FILED. File every agreed task before ending the turn.
+  Meeting unknown-toolu_01XuDQJnExVC6GRgJi6UxHc9: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.AhJS0R/data/standup-2026-11-04.md has no Due column (add 'Due' right after 'Owner':
+  '| # | Task | Owner | Due | Where |').
+  The check re-runs at turn end and clears the marker once the file passes (waive: delete state/meeting-pending/<id>).
+⏺ Write(/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.AhJS0R/data/standup-2026-11-04.md)
+  ⎿  Added 3 lines, removed 3 lines
+      1  # Standup 2026-11-04
+      2
+      3 -| # | Task | Owner | Where |
+      4 -| --- | --- | --- | --- |
+      5 -| 1 | Coach CSV export | coach-team | sc-9365 |
+      3 +| # | Task | Owner | Due | Where |
+      4 +| --- | --- | --- | --- | --- |
+      5 +| 1 | Coach CSV export | coach-team | no deadline | sc-9365 |
+⏺ Captain, the stop hook flagged the missing Due column, so I added it to the standup file. The coach CSV export row now reads "no deadline" in Due, since the transcript records no agreed date, with
+  owner coach-team and ticket sc-9365 unchanged. No other scripts were run. Ending the turn so the check can re-run.
+⏺ Ran 5 stop hooks
+  ⎿  Stop hook error: [command hook 2]: MEETING TRANSCRIPT READ, TICKETS NOT FILED. File every agreed task before ending the turn.
+  Meeting unknown-toolu_01XuDQJnExVC6GRgJi6UxHc9: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.AhJS0R/data/standup-2026-11-04.md has task rows with no valid due date:
+    - row 1: Coach CSV export (Due: 'no deadline')
+  Each row's Due cell needs a date as YYYY-MM-DD, or exactly 'no deadline - ask at standup'.
+  The check re-runs at turn end and clears the marker once the file passes (waive: delete state/meeting-pending/<id>).
+⏺ Update(/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.AhJS0R/data/standup-2026-11-04.md)
+  ⎿  Added 1 line, removed 1 line
+      2
+      3  | # | Task | Owner | Due | Where |
+      4  | --- | --- | --- | --- | --- |
+      5 -| 1 | Coach CSV export | coach-team | no deadline | sc-9365 |
+      5 +| 1 | Coach CSV export | coach-team | no deadline - ask at standup | sc-9365 |
+⏺ Captain, the hook required the exact no-deadline wording, so the Due cell for the coach CSV export now reads "no deadline - ask at standup". The rest of the row (coach-team, sc-9365) and the title
+  are unchanged, and no other scripts were run. Ending the turn for the check to re-run.
+✻ Crunched for 4m 36s · done 9:52 PM
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Fable 5.1 | ctx 8% | HEAD | Stop hook feedback:
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents
+
+--- state/meeting-pending after final turn end:
+(empty = marker cleared)
+--- final data/standup-2026-11-04.md:
+# Standup 2026-11-04
+
+| # | Task | Owner | Due | Where |
+| --- | --- | --- | --- | --- |
+| 1 | Coach CSV export | coach-team | no deadline - ask at standup | sc-9365 |

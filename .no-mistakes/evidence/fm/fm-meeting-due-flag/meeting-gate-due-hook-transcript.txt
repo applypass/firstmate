@@ -1,0 +1,152 @@
+=== scenario: ok
+--- 1. PostToolUse: fm-meeting-ticket-gate.sh mark (Krisp transcript read, meeting 9389e0c0ffee4a1b8c2d000000000430)
+exit=0
+marker: 9389e0c0ffee4a1b8c2d000000000430
+--- 2. main home writes data/standup-2026-11-04.md:
+# Engineering standup 2026-11-04
+Source: Krisp meeting 9389e0c0ffee4a1b8c2d000000000430 (full transcript re-read).
+
+| # | Task | Owner | Due | Where |
+|---|---|---|---|---|
+| 1 | Coach CSV export | coach-team | no deadline - ask at standup | sc-9365 |
+| 2 | Due flag on meeting to-dos | firstmate | 2026-11-06 | sc-9389 |
+| 3 | Release upgrade card | release-eng | 2026-11-05 | FE PR 444 |
+| - | BambooHR applier | Tomasz |  | not ours |
+--- 3. Stop hook: fm-turnend-guard.sh --claude
+exit=0
+meeting gate: passed (no meeting block message)
+marker after check: 
+
+=== scenario: empty
+--- 1. PostToolUse: fm-meeting-ticket-gate.sh mark (Krisp transcript read, meeting 9389e0c0ffee4a1b8c2d000000000430)
+exit=0
+marker: 9389e0c0ffee4a1b8c2d000000000430
+--- 2. main home writes data/standup-2026-11-04.md:
+# Engineering standup 2026-11-04
+Source: Krisp meeting 9389e0c0ffee4a1b8c2d000000000430.
+
+| # | Task | Owner | Due | Where |
+|---|---|---|---|---|
+| 1 | Coach CSV export | coach-team |  | sc-9365 |
+| 2 | Due flag on meeting to-dos | firstmate | 2026-11-06 | sc-9389 |
+--- 3. Stop hook: fm-turnend-guard.sh --claude
+exit=2
+meeting gate: BLOCKED
+MEETING TRANSCRIPT READ, TICKETS NOT FILED. File every agreed task before ending the turn.
+Meeting 9389e0c0ffee4a1b8c2d000000000430: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.AhJS0R/data/standup-2026-11-04.md has task rows with no valid due date:
+  - row 1: Coach CSV export (Due: 'empty')
+Each row's Due cell needs a date as YYYY-MM-DD, or exactly 'no deadline - ask at standup'.
+The check re-runs at turn end and clears the marker once the file passes (waive: delete state/meeting-pending/<id>).
+marker after check: 9389e0c0ffee4a1b8c2d000000000430
+
+=== scenario: badforms
+--- 1. PostToolUse: fm-meeting-ticket-gate.sh mark (Krisp transcript read, meeting 9389e0c0ffee4a1b8c2d000000000430)
+exit=0
+marker: 9389e0c0ffee4a1b8c2d000000000430
+--- 2. main home writes data/standup-2026-11-04.md:
+# Engineering standup 2026-11-04
+Source: Krisp meeting 9389e0c0ffee4a1b8c2d000000000430.
+
+| # | Task | Owner | Due | Where |
+|---|---|---|---|---|
+| 1 | Coach CSV export | coach-team | TBD | sc-9365 |
+| 2 | Due flag | firstmate | next week | sc-9389 |
+| 3 | Release | release-eng | 11/05/2026 | FE PR 444 |
+| 4 | Docs | firstmate | no deadline | sc-9390 |
+--- 3. Stop hook: fm-turnend-guard.sh --claude
+exit=2
+meeting gate: BLOCKED
+MEETING TRANSCRIPT READ, TICKETS NOT FILED. File every agreed task before ending the turn.
+Meeting 9389e0c0ffee4a1b8c2d000000000430: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.AhJS0R/data/standup-2026-11-04.md has task rows with no valid due date:
+  - row 1: Coach CSV export (Due: 'TBD')
+  - row 2: Due flag (Due: 'next week')
+  - row 3: Release (Due: '11/05/2026')
+  - row 4: Docs (Due: 'no deadline')
+Each row's Due cell needs a date as YYYY-MM-DD, or exactly 'no deadline - ask at standup'.
+The check re-runs at turn end and clears the marker once the file passes (waive: delete state/meeting-pending/<id>).
+marker after check: 9389e0c0ffee4a1b8c2d000000000430
+
+=== scenario: nodue
+--- 1. PostToolUse: fm-meeting-ticket-gate.sh mark (Krisp transcript read, meeting 9389e0c0ffee4a1b8c2d000000000430)
+exit=0
+marker: 9389e0c0ffee4a1b8c2d000000000430
+--- 2. main home writes data/standup-2026-11-04.md:
+# Engineering standup 2026-11-04
+Source: Krisp meeting 9389e0c0ffee4a1b8c2d000000000430.
+
+| # | Task | Owner | Where |
+|---|---|---|---|
+| 1 | Coach CSV export | coach-team | sc-9365 |
+--- 3. Stop hook: fm-turnend-guard.sh --claude
+exit=2
+meeting gate: BLOCKED
+MEETING TRANSCRIPT READ, TICKETS NOT FILED. File every agreed task before ending the turn.
+Meeting 9389e0c0ffee4a1b8c2d000000000430: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.AhJS0R/data/standup-2026-11-04.md has no Due column (add 'Due' right after 'Owner': '| # | Task | Owner | Due | Where |').
+The check re-runs at turn end and clears the marker once the file passes (waive: delete state/meeting-pending/<id>).
+marker after check: 9389e0c0ffee4a1b8c2d000000000430
+
+=== scenario: twotables
+--- 1. PostToolUse: fm-meeting-ticket-gate.sh mark (Krisp transcript read, meeting 9389e0c0ffee4a1b8c2d000000000430)
+exit=0
+marker: 9389e0c0ffee4a1b8c2d000000000430
+--- 2. main home writes data/standup-2026-11-04.md:
+# Engineering standup 2026-11-04
+Source: Krisp meeting 9389e0c0ffee4a1b8c2d000000000430.
+
+| # | Task | Owner | Where |
+|---|---|---|---|
+| 1 | Coach CSV export | eng | sc-9365 |
+
+Later items:
+
+| # | Task | Owner | Due | Where |
+|---|---|---|---|---|
+| 2 | Due flag | firstmate | 2026-11-06 | sc-9389 |
+--- 3. Stop hook: fm-turnend-guard.sh --claude
+exit=2
+meeting gate: BLOCKED
+MEETING TRANSCRIPT READ, TICKETS NOT FILED. File every agreed task before ending the turn.
+Meeting 9389e0c0ffee4a1b8c2d000000000430: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.AhJS0R/data/standup-2026-11-04.md has no Due column (add 'Due' right after 'Owner': '| # | Task | Owner | Due | Where |').
+The check re-runs at turn end and clears the marker once the file passes (waive: delete state/meeting-pending/<id>).
+marker after check: 9389e0c0ffee4a1b8c2d000000000430
+
+=== scenario: caseflag
+--- 1. PostToolUse: fm-meeting-ticket-gate.sh mark (Krisp transcript read, meeting 9389e0c0ffee4a1b8c2d000000000430)
+exit=0
+marker: 9389e0c0ffee4a1b8c2d000000000430
+--- 2. main home writes data/standup-2026-11-04.md:
+# Engineering standup 2026-11-04
+Source: Krisp meeting 9389e0c0ffee4a1b8c2d000000000430.
+
+| P | Task | Owner | Due | Story |
+|---|---|---|---|---|
+| P1 | Coach CSV export | coach-team |   No Deadline - Ask At Standup   | sc-9365 |
+--- 3. Stop hook: fm-turnend-guard.sh --claude
+exit=0
+meeting gate: passed (no meeting block message)
+marker after check: 
+
+=== scenario: both
+--- 1. PostToolUse: fm-meeting-ticket-gate.sh mark (Krisp transcript read, meeting 9389e0c0ffee4a1b8c2d000000000430)
+exit=0
+marker: 9389e0c0ffee4a1b8c2d000000000430
+--- 2. main home writes data/standup-2026-11-04.md:
+# Engineering standup 2026-11-04
+Source: Krisp meeting 9389e0c0ffee4a1b8c2d000000000430.
+
+| # | Task | Owner | Due | Where |
+|---|---|---|---|---|
+| 1 | Coach CSV export | coach-team |  | TBD |
+--- 3. Stop hook: fm-turnend-guard.sh --claude
+exit=2
+meeting gate: BLOCKED
+MEETING TRANSCRIPT READ, TICKETS NOT FILED. File every agreed task before ending the turn.
+Meeting 9389e0c0ffee4a1b8c2d000000000430: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.AhJS0R/data/standup-2026-11-04.md has task rows with no ticket or owner:
+  - row 1: Coach CSV export
+Each row needs an sc-NNNN story id, a 'not ours' owner, a PR reference, or a 'done' status.
+/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.AhJS0R/data/standup-2026-11-04.md has task rows with no valid due date:
+  - row 1: Coach CSV export (Due: 'empty')
+Each row's Due cell needs a date as YYYY-MM-DD, or exactly 'no deadline - ask at standup'.
+The check re-runs at turn end and clears the marker once the file passes (waive: delete state/meeting-pending/<id>).
+marker after check: 9389e0c0ffee4a1b8c2d000000000430
+
