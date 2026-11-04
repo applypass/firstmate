@@ -524,6 +524,21 @@ Work never sits waiting unless the captain asked or a resource ran out.
 
 `bin/fm-watch.sh` runs the sweep on every poll and the sweep throttles itself to once a minute.
 `FM_NEVER_WAIT=off` turns all five checks off, and `tests/lib.sh` sets it for fixtures.
+
+Check 3 and 5 judge a worker's own lines only.
+A line the system wrote does not count: one whose note starts `system:` (the daily quota stop) or whose key is machine-written (`pending-reply-`, `remote-reply-continuity-`, `branch-outcome-`, `child-outcome-`, `captain-hold-`).
+The sweep judges the latest blocked line of an open block, so a worker that re-blocks with a legal reason is not rejected for its first line.
+The daily quota stop writes `system: resource-exhausted (daily quota cap) external-wait until=<UTC>: daily quota stop: ...` when it refuses.
+
+### Wake noise (applypass fork)
+
+Each wake costs the supervisor one turn, so `bin/fm-wake-noise-lib.sh` holds back wakes that add no new fact.
+`tests/fm-wake-noise-replay.test.sh` replays one real supervision day (`tests/fixtures/wake-noise/replay-day.tsv`) through the real producers and counts the wakes; each cut must lower that count.
+
+- A known wait is a blocked or paused line that names its end, as `external-wait until=<UTC>` or the daily quota stop's `until <UTC>`.
+  The watcher wakes the supervisor the first time it sees one, then stays quiet about the same wait until its end time.
+  The daily quota cap is one wait for the whole fleet; any other wait belongs to its task.
+  Records are plain files in `state/wake-noise/`.
 <!-- Fork-only end -->
 
 ## Backlog backend (.tasks.toml / config/backlog-backend)

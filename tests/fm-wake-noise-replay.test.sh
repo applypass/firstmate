@@ -41,13 +41,14 @@ SWEEP_EVERY=1800                 # virtual seconds between sweep and reply-timer
 # Wake count before any fix, and after each step (one commit per step). The
 # replay asserts the latest value, and that every step lowered the one before it.
 # Append the next step's count here when its commit lands.
-COUNTS=(86 86 86)                # # COUNTS[0] = baseline, COUNTS[n] = after step n
+COUNTS=(86 86 86 86)             # # COUNTS[0] = baseline, COUNTS[n] = after step n
 # Never-wait findings (SELF-FIX or ALARM text), counting those read inside an open turn.
-# Steps 1 and 2 remove false findings but not turns: each finding ended up in a turn a
-# status signal already started, so those steps keep the wake count flat. Every other
-# step must lower COUNTS.
-FINDINGS=(11 1 0)
-FLAT_STEPS=" 1 2 "
+# Steps 1 to 3 remove notices but not turns: on this day each one landed in a turn that
+# another mate's status line had already started, so those steps keep the wake count
+# flat. Steps 1 and 2 are checked by the findings they remove, step 3 by the spans it
+# keeps quiet (ABSORBED). Every later step must lower COUNTS.
+FINDINGS=(11 1 0 0)
+FLAT_STEPS=" 1 2 3 "
 
 H="$TMP_ROOT/home"
 STATE="$H/state"
@@ -96,9 +97,13 @@ export FM_PENDING_REPLY_SEND_HOOK="$FAKEBIN/send-hook" FM_PENDING_REPLY_GRACE_SE
 . "$ROOT/bin/fm-pending-reply-lib.sh"
 # shellcheck source=bin/fm-wake-lib.sh
 . "$ROOT/bin/fm-wake-lib.sh"
+# The wake-noise library arrives with step 3; earlier commits replay without it.
+# shellcheck source=bin/fm-wake-noise-lib.sh
+[ ! -f "$ROOT/bin/fm-wake-noise-lib.sh" ] || . "$ROOT/bin/fm-wake-noise-lib.sh"
 # Library settings the sourced files leave on.
 set +e
 
+ABSORBED=0                       # status spans the known-wait cut kept quiet
 WAKES="$TMP_ROOT/wakes.log"      # "<offset>\t<class>\t<text>"
 : > "$WAKES"
 declare -A CLASSIFIED_SIZE=()    # status size at the last classification, per file
@@ -155,6 +160,12 @@ apply_quota() {  # <mate> <refuse|hold>
   local m=$1 level=$2
   ensure_mate "$m"
   # Day start at 10% used; the refuse line is 20% a day, the hold line 25%.
+  # The first call of a day records the baseline, so a call just before it reads 10%.
+  if [ -z "${QUOTA_BASELINE:-}" ]; then
+    QUOTA_BASELINE=1
+    FAKE_QUOTA_USED=10 FM_DAILY_QUOTA_NOW=$((FM_VCLOCK - 1)) \
+      "$ROOT/bin/fm-daily-quota-stop.sh" check spawn --home "$H" --status-file "$STATE/$m.status" >/dev/null 2>&1 || true
+  fi
   if [ "$level" = hold ]; then FAKE_QUOTA_USED=37; else FAKE_QUOTA_USED=31; fi
   export FAKE_QUOTA_USED
   "$ROOT/bin/fm-daily-quota-stop.sh" check spawn --home "$H" --status-file "$STATE/$m.status" >/dev/null 2>&1 || true
@@ -194,6 +205,8 @@ classify_signals() {  # <offset>
     [ "$rc" -eq 1 ] && [ -z "$record" ] && continue
     endpoint=${record%%$'\t'*}; rest=${record#*$'\t'}; ident=${rest%%$'\t'*}
     fm_wake_status_seen_commit "$STATE" "$f" "$endpoint" "$ident" || true
+    # The watcher's known-wait hook (signal_files_actionable in bin/fm-watch.sh).
+    if [ "$rc" -eq 0 ] && declare -F fm_noise_span_quiet >/dev/null && fm_noise_span_quiet "$STATE" "$(basename "$f" .status)" "${record#*$'\t'*$'\t'}" 2>/dev/null; then rc=1; needs=0; ABSORBED=$((ABSORBED + 1)); fi
     if [ "$rc" -eq 0 ] || [ "$needs" -eq 1 ]; then
       actionable=1
       files="$files $(basename "$f" .status)"
@@ -330,12 +343,13 @@ TOTAL=$(grep -vc $'\tmerged-' "$WAKES")
 SIGNAL=$(count_class signal)
 NEVER_WAIT=$(count_class never-wait)
 FOUND=$(grep -c 'never-wait' "$WAKES" || true)
-printf '# replay wake count: total=%s (signal=%s never-wait=%s) never-wait findings=%s\n' "$TOTAL" "$SIGNAL" "$NEVER_WAIT" "$FOUND"
+printf '# replay wake count: total=%s (signal=%s never-wait=%s) never-wait findings=%s absorbed=%s\n' "$TOTAL" "$SIGNAL" "$NEVER_WAIT" "$FOUND" "$ABSORBED"
 if [ -n "${FM_REPLAY_KEEP:-}" ]; then cp "$WAKES" "$FM_REPLAY_KEEP"; fi
 
 LATEST=$((${#COUNTS[@]} - 1))
 [ "$TOTAL" -eq "${COUNTS[$LATEST]}" ] \
   || fail "replayed wake count is $TOTAL, expected ${COUNTS[$LATEST]} after step $LATEST"
+[ "$ABSORBED" -ge "$((LATEST >= 3 ? 1 : 0))" ] || fail "the known-wait cut kept no span quiet"
 [ "$FOUND" -eq "${FINDINGS[$LATEST]}" ] \
   || fail "replayed never-wait findings are $FOUND, expected ${FINDINGS[$LATEST]} after step $LATEST"
 n=1
@@ -343,7 +357,7 @@ while [ "$n" -le "$LATEST" ]; do
   case "$FLAT_STEPS" in
     *" $n "*)
       [ "${COUNTS[$n]}" -le "${COUNTS[$((n - 1))]}" ] || fail "step $n raised the wake count"
-      [ "${FINDINGS[$n]}" -lt "${FINDINGS[$((n - 1))]}" ] \
+      [ "$n" -ge 3 ] || [ "${FINDINGS[$n]}" -lt "${FINDINGS[$((n - 1))]}" ] \
         || fail "step $n (${FINDINGS[$n]} findings) did not lower step $((n - 1)) (${FINDINGS[$((n - 1))]})" ;;
     *)
       [ "${COUNTS[$n]}" -lt "${COUNTS[$((n - 1))]}" ] \

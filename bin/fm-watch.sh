@@ -269,6 +269,10 @@ WATCH_HOME_EXISTED=0
 # and wake emission (secondmate_liveness_tick below).
 # shellcheck source=/dev/null # Analyzed separately as a canonical lint root.
 . "$SCRIPT_DIR/fm-secondmate-liveness-lib.sh"
+# Fork-only: wake-noise cuts (known waits stay quiet after their first announcement).
+# shellcheck source=bin/fm-wake-noise-lib.sh
+. "$SCRIPT_DIR/fm-wake-noise-lib.sh"
+# Fork-only end
 
 WATCH_LOCK="$STATE/.watch.lock"
 WATCH_PATH="$SCRIPT_DIR/fm-watch.sh"
@@ -3063,18 +3067,26 @@ fm_wait_tmp_cleanup() {
 # (docs/pi-supervision-branch.md). Stale and heartbeat rows retain their existing
 # eligibility rules.
 signal_files_actionable() {  # <status-file> ...
-  local f task record rest endpoint ident needs_decision rc found=1
+  local f task record rest endpoint ident needs_decision rc found=1 quiet_n=0 other_n=0
   FM_SIGNAL_SURFACE_ENDPOINTS=''
   FM_SIGNAL_NEEDS_DECISION_FILES=''
+  FM_SIGNAL_QUIET_ONLY=0
   for f in "$@"; do
-    case "$f" in *.status) ;; *) continue ;; esac
+    case "$f" in *.status) ;; *) other_n=$((other_n + 1)); continue ;; esac
     [ -e "$f" ] || [ -L "$f" ] || continue
     task=$(basename "$f"); task="${task%.status}"
     record=''; needs_decision=0
     status_span_first_actionable_record "$f" \
       "$(fm_wake_signal_seen_size "$STATE" "$f")" record needs_decision
     rc=$?
-    [ "$rc" -eq 1 ] && [ -z "$record" ] && continue
+    [ "$rc" -eq 1 ] && [ -z "$record" ] && { other_n=$((other_n + 1)); continue; }
+    # Fork-only: a span of only known waits already announced is quiet (fm-wake-noise-lib.sh).
+    if [ "$rc" -eq 0 ] && fm_noise_span_quiet "$STATE" "$task" "${record#*$'\t'*$'\t'}" 2>/dev/null; then
+      rc=1; needs_decision=0; quiet_n=$((quiet_n + 1))
+    else
+      other_n=$((other_n + 1))
+    fi
+    # Fork-only end
     if [ "$rc" -eq 2 ]; then
       # Could not classify this log. Surface it rather than absorbing it, and
       # record NO classified endpoint for it below, so its content is classified
@@ -3092,6 +3104,9 @@ signal_files_actionable() {  # <status-file> ...
       found=0
     fi
   done
+  # Fork-only: every file's new span was a known wait already announced, so no pane proof is needed to absorb it.
+  [ "$quiet_n" -gt 0 ] && [ "$other_n" -eq 0 ] && FM_SIGNAL_QUIET_ONLY=1
+  # Fork-only end
   return "$found"
 }
 
@@ -3888,7 +3903,7 @@ EOF
     # bin/fm-supervise-daemon.sh).
     # shellcheck disable=SC2086  # same space-separated status-path list
     if afk_present || [ "$signal_actionable" -eq 0 ] \
-      || { ! signal_crew_provably_working $files && ! signal_turnend_panes_churned $files; }; then
+      || { [ "${FM_SIGNAL_QUIET_ONLY:-0}" -ne 1 ] && ! signal_crew_provably_working $files && ! signal_turnend_panes_churned $files; }; then
       while IFS=$(printf '\t') read -r sf sig f; do
         [ -n "$sf" ] || continue
         file_reason="$reason"
