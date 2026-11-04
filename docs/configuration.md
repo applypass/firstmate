@@ -585,6 +585,9 @@ With no `--story` the job files an Engineering/Backlog chore story through `fm-s
 A story the decision merely names is commented on and never moved or edited.
 `fm-captain-hold.sh answer` calls it for the held task with the key `<task-id>-<answer occurrence>`, so each answer to a task held more than once gets its own entry.
 `audit` lists entries with no stamp, pending ones included.
+A decision that replaces another names it with `--supersedes <decided key | sc-N | repo#N>`, and `record` refuses text that mentions superseding without it.
+`record --supersedes` runs [`bin/fm-decision-sweep.sh`](../bin/fm-decision-sweep.sh), which lists the backlog items and PRs tied to the old decision and opens one `recheck-<key>-<repo>-<pr>` backlog item per PR.
+The two script headers own the details.
 To block direct edits of `data/decided.md`, merge the output of `fm-decide.sh guard-line` into the home's untracked `.claude/settings.local.json`, never the shared `.claude/settings.json`; `record` warns with that line while it is missing.
 
 ### Captain holds on Beads
