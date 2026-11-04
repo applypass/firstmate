@@ -169,6 +169,7 @@ test_plan_key_needs_a_plan_word() {
     out=$(decide "$dir" record "plan-$word" "$word: reason" --story sc-6523) || fail "$word: refused: $out"
   done
   out=$(decide "$dir" record not-a-plan "Any text at all." --story sc-6523) || fail "a non-plan key was refused: $out"
+  for word in plan-approved plan-small plan-waived not-a-plan; do wait_stamped "$dir" "$word"; done
   pass "a plan-* key must start with approved:, small: or waived:"
 }
 
