@@ -197,6 +197,11 @@ fm_primary_scope_matches "$FM_ROOT" "$STATE" || exit 0
 # Fork-only: charge this primary turn to the open task or fleet overhead (bin/fm-task-ledger.sh charge; best-effort).
 FM_HOME=$FM_HOME "$SCRIPT_DIR/fm-task-ledger.sh" charge --payload "$PAYLOAD" >/dev/null 2>&1 || true
 # Fork-only end
+# Fork-only: block the turn end while a read meeting transcript has no ticket mapping (bin/fm-meeting-ticket-gate.sh check).
+if [ -d "$STATE/meeting-pending" ]; then
+  FM_HOME=$FM_HOME FM_STATE_OVERRIDE=$STATE FM_CONFIG_OVERRIDE=$CONFIG "$SCRIPT_DIR/fm-meeting-ticket-gate.sh" check </dev/null || exit $?
+fi
+# Fork-only end
 
 # --- the actual predicate ----------------------------------------------------
 # shellcheck source=bin/fm-wake-lib.sh

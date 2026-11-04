@@ -818,6 +818,25 @@ EOF
   pass "context digest distinguishes ABSENT, empty-but-present, and populated files"
 }
 
+# Fork-only: a locked start registers the meeting-to-ticket PostToolUse hook once.
+test_session_start_registers_meeting_ticket_hook() {
+  local rec root home fakebin f
+  rec=$(new_world meeting-gate-hook)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  ln -sf "$(command -v jq)" "$fakebin/jq"
+  run_session_start "$home" "$root" "$fakebin:$BASE_PATH" >/dev/null
+  run_session_start "$home" "$root" "$fakebin:$BASE_PATH" >/dev/null
+  f="$home/.claude/settings.local.json"
+  [ -f "$f" ] || fail "session start wrote no .claude/settings.local.json"
+  jq -e '[.hooks.PostToolUse[]?.hooks[]? | select((.command // "") | endswith("fm-meeting-ticket-gate.sh mark"))] | length == 1' "$f" >/dev/null \
+    || fail "session start did not register the meeting gate mark hook exactly once: $(cat "$f")"
+  pass "a locked session start registers the meeting-to-ticket hook once"
+}
+
 # --- lock refusal: read-only path --------------------------------------------
 
 test_lock_refusal_read_only_path() {
@@ -3095,6 +3114,7 @@ EOF
 }
 
 test_context_digest_absent_empty_present
+test_session_start_registers_meeting_ticket_hook # Fork-only: meeting-to-ticket hook registration
 test_lock_refusal_read_only_path
 test_lock_write_failure_read_only_path
 test_trace_context_effective_state_is_frozen_after_lock

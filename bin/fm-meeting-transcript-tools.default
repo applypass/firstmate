@@ -1,0 +1,8 @@
+# Fork-only: tools whose result can hold a meeting transcript (bin/fm-meeting-ticket-gate.sh).
+# One shell glob per line. Override by writing config/meeting-transcript-tools in the home.
+mcp__krisp__get_multiple_documents
+mcp__krisp__search_meeting_content
+mcp__claude_ai_Granola__get_meetings
+mcp__claude_ai_Granola__get_meeting_transcript
+mcp__granola__get_meetings
+mcp__granola__get_meeting_transcript
