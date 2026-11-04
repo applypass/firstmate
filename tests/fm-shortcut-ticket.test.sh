@@ -404,6 +404,40 @@ ticket() {  # <case-dir> <args...>
     "$ROOT/bin/fm-shortcut-ticket.sh" "$@" 2>&1)
 }
 
+test_api_op_makes_one_raw_call_and_reports_failures() {
+  local dir out rc
+  dir=$(make_case api-op)
+  out=$(ticket "$dir" api GET /api/v3/stories/5000) || fail "api GET failed: $out"
+  assert_contains "$out" '"id": 5000' "api did not print the response body"
+  assert_grep "GET https://api.app.shortcut.com/api/v3/stories/5000" "$dir/curl.log" "api did not call the path"
+  assert_grep "TOKEN-ON-STDIN" "$dir/curl.log" "the token did not reach curl on stdin"
+  assert_no_grep "TOKEN-IN-ARGV" "$dir/curl.log" "the token leaked into curl's argv"
+  printf '{"deadline":"2026-11-05T12:30:00Z"}' > "$dir/body.json"
+  out=$(ticket "$dir" api PUT /api/v3/stories/5000 "$dir/body.json") || fail "api PUT failed: $out"
+  assert_grep 'PUT https://api.app.shortcut.com/api/v3/stories/5000' "$dir/curl.log" "api PUT not sent"
+  assert_grep '"deadline":"2026-11-05T12:30:00Z"' "$dir/curl.log" "api did not send the body file"
+  FAKE_CURL_MISSING=9 ticket "$dir" api GET /api/v3/stories/9 >/dev/null 2>&1 && fail "api returned 0 for a 404"
+  out=$(FAKE_CURL_MISSING=9 ticket "$dir" api GET /api/v3/stories/9); rc=$?
+  [ "$rc" = 1 ] || fail "api exit for a 404 was $rc"
+  assert_contains "$out" "HTTP 404" "api did not report the HTTP code"
+  out=$(ticket "$dir" api TRACE /api/v3/stories/5000) && fail "api accepted an unknown method"
+  out=$(ticket "$dir" api GET /other/path) && fail "api accepted a path outside /api/v3"
+  pass "api makes one raw call with the home token, prints the body, and reports a failed answer"
+}
+
+test_api_op_refuses_when_tickets_are_off_and_setting_prints_a_value() {
+  local dir out
+  dir=$(make_case api-off off)
+  out=$(ticket "$dir" api GET /api/v3/stories/5000) && fail "api ran with tickets off"
+  assert_contains "$out" "Shortcut tickets are off" "api did not say tickets are off"
+  assert_no_grep "GET" "$dir/curl.log" "api called Shortcut with tickets off"
+  out=$(ticket "$dir" setting team_id) || fail "setting failed: $out"
+  assert_equals 649562cb-7f18-471f-835f-7ed28a5abf0a "$out" "setting team_id wrong"
+  out=$(ticket "$dir" setting no_such_key fallback) || fail "setting with default failed"
+  assert_equals fallback "$out" "setting default wrong"
+  pass "api refuses while tickets are off, and setting prints a Shortcut setting or its default"
+}
+
 test_state_moves_the_story() {
   local dir out
   dir=$(make_ticketed state)
@@ -662,6 +696,8 @@ test_api_failure_keeps_add_and_check_refuses
 test_retry_then_check_passes
 test_feature_off_makes_no_calls
 test_handoff_carries_the_sc_id
+test_api_op_makes_one_raw_call_and_reports_failures
+test_api_op_refuses_when_tickets_are_off_and_setting_prints_a_value
 test_state_moves_the_story
 test_review_links_pr_and_uploads_report
 test_review_warns_when_the_item_has_no_story

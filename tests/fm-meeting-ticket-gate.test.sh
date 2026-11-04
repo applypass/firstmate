@@ -181,6 +181,8 @@ test_missing_file_blocks() {
   expect_code 2 "$CHECK_RC" "missing file blocks"
   assert_contains "$CHECK_ERR" "data/standup-$DATE.md" "names the expected file"
   assert_contains "$CHECK_ERR" "$MID" "names the meeting"
+  assert_contains "$CHECK_ERR" "data/meeting-todos/<date>.md first" "the block message does not say to write the record first"
+  assert_contains "$CHECK_ERR" "bin/fm-meeting-todos-sync.sh" "the block message does not name the sync script"
   pass "a missing mapping file blocks"
 }
 

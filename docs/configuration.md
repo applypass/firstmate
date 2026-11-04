@@ -3439,3 +3439,31 @@ The meeting-tool list is `config/meeting-transcript-tools` (one shell glob per l
 The hook is a no-op for unlisted tools, in child task worktrees, and in secondmate homes.
 `bin/fm-session-start.sh` registers it on every locked start by running `bin/fm-meeting-ticket-gate.sh install "$FM_HOME"`, which merges one entry into the untracked `.claude/settings.local.json` and is idempotent.
 <!-- Fork-only end -->
+
+<!-- Fork-only: meeting to-do record and Shortcut sync; bin/fm-meeting-todos-lib.sh and bin/fm-meeting-todos-sync.sh own the contract. -->
+## Meeting to-do record (fork)
+
+When firstmate reads a meeting transcript, every agreed to-do goes into `data/meeting-todos/<YYYY-MM-DD>.md` first (the file name is the meeting date), and only then does `bin/fm-meeting-todos-sync.sh <file>` run.
+The record is the durable list of what the team agreed, so no to-do depends on firstmate's memory of the meeting.
+One section per meeting:
+
+```text
+## <meeting title> - Krisp <meeting id> <krisp link>
+> <summary line 1>
+> <summary line 2>
+| # | Task | Owner | Story | Scope | Deadline | Status | Quote |
+|---|---|---|---|---|---|---|---|
+| 1 | <task> [agentic] | <person> | sc-NNNN or empty | today | YYYY-MM-DD | open | "<transcript words>" @mm:ss |
+```
+
+- Scope is `today` or `week`. A `today` item is due the next standup date (the next Monday to Friday after the meeting); a `week` item is due the Friday of the meeting week.
+- Status is `open`, `done`, `dropped` or `moved`. A row that moved keeps its new date and the reason: `2026-11-10 (moved: waiting on design)`.
+- The Quote is the transcript's own words with the time they were said. A cell never holds a `|`.
+- A Task ending in `[agentic]` is agentic work and goes on epic 6074; every other story has no epic.
+
+`bin/fm-meeting-todos-sync.sh <file> [--dry-run]` validates the record (exit 2 with `file:line: problem` lines when it is malformed), then for each `open` or `moved` row creates the Shortcut story when the Story cell is empty and writes the new `sc-NNNN` into the cell, or reads the story and writes only what differs.
+Stories are in Engineering with the built-in Deadline (`<date>T12:30:00Z`, which is 18:00 IST) and the labels `standup-<meeting date>` and `todo-today` or `todo-week`; a missing label is created.
+A Deadline that replaces a different one also comments `Deadline moved <old> -> <new>: <reason>` on the story.
+It also keeps one Shortcut Doc per meeting, `Standup <Day D Mon> - agreed to-dos`, with the Krisp link, the two summary lines and a table of story link, task, owner, scope, deadline and status; its id and a content hash sit in the section heading (`| doc <id> <hash>`), so a re-run on an unchanged file makes no Shortcut writes.
+Shortcut calls go through `bin/fm-shortcut-ticket.sh api` and `setting`, which own the token and the settings.
+<!-- Fork-only end -->
