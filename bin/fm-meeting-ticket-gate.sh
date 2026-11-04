@@ -247,6 +247,7 @@ cmd_check() {
   {
     printf 'MEETING TRANSCRIPT READ, TICKETS NOT FILED. File every agreed task before ending the turn.%s\n' "$msg"
     printf 'The check re-runs at turn end and clears the marker once the file passes (waive: delete state/meeting-pending/<id>).\n'
+    printf 'Record every agreed to-do in data/meeting-todos/<date>.md first (format: docs/configuration.md "Meeting to-do record"; mark soft or undated ones scope later, placeholder deadline two weeks out), then run bin/fm-meeting-todos-sync.sh <that file> to create the stories and the standup doc.\n'
   } >&2
   exit 2
 }

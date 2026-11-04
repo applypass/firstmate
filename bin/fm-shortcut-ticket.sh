@@ -18,6 +18,11 @@
 #        fm-shortcut-ticket.sh release-hook <pr-url> [--task <id>]
 #                                                            the merge-path form: finish, or say what to run next
 #        fm-shortcut-ticket.sh pending                       replay and list calls that failed earlier
+#        fm-shortcut-ticket.sh api <METHOD> <path> [<json-file>]
+#                                                            one raw REST call with this home's token: body on stdout,
+#                                                            "HTTP <code>" on stderr and exit 1 for a non-2xx answer
+#                                                            (bin/fm-meeting-todos-sync.sh calls it)
+#        fm-shortcut-ticket.sh setting <key> [<default>]     print one value of the Shortcut settings
 #        fm-shortcut-ticket.sh --check <item>                exit 0 if the item has its own, existing story (or is exempt)
 #        fm-shortcut-ticket.sh --linked <item>               print the linked sc-NNNN, if any
 #        fm-shortcut-ticket.sh --enabled                     exit 0 if the feature is on
@@ -158,19 +163,20 @@ CALL_ARGS=(${ARGS[@]+"${ARGS[@]}"})
 case "${1:-}" in
   -h | --help) usage; exit 0 ;;
   --enabled) enabled; exit $? ;;
+  setting) printf '%s\n' "$(setting "${2:-}" "${3:-}")"; exit 0 ;;
 esac
 
 OP=create
 case "${1:-}" in
   --check) OP=check; shift ;;
   --linked) OP=linked; shift ;;
-  link | chore | state | review | comment | attach | outcome | park | done | release-done | release-hook | pending) OP=$1; shift ;;
+  link | chore | api | state | review | comment | attach | outcome | park | done | release-done | release-hook | pending) OP=$1; shift ;;
 esac
 ID=${1:-}
 [ -n "$ID" ] || [ "$OP" = pending ] || die "usage: fm-shortcut-ticket.sh [<op>] <item-id> ... (see --help)"
 shift
 
-enabled || exit 0
+enabled || { [ "$OP" != api ] || die "Shortcut tickets are off (enabled=off); the api call was not made"; exit 0; }
 # shellcheck disable=SC2034
 case "$ID" in https://*/*) ;; *) [ ! -f "$STATE/$ID.status" ] || STATUS_FILE=$STATE/$ID.status ;; esac
 
@@ -192,7 +198,7 @@ field() {  # <name>; decodes a quoted value
 RELEASE=0
 case "$OP" in release-done | release-hook | pending) RELEASE=1 ;; esac
 case "$OP" in release-done | release-hook) release_parse_args "$ID" "$@" ;; esac
-if [ -z "$SC" ] && [ "$RELEASE" = 0 ] && [ "$OP" != chore ]; then
+if [ -z "$SC" ] && [ "$RELEASE" = 0 ] && [ "$OP" != chore ] && [ "$OP" != api ]; then
   SHOW=$("$TASKS" show "$ID" --full 2>&1) || die "cannot read backlog item $ID: $(printf '%s' "$SHOW" | head -1)"
   KIND=$(field kind)
   TITLE=$(field title)
@@ -227,7 +233,7 @@ elif [ "$OP" = link ]; then
   [ -z "$SC" ] || [ "$SC" = "$TARGET" ] || die "backlog item $ID already names $SC as its own story"
   [ "$TARGET" != "$PARENT" ] || die "$TARGET is the parent (umbrella) story in $ID's title, never its own; create its own with: bin/fm-shortcut-ticket.sh $ID"
   SC=$TARGET
-elif [ "$OP" = chore ]; then
+elif [ "$OP" = chore ] || [ "$OP" = api ]; then
   require_home_settings
 elif [ "$RELEASE" = 0 ] && [ -z "$SC" ]; then
   # A review with no story line cannot link its PR, so release-done will not find it by link.
@@ -428,6 +434,20 @@ case "$OP" in
     [ -n "$TEXT" ] || die "usage: comment <item> <text> | --file <file>"
     post_comment "$TEXT"
     [ "$PRINT_URL" = 0 ] || jq -r '.app_url // empty' "$WORK/resp"
+    exit 0
+    ;;
+  api)
+    # ID holds the METHOD; $1 the path, $2 an optional JSON body file.
+    case "$ID" in GET | POST | PUT | DELETE) ;; *) die "usage: api <GET|POST|PUT|DELETE> <path> [<json-file>]" ;; esac
+    case "${1:-}" in /api/v3/*) ;; *) die "usage: api <METHOD> /api/v3/<path> [<json-file>]" ;; esac
+    if [ -n "${2:-}" ]; then
+      [ -f "$2" ] || die "no such request body file: $2"
+      http_json "$ID" "$1" "$2"
+    else
+      http "$ID" "$1"
+    fi
+    cat "$WORK/resp" 2>/dev/null
+    ok || { printf 'HTTP %s\n' "$HTTP_CODE" >&2; exit 1; }
     exit 0
     ;;
   chore)
