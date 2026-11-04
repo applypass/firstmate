@@ -203,6 +203,20 @@ test_named_pr_outside_the_lists_gets_a_recheck() {
   pass "a PR named as a ref gets a re-check even when no searched PR list holds it"
 }
 
+test_pr_ref_alone_expands_to_its_stories() {
+  local dir out
+  dir=$(make_case pr-only)
+  printf -- '- [by-pr] 2026-11-04 one dropdown (supersedes: apply_pass_backend#823) (shortcut: pending)\n' >>"$dir/home/data/$DECISIONS"
+  printf '{"title":"Store several languages (sc-9018, sc-8740)","body":"","headRefName":"fm/multi","state":"MERGED","mergedAt":"2026-11-01T10:00:00Z"}\n' >"$dir/fx/view.823.json"
+  out=$(sweep "$dir" by-pr) || fail "sweep failed: $out"
+  assert_not_contains "$out" "jq: error" "reading the named PR's stories failed"
+  assert_contains "$out" "$BURL/823 (" "the named PR was not listed"
+  assert_contains "$out" "$FURL/443" "PR 443 on sc-8740, a story the named PR names, was missed"
+  assert_contains "$out" "$FURL/448" "PR 448 on sc-8740, a story the named PR names, was missed"
+  assert_contains "$out" "$BURL/91 (" "PR 91 on sc-9018, a story the named PR names, was missed"
+  pass "a PR named as the only ref expands to the stories in its title, body and branch"
+}
+
 test_dry_run_opens_nothing() {
   local dir out
   dir=$(make_case dry)
@@ -220,4 +234,5 @@ test_missing_suffix_and_unreadable_repo
 test_pending_story_stamp_counts
 test_unreadable_release_commits_fail_the_sweep
 test_named_pr_outside_the_lists_gets_a_recheck
+test_pr_ref_alone_expands_to_its_stories
 test_dry_run_opens_nothing

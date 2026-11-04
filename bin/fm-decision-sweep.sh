@@ -101,7 +101,7 @@ add_stories_of_pr() {  # <pr url> <repo> <ref>: the stories its title, body and 
   local url=$1 repo=$2 ref=$3 json n
   json=$("$GH" pr view "$url" --json title,body,headRefName,state,mergedAt 2>/dev/null) || { warn "could not read $url"; return 0; }
   printf '%s\t%s\t%s\n' "$url" "$repo" "$(jq -c . <<<"$json")" >>"$WORK/named"
-  jq -r '[(.title // "") , (.body // "")] | map(gsub("https?://[^\\s)>]*"; "")) | join(" ") + " " + (.headRefName // "")' <<<"$json" |
+  jq -r '([(.title // "") , (.body // "")] | map(gsub("https?://[^\\s)>]*"; "")) | join(" ")) + " " + (.headRefName // "")' <<<"$json" |
     tr -c 'A-Za-z0-9_\n-' ' ' | tr ' ' '\n' | sed -nE 's/^[sS][cC]-([0-9]+)(-.*)?$/\1/p' |
     while IFS= read -r n; do printf '%s\t%s\n' "$n" "$ref" >>"$WORK/stories"; done
 }
