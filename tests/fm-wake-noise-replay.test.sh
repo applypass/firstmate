@@ -41,7 +41,13 @@ SWEEP_EVERY=1800                 # virtual seconds between sweep and reply-timer
 # Wake count before any fix, and after each step (one commit per step). The
 # replay asserts the latest value, and that every step lowered the one before it.
 # Append the next step's count here when its commit lands.
-COUNTS=(86)                      # COUNTS[0] = baseline, COUNTS[n] = after step n
+COUNTS=(86 86)                   # COUNTS[0] = baseline, COUNTS[n] = after step n
+# Never-wait findings (SELF-FIX or ALARM text), counting those read inside an open turn.
+# Step 1 removes false findings but not turns: each ended up in a turn a status signal
+# already started, so it is the one step whose wake count stays flat. Every other step
+# must lower COUNTS.
+FINDINGS=(11 1)
+FLAT_STEPS=" 1 "
 
 H="$TMP_ROOT/home"
 STATE="$H/state"
@@ -323,16 +329,26 @@ replay
 TOTAL=$(grep -vc $'\tmerged-' "$WAKES")
 SIGNAL=$(count_class signal)
 NEVER_WAIT=$(count_class never-wait)
-printf '# replay wake count: total=%s (signal=%s never-wait=%s)\n' "$TOTAL" "$SIGNAL" "$NEVER_WAIT"
+FOUND=$(grep -c 'never-wait' "$WAKES" || true)
+printf '# replay wake count: total=%s (signal=%s never-wait=%s) never-wait findings=%s\n' "$TOTAL" "$SIGNAL" "$NEVER_WAIT" "$FOUND"
 if [ -n "${FM_REPLAY_KEEP:-}" ]; then cp "$WAKES" "$FM_REPLAY_KEEP"; fi
 
 LATEST=$((${#COUNTS[@]} - 1))
 [ "$TOTAL" -eq "${COUNTS[$LATEST]}" ] \
   || fail "replayed wake count is $TOTAL, expected ${COUNTS[$LATEST]} after step $LATEST"
+[ "$FOUND" -eq "${FINDINGS[$LATEST]}" ] \
+  || fail "replayed never-wait findings are $FOUND, expected ${FINDINGS[$LATEST]} after step $LATEST"
 n=1
 while [ "$n" -le "$LATEST" ]; do
-  [ "${COUNTS[$n]}" -lt "${COUNTS[$((n - 1))]}" ] \
-    || fail "step $n (${COUNTS[$n]} wakes) did not lower step $((n - 1)) (${COUNTS[$((n - 1))]})"
+  case "$FLAT_STEPS" in
+    *" $n "*)
+      [ "${COUNTS[$n]}" -le "${COUNTS[$((n - 1))]}" ] || fail "step $n raised the wake count"
+      [ "${FINDINGS[$n]}" -lt "${FINDINGS[$((n - 1))]}" ] \
+        || fail "step $n (${FINDINGS[$n]} findings) did not lower step $((n - 1)) (${FINDINGS[$((n - 1))]})" ;;
+    *)
+      [ "${COUNTS[$n]}" -lt "${COUNTS[$((n - 1))]}" ] \
+        || fail "step $n (${COUNTS[$n]} wakes) did not lower step $((n - 1)) (${COUNTS[$((n - 1))]})" ;;
+  esac
   n=$((n + 1))
 done
 pass "replayed wake count is $TOTAL after step $LATEST (baseline ${COUNTS[0]})"

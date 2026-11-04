@@ -74,9 +74,9 @@ report_once() {  # <level>
   ( set -o noclobber; : > "$marker" ) 2>/dev/null || return 0
   if [ "$level" = hold ]; then
     until_utc=$(TZ=UTC fm_dq_date '%Y-%m-%dT%H:%MZ' "$(( $(fm_dq_midnight "$now") + 86400 ))")
-    line="paused [at=$now]: $(fm_dq_message "$WHAT" | tr -d '\n') until $until_utc"
+    line="paused [at=$now]: system: $(fm_dq_message "$WHAT" | tr -d '\n') until $until_utc"
   else
-    line="blocked [at=$now]: $(fm_dq_message "$WHAT" | tr -d '\n')"
+    line="blocked [at=$now]: system: $(fm_dq_message "$WHAT" | tr -d '\n')"
   fi
   line=$(fm_parent_channel_clean_note "$line")
   if [ -n "$STATUS_FILE" ]; then

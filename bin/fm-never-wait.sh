@@ -155,6 +155,16 @@ line_at() { printf '%s' "$1" | sed -n 's/^[^[]*\[at=\([0-9]*\)\].*/\1/p' | head 
 line_text() { printf '%s' "$1" | sed -n 's/^[^:]*: *//p'; }
 line_verb() { printf '%s' "$1" | sed -n 's/^[[:space:]]*\([a-z-]*\).*/\1/p'; }
 
+# system_line <line>: 0 when the line was written by the system, not by a worker.
+# A system line has the note label "system:" or a machine-written key; it never starts or ends a block.
+system_line() {
+  case "$1" in
+    *\[key=pending-reply-* | *\[key=remote-reply-continuity-* | *\[key=branch-outcome-* | *\[key=child-outcome-* | *\[key=captain-hold-*) return 0 ;;
+  esac
+  case "$(line_text "$1")" in system:*) return 0 ;; esac
+  return 1
+}
+
 legal_reason() {  # <text>: 0 when the block carries one of the four reasons
   local text until
   text=$(printf '%s' "$1" | sed 's/^[[:space:]]*//' | tr '[:upper:]' '[:lower:]')
@@ -183,6 +193,7 @@ sweep() {  # <now> <threshold>
     last_lines=$(grep -n . "$f" | tail -50)
     run_start=''
     while IFS= read -r l; do
+      system_line "${l#*:}" && continue
       verb=$(line_verb "${l#*:}")
       if [ "$verb" = blocked ]; then
         [ -n "$run_start" ] || run_start=$l

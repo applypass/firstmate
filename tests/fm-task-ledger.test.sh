@@ -344,6 +344,22 @@ test_sweep_rejects_a_block_without_a_legal_reason() {
   pass "sweep rejects blocks without a legal reason and routes them with the playbook"
 }
 
+test_sweep_skips_system_written_lines() {
+  local home="$TMP_ROOT/nwsweep-sys" out
+  mkdir -p "$home/state" "$home/data"
+  status_block "$home" sys1 1000 "system: daily quota stop: refusing a new worker launch"
+  printf 'blocked [key=branch-outcome-7] [at=1000]: captain outcome for sys2: it stopped\n' >> "$home/state/sys2.status"
+  out=$(FM_HOME=$home "$NEVER" sweep --now 5000)
+  assert_not_contains "$out" "SELF-FIX" "system lines are not worker blocks"
+  assert_not_contains "$out" "ALARM" "system lines never alarm"
+  # A system line inside a worker block neither ends nor restarts it.
+  status_block "$home" sys3 1000 "waiting on a fresh share link"
+  status_block "$home" sys3 1100 "system: daily quota stop: refusing a new worker launch"
+  out=$(FM_HOME=$home "$NEVER" sweep --now 5100)
+  assert_contains "$out" "SELF-FIX sys3" "the worker's own block is still judged"
+  pass "sweep skips system-written lines"
+}
+
 test_sweep_alarms_a_stale_block_and_counts_blocked_time() {
   local home="$TMP_ROOT/nwsweep2" out
   mkdir -p "$home/state" "$home/data"
@@ -547,6 +563,7 @@ fm_test_run \
   test_brief_check_refuses_access_expiring_within_two_hours \
   test_spawn_refuses_a_never_wait_violation \
   test_sweep_rejects_a_block_without_a_legal_reason \
+  test_sweep_skips_system_written_lines \
   test_sweep_alarms_a_stale_block_and_counts_blocked_time \
   test_brief_teaches_the_block_reasons \
   test_watcher_wakes_on_a_never_wait_finding \
