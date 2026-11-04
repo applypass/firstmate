@@ -41,7 +41,16 @@ echo "$*" >> "$CASE_DIR/merge.log"
 cat "$CASE_DIR/merge-out"
 [ ! -e "$CASE_DIR/merge-refuses" ] || exit "$(cat "$CASE_DIR/merge-refuses")"
 M
-  chmod +x "$dir/fakebin/gh" "$dir/merge"
+  cat > "$dir/gate" <<'G'
+#!/usr/bin/env bash
+echo "$*" >> "$CASE_DIR/gate.log"
+if [ "$1" = check ] && [ -e "$CASE_DIR/gate-refuses" ]; then
+  echo "release gate: #7 fails the gate" >&2
+  exit 1
+fi
+G
+  chmod +x "$dir/fakebin/gh" "$dir/merge" "$dir/gate"
+  : > "$dir/gate.log"
   : > "$dir/merge.log"
   : > "$dir/gh.log"
   printf 'verified: %s is merged (state=MERGED, merged=true, isInMergeQueue=false)\n' "$URL" > "$dir/merge-out"
@@ -52,7 +61,7 @@ run_rel() {  # <case-dir> <args...>; sets OUT and RC
   local dir=$1
   shift
   OUT=$(CASE_DIR="$dir" PATH="$dir/fakebin:$PATH" FM_HOME="$dir" FM_STATE_OVERRIDE="$dir/state" \
-    FM_RELEASE_MERGE="$dir/merge" FM_RELEASE_SHORTCUT="$dir/shortcut" "$REL" "$@" 2>&1)
+    FM_RELEASE_MERGE="$dir/merge" FM_RELEASE_GATE="$dir/gate" FM_RELEASE_SHORTCUT="$dir/shortcut" "$REL" "$@" 2>&1)
   RC=$?
 }
 
@@ -65,6 +74,16 @@ run_rel "$d" open acme/app
 case "$OUT" in *"https://github.com/acme/app/pull/10"*) ;; *) fail "open: no PR URL: $OUT" ;; esac
 grep -q -- '--base main' "$d/gh.log" || fail "open: must target main"
 grep -q -- '--head dev' "$d/gh.log" || fail "open: must open from dev"
+
+# open: the gate table is written into the new PR right after it is created.
+grep -qx 'refresh https://github.com/acme/app/pull/10' "$d/gate.log" || fail "open: gate refresh not called: $(cat "$d/gate.log")"
+
+# open: a failing table write warns but keeps the PR.
+d=$(make_case open-gate-warn)
+printf '#!/usr/bin/env bash\nexit 1\n' > "$d/gate"
+run_rel "$d" open acme/app
+[ "$RC" -eq 0 ] || fail "open-gate-warn: exit $RC: $OUT"
+case "$OUT" in *"pull/10"*"warning: could not write the release gate table"*) ;; *) fail "open-gate-warn: $OUT" ;; esac
 
 # open: a project name resolves to its clone's origin.
 d=$(make_case open-project main dev app-main)
@@ -92,6 +111,16 @@ done
 grep -qx "release-main-app-9 $URL --release-main --merge" "$d/merge.log" || fail "merge-ok: wrong merge call: $(cat "$d/merge.log")"
 case "$OUT" in *"release merged: $URL"*) ;; *) fail "merge-ok: no merged line: $OUT" ;; esac
 case "$OUT" in *"release-done"*) fail "merge-ok: release-done unsupported, must not print it: $OUT" ;; esac
+
+# merge: the gate check runs first and a failing check stops everything.
+grep -qx "check $URL" "$d/gate.log" || fail "merge-ok: gate check not called: $(cat "$d/gate.log")"
+d=$(make_case merge-gate)
+: > "$d/gate-refuses"
+run_rel "$d" merge "$URL" --captain-authorized "merge the release"
+[ "$RC" -ne 0 ] || fail "merge-gate: a failing gate must refuse"
+case "$OUT" in *"release gate refuses"*"#7 fails the gate"*|*"#7 fails the gate"*"release gate refuses"*) ;; *) fail "merge-gate: no reason: $OUT" ;; esac
+[ ! -s "$d/merge.log" ] || fail "merge-gate: must not merge"
+[ ! -e "$d/state/$META" ] || fail "merge-gate: must not write a record"
 
 # merge: a Shortcut command that supports release-done gets the next step.
 d=$(make_case merge-release-done)

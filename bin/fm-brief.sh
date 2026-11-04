@@ -175,6 +175,8 @@ esac
 . "$SCRIPT_DIR/fm-handbook-lib.sh"
 # shellcheck source=bin/fm-cleanup-line-lib.sh
 . "$SCRIPT_DIR/fm-cleanup-line-lib.sh"
+# shellcheck source=bin/fm-release-audit-lib.sh
+. "$SCRIPT_DIR/fm-release-audit-lib.sh"
 # Fork-only end
 PAUSED_VERB=${FM_CLASSIFY_PAUSED_VERB:-$FM_CLASSIFY_PAUSED_VERB_DEFAULT}
 IFS= read -r -d '' CREWMATE_PAUSE_INSTRUCTIONS <<EOF || true
@@ -831,7 +833,7 @@ A correction edits only the wrong text: do not run \`$FM_ROOT/bin/fm-ensure-agen
 $DOD
 EOF
 fm_handbook_brief_block "$FM_HOME" "$PROJECT_DIR" "$FM_ROOT" >> "$BRIEF"  # Fork-only
-fm_cleanup_brief_block >> "$BRIEF"  # Fork-only
+{ fm_cleanup_brief_block; fm_release_audit_brief_block; } >> "$BRIEF"  # Fork-only
 append_brief_include
 if [ "$FORGE" = none ]; then
   echo "scaffolded: $BRIEF (ship, mode=$MODE; replace {TASK} and {FIRSTMATE_SPEC})"

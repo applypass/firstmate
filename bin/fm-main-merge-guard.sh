@@ -12,7 +12,8 @@
 # unchanged. A base that cannot be read exits 1 too, so an unreadable forge
 # never lets a main merge through. The fourth argument is true only when the
 # caller passed --release-main, which is passed only after the captain's
-# explicit word for that specific merge.
+# explicit word for that specific merge. A GitHub merge then runs
+# bin/fm-release-gate.sh check on the PR and exits 1 when that check fails.
 set -u
 
 usage() {
@@ -41,6 +42,13 @@ if [ -z "$base" ]; then
   exit 1
 fi
 [ "$base" = main ] || exit 0
-[ "$RELEASE_MAIN" = true ] && exit 0
+if [ "$RELEASE_MAIN" = true ]; then
+  # The release gate refuses a release whose PRs lack a current decision or a needed
+  # reader and writer audit (bin/fm-release-gate.sh). GitHub only; uncovered repos pass.
+  if [ "$PROVIDER" = github ]; then
+    "${FM_RELEASE_GATE_CMD:-$(dirname "${BASH_SOURCE[0]}")/fm-release-gate.sh}" check "https://github.com/$REPO/pull/$NUMBER" || exit 1
+  fi
+  exit 0
+fi
 echo "error: $NAME targets main, and a merge into main deploys prod; pass --release-main only after the captain's explicit word for this specific merge" >&2
 exit 1
