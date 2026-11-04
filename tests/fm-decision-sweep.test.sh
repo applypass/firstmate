@@ -239,7 +239,7 @@ test_done_item_link_keeps_the_window() {
   local dir out
   dir=$(make_case done-link)
   tasks "$dir" add lang-v1 "First language picker" --kind ship --body "sc-9018 v1. pr=$BURL/700" >/dev/null || fail "fixture add failed"
-  tasks "$dir" done lang-v1 --note "shipped" >/dev/null || fail "fixture done failed"
+  tasks "$dir" "done" lang-v1 --note "shipped" >/dev/null || fail "fixture done failed"
   add_merged_pr "$dir" 700 "Language picker v1" 2026-06-01T10:00:00Z
   out=$(sweep "$dir" dropdown-again) || fail "sweep failed: $out"
   assert_contains "$out" "lang-v1 (" "the done item tied to the old story was not listed"
