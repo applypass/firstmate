@@ -336,7 +336,12 @@ test_free_text_supersede_is_refused_without_the_flag() {
   out=$(decide "$dir" record dd-11 "Replaces the old way, supersedes it." --best-effort --story sc-6523) || fail "best-effort refused: $out"
   assert_contains "$out" "names nothing; no reversal sweep ran" "the best-effort gap is not named"
   assert_grep '- [dd-11] ' "$dir/home/data/decided.md" "a best-effort answer was dropped"
-  pass "text that mentions superseding is refused without --supersedes, and --no-supersedes lets it through"
+  out=$(decide "$dir" record dd-11 "Replaces the old way, supersedes it." --best-effort --story sc-6523) || fail "best-effort re-record failed: $out"
+  out=$(cd "$dir/code" && FM_HOME="$dir/home" "$ROOT/bin/fm-tasks-axi.sh" show supersede-unclassified-dd-11 --full 2>&1) || fail "no follow-up item for dd-11: $out"
+  assert_contains "$out" "re-record dd-11 with --supersedes <ref> so the sweep runs" "the follow-up item does not say how to fix the gap"
+  assert_equals 1 "$(grep -c 'supersede-unclassified-dd-11' "$dir/home/data/backlog.md")" "the follow-up item was duplicated"
+  (cd "$dir/code" && FM_HOME="$dir/home" "$ROOT/bin/fm-tasks-axi.sh" show supersede-unclassified-dd-9 >/dev/null 2>&1) && fail "--no-supersedes opened a follow-up item"
+  pass "text that mentions superseding is refused without --supersedes, --no-supersedes lets it through, and best-effort queues one follow-up"
 }
 
 test_supersedes_writes_the_suffix_and_sweeps_before_the_post() {

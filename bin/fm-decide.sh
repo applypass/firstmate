@@ -35,7 +35,8 @@
 # PR gets a re-check item by the time record returns. A text containing
 # "supersede" without --supersedes is refused (free text reacts to nothing);
 # --no-supersedes allows text such as "does not supersede" (with --best-effort the
-# entry is recorded and a warning names the gap, so an answer is never lost). A key ref must
+# entry is recorded, a warning names the gap, and one backlog item
+# supersede-unclassified-<key> asks for the --supersedes re-record, so an answer is never lost). A key ref must
 # already be recorded. A sweep failure keeps the entry, says so, and exits 1.
 # --best-effort turns a refusal into a warning, which is how
 # bin/fm-captain-hold.sh answer calls it, keyed <task-id>-<answer occurrence>.
@@ -54,6 +55,7 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 DECIDED="$DATA/decided.md"
 TICKET="$SCRIPT_DIR/fm-shortcut-ticket.sh"
+TASKS="$SCRIPT_DIR/fm-tasks-axi.sh"
 SWEEP="$SCRIPT_DIR/fm-decision-sweep.sh"
 BEST_EFFORT=0
 
@@ -307,6 +309,15 @@ guard_warning() {
   guard_installed || printf 'fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to %s/.claude/settings.local.json (merge into its "hooks"):\n%s\n' "$FM_HOME" "$(guard_line)" >&2
 }
 
+# flag_unclassified <key>: one backlog item asking for the --supersedes re-record (idempotent).
+flag_unclassified() {
+  local id="supersede-unclassified-$1"
+  FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA "$TASKS" show "$id" >/dev/null 2>&1 && return 0
+  FM_SHORTCUT_TICKETS=off FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA "$TASKS" add "$id" "Name what [$1] supersedes" \
+    --body "re-record $1 with --supersedes <ref> so the sweep runs" >/dev/null 2>&1 ||
+    printf 'fm-decide: warning: could not add backlog item %s\n' "$id" >&2
+}
+
 # run_sweep <key>: the reversal sweep, in the foreground. Nonzero when it could not finish.
 run_sweep() {
   FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA "$SWEEP" "$1" || {
@@ -316,7 +327,7 @@ run_sweep() {
 }
 
 command_record() {
-  local key=${1:-} text='' story='' item='' file='' stamp=pending ref lowref sweep_rc=0 no_supersedes=0
+  local key=${1:-} text='' story='' item='' file='' stamp=pending ref lowref sweep_rc=0 no_supersedes=0 unclassified=0
   local supersedes=()
   [ -n "$key" ] || die "usage: record <key> <text> [--story sc-NNNN] [--item <task-id>] [--supersedes <ref>]..."
   shift
@@ -362,6 +373,7 @@ command_record() {
     # decision is recorded and the gap is named; refusing would lose the captain's answer.
     if [ "$BEST_EFFORT" = 1 ]; then
       printf 'fm-decide: warning: [%s] mentions superseding but names nothing; no reversal sweep ran. Re-record the replacement with --supersedes <ref>.\n' "$key" >&2
+      unclassified=1
     else
       die "the text mentions superseding, which reacts to nothing as free text; name what it replaces with --supersedes <decided key | sc-N | repo#N> (repeatable), or pass --no-supersedes if it replaces nothing"
     fi
@@ -382,6 +394,7 @@ command_record() {
       END { print same ? "same" : seen ? "other" : "" }' "$DECIDED") in
       same)
         release_lock
+        [ "$unclassified" = 0 ] || flag_unclassified "$key"
         [ "${#supersedes[@]}" -eq 0 ] || run_sweep "$key"
         return $? ;;
       other) die "a decision with key '$key' is already recorded with different text; use a new key" ;;
@@ -394,6 +407,7 @@ command_record() {
   [ -z "$story" ] || stamp="pending $story"
   append_entry "- [$key] ${FM_DECIDE_DATE:-$(date +%F)} $text (shortcut: $stamp)" || die "cannot write $DECIDED"
   release_lock
+  [ "$unclassified" = 0 ] || flag_unclassified "$key"
   # Foreground, before the detached post: the re-check items exist when record returns.
   [ "${#supersedes[@]}" -eq 0 ] || run_sweep "$key" || sweep_rc=1
   launch_sync "$key"
