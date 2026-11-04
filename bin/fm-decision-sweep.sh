@@ -19,9 +19,10 @@
 #   - backlog items (any state) naming a story as a whole token, or a key;
 #   - PRs naming a story the way bin/fm-shortcut-release-lib.sh finds one (a
 #     whole-token sc-N in title, body or branch; Shortcut external links are not
-#     read), plus PRs a ref names directly and PRs a found item links as pr=,
-#     that are open, merged to dev in the last FM_SWEEP_DAYS days (default 30),
-#     or carried by an open dev-to-main release PR. The repos are the origins of
+#     read), plus PRs a ref names directly and PRs a found item links as pr=
+#     (bodies read in full), that are open, merged to dev in the last
+#     FM_SWEEP_DAYS days (default 30), or carried by an open dev-to-main release
+#     PR; a PR a ref names directly skips that window. The repos are the origins of
 #     the clones of data/projects.md plus applypass/apply_pass_backend and
 #     applypass/apply_pass_frontend. A PR a ref names directly is added when
 #     open or merged even if no searched list holds it.
@@ -78,6 +79,7 @@ trap 'rm -rf "$WORK"' EXIT
 : >"$WORK/direct"  # <pr url> TAB <ref>
 : >"$WORK/items"   # <item id> TAB <why>
 : >"$WORK/named"   # <pr url> TAB <repo> TAB <pr view json>, for PRs named as refs
+: >"$WORK/refurls" # <pr url>, for PRs named as refs
 
 entry_for() {  # <key>: its decided.md line
   FM_KEY=$1 awk 'BEGIN { p = "- [" ENVIRON["FM_KEY"] "] " } index($0, p) == 1 { print; exit }' "$DECIDED"
@@ -88,7 +90,20 @@ lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 # Backlog rows, one per task, literal \n turned into a space so tokens stay whole.
 ROWS="$WORK/rows"
 "$TASKS" list --fields body >"$WORK/tasks.out" 2>"$WORK/tasks.err" || die "cannot read the backlog: $(cat "$WORK/tasks.err")"
-sed -n 's/^  \([^ ,][^,]*,.*\)$/  \1/p' "$WORK/tasks.out" | sed 's/\\n/ /g' >"$ROWS"
+sed -n 's/^  \([^ ,][^,]*,.*\)$/  \1/p' "$WORK/tasks.out" | sed 's/\\n/ /g' >"$WORK/rows.list"
+while IFS= read -r row; do
+  case "$row" in
+    *'(truncated, '*' chars total - use show '*)
+      id=${row#  }; id=${id%%,*}
+      if full=$("$TASKS" show "$id" --full 2>"$WORK/show.err"); then
+        printf '  %s,%s\n' "$id" "$(printf '%s\n' "$full" | sed 's/\\n/ /g' | tr '\n' ' ')"
+      else
+        warn "could not read the full body of $id: $(head -n 1 "$WORK/show.err")"
+        printf '%s\n' "$row"
+      fi ;;
+    *) printf '%s\n' "$row" ;;
+  esac
+done <"$WORK/rows.list" >"$ROWS"
 
 row_story_tokens() {  # <row>: story numbers named as whole sc-N tokens
   printf '%s\n' "$1" | sed -E 's#https?://[^[:space:]")>,]*# #g' | tr -c 'A-Za-z0-9_\n-' ' ' | tr ' ' '\n' |
@@ -119,6 +134,7 @@ while IFS= read -r ref; do
       repo=${ref%%#*}; num=${ref##*#}
       url="https://github.com/$OWNER/$repo/pull/$num"
       printf '%s\t%s\n' "$url" "$ref" >>"$WORK/direct"
+      printf '%s\n' "$url" >>"$WORK/refurls"
       add_stories_of_pr "$url" "$OWNER/$repo" "$ref"
       ;;
     *)
@@ -181,6 +197,7 @@ else
 fi
 STORIES_JSON=$(cut -f1 "$WORK/stories" | sort -u | jq -R . | jq -s .)
 DIRECT_JSON=$(cut -f1 "$WORK/direct" | sort -u | jq -R . | jq -s .)
+NAMED_JSON=$(sort -u "$WORK/refurls" | jq -R . | jq -s .)
 
 # 4. PRs per repo: open, merged to dev inside the window, or inside an open release.
 : >"$WORK/found" # url TAB repo TAB num TAB state TAB stories TAB release
@@ -203,7 +220,7 @@ for repo in $REPOS; do
       while IFS= read -r c; do printf '%s\t%s\n' "$c" "$rurl" >>"$WORK/carried"; done
   done <"$WORK/releases"
   CARRIED_JSON=$(jq -R 'split("\t") | {(.[0]): .[1]}' "$WORK/carried" | jq -s 'add // {}')
-  jq -s -r --argjson stories "$STORIES_JSON" --argjson direct "$DIRECT_JSON" --argjson carried "$CARRIED_JSON" \
+  jq -s -r --argjson stories "$STORIES_JSON" --argjson direct "$DIRECT_JSON" --argjson named "$NAMED_JSON" --argjson carried "$CARRIED_JSON" \
     --arg since "$SINCE" --arg repo "$repo" '
     def toks: [((.title // "") , (.body // "")) | gsub("https?://[^\\s)>]*"; "")] + [(.headRefName // "")]
       | join(" ") | [scan("(?i)(?<![A-Za-z0-9_-])sc-([0-9]+)(?![0-9A-Za-z_])") | .[0]];
@@ -211,7 +228,7 @@ for repo in $REPOS; do
     | map(select((.headRefName == "dev" and .baseRefName == "main") | not))
     | map(. + {matched: (toks | map(select(. as $t | $stories | index($t))) | unique)})
     | map(select((.matched | length) > 0 or (.url as $u | $direct | index($u))))
-    | map(select(.st == "open" or (.mergedAt // "")[0:10] >= $since or ($carried[(.number | tostring)] != null) or (.url as $u | $direct | index($u))))
+    | map(select(.st == "open" or (.mergedAt // "")[0:10] >= $since or ($carried[(.number | tostring)] != null) or (.url as $u | $named | index($u))))
     | .[] | [.url, $repo, (.number | tostring), (if .st == "open" then "open" else "merged " + (.mergedAt // "")[0:10] end),
              (.matched | join(",")), ($carried[(.number | tostring)] // "")] | @tsv' \
     "$WORK/open.json" "$WORK/merged.json" >>"$WORK/found" 2>"$WORK/jq.err" || warn "could not read the PR list of $repo: $(head -n 1 "$WORK/jq.err")"

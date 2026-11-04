@@ -217,6 +217,36 @@ test_pr_ref_alone_expands_to_its_stories() {
   pass "a PR named as the only ref expands to the stories in its title, body and branch"
 }
 
+add_merged_pr() {  # <case-dir> <number> <title> <mergedAt>
+  local f="$1/fx/applypass_apply_pass_backend.merged.json"
+  jq --argjson n "$2" --arg t "$3" --arg m "$4" --arg u "$BURL/$2" \
+    '. + [{number: $n, title: $t, body: "", headRefName: "fm/x\($n)", baseRefName: "dev", url: $u, mergedAt: $m}]' "$f" >"$f.new" && mv "$f.new" "$f"
+}
+
+test_long_item_bodies_are_read_in_full() {
+  local dir out pad
+  dir=$(make_case long-body)
+  pad=$(printf 'x%.0s' $(seq 1 700))
+  tasks "$dir" add longitem "Language notes" --kind ship --body "notes $pad end. pr=$BURL/777 Shortcut: sc-8740" >/dev/null || fail "fixture add failed"
+  add_merged_pr "$dir" 777 "Language storage" 2026-11-02T10:00:00Z
+  out=$(sweep "$dir" dropdown-again) || fail "sweep failed: $out"
+  assert_contains "$out" "longitem (" "an item whose story sits past the list cut was not listed"
+  assert_contains "$out" "$BURL/777 (merged 2026-11-02)" "a pr= link past the list cut was not followed"
+  pass "an item's story and pr= link past the list's 500-char cut are found"
+}
+
+test_done_item_link_keeps_the_window() {
+  local dir out
+  dir=$(make_case done-link)
+  tasks "$dir" add lang-v1 "First language picker" --kind ship --body "sc-9018 v1. pr=$BURL/700" >/dev/null || fail "fixture add failed"
+  tasks "$dir" done lang-v1 --note "shipped" >/dev/null || fail "fixture done failed"
+  add_merged_pr "$dir" 700 "Language picker v1" 2026-06-01T10:00:00Z
+  out=$(sweep "$dir" dropdown-again) || fail "sweep failed: $out"
+  assert_contains "$out" "lang-v1 (" "the done item tied to the old story was not listed"
+  assert_not_contains "$out" "$BURL/700" "a PR merged before the window was reported through a done item's link"
+  pass "a PR linked from a done item must be open, recent or in an open release"
+}
+
 test_dry_run_opens_nothing() {
   local dir out
   dir=$(make_case dry)
@@ -235,4 +265,6 @@ test_pending_story_stamp_counts
 test_unreadable_release_commits_fail_the_sweep
 test_named_pr_outside_the_lists_gets_a_recheck
 test_pr_ref_alone_expands_to_its_stories
+test_long_item_bodies_are_read_in_full
+test_done_item_link_keeps_the_window
 test_dry_run_opens_nothing
