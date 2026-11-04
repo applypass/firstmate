@@ -77,7 +77,7 @@ BEGIN {
   delete seen
   line = substr($0, 4)
   pos = lastindex(line, " - Krisp ")
-  head_ok = 0
+  head_ok = 0; docerr = 0; mid = ""; link = ""
   if (pos > 0) {
     title = trim(substr(line, 1, pos - 1))
     rest = substr(line, pos + 9)
@@ -90,11 +90,11 @@ BEGIN {
       if (suffix != "") {
         m = split(suffix, d, " ")
         if (m == 3 && d[1] == "doc" && d[2] ~ /^[A-Za-z0-9-]+$/ && d[3] ~ /^[0-9a-f]+$/) { docid = d[2]; dochash = d[3] }
-        else { err("doc suffix must be: | doc <doc id> <content hash>"); head_ok = 0 }
+        else { err("doc suffix must be: | doc <doc id> <content hash>"); head_ok = 0; docerr = 1 }
       }
     }
   }
-  if (!head_ok && (pos == 0 || suffix == "")) err("section heading must be: ## <meeting title> - Krisp <meeting id> <https link>")
+  if (!head_ok && !docerr) err("section heading must be: ## <meeting title> - Krisp <meeting id> <https link>")
   next
 }
 insec && /^>/ {

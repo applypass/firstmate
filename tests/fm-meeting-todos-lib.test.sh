@@ -151,6 +151,8 @@ test_structure_errors() {
   expect_error no-rows "$f" "has no task rows"
   printf '## Team standup - Krisp aa11 not-a-link\n> a\n\n%s\n%s\n' "$HEAD" "$ROW1" > "$f"
   expect_error bad-link "$f" "section heading must be"
+  printf '## Team standup - Krisp aa11 not-a-link | doc 99 deadbeef01\n> a\n\n%s\n%s\n' "$HEAD" "$ROW1" > "$f"
+  expect_error bad-link-with-doc "$f" "section heading must be"
   f=$(record 2026-11-04.md ' | doc 77' "$SUMMARY" "$ROW1")
   expect_error bad-doc "$f" "doc suffix must be"
   f=$(record notes.md '' "$SUMMARY" "$ROW1")
