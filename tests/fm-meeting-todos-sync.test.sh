@@ -120,7 +120,7 @@ $ROW_DONE
 $ROW_DROPPED")
   out=$(sync "$dir" "$f") || fail "first sync failed: $out"
   # stories
-  [ "$(ls "$dir/store/stories" | wc -l | tr -d ' ')" = 2 ] || fail "expected 2 stories (done and dropped rows make none): $(ls "$dir/store/stories")"
+  [ "$(find "$dir/store/stories" -type f | wc -l | tr -d ' ')" = 2 ] || fail "expected 2 stories (done and dropped rows make none): $(find "$dir/store/stories" -type f)"
   s1=$(story_json "$dir" 1001)
   assert_equals "Ship the widget fix" "$(printf '%s' "$s1" | jq -r .name)" "story name"
   assert_equals "$TEAM" "$(printf '%s' "$s1" | jq -r .group_id)" "team is not Engineering"
@@ -141,7 +141,7 @@ $ROW_DROPPED")
   grep -qF '| 2 | Add the retry helper [agentic] | Sam | sc-1002 | week |' "$f" || fail "sc-1002 not written back"
   grep -qF '| 3 | Rotate the staging key | Alex | | today |' "$f" || fail "the done row got a story id"
   # one doc
-  [ "$(ls "$dir/store/docs" | wc -l | tr -d ' ')" = 1 ] || fail "expected one doc"
+  [ "$(find "$dir/store/docs" -type f | wc -l | tr -d ' ')" = 1 ] || fail "expected one doc"
   doc=$(cat "$dir/store/docs/doc-1.json")
   assert_equals "Standup Wed 4 Nov - agreed to-dos" "$(printf '%s' "$doc" | jq -r .title)" "doc title"
   assert_equals "markdown" "$(printf '%s' "$doc" | jq -r .content_format)" "doc format"
@@ -231,6 +231,34 @@ test_same_state_story_is_left_alone() {
   pass "a story that already matches is not written, and existing labels are not created again"
 }
 
+test_later_rows_get_the_later_label_and_their_own_doc_table() {
+  local dir f s content
+  dir=$(new_case later)
+  f=$(rec "$dir" "$ROW_NEW
+| 2 | Look at the exporter someday | Sam | | later | 2026-11-18 | open | \"maybe at some point\" @50:00 |")
+  sync "$dir" "$f" >/dev/null || fail "sync failed"
+  s=$(story_json "$dir" 1002)
+  assert_equals "standup-2026-11-04 todo-later" "$(printf '%s' "$s" | jq -r '[.labels[].name] | join(" ")')" "later labels"
+  assert_equals "2026-11-18T12:30:00Z" "$(printf '%s' "$s" | jq -r .deadline)" "later placeholder deadline"
+  content=$(jq -r .content "$dir/store/docs/doc-1.json")
+  assert_contains "$content" "Later - agreed softly or with no date" "doc lacks the later section"
+  assert_contains "$content" "not at risk" "later section does not say it is not at risk"
+  pass "a later row gets todo-later, the two-week placeholder deadline, and its own doc section"
+}
+
+test_a_later_story_with_a_stated_timing_moves_and_drops_the_later_label() {
+  local dir f
+  dir=$(new_case later-moved)
+  f=$(rec "$dir" "| 1 | Look at the exporter someday | Sam | | later | 2026-11-18 | open | \"maybe at some point\" @50:00 |")
+  sync "$dir" "$f" >/dev/null || fail "first sync failed"
+  sed -i.bak 's/| sc-1001 | later | 2026-11-18 | open |/| sc-1001 | week | 2026-11-06 (moved: Sam gave a date in the next standup) | moved |/' "$f"
+  sync "$dir" "$f" >/dev/null || fail "move sync failed"
+  assert_equals "2026-11-06T12:30:00Z" "$(story_json "$dir" 1001 | jq -r .deadline)" "deadline not updated"
+  assert_equals "standup-2026-11-04 todo-week" "$(story_json "$dir" 1001 | jq -r '[.labels[].name] | join(" ")')" "stale todo-later label kept"
+  assert_equals "Deadline moved 2026-11-18 -> 2026-11-06: Sam gave a date in the next standup" "$(cat "$dir/store/comments-1001.log")" "comment wrong"
+  pass "a later story given a real timing moves its Deadline with a comment and swaps todo-later for the new scope label"
+}
+
 test_done_and_dropped_rows_never_touch_a_story() {
   local dir f out w
   dir=$(new_case closed)
@@ -249,7 +277,7 @@ test_invalid_record_is_refused_before_any_call() {
   f=$(rec "$dir" '| 1 | T | A | | soon | 2026-11-05 | open | "q" @1:02 |')
   out=$(sync "$dir" "$f"); rc=$?
   [ "$rc" = 2 ] || fail "invalid record exit was $rc, expected 2"
-  assert_contains "$out" "Scope must be today or week" "invalid record error missing"
+  assert_contains "$out" "Scope must be today, week or later" "invalid record error missing"
   [ ! -f "$dir/store/calls.log" ] || fail "an invalid record reached Shortcut"
   out=$(sync "$dir"); rc=$?
   [ "$rc" = 2 ] || fail "missing argument exit was $rc"
@@ -293,7 +321,7 @@ test_two_meetings_get_two_docs_with_distinct_titles() {
     printf '| 1 | Tune the queue | Sam | | week | 2026-11-06 | open | "tune the queue" @05:00 |\n'
   } >> "$f"
   sync "$dir" "$f" >/dev/null || fail "sync failed"
-  [ "$(ls "$dir/store/docs" | wc -l | tr -d ' ')" = 2 ] || fail "expected two docs"
+  [ "$(find "$dir/store/docs" -type f | wc -l | tr -d ' ')" = 2 ] || fail "expected two docs"
   assert_equals "Standup Wed 4 Nov - agreed to-dos (Team standup)" "$(jq -r .title "$dir/store/docs/doc-1.json")" "first doc title"
   assert_equals "Standup Wed 4 Nov - agreed to-dos (Backend sync)" "$(jq -r .title "$dir/store/docs/doc-2.json")" "second doc title"
   grep -c '| doc doc-' "$f" | grep -qx 2 || fail "both headings should record a doc id"
@@ -317,6 +345,8 @@ fm_test_run \
   test_deadline_move_changes_deadline_and_comments_the_reason \
   test_existing_story_gets_missing_labels_and_deadline_without_a_move_comment \
   test_same_state_story_is_left_alone \
+  test_later_rows_get_the_later_label_and_their_own_doc_table \
+  test_a_later_story_with_a_stated_timing_moves_and_drops_the_later_label \
   test_done_and_dropped_rows_never_touch_a_story \
   test_invalid_record_is_refused_before_any_call \
   test_a_failed_story_call_is_reported_and_other_rows_continue \

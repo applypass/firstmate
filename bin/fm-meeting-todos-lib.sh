@@ -9,7 +9,9 @@
 #   > <summary line 2>            (one or two summary lines)
 #   | # | Task | Owner | Story | Scope | Deadline | Status | Quote |
 #   |---|---|---|---|---|---|---|---|
-#   | 1 | ... | ... | sc-NNNN or empty | today|week | YYYY-MM-DD [(moved: why)] | open|done|dropped|moved | "words" @mm:ss |
+#   | 1 | ... | ... | sc-NNNN or empty | today|week|later | YYYY-MM-DD [(moved: why)] | open|done|dropped|moved | "words" @mm:ss |
+# Scope later = a soft or undated to-do: placeholder Deadline two weeks after the meeting date; a later
+# transcript that states a timing sets the real date with (moved: <why>) and may change the scope.
 # A cell never holds a '|'. The file name is the meeting date. The sync script writes the Story
 # cell and the heading's doc suffix; everything else is the firstmate's record.
 #
@@ -23,6 +25,7 @@
 #   fm_mt_doc_title <YYYY-MM-DD>    'Standup Wed 4 Nov - agreed to-dos'
 
 # One awk program serves validation (MODE=check) and parsing (MODE=records), so the two cannot drift.
+# shellcheck disable=SC2016 # awk program text, no shell expansion wanted
 FM_MT_AWK='
 function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
 function days(y, m, d,   yy, era, yoe, mm, doy, doe) {
@@ -65,7 +68,7 @@ BEGIN {
   fd = dnum(FDATE); fdow = dow(FDATE)
   nextwd = fd + (fdow == 5 ? 3 : (fdow == 6 ? 2 : 1))
   friday = fd + (fdow == 6 ? 6 : (fdow == 0 ? 5 : 5 - fdow))
-  nextstand = civil(nextwd); weekdue = civil(friday)
+  nextstand = civil(nextwd); weekdue = civil(friday); laterdue = civil(fd + 14)
   HDR = "|#|Task|Owner|Story|Scope|Deadline|Status|Quote|"
 }
 /^## / {
@@ -121,7 +124,7 @@ insec && /^[ \t]*\|/ {
   if (task == "") err("Task is empty")
   if (owner == "") err("Owner is empty")
   if (story != "" && story !~ /^sc-[0-9]+$/) err("Story must be empty or sc-NNNN")
-  if (scope != "today" && scope != "week") err("Scope must be today or week")
+  if (scope != "today" && scope != "week" && scope != "later") err("Scope must be today, week or later")
   if (status != "open" && status != "done" && status != "dropped" && status != "moved") err("Status must be open, done, dropped or moved")
   if (quote !~ /@[0-9]+:[0-9][0-9](:[0-9][0-9])?$/) err("Quote must end with the transcript time @mm:ss")
   date = ""; reason = ""; moved = 0
@@ -140,6 +143,7 @@ insec && /^[ \t]*\|/ {
   if (date != "" && !moved && status != "moved") {
     if (scope == "today" && date != nextstand) err("a today item is due the next standup date " nextstand " (got " date "); if it moved, write (moved: <why>)")
     if (scope == "week" && date != weekdue) err("a week item is due Friday " weekdue " (got " date "); if it moved, write (moved: <why>)")
+    if (scope == "later" && date != laterdue) err("a later item has the placeholder deadline " laterdue ", two weeks after the meeting (got " date "); when a transcript states a timing, write (moved: <why>)")
   }
   if (MODE == "records") {
     if (!(sec in secout)) {
@@ -198,6 +202,7 @@ fm_mt_replace() {  # <file> <awk-program> [awk args...]; rewrite the file in pla
 }
 
 fm_mt_set_story() {  # <file> <line> <sc-NNNN>
+  # shellcheck disable=SC2016 # awk program text
   fm_mt_replace "$1" '
     NR == LN {
       n = split($0, c, "|")
@@ -212,6 +217,7 @@ fm_mt_set_story() {  # <file> <line> <sc-NNNN>
 }
 
 fm_mt_set_doc() {  # <file> <line> <doc id> <hash>
+  # shellcheck disable=SC2016 # awk program text
   fm_mt_replace "$1" '
     NR == LN {
       p = index($0, " | doc")

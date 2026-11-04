@@ -8,21 +8,22 @@
 # script validates the record first and exits 2 with one "file:line: problem" per line when it is
 # malformed, before any Shortcut call.
 #
-# Per row with status open or moved:
+# Per row with status open or moved (scope today, week or later; a later row is a soft or undated
+# to-do with label todo-later and a placeholder Deadline two weeks after the meeting):
 #   - Story cell empty: create the story (Engineering team, Backlog, the row's Deadline, labels
-#     standup-<meeting date> and todo-today|todo-week; epic 6074 only when the Task ends in
+#     standup-<meeting date> and todo-today|todo-week|todo-later; epic 6074 only when the Task ends in
 #     "[agentic]", the tag is dropped from the story name) and write the new sc-NNNN into the
 #     Story cell at once, so a re-run never creates it twice.
 #   - Story cell set: read the story and write only what differs - a missing label, or the Deadline.
 #     A Deadline that replaces a different one also comments "Deadline moved <old> -> <new>: <reason>"
 #     (the reason is the trailing "(moved: <reason>)" of the Deadline cell). A story with no Deadline
-#     yet gets one with no comment.
+#     yet gets one with no comment. A todo-* label that no longer matches the scope is removed.
 # Rows with status done or dropped never write to a story. Deadlines are stored as <date>T12:30:00Z,
 # which is 18:00 IST.
 #
 # Per meeting: one Shortcut Doc titled 'Standup <Day D Mon> - agreed to-dos' (with ' (<meeting title>)'
 # added when the file holds several meetings) holding the Krisp link, the two-line summary and a table
-# of story link, task, owner, scope, deadline and status. The doc id and a hash of its content go in
+# of story link, task, owner, scope, deadline and status; later rows get their own short table. The doc id and a hash of its content go in
 # the section heading ('| doc <id> <hash>'); the doc is written only when the hash differs, so a
 # re-run on an unchanged file makes no Shortcut writes. A section with a failed row writes no doc.
 #
@@ -118,6 +119,7 @@ ensure_label() {  # <name>
 SEC_ERR=0 SEC_PLANNED=0
 SEC_TITLE='' SEC_ID='' SEC_LINK='' SEC_DOC='' SEC_HASH='' SUM1='' SUM2='' SEC_LINE=0
 TABLE="$WORK/table"
+LATER_TABLE="$WORK/later-table"
 NSEC=$(fm_mt_records "$FILE" | grep -c "^S") || true
 
 content_hash() {
@@ -132,7 +134,7 @@ content_hash() {
 
 do_row() {  # <num> <line> <task> <owner> <story> <scope> <date> <reason> <status> <quote>
   local num=$1 line=$2 task=$3 owner=$4 story=$5 scope=$6 date=$7 reason=$8 status=$9 quote=${10}
-  local name=$task agentic=0 want iso cur have id url ref missing upd moved label
+  local name=$task agentic=0 want iso cur have id url ref missing stale upd moved label out
   case "$task" in
     *"[agentic]") agentic=1; name=${task%"[agentic]"}; name=${name% } ;;
   esac
@@ -194,9 +196,13 @@ do_row() {  # <num> <line> <task> <owner> <story> <scope> <date> <reason> <statu
         url=$(jq -r '.app_url // empty' "$WORK/out")
         cur=$(jq -r '(.deadline // "")[0:10]' "$WORK/out")
         have=$(jq -r '[.labels[]?.name] | .[]' "$WORK/out")
-        missing=''
+        missing='' stale=''
         for label in $want; do
           printf '%s\n' "$have" | grep -Fxq -- "$label" || missing="$missing $label"
+        done
+        # A scope change (later -> week) must not leave the old todo-* label behind.
+        for label in $(printf '%s\n' "$have" | grep -E '^todo-(today|week|later)$'); do
+          case " $want " in *" $label "*) ;; *) stale="$stale $label" ;; esac
         done
         upd=$(jq -n '{}')
         moved=0
@@ -204,9 +210,10 @@ do_row() {  # <num> <line> <task> <owner> <story> <scope> <date> <reason> <statu
           upd=$(printf '%s' "$upd" | jq -c --arg d "$iso" '. + {deadline: $d}')
           [ -z "$cur" ] || moved=1
         fi
-        if [ -n "$missing" ]; then
-          upd=$(jq -c -n --argjson u "$upd" --slurpfile s "$WORK/out" --arg miss "$missing" '
-            $u + {labels: ([($s[0].labels // [])[] | {name: .name}] + [$miss | split(" ")[] | select(. != "") | {name: .}])}')
+        if [ -n "$missing$stale" ]; then
+          upd=$(jq -c -n --argjson u "$upd" --slurpfile s "$WORK/out" --arg miss "$missing" --arg stale "$stale" '
+            ($stale | split(" ")) as $drop
+            | $u + {labels: ([($s[0].labels // [])[] | select(.name as $n | $drop | index($n) | not) | {name: .name}] + [$miss | split(" ")[] | select(. != "") | {name: .}])}')
         fi
         if [ "$upd" = '{}' ]; then
           printf 'row %s: %s unchanged\n' "$num" "$story"
@@ -233,10 +240,12 @@ do_row() {  # <num> <line> <task> <owner> <story> <scope> <date> <reason> <statu
       fi
       ;;
   esac
+  out=$TABLE
+  [ "$scope" != later ] || out=$LATER_TABLE
   if [ -n "$url" ] && [ "$ref" != '-' ]; then
-    printf '| [%s](%s) | %s | %s | %s | %s | %s |\n' "$ref" "$url" "$name" "$owner" "$scope" "$date" "$status" >> "$TABLE"
+    printf '| [%s](%s) | %s | %s | %s | %s | %s |\n' "$ref" "$url" "$name" "$owner" "$scope" "$date" "$status" >> "$out"
   else
-    printf '| %s | %s | %s | %s | %s | %s |\n' "$ref" "$name" "$owner" "$scope" "$date" "$status" >> "$TABLE"
+    printf '| %s | %s | %s | %s | %s | %s |\n' "$ref" "$name" "$owner" "$scope" "$date" "$status" >> "$out"
   fi
 }
 
@@ -253,8 +262,15 @@ finish_section() {
     printf 'Krisp: %s\n\n' "$SEC_LINK"
     [ -z "$SUM1" ] || printf '%s\n' "$SUM1"
     [ -z "$SUM2" ] || printf '%s\n' "$SUM2"
-    printf '\n| Story | Task | Owner | Scope | Deadline | Status |\n|---|---|---|---|---|---|\n'
-    cat "$TABLE"
+    if [ -s "$TABLE" ]; then
+      printf '\n| Story | Task | Owner | Scope | Deadline | Status |\n|---|---|---|---|---|---|\n'
+      cat "$TABLE"
+    fi
+    if [ -s "$LATER_TABLE" ]; then
+      printf '\nLater - agreed softly or with no date; placeholder deadline two weeks out, worked after the dated items (not at risk):\n'
+      printf '\n| Story | Task | Owner | Scope | Deadline | Status |\n|---|---|---|---|---|---|\n'
+      cat "$LATER_TABLE"
+    fi
   )
   hash=$(printf '%s\n%s' "$title" "$content" | content_hash)
   if [ "$DRY" = 1 ]; then
@@ -300,7 +316,7 @@ while IFS="$US" read -r -u 3 kind _ f2 f3 f4 f5 f6 f7 f8 f9 f10 f11; do
   case "$kind" in
     S)
       finish_section
-      : > "$TABLE"
+      : > "$TABLE"; : > "$LATER_TABLE"
       SEC_ERR=0 SEC_PLANNED=0
       SEC_TITLE=$f2 SEC_ID=$f3 SEC_LINK=$f4 SEC_DOC=$f5 SEC_HASH=$f6 SUM1=$f7 SUM2=$f8 SEC_LINE=$f9
       ;;

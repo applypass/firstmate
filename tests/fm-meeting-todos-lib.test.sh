@@ -72,7 +72,7 @@ test_moved_reason_is_split_from_the_date() {
 test_malformed_cases_each_name_the_problem() {
   local f
   f=$(record 2026-11-04.md '' "$SUMMARY" '| 1 | T | A | | soon | 2026-11-05 | open | "q" @1:02 |')
-  expect_error scope "$f" "Scope must be today or week"
+  expect_error scope "$f" "Scope must be today, week or later"
   f=$(record 2026-11-04.md '' "$SUMMARY" '| 1 | T | A | | today | 2026-11-05 | later | "q" @1:02 |')
   expect_error status "$f" "Status must be open, done, dropped or moved"
   f=$(record 2026-11-04.md '' "$SUMMARY" '| 1 | T | A | 123 | today | 2026-11-05 | open | "q" @1:02 |')
@@ -108,6 +108,19 @@ test_moved_rows_may_use_any_date() {
   f=$(record 2026-11-04.md '' "$SUMMARY" '| 1 | T | A | sc-5 | week | 2026-11-12 (moved: waiting on design) | open | "q" @1:02 |')
   fm_mt_validate "$f" || fail "a row with a moved reason was refused"
   pass "a row that moved may carry a date outside the standup rule"
+}
+
+test_later_rows_carry_the_two_week_placeholder() {
+  local f
+  f=$(record 2026-11-04.md '' "$SUMMARY" '| 1 | T | A | | later | 2026-11-18 | open | "maybe someday" @1:02 |')
+  fm_mt_validate "$f" || fail "a later row with the placeholder deadline was refused: $(fm_mt_validate "$f" 2>&1)"
+  f=$(record 2026-10-30.md '' "$SUMMARY" '| 1 | T | A | | later | 2026-11-13 | open | "maybe someday" @1:02 |')
+  fm_mt_validate "$f" || fail "30 Oct later row due 13 Nov was refused"
+  f=$(record 2026-11-04.md '' "$SUMMARY" '| 1 | T | A | | later | 2026-11-11 | open | "q" @1:02 |')
+  expect_error later-date "$f" "a later item has the placeholder deadline 2026-11-18"
+  f=$(record 2026-11-04.md '' "$SUMMARY" '| 1 | T | A | sc-5 | later | 2026-11-09 (moved: Sam said Monday) | moved | "q" @1:02 |')
+  fm_mt_validate "$f" || fail "a later row with a stated timing was refused"
+  pass "a later row is due two weeks after the meeting unless a transcript stated a timing"
 }
 
 test_friday_meetings_are_due_monday() {
@@ -176,6 +189,7 @@ fm_test_run \
   test_moved_reason_is_split_from_the_date \
   test_malformed_cases_each_name_the_problem \
   test_moved_rows_may_use_any_date \
+  test_later_rows_carry_the_two_week_placeholder \
   test_friday_meetings_are_due_monday \
   test_structure_errors \
   test_write_back_story_and_doc \
