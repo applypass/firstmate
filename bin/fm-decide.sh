@@ -2,6 +2,7 @@
 # fm-decide.sh - the only writer of data/decided.md; every decision lands on a Shortcut story (applypass fork).
 #
 # Usage: fm-decide.sh record <key> <text> [--story sc-NNNN] [--item <task-id>] [--best-effort]
+#                      [--supersedes <ref>]... [--no-supersedes]
 #        fm-decide.sh record <key> --file <file> [...]
 #        fm-decide.sh sync [<key>]                post entries still waiting for Shortcut, now
 #        fm-decide.sh audit                       list entries with no Shortcut stamp
@@ -26,6 +27,16 @@
 # is only commented on, never moved or edited. Recording the same key and exact
 # text again is a no-op (pending or posted); other text under a recorded key is
 # refused.
+# --supersedes <ref> (repeatable) says what a decision replaces: a decided key, a
+# story (sc-N) or a PR (<repo>#<N>, repo = GitHub repo name under applypass). It
+# appends ` (supersedes: <ref>, <ref>)` to the entry text, before the stamp, then
+# runs bin/fm-decision-sweep.sh in the foreground, before the detached Shortcut
+# job, so every backlog item and PR tied to the old decision is listed and each
+# PR gets a re-check item by the time record returns. A text containing
+# "supersede" without --supersedes is refused (free text reacts to nothing);
+# --no-supersedes allows text such as "does not supersede" (with --best-effort the
+# entry is recorded and a warning names the gap, so an answer is never lost). A key ref must
+# already be recorded. A sweep failure keeps the entry, says so, and exits 1.
 # --best-effort turns a refusal into a warning, which is how
 # bin/fm-captain-hold.sh answer calls it, keyed <task-id>-<answer occurrence>.
 #
@@ -43,6 +54,7 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 DECIDED="$DATA/decided.md"
 TICKET="$SCRIPT_DIR/fm-shortcut-ticket.sh"
+SWEEP="$SCRIPT_DIR/fm-decision-sweep.sh"
 BEST_EFFORT=0
 
 usage() {
@@ -295,15 +307,26 @@ guard_warning() {
   guard_installed || printf 'fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to %s/.claude/settings.local.json (merge into its "hooks"):\n%s\n' "$FM_HOME" "$(guard_line)" >&2
 }
 
+# run_sweep <key>: the reversal sweep, in the foreground. Nonzero when it could not finish.
+run_sweep() {
+  FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA "$SWEEP" "$1" || {
+    printf 'fm-decide: decision %s is recorded, but the reversal sweep did not finish; run: %s %s\n' "$1" "$SWEEP" "$1" >&2
+    return 1
+  }
+}
+
 command_record() {
-  local key=${1:-} text='' story='' item='' file='' stamp=pending
-  [ -n "$key" ] || die "usage: record <key> <text> [--story sc-NNNN] [--item <task-id>]"
+  local key=${1:-} text='' story='' item='' file='' stamp=pending ref lowref sweep_rc=0 no_supersedes=0
+  local supersedes=()
+  [ -n "$key" ] || die "usage: record <key> <text> [--story sc-NNNN] [--item <task-id>] [--supersedes <ref>]..."
   shift
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --story) story=$(printf '%s' "${2:-}" | tr '[:upper:]' '[:lower:]'); shift ;;
       --item) item=${2:-}; shift ;;
       --file) file=${2:-}; shift ;;
+      --supersedes) supersedes+=("${2:-}"); shift ;;
+      --no-supersedes) no_supersedes=1 ;;
       *) text=$1 ;;
     esac
     shift
@@ -321,6 +344,28 @@ command_record() {
       *) die "a plan-* decision must start with approved:, small: or waived: (the ship plan gate reads it)" ;;
     esac ;;
   esac
+  if [ "${#supersedes[@]}" -gt 0 ]; then
+    [ "$no_supersedes" = 0 ] || die "--supersedes and --no-supersedes conflict"
+    for ref in "${supersedes[@]}"; do
+      lowref=$(printf '%s' "$ref" | tr '[:upper:]' '[:lower:]')
+      case "$lowref" in
+        sc-[0-9]*) case "${lowref#sc-}" in *[!0-9]*) die "bad --supersedes ref '$ref': a story is sc-N" ;; esac ;;
+        *[!A-Za-z0-9._#-]* | '' | '#'* | *'#') die "bad --supersedes ref '$ref': use a decided key, sc-N, or <repo>#<N>" ;;
+        *'#'*) case "${ref#*#}" in '' | *[!0-9]*) die "bad --supersedes ref '$ref': a PR is <repo>#<N>" ;; esac ;;
+        *) [ "$ref" != "$key" ] || die "a decision cannot supersede itself"
+           if [ ! -f "$DECIDED" ] || ! grep -qF -- "- [$ref] " "$DECIDED"; then die "--supersedes $ref: no decision with that key in $DECIDED"; fi ;;
+      esac
+    done
+    text="$text (supersedes: $(printf '%s, ' "${supersedes[@]}" | sed 's/, $//'))"
+  elif [ "$no_supersedes" = 0 ] && printf '%s' "$text" | grep -qi 'supersede'; then
+    # A --best-effort caller (the captain-hold answer hook) cannot be asked again, so the
+    # decision is recorded and the gap is named; refusing would lose the captain's answer.
+    if [ "$BEST_EFFORT" = 1 ]; then
+      printf 'fm-decide: warning: [%s] mentions superseding but names nothing; no reversal sweep ran. Re-record the replacement with --supersedes <ref>.\n' "$key" >&2
+    else
+      die "the text mentions superseding, which reacts to nothing as free text; name what it replaces with --supersedes <decided key | sc-N | repo#N> (repeatable), or pass --no-supersedes if it replaces nothing"
+    fi
+  fi
   [ -z "$story" ] || case "${story#sc-}" in "$story" | '' | *[!0-9]*) die "--story takes sc-NNNN" ;; esac
   command -v jq >/dev/null 2>&1 || die "jq is required"
   "$TICKET" --enabled || die "Shortcut ticket sync is off in this home, so a decision cannot be given a story; turn it on (see docs/configuration.md)"
@@ -335,7 +380,10 @@ command_record() {
         if (index(r, q) == 1 && substr(r, length(q) + 1) ~ /^( sc-[0-9]+)?\)$/) same = 1
       }
       END { print same ? "same" : seen ? "other" : "" }' "$DECIDED") in
-      same) return 0 ;;
+      same)
+        release_lock
+        [ "${#supersedes[@]}" -eq 0 ] || run_sweep "$key"
+        return $? ;;
       other) die "a decision with key '$key' is already recorded with different text; use a new key" ;;
     esac
   fi
@@ -346,9 +394,12 @@ command_record() {
   [ -z "$story" ] || stamp="pending $story"
   append_entry "- [$key] ${FM_DECIDE_DATE:-$(date +%F)} $text (shortcut: $stamp)" || die "cannot write $DECIDED"
   release_lock
+  # Foreground, before the detached post: the re-check items exist when record returns.
+  [ "${#supersedes[@]}" -eq 0 ] || run_sweep "$key" || sweep_rc=1
   launch_sync "$key"
   printf 'fm-decide: recorded %s locally; posting to Shortcut in the background\n' "$key"
   guard_warning
+  return "$sweep_rc"
 }
 
 ARGS=()
