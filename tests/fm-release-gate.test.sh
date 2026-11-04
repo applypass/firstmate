@@ -116,6 +116,19 @@ for ref in sc-100 app#7; do
   [ "$RC" -eq 1 ] || fail "supersede $ref: must exit 1: $OUT"
 done
 
+# sc-9018 replay, no re-check item: a reversal stamped on the PR's own story is not
+# the PR's decision; it supersedes the multi-select decision, so the row is not current.
+d=$(make_case sc9018)
+mkpr "$d" 7 "Multi-select alt languages sc-8740 sc-9018" "body" '[]'
+decide "$d" plan-jsp-multi-alt-langs "approved: multi-select (shortcut: sc-8740 u)"
+decide "$d" secondary-language-dropdown-again \
+  "single dropdown (shortcut: sc-8740 u) (supersedes: plan-jsp-multi-alt-langs, sc-8740, apply_pass_frontend#443)"
+run_gate "$d" check
+[ "$RC" -eq 1 ] || fail "sc9018: must exit 1: $OUT"
+case "$OUT" in *"NOT CURRENT: superseded by secondary-language-dropdown-again"*) ;; *) fail "sc9018: reason missing: $OUT" ;; esac
+run_gate "$d" table
+case "$OUT" in *"| plan-jsp-multi-alt-langs |"*) ;; *) fail "sc9018: only the old decision must be listed: $OUT" ;; esac
+
 # re-check items: open fails; all done passes a superseded PR.
 d=$(make_case recheck)
 decide "$d" plan-a "approved: a (shortcut: sc-100 u)"

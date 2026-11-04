@@ -19,11 +19,14 @@
 #   decision  1. its backlog item (the item whose text names the PR url, not followed
 #                by a digit): decided.md
 #                keys plan-<item> and <item>-*;
-#             2. else the decided.md entries stamped with one of the PR's stories;
+#             2. else the decided.md entries stamped with one of the PR's stories,
+#                except an entry whose "(supersedes: ...)" suffix names one of the
+#                PR's stories or another such entry (it stays a superseder);
 #             3. else none
 #   current   yes unless a LATER decided.md entry's "(supersedes: ...)" suffix names
 #             a listed decision key, one of the PR's stories (sc-N), or <repo>#<N>
-#             (and that entry is not itself a listed decision), or an open re-check
+#             (and that entry is not itself a decision from the PR's backlog item),
+#             or an open re-check
 #             item exists. A re-check item has id recheck-*, body line pr=<url>
 #             (not followed by a digit);
 #             with re-check items, the PR is current only when every one is done.
@@ -255,6 +258,21 @@ build_rows() {
           fi
         done
       done <<<"$ENTRIES"
+      after=''
+      while IFS=$'\t' read -r line k text; do
+        case " $decs " in *" $k "*) ;; *) continue ;; esac
+        if [[ "$text" =~ \(supersedes:\ ([^\)]*)\) ]]; then
+          hit=0
+          for ref in ${BASH_REMATCH[1]//,/ }; do
+            ref=$(lower "$ref")
+            for sc in $stories; do [ "$ref" = "$sc" ] && hit=1; done
+            for d in $decs; do [ "$d" != "$k" ] && [ "$ref" = "$(lower "$d")" ] && hit=1; done
+          done
+          [ "$hit" = 1 ] && continue
+        fi
+        after="$after $k"
+      done <<<"$ENTRIES"
+      decs=$after
     fi
     decs=${decs# }
     # superseded by a later entry
