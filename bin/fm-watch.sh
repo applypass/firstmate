@@ -3067,7 +3067,7 @@ fm_wait_tmp_cleanup() {
 # (docs/pi-supervision-branch.md). Stale and heartbeat rows retain their existing
 # eligibility rules.
 signal_files_actionable() {  # <status-file> ...
-  local f task record rest endpoint ident needs_decision rc found=1 quiet_n=0 other_n=0
+  local f task record rest endpoint ident needs_decision rc found=1 quiet_n=0 other_n=0 noise_start
   FM_SIGNAL_SURFACE_ENDPOINTS=''
   FM_SIGNAL_NEEDS_DECISION_FILES=''
   FM_SIGNAL_QUIET_ONLY=0
@@ -3076,12 +3076,15 @@ signal_files_actionable() {  # <status-file> ...
     [ -e "$f" ] || [ -L "$f" ] || continue
     task=$(basename "$f"); task="${task%.status}"
     record=''; needs_decision=0
-    status_span_first_actionable_record "$f" \
-      "$(fm_wake_signal_seen_size "$STATE" "$f")" record needs_decision
+    # Fork-only: a held routine span is read again with the next one (fm-wake-noise-lib.sh).
+    noise_start=$(fm_noise_held_start "$STATE" "$task" "$(fm_wake_signal_seen_size "$STATE" "$f")")
+    status_span_first_actionable_record "$f" "$noise_start" record needs_decision
     rc=$?
     [ "$rc" -eq 1 ] && [ -z "$record" ] && { other_n=$((other_n + 1)); continue; }
-    # Fork-only: a span of only known waits already announced is quiet (fm-wake-noise-lib.sh).
-    if [ "$rc" -eq 0 ] && fm_noise_span_quiet "$STATE" "$task" "${record#*$'\t'*$'\t'}" 2>/dev/null; then
+    # A span of only routine notices is held for the next real wake; a span of only known waits
+    # already announced is quiet. Either way no pane proof is needed to absorb it.
+    if [ "$rc" -eq 0 ] && { fm_noise_span_routine "$STATE" "$task" "${record#*$'\t'*$'\t'}" "$noise_start" \
+      || fm_noise_span_quiet "$STATE" "$task" "${record#*$'\t'*$'\t'}"; } 2>/dev/null; then
       rc=1; needs_decision=0; quiet_n=$((quiet_n + 1))
     else
       other_n=$((other_n + 1))

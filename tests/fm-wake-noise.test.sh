@@ -137,7 +137,44 @@ test_open_problem_wakes_once_and_repeats_are_counted() {
   pass "an open problem wakes once; repeats are counted until it is resolved"
 }
 
+test_routine_notices_are_held_for_the_next_real_wake() {
+  local state="$TMP_ROOT/held" r="done [key=child-outcome-ab12-done] [at=$NOW]: a child finished"
+  mkdir -p "$state"
+  fm_noise_span_routine "$state" m1 "$r" 100 || fail "a lone routine notice is held"
+  [ "$(fm_noise_held_start "$state" m1 250)" = 100 ] || fail "the next span starts where the held one began"
+  fm_noise_span_routine "$state" m1 "$r ; $r" 100 || fail "more routine notices are held too"
+  fm_noise_span_routine "$state" m1 "$r ; done [at=$NOW]: real work finished" 100 && fail "a real event ends the hold"
+  [ "$(fm_noise_held_start "$state" m1 250)" = 250 ] || fail "the hold is cleared once a real event wakes"
+  fm_noise_span_routine "$state" m1 "blocked [at=$NOW]: captain-decision: pick" 100 && fail "a decision is never routine"
+  # A hold ends after its limit, so a lone notice still arrives.
+  FM_NOISE_HOLD_SECS=0 fm_noise_span_routine "$state" m2 "$r" 10 || fail "first sight is held"
+  FM_NOISE_HOLD_SECS=0 fm_noise_span_routine "$state" m2 "$r" 10 && fail "a hold past its limit wakes"
+  pass "routine notices wait for the next real wake, up to the hold limit"
+}
+
+test_watcher_holds_a_routine_notice_then_carries_it() {
+  local home="$TMP_ROOT/watch2" out="$TMP_ROOT/watch2.out" pid i=0
+  mkdir -p "$home/state" "$home/config" "$home/data"
+  : > "$home/state/rtask.meta"
+  printf 'done [key=child-outcome-ab12-done] [at=%s]: a child finished\n' "$NOW" > "$home/state/rtask.status"
+  FM_HOME=$home FM_STATE_OVERRIDE="$home/state" FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 \
+    FM_HEARTBEAT=999999 FM_SECONDMATE_LIVENESS_SECS=99999999 FM_NEVER_WAIT=off bash "$ROOT/bin/fm-watch.sh" > "$out" 2>&1 &
+  pid=$!
+  while [ "$i" -lt 60 ] && kill -0 "$pid" 2>/dev/null; do sleep 0.1; i=$((i + 1)); done
+  kill -0 "$pid" 2>/dev/null || { wait "$pid" 2>/dev/null; fail "a lone routine notice woke the watcher: $(cat "$out")"; }
+  # A real event arrives: the watcher wakes and the wake covers both lines.
+  printf 'done [at=%s]: real work finished\n' "$((NOW + 5))" >> "$home/state/rtask.status"
+  i=0
+  while [ "$i" -lt 150 ] && kill -0 "$pid" 2>/dev/null; do sleep 0.1; i=$((i + 1)); done
+  if kill -0 "$pid" 2>/dev/null; then kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; fail "the real event did not wake the watcher"; fi
+  wait "$pid" 2>/dev/null
+  assert_contains "$(cat "$out")" "signal" "the real event wakes the watcher"
+  pass "the watcher holds a routine notice and wakes on the next real event"
+}
+
 test_known_wait_is_announced_once_then_quiet
+test_watcher_holds_a_routine_notice_then_carries_it
+test_routine_notices_are_held_for_the_next_real_wake
 test_open_problem_wakes_once_and_repeats_are_counted
 test_recent_activity_is_not_a_missed_reply
 test_wait_wakes_again_after_it_ends

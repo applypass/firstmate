@@ -161,3 +161,58 @@ fm_noise_key_resolved_after() {
   done < <(grep -F "[key=$key]" "$f" 2>/dev/null)
   return 1
 }
+
+# Routine notices (step 6). A "done" line for a child outcome (key child-outcome-*) says a piece
+# of delegated work finished and needs no decision. It should not cost a turn by itself, so a span
+# made only of such lines is held: the watcher marks it seen, but remembers where the held span
+# began, and the next span is read from there. It carries the held notices together with whatever
+# real event comes next. A hold ends after FM_NOISE_HOLD_SECS (default 1800) so a lone routine
+# notice still arrives.
+#
+#   fm_noise_held_start <state-dir> <task> <seen-offset>
+#       the offset to read the next span from: where the held span began, else <seen-offset>.
+#   fm_noise_span_routine <state-dir> <task> <events> <span-start-offset>
+#       0 when every event is routine and the oldest held one is younger than the hold limit.
+#       The first held span records its start; a loud span clears the hold.
+fm_noise_event_is_routine() {  # <event>
+  case "$1" in
+    done\ *"[key=child-outcome-"*) return 0 ;;
+  esac
+  return 1
+}
+
+fm_noise_held_start() {  # <state-dir> <task> <seen-offset>
+  local rec="$1/wake-noise/held-$2" first start
+  if [ -f "$rec" ]; then
+    read -r first start < "$rec" || true
+    case "$start" in '' | *[!0-9]*) ;; *) [ "$start" -le "$3" ] && { printf '%s' "$start"; return 0; } ;; esac
+  fi
+  printf '%s' "$3"
+}
+
+fm_noise_span_routine() {  # <state-dir> <task> <events> <span-start-offset>
+  local state=$1 task=$2 events=$3 start=$4 ev rest dir rec first now hold=${FM_NOISE_HOLD_SECS:-1800} seen=0
+  case "$hold" in '' | *[!0-9]*) hold=1800 ;; esac
+  dir="$state/wake-noise"
+  rec="$dir/held-$task"
+  rest=$events
+  while [ -n "$rest" ]; do
+    case "$rest" in
+      *' ; '*) ev=${rest%% ; *}; rest=${rest#* ; } ;;
+      *) ev=$rest; rest='' ;;
+    esac
+    fm_noise_event_is_routine "$ev" || { rm -f "$rec" 2>/dev/null; return 1; }
+    seen=$((seen + 1))
+  done
+  [ "$seen" -gt 0 ] || return 1
+  now=$(date +%s)
+  if [ -f "$rec" ]; then
+    read -r first _ < "$rec" || true
+    case "$first" in '' | *[!0-9]*) first=$now ;; esac
+    if [ $((now - first)) -ge "$hold" ]; then rm -f "$rec" 2>/dev/null; return 1; fi
+  else
+    mkdir -p "$dir" 2>/dev/null || return 1
+    printf '%s %s\n' "$now" "$start" > "$rec" 2>/dev/null || return 1
+  fi
+  return 0
+}

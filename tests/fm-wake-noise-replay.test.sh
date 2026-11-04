@@ -41,13 +41,13 @@ SWEEP_EVERY=1800                 # virtual seconds between sweep and reply-timer
 # Wake count before any fix, and after each step (one commit per step). The
 # replay asserts the latest value, and that every step lowered the one before it.
 # Append the next step's count here when its commit lands.
-COUNTS=(86 86 86 86 85 84)       # # COUNTS[0] = baseline, COUNTS[n] = after step n
+COUNTS=(86 86 86 86 85 84 82)    # # COUNTS[0] = baseline, COUNTS[n] = after step n
 # Never-wait findings (SELF-FIX or ALARM text), counting those read inside an open turn.
 # Steps 1 to 3 remove notices but not turns: on this day each one landed in a turn that
 # another mate's status line had already started, so those steps keep the wake count
 # flat. Steps 1 and 2 are checked by the findings they remove, step 3 by the spans it
 # keeps quiet (ABSORBED). Every later step must lower COUNTS.
-FINDINGS=(11 1 0 0 0 0)
+FINDINGS=(11 1 0 0 0 0 0)
 FLAT_STEPS=" 1 2 3 "
 
 H="$TMP_ROOT/home"
@@ -103,6 +103,7 @@ export FM_PENDING_REPLY_SEND_HOOK="$FAKEBIN/send-hook" FM_PENDING_REPLY_GRACE_SE
 # Library settings the sourced files leave on.
 set +e
 
+HELD=0                           # status spans held for the next real wake
 ABSORBED=0                       # status spans the known-wait cut kept quiet
 WAKES="$TMP_ROOT/wakes.log"      # "<offset>\t<class>\t<text>"
 : > "$WAKES"
@@ -199,11 +200,18 @@ classify_signals() {  # <offset>
     [ "${CLASSIFIED_SIZE[$f]:-}" != "$size" ] || continue
     CLASSIFIED_SIZE[$f]=$size
     start=$(fm_wake_signal_seen_size "$STATE" "$f")
+    # A held routine span is read again with the next one (fm_noise_held_start).
+    ! declare -F fm_noise_held_start >/dev/null || start=$(fm_noise_held_start "$STATE" "$(basename "$f" .status)" "$start")
     record=''; needs=0
     status_span_first_actionable_record "$f" "$start" record needs
     rc=$?
     [ "$rc" -eq 1 ] && [ -z "$record" ] && continue
     endpoint=${record%%$'\t'*}; rest=${record#*$'\t'}; ident=${rest%%$'\t'*}
+    # The watcher's routine-notice hold (signal_files_actionable in bin/fm-watch.sh).
+    if [ "$rc" -eq 0 ] && declare -F fm_noise_span_routine >/dev/null \
+      && fm_noise_span_routine "$STATE" "$(basename "$f" .status)" "${record#*$'\t'*$'\t'}" "$start" 2>/dev/null; then
+      HELD=$((HELD + 1)); rc=1; needs=0
+    fi
     fm_wake_status_seen_commit "$STATE" "$f" "$endpoint" "$ident" || true
     # The watcher's known-wait hook (signal_files_actionable in bin/fm-watch.sh).
     if [ "$rc" -eq 0 ] && declare -F fm_noise_span_quiet >/dev/null && fm_noise_span_quiet "$STATE" "$(basename "$f" .status)" "${record#*$'\t'*$'\t'}" 2>/dev/null; then rc=1; needs=0; ABSORBED=$((ABSORBED + 1)); fi
@@ -343,7 +351,7 @@ TOTAL=$(grep -vc $'\tmerged-' "$WAKES")
 SIGNAL=$(count_class signal)
 NEVER_WAIT=$(count_class never-wait)
 FOUND=$(grep -c 'never-wait' "$WAKES" || true)
-printf '# replay wake count: total=%s (signal=%s never-wait=%s) never-wait findings=%s absorbed=%s\n' "$TOTAL" "$SIGNAL" "$NEVER_WAIT" "$FOUND" "$ABSORBED"
+printf '# replay wake count: total=%s (signal=%s never-wait=%s) never-wait findings=%s absorbed=%s held=%s\n' "$TOTAL" "$SIGNAL" "$NEVER_WAIT" "$FOUND" "$ABSORBED" "$HELD"
 if [ -n "${FM_REPLAY_KEEP:-}" ]; then cp "$WAKES" "$FM_REPLAY_KEEP"; fi
 
 LATEST=$((${#COUNTS[@]} - 1))

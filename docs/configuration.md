@@ -545,6 +545,10 @@ Each wake costs the supervisor one turn, so `bin/fm-wake-noise-lib.sh` holds bac
 - An open problem wakes once.
   A `blocked` or `needs-decision` line with a `[key=...]` opens a problem; the same key stated again for the same task before a `resolved [key=...]` line stays quiet and is counted in `state/wake-noise/problem-*` (announced time, repeat count, key).
   Outcome keys (`branch-outcome-`, `child-outcome-`) are one report each and never coalesce.
+- A routine notice rides the next real wake.
+  A `done` line for a child outcome (key `child-outcome-*`) needs no decision.
+  A span made only of such lines is marked seen but held: `state/wake-noise/held-<task>` records where it began, and the next span is read from there, so the held notices arrive with the next real event.
+  A hold ends after `FM_NOISE_HOLD_SECS` (default 1800) so a lone notice still arrives.
 <!-- Fork-only end -->
 
 ## Backlog backend (.tasks.toml / config/backlog-backend)
