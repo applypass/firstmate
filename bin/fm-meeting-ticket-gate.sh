@@ -17,11 +17,18 @@
 #
 # check: for each marker, pass when data/meeting-<date>-<id>.md or data/standup-<date>.md exists,
 # names the meeting id, has at least one table task row, and every task row carries evidence in
-# a cell after the Task cell (Owner, Where): an sc-NNNN story id, a whole 'not ours' or 'done'
+# a cell after the Task cell (Owner, Where; the Due cell does not count): an sc-NNNN story id, a whole 'not ours' or 'done'
 # cell, or a PR reference (PR 826, BE 825, FE 445 with 3+ digits, or a /pull/N url). A row with
 # 'id pending', 'TBD', or none of those fails. A passing marker is deleted; a failing one blocks the turn
-# end, and the message names the file checked and each failing row. Delete a marker by hand
-# to waive a meeting.
+# end, and the message names the file checked and each failing row.
+#
+# Due column: the table header is '| # | Task | Owner | Due | Where |' (or '| P | Task | Owner | Due | Story |').
+# The Due column is found by its header name. Each task row's Due cell holds a date as YYYY-MM-DD,
+# or exactly 'no deadline - ask at standup' (case-insensitive, surrounding spaces ignored), so a
+# to-do with no timeline is visible and raised at the next standup. A row whose evidence cell is a
+# whole 'not ours' or 'done' needs no due date. A file with task rows but no Due column fails.
+#
+# Delete a marker by hand to waive a meeting.
 #
 # Test seams: FM_HOME, FM_STATE_OVERRIDE, FM_CONFIG_OVERRIDE, FM_DATA_OVERRIDE.
 set -u
@@ -115,40 +122,57 @@ cmd_mark() {
 }
 
 # Prints failing-row descriptions for one mapping file; prints nothing when the file passes.
-# Output lines: "ROW<TAB>text" per failing row, or "NOROWS" when no task row exists.
+# Output lines: "TICKET<TAB>row<TAB>text" (no story/PR evidence), "DUE<TAB>row<TAB>text<TAB>cell"
+# (Due cell is not a YYYY-MM-DD date or the no-deadline flag), "NODUE" (no Due header),
+# or "NOROWS" when no task row exists. Evidence is read from the cells after Task, skipping Due.
 file_failures() {  # <file>
   awk '
     function trim(s) { gsub(/^[ \t]+|[ \t]+$/, "", s); return s }
-    function ok(owner_cells, cells, nc,   low, i, cell) {
-      low = tolower(owner_cells)
-      if (low ~ /id pending|tbd/) return 0
-      if (low ~ /(^|[^a-z0-9])sc-[0-9]+/) return 1
+    function whole(cells, nc,   i, cell) {
       for (i = 1; i <= nc; i++) {
         cell = tolower(trim(cells[i]))
         if (cell == "not ours" || cell == "done") return 1
       }
+      return 0
+    }
+    function ok(owner_cells, cells, nc,   low) {
+      low = tolower(owner_cells)
+      if (low ~ /id pending|tbd/) return 0
+      if (low ~ /(^|[^a-z0-9])sc-[0-9]+/) return 1
+      if (whole(cells, nc)) return 1
       if (owner_cells ~ /(^|[^A-Za-z])(PR|BE|FE) [0-9][0-9][0-9]+/) return 1
       if (owner_cells ~ /\/pull\/[0-9]+/) return 1
       return 0
     }
+    function due_ok(d) {
+      d = tolower(trim(d))
+      return (d ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/ || d == "no deadline - ask at standup")
+    }
     /^[ \t]*\|/ {
       line = $0
       if (line ~ /^[ \t]*\|[ \t:|-]+\|[ \t]*$/) { next }       # separator
-      if (!in_table) { in_table = 1; next }                      # header row
+      if (!in_table) {                                           # header row
+        in_table = 1
+        n = split(line, h, "|")
+        due = 0
+        for (i = 2; i < n; i++) if (tolower(trim(h[i])) == "due") { due = i; break }
+        next
+      }
       n = split(line, c, "|")                                    # c[1] empty, c[2..n-1] cells
       if (n < 5) next
       rows++
       owner = ""
       nc = 0
-      for (i = 4; i < n; i++) { owner = owner " | " c[i]; oc[++nc] = c[i] }
-      if (!ok(owner, oc, nc)) {
-        printf "%s\t%s\n", trim(c[2]), trim(c[3])
-        bad++
-      }
+      for (i = 4; i < n; i++) { if (i == due) continue; owner = owner " | " c[i]; oc[++nc] = c[i] }
+      if (!ok(owner, oc, nc)) printf "TICKET\t%s\t%s\n", trim(c[2]), trim(c[3])
+      if (due && !whole(oc, nc) && !due_ok(c[due])) printf "DUE\t%s\t%s\t%s\n", trim(c[2]), trim(c[3]), trim(c[due])
       next
     }
     { in_table = 0 }
-    END { if (rows == 0) print "NOROWS" }
+    END {
+      if (rows == 0) print "NOROWS"
+      else if (!due) print "NODUE"
+    }
   ' "$1"
 }
 
@@ -175,13 +199,26 @@ check_marker() {  # <marker-file>; sets REPORT, returns 0 pass / 1 fail
     fi
     best=$cand
     if [ "$failures" = NOROWS ]; then
-      REPORT="$cand has no task rows (a '| # | Task | Owner | Where |' table with one row per agreed task)."
+      REPORT="$cand has no task rows (a '| # | Task | Owner | Due | Where |' table with one row per agreed task)."
     else
-      REPORT="$cand has task rows with no ticket or owner:"
-      while IFS=$'\t' read -r row text; do
-        REPORT="$REPORT"$'\n'"  - row $row: $text"
-      done <<< "$failures"
-      REPORT="$REPORT"$'\n'"Each row needs an sc-NNNN story id, a 'not ours' owner, a PR reference, or a 'done' status."
+      REPORT=''
+      if printf '%s\n' "$failures" | grep -qx NODUE; then
+        REPORT="$cand has no Due column (add 'Due' right after 'Owner': '| # | Task | Owner | Due | Where |')."
+      fi
+      if printf '%s\n' "$failures" | grep -q '^TICKET'; then
+        REPORT="${REPORT:+$REPORT$'\n'}$cand has task rows with no ticket or owner:"
+        while IFS=$'\t' read -r kind row text _; do
+          [ "$kind" = TICKET ] && REPORT="$REPORT"$'\n'"  - row $row: $text"
+        done <<< "$failures"
+        REPORT="$REPORT"$'\n'"Each row needs an sc-NNNN story id, a 'not ours' owner, a PR reference, or a 'done' status."
+      fi
+      if printf '%s\n' "$failures" | grep -q '^DUE'; then
+        REPORT="${REPORT:+$REPORT$'\n'}$cand has task rows with no valid due date:"
+        while IFS=$'\t' read -r kind row text cell; do
+          [ "$kind" = DUE ] && REPORT="$REPORT"$'\n'"  - row $row: $text (Due: '${cell:-empty}')"
+        done <<< "$failures"
+        REPORT="$REPORT"$'\n'"Each row's Due cell needs a date as YYYY-MM-DD, or exactly 'no deadline - ask at standup'."
+      fi
     fi
     return 1
   done
