@@ -2796,7 +2796,7 @@ age_of() {  # seconds since file mtime; "due immediately" if missing
 # The caller records reported state only after surfacing or intentional absorption,
 # and commits a status classification position only after a successful span read.
 scan_signals() {
-  local f sig sf exclude
+  local f sig sf exclude t
   # A remote mate's own parent channel is not a self-home task status log; the
   # home-shape-aware exclusion and its precedent live in
   # status_scan_parent_channel_exclude (fm-classify-lib.sh).
@@ -2810,7 +2810,8 @@ scan_signals() {
     [ -n "$sig" ] || continue
     sf=$(fm_wake_signal_seen_path "$STATE" "$f")
     case "$f" in
-      *.status) fm_wake_signal_seen_current "$STATE" "$f" && continue ;;
+      # Fork-only: a routine span held past its limit is read again with no new bytes (fm-wake-noise-lib.sh).
+      *.status) t=${f##*/}; fm_wake_signal_seen_current "$STATE" "$f" && ! fm_noise_held_expired "$STATE" "${t%.status}" && continue ;;
       *) [ "$sig" = "$(cat "$sf" 2>/dev/null)" ] && continue ;;
     esac
     printf '%s\t%s\t%s\n' "$sf" "$sig" "$f"
@@ -3084,7 +3085,7 @@ signal_files_actionable() {  # <status-file> ...
     # A span of only routine notices is held for the next real wake; a span of only known waits
     # already announced is quiet. Either way no pane proof is needed to absorb it.
     if [ "$rc" -eq 0 ] && { fm_noise_span_routine "$STATE" "$task" "${record#*$'\t'*$'\t'}" "$noise_start" \
-      || fm_noise_span_quiet "$STATE" "$task" "${record#*$'\t'*$'\t'}"; } 2>/dev/null; then
+      || fm_noise_span_quiet "$STATE" "$task" "${record#*$'\t'*$'\t'}" "$noise_start"; } 2>/dev/null; then
       rc=1; needs_decision=0; quiet_n=$((quiet_n + 1))
     else
       other_n=$((other_n + 1))

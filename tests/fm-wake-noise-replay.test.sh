@@ -41,7 +41,7 @@ SWEEP_EVERY=1800                 # virtual seconds between sweep and reply-timer
 # Wake count before any fix, and after each step (one commit per step). The
 # replay asserts the latest value, and that every step lowered the one before it.
 # Append the next step's count here when its commit lands.
-COUNTS=(86 86 86 86 85 84 82)    # # COUNTS[0] = baseline, COUNTS[n] = after step n
+COUNTS=(86 86 86 86 85 84 83)    # # COUNTS[0] = baseline, COUNTS[n] = after step n
 # Never-wait findings (SELF-FIX or ALARM text), counting those read inside an open turn.
 # Steps 1 to 3 remove notices but not turns: on this day each one landed in a turn that
 # another mate's status line had already started, so those steps keep the wake count
@@ -197,7 +197,10 @@ classify_signals() {  # <offset>
     [ -f "$f" ] || continue
     # A file with no new bytes has no new span: skip the costly classifier call.
     size=$(wc -c < "$f" | tr -d ' ')
-    [ "${CLASSIFIED_SIZE[$f]:-}" != "$size" ] || continue
+    # A routine span held past its limit is read again with no new bytes (scan_signals in bin/fm-watch.sh).
+    [ "${CLASSIFIED_SIZE[$f]:-}" != "$size" ] \
+      || { declare -F fm_noise_held_expired >/dev/null && fm_noise_held_expired "$STATE" "$(basename "$f" .status)" "$FM_VCLOCK"; } \
+      || continue
     CLASSIFIED_SIZE[$f]=$size
     start=$(fm_wake_signal_seen_size "$STATE" "$f")
     # A held routine span is read again with the next one (fm_noise_held_start).
@@ -214,7 +217,7 @@ classify_signals() {  # <offset>
     fi
     fm_wake_status_seen_commit "$STATE" "$f" "$endpoint" "$ident" || true
     # The watcher's known-wait hook (signal_files_actionable in bin/fm-watch.sh).
-    if [ "$rc" -eq 0 ] && declare -F fm_noise_span_quiet >/dev/null && fm_noise_span_quiet "$STATE" "$(basename "$f" .status)" "${record#*$'\t'*$'\t'}" 2>/dev/null; then rc=1; needs=0; ABSORBED=$((ABSORBED + 1)); fi
+    if [ "$rc" -eq 0 ] && declare -F fm_noise_span_quiet >/dev/null && fm_noise_span_quiet "$STATE" "$(basename "$f" .status)" "${record#*$'\t'*$'\t'}" "$start" 2>/dev/null; then rc=1; needs=0; ABSORBED=$((ABSORBED + 1)); fi
     if [ "$rc" -eq 0 ] || [ "$needs" -eq 1 ]; then
       actionable=1
       files="$files $(basename "$f" .status)"
@@ -309,6 +312,17 @@ run_producers() {  # <offset> <sweep:0|1> <reply:0|1>
   [ -z "${FM_REPLAY_PROFILE:-}" ] || printf 'pass %s sweep=%s reply=%s: reply=%ss nw=%ss cls=%ss\n' "$off" "$2" "$3" $((t1-t0)) $((t2-t1)) $((t3-t2)) >&2
 }
 
+# Does any held routine span pass its hold limit at offset <off>? The watcher polls it then.
+held_due() {  # <offset>
+  local rec
+  declare -F fm_noise_held_expired >/dev/null || return 1
+  for rec in "$STATE"/wake-noise/held-*; do
+    [ -f "$rec" ] || continue
+    fm_noise_held_expired "$STATE" "${rec##*/held-}" "$((DAY0 + $1))" && return 0
+  done
+  return 1
+}
+
 replay() {
   local t=0 off kind mate arg changed sweep reply
   local -a E_OFF=() E_KIND=() E_MATE=() E_ARG=()
@@ -337,7 +351,7 @@ replay() {
     fi
     # A line that ends a block needs one more sweep to close it.
     if [ "$changed" -eq 1 ] && [ "$BLOCK_HOT" -eq 1 ]; then sweep=1; fi
-    if [ "$changed" -eq 1 ] || [ "$sweep" -eq 1 ] || [ "$reply" -eq 1 ]; then
+    if [ "$changed" -eq 1 ] || [ "$sweep" -eq 1 ] || [ "$reply" -eq 1 ] || held_due "$t"; then
       run_producers "$t" "$sweep" "$reply"
     fi
     t=$((t + TICK))

@@ -10,9 +10,10 @@
 # The same wait seen again before that time stays quiet: no wake. The daily quota cap
 # is one wait for the whole fleet; any other wait belongs to its task.
 #
-#   fm_noise_span_quiet <state-dir> <task> <events>
+#   fm_noise_span_quiet <state-dir> <task> <events> <span-start-offset>
 #       0 when every event in the span is a known wait already announced and not yet
-#       over. A wait seen for the first time is recorded here and makes the span loud.
+#       over, or a repeat of an open problem. A wait seen for the first time is
+#       recorded here and makes the span loud.
 #
 # Records live under <state-dir>/wake-noise/. They are plain files holding the clear
 # time as epoch seconds; an expired one is overwritten on the next look.
@@ -55,8 +56,8 @@ fm_noise_known_wait() {
   printf '%s|%s' "$scope" "$epoch"
 }
 
-fm_noise_span_quiet() {  # <state-dir> <task> <events>
-  local state=$1 task=$2 events=$3 dir ev wait scope epoch key rec now quiet=0 seen=0 rest
+fm_noise_span_quiet() {  # <state-dir> <task> <events> <span-start-offset>
+  local state=$1 task=$2 events=$3 start=${4:-0} dir ev wait scope epoch key rec now quiet=0 seen=0 rest open folded=0
   dir="$state/wake-noise"
   now=$(date +%s)
   rest=$events
@@ -68,7 +69,11 @@ fm_noise_span_quiet() {  # <state-dir> <task> <events>
     # Any other event keeps the span loud; a known wait beside it still counts as announced.
     if ! wait=$(fm_noise_known_wait "$task" "$ev"); then
       seen=$((seen + 1))
-      if fm_noise_open_problem_repeat "$state" "$task" "$ev"; then quiet=$((quiet + 1)); fi
+      if [ "$folded" -eq 0 ] && fm_noise_event_key "$ev" >/dev/null; then
+        open=$(fm_noise_open_before "$state/$task.status" "$start") || return 1
+        folded=1
+      fi
+      if [ "$folded" -eq 1 ] && fm_noise_open_problem_repeat "$state" "$task" "$ev" "$open"; then quiet=$((quiet + 1)); fi
       continue
     fi
     scope=${wait%%|*}; epoch=${wait#*|}
@@ -86,12 +91,13 @@ fm_noise_span_quiet() {  # <state-dir> <task> <events>
 }
 
 # Recent activity (step 4). A mate that answered "working" and has done something since is
-# not a missed reply. fm_noise_task_recently_active <state-dir> <task> <now>: 0 when the
-# task's latest sign of life is within FM_NOISE_ACTIVE_SECS (default 1200) of <now>.
+# not a missed reply. fm_noise_task_recently_active <state-dir> <task> <now> [<since>]: 0 when the
+# task's latest sign of life is within FM_NOISE_ACTIVE_SECS (default 1200) of <now> and after <since>.
 # A sign of life is a status line stamped [at=N] or a turn event in the mate home's task ledger.
 fm_noise_task_recently_active() {
-  local state=$1 task=$2 now=$3 window=${FM_NOISE_ACTIVE_SECS:-1200} latest=0 at home f
+  local state=$1 task=$2 now=$3 since=${4:-0} window=${FM_NOISE_ACTIVE_SECS:-1200} latest=0 at home f
   case "$window" in '' | *[!0-9]*) window=1200 ;; esac
+  case "$since" in '' | *[!0-9]*) since=0 ;; esac
   [ -n "$task" ] && [ -n "$now" ] || return 1
   if [ -f "$state/$task.status" ]; then
     # The system's own lines (machine keys, system: notes) are not the mate's activity.
@@ -110,56 +116,53 @@ fm_noise_task_recently_active() {
       done
     fi
   fi
-  [ "$latest" -gt 0 ] && [ $((now - latest)) -le "$window" ] && [ "$latest" -le "$now" ]
+  [ "$latest" -gt "$since" ] && [ $((now - latest)) -le "$window" ] && [ "$latest" -le "$now" ]
 }
 
-# Open problems (step 5). A blocked or needs-decision line with a key opens a problem; the same
-# key stated again while the problem is still open adds nothing, so it stays quiet and is
-# counted instead. A "resolved" line for the key closes the problem, and the next line for the
-# key is a new problem. Outcome keys are one report each and never coalesce.
-# The count of held repeats lives in state/wake-noise/problem-<cksum>, as "<announced-at> <repeats> <key>".
+# Open problems (step 5). A blocked or needs-decision line with a key opens a problem. The shared
+# decision fold (status_open_decisions in bin/fm-classify-lib.sh) owns open and closed: a line is a
+# repeat only when the fold over the status bytes before its span already holds its key open with
+# the same verb and note. Anything that closes the key there (resolved, captain-held, a terminal
+# done/failed) or a new status file makes the next line a new problem, and a changed verb or note
+# is a new fact. Outcome keys are one report each and never coalesce.
+# The count of held repeats lives in state/wake-noise/problem-<cksum>, as "<repeats> <key>".
 fm_noise_event_key() {  # <event>: the [key=...] of a blocked or needs-decision line
-  local ev=$1 verb re='\[key=([^]]+)\]'
-  verb=${ev%%[[:space:]]*}
+  local ev=$1 verb key
+  status_line_verb "$ev" verb
   case "$verb" in blocked | needs-decision) ;; *) return 1 ;; esac
-  [[ "$ev" =~ $re ]] || return 1
-  case "${BASH_REMATCH[1]}" in branch-outcome-* | child-outcome-*) return 1 ;; esac
-  printf '%s' "${BASH_REMATCH[1]}"
+  key=$(_fm_decision_key "$ev" '')
+  case "$key" in '' | branch-outcome-* | child-outcome-*) return 1 ;; esac
+  printf '%s' "$key"
 }
 
-# fm_noise_open_problem_repeat <state-dir> <task> <event>: 0 for a repeat of an open problem
-# (counted, to stay quiet); 1 for a new problem or any other event (recorded as announced).
+fm_noise_open_before() {  # <status-file> <offset>: the shared fold's open set over the bytes before <offset>
+  local f=$1 off=$2 tmp
+  case "$off" in '' | *[!0-9]*) return 0 ;; esac
+  [ -f "$f" ] && [ "$off" -gt 0 ] || return 0
+  tmp=$(mktemp "${TMPDIR:-/tmp}/fm-noise-open.XXXXXX") || return 1
+  head -c "$off" "$f" > "$tmp" 2>/dev/null && status_open_decisions "$tmp" "$(_fm_status_kind "$f")"
+  rm -f "$tmp"
+}
+
+# fm_noise_open_problem_repeat <state-dir> <task> <event> <open-set>: 0 for a repeat of an open
+# problem (counted, to stay quiet); 1 for a new problem or any other event.
 fm_noise_open_problem_repeat() {
-  local state=$1 task=$2 ev=$3 key at rec dir sum announced repeats rest re='\[at=([0-9]+)\]'
+  local state=$1 task=$2 ev=$3 open=$4 key verb note rec dir repeats rest
   key=$(fm_noise_event_key "$ev") || return 1
-  at=0; [[ "$ev" =~ $re ]] && at=${BASH_REMATCH[1]}
+  status_line_verb "$ev" verb
+  note=$(status_line_note "$ev")
   dir="$state/wake-noise"
-  sum=$(printf '%s|%s' "$task" "$key" | cksum | cut -d' ' -f1)
-  rec="$dir/problem-$sum"
-  if [ -f "$rec" ]; then
-    read -r announced repeats rest < "$rec" || true
-    case "$announced$repeats" in *[!0-9]* | '') announced=0; repeats=0 ;; esac
-    # Still open when no resolved line for the key came after the announcement.
-    if ! fm_noise_key_resolved_after "$state/$task.status" "$key" "$announced"; then
-      printf '%s %s %s\n' "$announced" "$((repeats + 1))" "$key" > "$rec" 2>/dev/null || return 1
-      return 0
-    fi
-  fi
+  rec="$dir/problem-$(printf '%s|%s' "$task" "$key" | cksum | cut -d' ' -f1)"
+  case $'\n'"$open"$'\n' in
+    *$'\n'"$key"$'\t'"$verb"$'\t'"$note"$'\n'*) ;;
+    *) rm -f "$rec" 2>/dev/null; return 1 ;;
+  esac
+  repeats=0
+  [ ! -f "$rec" ] || read -r repeats rest < "$rec" || true
+  case "$repeats" in '' | *[!0-9]*) repeats=0 ;; esac
   mkdir -p "$dir" 2>/dev/null || return 1
-  printf '%s 0 %s\n' "$at" "$key" > "$rec" 2>/dev/null || return 1
-  return 1
-}
-
-# fm_noise_key_resolved_after <status-file> <key> <epoch>: 0 when a resolved line for the key is stamped later.
-fm_noise_key_resolved_after() {
-  local f=$1 key=$2 since=$3 line at re='\[at=([0-9]+)\]'
-  [ -f "$f" ] || return 1
-  while IFS= read -r line; do
-    case "$line" in resolved*"[key=$key]"*) ;; *) continue ;; esac
-    at=0; [[ "$line" =~ $re ]] && at=${BASH_REMATCH[1]}
-    [ "$at" -ge "$since" ] && return 0
-  done < <(grep -F "[key=$key]" "$f" 2>/dev/null)
-  return 1
+  printf '%s %s\n' "$((repeats + 1))" "$key" > "$rec" 2>/dev/null || return 1
+  return 0
 }
 
 # Routine notices (step 6). A "done" line for a child outcome (key child-outcome-*) says a piece
@@ -169,6 +172,9 @@ fm_noise_key_resolved_after() {
 # real event comes next. A hold ends after FM_NOISE_HOLD_SECS (default 1800) so a lone routine
 # notice still arrives.
 #
+#   fm_noise_held_expired <state-dir> <task> [<now>]
+#       0 when the task holds a span past the hold limit; the watcher then reads the file
+#       again even with no new bytes, so the held notices arrive on their own.
 #   fm_noise_held_start <state-dir> <task> <seen-offset>
 #       the offset to read the next span from: where the held span began, else <seen-offset>.
 #   fm_noise_span_routine <state-dir> <task> <events> <span-start-offset>
@@ -181,6 +187,16 @@ fm_noise_event_is_routine() {  # <event>
   return 1
 }
 
+fm_noise_held_expired() {  # <state-dir> <task> [<now>]
+  local rec="$1/wake-noise/held-$2" now=${3:-} first hold=${FM_NOISE_HOLD_SECS:-1800}
+  case "$hold" in '' | *[!0-9]*) hold=1800 ;; esac
+  [ -f "$rec" ] || return 1
+  read -r first _ < "$rec" || true
+  case "$first" in '' | *[!0-9]*) return 0 ;; esac
+  [ -n "$now" ] || now=$(date +%s)
+  [ $((now - first)) -ge "$hold" ]
+}
+
 fm_noise_held_start() {  # <state-dir> <task> <seen-offset>
   local rec="$1/wake-noise/held-$2" first start
   if [ -f "$rec" ]; then
@@ -191,8 +207,7 @@ fm_noise_held_start() {  # <state-dir> <task> <seen-offset>
 }
 
 fm_noise_span_routine() {  # <state-dir> <task> <events> <span-start-offset>
-  local state=$1 task=$2 events=$3 start=$4 ev rest dir rec first now hold=${FM_NOISE_HOLD_SECS:-1800} seen=0
-  case "$hold" in '' | *[!0-9]*) hold=1800 ;; esac
+  local state=$1 task=$2 events=$3 start=$4 ev rest dir rec now seen=0
   dir="$state/wake-noise"
   rec="$dir/held-$task"
   rest=$events
@@ -207,9 +222,7 @@ fm_noise_span_routine() {  # <state-dir> <task> <events> <span-start-offset>
   [ "$seen" -gt 0 ] || return 1
   now=$(date +%s)
   if [ -f "$rec" ]; then
-    read -r first _ < "$rec" || true
-    case "$first" in '' | *[!0-9]*) first=$now ;; esac
-    if [ $((now - first)) -ge "$hold" ]; then rm -f "$rec" 2>/dev/null; return 1; fi
+    if fm_noise_held_expired "$state" "$task" "$now"; then rm -f "$rec" 2>/dev/null; return 1; fi
   else
     mkdir -p "$dir" 2>/dev/null || return 1
     printf '%s %s\n' "$now" "$start" > "$rec" 2>/dev/null || return 1

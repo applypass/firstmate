@@ -1115,9 +1115,6 @@ fm_pending_reply_target_is_remote() {  # <state-dir> <task_id>
 # only once the mirror has been read through its end at or after <since-epoch>.
 fm_pending_reply_missing_report_is_evidence() {  # <state-dir> <task_id> <since-epoch>
   local state=$1 task_id=$2 since=$3 caught
-  # Fork-only: a mate with recent activity has not missed its reply (fm-wake-noise-lib.sh).
-  ! fm_noise_task_recently_active "$state" "$task_id" "$(fm_pending_reply_now)" || return 1
-  # Fork-only end
   fm_pending_reply_target_is_remote "$state" "$task_id" || return 0
   case "$since" in ''|*[!0-9]*) return 1 ;; esac
   caught=$(fm_pending_reply_remote_channel_epoch "$state" "$task_id")
@@ -1491,6 +1488,10 @@ _fm_pending_reply_maybe_escalate_locked() {  # <state-dir> <corr_id>
       now=$(fm_pending_reply_now)
       age=$((now - completed))
       [ "$age" -ge "$(fm_pending_reply_ack_secs)" ] || return 1
+      # Fork-only: a mate active since the request arrived has not missed its reply (fm-wake-noise-lib.sh).
+      ! fm_noise_task_recently_active "$state" "$(fm_pending_reply_get "$rec" task_id)" "$now" \
+        "$(fm_pending_reply_get "$rec" delivered_epoch)" || return 1
+      # Fork-only end
       fm_pending_reply_missing_report_is_evidence "$state" \
         "$(fm_pending_reply_get "$rec" task_id)" "$completed" || return 1
       ;;
