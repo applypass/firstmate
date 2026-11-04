@@ -1,0 +1,19 @@
+$ bin/fm-task-ledger.sh show pg-ship-1
+1793779219 intake-start none
+1793779240 planning-done none
+$ bin/fm-spawn.sh pg-ship-1 $LAB/proj --mode local-only --yolo off   # no [plan-pg-ship-1] in decided.md
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.CRg5nv
+plan gate: ship pg-ship-1 has no [plan-pg-ship-1] entry in data/decided.md, so spawn is refused.
+record one of:
+  bin/fm-decide.sh record plan-pg-ship-1 "approved: <captain words approving the plan> <plan link>" --item pg-ship-1
+  bin/fm-decide.sh record plan-pg-ship-1 "small: <why this task is small>" --item pg-ship-1
+  bin/fm-decide.sh record plan-pg-ship-1 "waived: Captain <date>: <words waiving the plan>" --item pg-ship-1
+exit=1
+$ ls data/ state/
+/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.CRg5nv/data:
+backlog.md
+ticket-ledger
+
+/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.CRg5nv/state:
+daily-quota-day-start
+ticket-ledger-open

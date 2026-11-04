@@ -1,0 +1,28 @@
+# no [plan-pg-scout-1] in decided.md:
+0
+$ bin/fm-spawn.sh pg-scout-1 $LAB/proj --scout   (no plan entry)
+error: task pg-scout-1 has no brief at inaccessible data path /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.CRg5nv/data/pg-scout-1/brief.md
+exit=1
+
+$ bin/fm-spawn.sh pg-relaunch-1 $LAB/proj --relaunch --mode local-only --yolo off   (no plan entry, no ledger)
+error: --relaunch reuses the task's recorded delivery mode; --mode cannot override it
+exit=1
+
+$ bin/fm-spawn.sh pg-sm-1 --secondmate   (no plan entry)
+error: no firstmate home supplied or registered for pg-sm-1
+exit=1
+
+# grandfathered ship: queued before the ledger (no ledger file), no plan entry
+pg-scout-1.jsonl
+pg-ship-1.jsonl
+pg-ship-small.jsonl
+pg-ship-waived.jsonl
+ticket-ledger-open
+$ bin/fm-spawn.sh pg-old-1 $LAB/proj --mode local-only --yolo off
+plan gate: ship pg-old-1 has no [plan-pg-old-1] entry in data/decided.md, so spawn is refused.
+record one of:
+  bin/fm-decide.sh record plan-pg-old-1 "approved: <captain words approving the plan> <plan link>" --item pg-old-1
+exit=1
+$ bin/fm-task-ledger.sh show pg-old-1
+1793779614 intake-start none grandfathered: queued before the task ledger
+1793779615 planning-done none grandfathered: queued before the task ledger

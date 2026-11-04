@@ -1,0 +1,3 @@
+$ fm-spawn.sh t2 --relaunch --harness claude   (t2 has no valid plan entry)
+error: --relaunch needs an existing task record; no /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.uMFemg/state/t2.meta
+[exit 1]

@@ -1,0 +1,122 @@
+=== S1: fresh ship t2 with intake+planning recorded but no plan entry -> refused
+
+$ /tmp/fmscr.aOWF/run bin/fm-task-ledger.sh record t2 intake-start
+[exit 0]
+
+$ /tmp/fmscr.aOWF/run bin/fm-task-ledger.sh record t2 planning-done
+[exit 0]
+
+$ /tmp/fmscr.aOWF/run bin/fm-spawn.sh t2 /private/tmp/fmproj.zeNr --mode no-mistakes --yolo off --backend tmux --harness claude
+plan gate: ship t2 has no [plan-t2] entry in data/decided.md, so spawn is refused.
+record one of:
+  bin/fm-decide.sh record plan-t2 "approved: <captain words approving the plan> <plan link>" --item t2
+  bin/fm-decide.sh record plan-t2 "small: <why this task is small>" --item t2
+  bin/fm-decide.sh record plan-t2 "waived: Captain <date>: <words waiving the plan>" --item t2
+[exit 1]
+
+=== S2: fm-decide refuses plan-t2 text without a plan word
+
+$ /tmp/fmscr.aOWF/run bin/fm-decide.sh record plan-t2 Looks good to me --story sc-9212
+fm-decide: a plan-* decision must start with approved:, small: or waived: (the ship plan gate reads it)
+[exit 1]
+
+=== S3: hand-written plan-t2 entry with no plan word (bypassing fm-decide) -> spawn refused
+
+$ /tmp/fmscr.aOWF/run bin/fm-spawn.sh t2 /private/tmp/fmproj.zeNr --mode no-mistakes --yolo off --backend tmux --harness claude
+plan gate: [plan-t2] in data/decided.md starts with none of approved:, small:, waived:, so spawn is refused.
+record one of:
+  bin/fm-decide.sh record plan-t2 "approved: <captain words approving the plan> <plan link>" --item t2
+  bin/fm-decide.sh record plan-t2 "small: <why this task is small>" --item t2
+  bin/fm-decide.sh record plan-t2 "waived: Captain <date>: <words waiving the plan>" --item t2
+[exit 1]
+
+=== S4: a plan for another task / a lookalike key does not count for t3
+
+$ /tmp/fmscr.aOWF/run bin/fm-task-ledger.sh record t3 intake-start
+[exit 0]
+
+$ /tmp/fmscr.aOWF/run bin/fm-task-ledger.sh record t3 planning-done
+[exit 0]
+
+$ /tmp/fmscr.aOWF/run bin/fm-spawn.sh t3 /private/tmp/fmproj.zeNr --mode no-mistakes --yolo off --backend tmux --harness claude
+plan gate: ship t3 has no [plan-t3] entry in data/decided.md, so spawn is refused.
+record one of:
+  bin/fm-decide.sh record plan-t3 "approved: <captain words approving the plan> <plan link>" --item t3
+  bin/fm-decide.sh record plan-t3 "small: <why this task is small>" --item t3
+  bin/fm-decide.sh record plan-t3 "waived: Captain <date>: <words waiving the plan>" --item t3
+[exit 1]
+
+=== S5: approved:, small:, waived: each let the ship spawn past the plan gate (next check is the brief)
+
+$ /tmp/fmscr.aOWF/run bin/fm-task-ledger.sh record t-approved intake-start
+[exit 0]
+
+$ /tmp/fmscr.aOWF/run bin/fm-task-ledger.sh record t-approved planning-done
+[exit 0]
+
+$ /tmp/fmscr.aOWF/run bin/fm-decide.sh record plan-t-approved approved: Captain 2026-11-04 words for approved --story sc-9212
+fm-decide: recorded plan-t-approved locally; posting to Shortcut in the background
+[exit 0]
+
+$ /tmp/fmscr.aOWF/run bin/fm-spawn.sh t-approved /private/tmp/fmproj.zeNr --mode no-mistakes --yolo off --backend tmux --harness claude
+error: task t-approved has no brief at inaccessible data path /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.uMFemg/data/t-approved/brief.md
+[exit 1]
+
+$ /tmp/fmscr.aOWF/run bin/fm-task-ledger.sh record t-small intake-start
+[exit 0]
+
+$ /tmp/fmscr.aOWF/run bin/fm-task-ledger.sh record t-small planning-done
+[exit 0]
+
+$ /tmp/fmscr.aOWF/run bin/fm-decide.sh record plan-t-small small: Captain 2026-11-04 words for small --story sc-9212
+fm-decide: recorded plan-t-small locally; posting to Shortcut in the background
+[exit 0]
+
+$ /tmp/fmscr.aOWF/run bin/fm-spawn.sh t-small /private/tmp/fmproj.zeNr --mode no-mistakes --yolo off --backend tmux --harness claude
+error: task t-small has no brief at inaccessible data path /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.uMFemg/data/t-small/brief.md
+[exit 1]
+
+$ /tmp/fmscr.aOWF/run bin/fm-task-ledger.sh record t-waived intake-start
+[exit 0]
+
+$ /tmp/fmscr.aOWF/run bin/fm-task-ledger.sh record t-waived planning-done
+[exit 0]
+
+$ /tmp/fmscr.aOWF/run bin/fm-decide.sh record plan-t-waived waived: Captain 2026-11-04 words for waived --story sc-9212
+fm-decide: recorded plan-t-waived locally; posting to Shortcut in the background
+[exit 0]
+
+$ /tmp/fmscr.aOWF/run bin/fm-spawn.sh t-waived /private/tmp/fmproj.zeNr --mode no-mistakes --yolo off --backend tmux --harness claude
+error: task t-waived has no brief at inaccessible data path /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.uMFemg/data/t-waived/brief.md
+[exit 1]
+
+=== S6: scout with no plan entry is exempt (passes ledger+plan, reaches brief check)
+
+$ /tmp/fmscr.aOWF/run bin/fm-task-ledger.sh record sc1 intake-start
+[exit 0]
+
+$ /tmp/fmscr.aOWF/run bin/fm-task-ledger.sh record sc1 planning-done
+[exit 0]
+
+$ /tmp/fmscr.aOWF/run bin/fm-spawn.sh sc1 /private/tmp/fmproj.zeNr --scout --backend tmux --harness claude
+error: task sc1 has no brief at inaccessible data path /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.uMFemg/data/sc1/brief.md
+[exit 1]
+
+=== S7: ship still refused for missing ledger events before the plan check
+
+$ /tmp/fmscr.aOWF/run bin/fm-spawn.sh t9 /private/tmp/fmproj.zeNr --mode no-mistakes --yolo off --backend tmux --harness claude
+plan gate: ship t9 has no [plan-t9] entry in data/decided.md, so spawn is refused.
+record one of:
+  bin/fm-decide.sh record plan-t9 "approved: <captain words approving the plan> <plan link>" --item t9
+  bin/fm-decide.sh record plan-t9 "small: <why this task is small>" --item t9
+  bin/fm-decide.sh record plan-t9 "waived: Captain <date>: <words waiving the plan>" --item t9
+[exit 1]
+
+=== decided.md after the run
+- [plan-t1] 2026-11-04 approved: Captain 2026-11-04: build the plan https://example/plan (shortcut: sc-9212 https://app.shortcut.com/applypass/story/9212)
+- [plan-t2] 2026-11-04 Not approved: still open (shortcut: pending)
+- [plan-t3x] 2026-11-04 approved: lookalike key (shortcut: pending)
+- [plan-t2b] 2026-11-04 approved: other task (shortcut: pending)
+- [plan-t-approved] 2026-11-04 approved: Captain 2026-11-04 words for approved (shortcut: sc-9212 https://app.shortcut.com/applypass/story/9212)
+- [plan-t-small] 2026-11-04 small: Captain 2026-11-04 words for small (shortcut: sc-9212 https://app.shortcut.com/applypass/story/9212)
+- [plan-t-waived] 2026-11-04 waived: Captain 2026-11-04 words for waived (shortcut: sc-9212 https://app.shortcut.com/applypass/story/9212)

@@ -1,0 +1,6 @@
+$ bin/fm-spawn.sh pg-relaunch-1 --relaunch   (ship id, no plan entry, no ledger file)
+error: --relaunch needs an existing task record; no /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.CRg5nv/state/pg-relaunch-1.meta
+exit=1
+$ bin/fm-task-ledger.sh show pg-relaunch-1   (empty: the ledger/plan gate never ran)
+
+# The relaunch got past bin/fm-spawn.sh:2040 (the ledger/plan gate) to the meta check at :2291, and the ledger holds no grandfathered rows, so the plan gate never ran for a relaunch. Compare s6: a fresh ship pg-old-1 in the same state is refused by the plan gate.

@@ -1,0 +1,6 @@
+# adversarial: another task plan and a prefix-collision key do not count
+- [plan-pg-ship-10] 2026-11-04 approved: other task (shortcut: sc-1 u)
+- [plan-other] 2026-11-04 approved: other (shortcut: sc-1 u)
+plan gate: ship pg-ship-1 has no [plan-pg-ship-1] entry in data/decided.md, so spawn is refused.
+record one of:
+exit=1

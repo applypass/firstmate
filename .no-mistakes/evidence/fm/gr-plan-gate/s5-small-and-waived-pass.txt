@@ -1,0 +1,28 @@
+## small path
+$ bin/fm-spawn.sh pg-ship-small ... (before plan entry)
+plan gate: ship pg-ship-small has no [plan-pg-ship-small] entry in data/decided.md, so spawn is refused.
+record one of:
+  bin/fm-decide.sh record plan-pg-ship-small "approved: <captain words approving the plan> <plan link>" --item pg-ship-small
+exit=1
+$ bin/fm-decide.sh record plan-pg-ship-small "small: one-line copy fix, posted on the story" --item pg-ship-small
+fm-decide: recorded plan-pg-ship-small locally; posting to Shortcut in the background
+$ bin/fm-spawn.sh pg-ship-small ... (after plan entry)
+error: task pg-ship-small has no brief at inaccessible data path /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.CRg5nv/data/pg-ship-small/brief.md
+exit=1
+
+## waived path
+$ bin/fm-spawn.sh pg-ship-waived ... (before plan entry)
+plan gate: ship pg-ship-waived has no [plan-pg-ship-waived] entry in data/decided.md, so spawn is refused.
+record one of:
+  bin/fm-decide.sh record plan-pg-ship-waived "approved: <captain words approving the plan> <plan link>" --item pg-ship-waived
+exit=1
+$ bin/fm-decide.sh record plan-pg-ship-waived "waived: Captain 2026-11-04: ship without a plan" --item pg-ship-waived
+fm-decide: recorded plan-pg-ship-waived locally; posting to Shortcut in the background
+$ bin/fm-spawn.sh pg-ship-waived ... (after plan entry)
+error: task pg-ship-waived has no brief at inaccessible data path /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.CRg5nv/data/pg-ship-waived/brief.md
+exit=1
+
+$ cat data/decided.md
+- [plan-pg-ship-1] 2026-11-04 approved: Captain 2026-11-04 approved the lab plan https://example/plan (shortcut: sc-7777 https://app.shortcut.com/applypass/story/7777)
+- [plan-pg-ship-small] 2026-11-04 small: one-line copy fix, posted on the story (shortcut: sc-7777 https://app.shortcut.com/applypass/story/7777)
+- [plan-pg-ship-waived] 2026-11-04 waived: Captain 2026-11-04: ship without a plan (shortcut: sc-7777 https://app.shortcut.com/applypass/story/7777)

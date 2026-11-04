@@ -1,0 +1,25 @@
+$ bin/fm-decide.sh record plan-pg-ship-1 "approved: Captain 2026-11-04 approved the lab plan https://example/plan" --item pg-ship-1
+fm-decide: recorded plan-pg-ship-1 locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.CRg5nv/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M6JNSCFEBFGNHW6KBE9M7286/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+exit=0
+$ cat data/decided.md
+- [plan-pg-ship-1] 2026-11-04 approved: Captain 2026-11-04 approved the lab plan https://example/plan (shortcut: sc-7777 https://app.shortcut.com/applypass/story/7777)
+$ bin/fm-spawn.sh pg-ship-1 $LAB/proj --mode local-only --yolo off
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.CRg5nv
+error: task pg-ship-1 has no brief at inaccessible data path /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.CRg5nv/data/pg-ship-1/brief.md
+exit=1
