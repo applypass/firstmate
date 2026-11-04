@@ -180,6 +180,21 @@ fm_noise_open_problem_repeat() {
 #   fm_noise_span_routine <state-dir> <task> <events> <span-start-offset>
 #       0 when every event is routine and the oldest held one is younger than the hold limit.
 #       The first held span records its start; a loud span clears the hold.
+#   fm_noise_span_held_by_captain <state-dir> <task> <status-file> <span-start-offset>
+#       0 when the span holds a captain-held transfer. The classifier reports that only as a
+#       needs-decision marker, never as an event, so no noise cut may absorb such a span; the
+#       span wakes and any hold on the task ends with it.
+fm_noise_span_held_by_captain() {  # <state-dir> <task> <status-file> <span-start-offset>
+  local line start=${4:-0}
+  case "$start" in '' | *[!0-9]*) start=0 ;; esac
+  while IFS= read -r line || [ -n "$line" ]; do
+    status_is_captain_held "$line" || continue
+    rm -f "$1/wake-noise/held-$2" 2>/dev/null
+    return 0
+  done < <(tail -c "+$((start + 1))" "$3" 2>/dev/null)
+  return 1
+}
+
 fm_noise_event_is_routine() {  # <event>
   case "$1" in
     done\ *"[key=child-outcome-"*) return 0 ;;

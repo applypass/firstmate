@@ -3084,7 +3084,8 @@ signal_files_actionable() {  # <status-file> ...
     [ "$rc" -eq 1 ] && [ -z "$record" ] && { other_n=$((other_n + 1)); continue; }
     # A span of only routine notices is held for the next real wake; a span of only known waits
     # already announced is quiet. Either way no pane proof is needed to absorb it.
-    if [ "$rc" -eq 0 ] && { fm_noise_span_routine "$STATE" "$task" "${record#*$'\t'*$'\t'}" "$noise_start" \
+    if [ "$rc" -eq 0 ] && ! fm_noise_span_held_by_captain "$STATE" "$task" "$f" "$noise_start" \
+      && { fm_noise_span_routine "$STATE" "$task" "${record#*$'\t'*$'\t'}" "$noise_start" \
       || fm_noise_span_quiet "$STATE" "$task" "${record#*$'\t'*$'\t'}" "$noise_start"; } 2>/dev/null; then
       rc=1; needs_decision=0; quiet_n=$((quiet_n + 1))
     else

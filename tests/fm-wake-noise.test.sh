@@ -299,6 +299,41 @@ test_watcher_releases_a_held_notice_after_its_limit() {
   pass "a held routine notice arrives on its own once its hold ends"
 }
 
+test_watcher_wakes_on_a_captain_held_transfer_beside_a_held_notice() {
+  local home="$TMP_ROOT/watch4" out="$TMP_ROOT/watch4.out" pid i=0
+  mkdir -p "$home/state" "$home/config" "$home/data"
+  : > "$home/state/ctask.meta"
+  printf 'done [key=child-outcome-ef56-done] [at=%s]: a child finished\n' "$NOW" > "$home/state/ctask.status"
+  FM_HOME=$home FM_STATE_OVERRIDE="$home/state" FM_POLL=1 FM_SIGNAL_GRACE=1 FM_CHECK_INTERVAL=999999 \
+    FM_HEARTBEAT=999999 FM_SECONDMATE_LIVENESS_SECS=99999999 FM_NEVER_WAIT=off \
+    bash "$ROOT/bin/fm-watch.sh" > "$out" 2>&1 &
+  pid=$!
+  while [ "$i" -lt 40 ] && kill -0 "$pid" 2>/dev/null; do sleep 0.1; i=$((i + 1)); done
+  kill -0 "$pid" 2>/dev/null || { wait "$pid" 2>/dev/null; fail "a lone routine notice woke the watcher: $(cat "$out")"; }
+  # The supervisor's decision moves to the captain: that transfer must wake, hold or not.
+  printf 'captain-held [key=merge-ok] [at=%s]: tracked by the captain\n' "$((NOW + 5))" >> "$home/state/ctask.status"
+  i=0
+  while [ "$i" -lt 150 ] && kill -0 "$pid" 2>/dev/null; do sleep 0.1; i=$((i + 1)); done
+  if kill -0 "$pid" 2>/dev/null; then kill "$pid" 2>/dev/null; wait "$pid" 2>/dev/null; fail "a captain-held transfer beside a held notice did not wake"; fi
+  wait "$pid" 2>/dev/null
+  assert_contains "$(cat "$out")" "signal" "the transfer wakes the watcher"
+  [ ! -e "$home/state/wake-noise/held-ctask" ] || fail "the hold ends with the wake that carried it"
+  pass "a captain-held transfer is never absorbed by the routine hold"
+}
+
+test_captain_held_span_is_never_quiet() {
+  local state="$TMP_ROOT/cheld" off ev="blocked [at=$NOW]: external-wait until=$LATER: vendor fix"
+  mkdir -p "$state/wake-noise"
+  : > "$state/m1.status"
+  off=$(append_line "$state/m1.status" "$ev")
+  fm_noise_span_held_by_captain "$state" m1 "$state/m1.status" "$off" && fail "a span with no transfer is not held by the captain"
+  printf '1 0\n' > "$state/wake-noise/held-m1"
+  off=$(append_line "$state/m1.status" "captain-held [key=merge-ok] [at=$NOW]: tracked by the captain")
+  fm_noise_span_held_by_captain "$state" m1 "$state/m1.status" "$off" || fail "a span with a transfer is held by the captain"
+  [ ! -e "$state/wake-noise/held-m1" ] || fail "a transfer ends the routine hold"
+  pass "a span holding a captain-held transfer is never absorbed"
+}
+
 test_known_wait_is_announced_once_then_quiet
 test_watcher_holds_a_routine_notice_then_carries_it
 test_routine_notices_are_held_for_the_next_real_wake
@@ -307,6 +342,8 @@ test_open_problem_closes_where_the_shared_fold_closes_it
 test_open_problem_with_a_new_fact_wakes
 test_recent_activity_only_holds_an_acknowledged_reply
 test_watcher_releases_a_held_notice_after_its_limit
+test_watcher_wakes_on_a_captain_held_transfer_beside_a_held_notice
+test_captain_held_span_is_never_quiet
 test_recent_activity_is_not_a_missed_reply
 test_wait_wakes_again_after_it_ends
 test_daily_cap_is_one_wait_for_the_fleet

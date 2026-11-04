@@ -192,7 +192,7 @@ record_wake() {  # <offset> <class> <text>
 
 # The watcher's status-signal pass: one wake per poll with any actionable span.
 classify_signals() {  # <offset>
-  local off=$1 f size start record needs rc endpoint rest ident actionable=0 files=''
+  local off=$1 f size start record needs rc endpoint rest ident actionable=0 files='' held_by_captain
   for f in "$STATE"/*.status; do
     [ -f "$f" ] || continue
     # A file with no new bytes has no new span: skip the costly classifier call.
@@ -210,14 +210,18 @@ classify_signals() {  # <offset>
     rc=$?
     [ "$rc" -eq 1 ] && [ -z "$record" ] && continue
     endpoint=${record%%$'\t'*}; rest=${record#*$'\t'}; ident=${rest%%$'\t'*}
+    # The watcher never absorbs a span holding a captain-held transfer (fm_noise_span_held_by_captain).
+    held_by_captain=0
+    [ "$rc" -ne 0 ] || ! declare -F fm_noise_span_held_by_captain >/dev/null \
+      || ! fm_noise_span_held_by_captain "$STATE" "$(basename "$f" .status)" "$f" "$start" || held_by_captain=1
     # The watcher's routine-notice hold (signal_files_actionable in bin/fm-watch.sh).
-    if [ "$rc" -eq 0 ] && declare -F fm_noise_span_routine >/dev/null \
+    if [ "$rc" -eq 0 ] && [ "$held_by_captain" -eq 0 ] && declare -F fm_noise_span_routine >/dev/null \
       && fm_noise_span_routine "$STATE" "$(basename "$f" .status)" "${record#*$'\t'*$'\t'}" "$start" 2>/dev/null; then
       HELD=$((HELD + 1)); rc=1; needs=0
     fi
     fm_wake_status_seen_commit "$STATE" "$f" "$endpoint" "$ident" || true
     # The watcher's known-wait hook (signal_files_actionable in bin/fm-watch.sh).
-    if [ "$rc" -eq 0 ] && declare -F fm_noise_span_quiet >/dev/null && fm_noise_span_quiet "$STATE" "$(basename "$f" .status)" "${record#*$'\t'*$'\t'}" "$start" 2>/dev/null; then rc=1; needs=0; ABSORBED=$((ABSORBED + 1)); fi
+    if [ "$rc" -eq 0 ] && [ "$held_by_captain" -eq 0 ] && declare -F fm_noise_span_quiet >/dev/null && fm_noise_span_quiet "$STATE" "$(basename "$f" .status)" "${record#*$'\t'*$'\t'}" "$start" 2>/dev/null; then rc=1; needs=0; ABSORBED=$((ABSORBED + 1)); fi
     if [ "$rc" -eq 0 ] || [ "$needs" -eq 1 ]; then
       actionable=1
       files="$files $(basename "$f" .status)"
