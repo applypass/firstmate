@@ -3403,7 +3403,7 @@ The check passes when `data/meeting-<date>-<id>.md` or `data/standup-<date>.md` 
 A row with `id pending`, `TBD`, or none of those fails; the block message names the file and each failing row.
 The table header is `| # | Task | Owner | Due | Where |` (or `| P | Task | Owner | Due | Story |`), and the check finds the Due column by that header name.
 Each task row's Due cell holds a date as `YYYY-MM-DD`, or exactly `no deadline - ask at standup` (case-insensitive, surrounding spaces ignored); a row whose evidence cell is a whole `not ours` or `done` needs no due date.
-A file with task rows but no Due column fails, and so does a row with an empty, `TBD`, or other Due cell; the message names the row and both accepted forms.
+A table with task rows but no Due column fails, and so does a row with an empty, `TBD`, or other Due cell; the message names the row and both accepted forms.
 The main home's `data/todos.md` register uses the header `| Task | Owner | Due | Story |`, and its Due cell holds `YYYY-MM-DD` or exactly `no deadline - ask at standup`; the gate does not check `data/todos.md`.
 A pass deletes the marker; delete `state/meeting-pending/<id>` by hand to waive a meeting.
 

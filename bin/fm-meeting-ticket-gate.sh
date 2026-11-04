@@ -26,7 +26,7 @@
 # The Due column is found by its header name. Each task row's Due cell holds a date as YYYY-MM-DD,
 # or exactly 'no deadline - ask at standup' (case-insensitive, surrounding spaces ignored), so a
 # to-do with no timeline is visible and raised at the next standup. A row whose evidence cell is a
-# whole 'not ours' or 'done' needs no due date. A file with task rows but no Due column fails.
+# whole 'not ours' or 'done' needs no due date. A table with task rows but no Due column fails.
 # The main home's data/todos.md register uses the header '| Task | Owner | Due | Story |' with the same
 # Due cell: YYYY-MM-DD or exactly 'no deadline - ask at standup'. This gate does not check data/todos.md.
 #
@@ -125,7 +125,7 @@ cmd_mark() {
 
 # Prints failing-row descriptions for one mapping file; prints nothing when the file passes.
 # Output lines: "TICKET<TAB>row<TAB>text" (no story/PR evidence), "DUE<TAB>row<TAB>text<TAB>cell"
-# (Due cell is not a YYYY-MM-DD date or the no-deadline flag), "NODUE" (no Due header),
+# (Due cell is not a YYYY-MM-DD date or the no-deadline flag), "NODUE" (a table with task rows has no Due header),
 # or "NOROWS" when no task row exists. Evidence is read from the cells after Task, skipping Due.
 file_failures() {  # <file>
   awk '
@@ -163,6 +163,7 @@ file_failures() {  # <file>
       n = split(line, c, "|")                                    # c[1] empty, c[2..n-1] cells
       if (n < 5) next
       rows++
+      if (!due) nodue = 1
       owner = ""
       nc = 0
       for (i = 4; i < n; i++) { if (i == due) continue; owner = owner " | " c[i]; oc[++nc] = c[i] }
@@ -173,7 +174,7 @@ file_failures() {  # <file>
     { in_table = 0 }
     END {
       if (rows == 0) print "NOROWS"
-      else if (!due) print "NODUE"
+      else if (nodue) print "NODUE"
     }
   ' "$1"
 }

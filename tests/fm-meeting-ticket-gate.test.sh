@@ -337,6 +337,16 @@ test_missing_due_column_fails() {
   pass "a table with no Due column blocks and names the expected header"
 }
 
+test_earlier_table_without_due_fails() {
+  local h; h=$(new_home twotables)
+  run_mark "$h" "$(payload mcp__krisp__get_multiple_documents "$(transcript_response)")"
+  printf 'Source: Krisp meeting %s\n\n| # | Task | Owner | Where |\n|---|---|---|---|\n| 1 | Coach CSV | eng | sc-9365 |\n\nLater:\n\n| # | Task | Owner | Due | Where |\n|---|---|---|---|---|\n| 2 | Ship it | eng | 2026-11-07 | sc-9109 |\n' "$MID" > "$h/data/standup-$DATE.md"
+  run_check "$h"
+  expect_code 2 "$CHECK_RC" "an earlier table with no Due column blocks"
+  assert_contains "$CHECK_ERR" "no Due column" "says the Due column is missing"
+  pass "an earlier table with no Due column blocks even when a later table has one"
+}
+
 test_not_ours_row_needs_no_due() {
   row_check dueours 's#| 2026-11-07 | sc-9109 |#|  | not ours |#'
   expect_code 0 "$CHECK_RC" "a 'not ours' row with no Due passes: $CHECK_ERR"
@@ -378,5 +388,6 @@ test_due_date_and_flag_pass
 test_empty_due_fails_naming_row
 test_tbd_due_fails
 test_missing_due_column_fails
+test_earlier_table_without_due_fails
 test_not_ours_row_needs_no_due
 test_installer_is_idempotent
