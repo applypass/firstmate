@@ -36,7 +36,7 @@
 # "supersede" without --supersedes is refused (free text reacts to nothing);
 # --no-supersedes allows text such as "does not supersede" (with --best-effort the
 # entry is recorded, a warning names the gap, and one backlog item
-# supersede-unclassified-<key> asks for the --supersedes re-record, so an answer is never lost). A key ref must
+# supersede-unclassified-<key> asks for a new key recorded with --supersedes, so an answer is never lost). A key ref must
 # already be recorded. A sweep failure keeps the entry, says so, and exits 1.
 # --best-effort turns a refusal into a warning, which is how
 # bin/fm-captain-hold.sh answer calls it, keyed <task-id>-<answer occurrence>.
@@ -309,12 +309,12 @@ guard_warning() {
   guard_installed || printf 'fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to %s/.claude/settings.local.json (merge into its "hooks"):\n%s\n' "$FM_HOME" "$(guard_line)" >&2
 }
 
-# flag_unclassified <key>: one backlog item asking for the --supersedes re-record (idempotent).
+# flag_unclassified <key>: one backlog item asking for a new key recorded with --supersedes (idempotent).
 flag_unclassified() {
   local id="supersede-unclassified-$1"
   FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA "$TASKS" show "$id" >/dev/null 2>&1 && return 0
   FM_SHORTCUT_TICKETS=off FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$DATA "$TASKS" add "$id" "Name what [$1] supersedes" \
-    --body "re-record $1 with --supersedes <ref> so the sweep runs" >/dev/null 2>&1 ||
+    --body "record a new key with --supersedes <ref> (it replaces $1) so the sweep runs" >/dev/null 2>&1 ||
     printf 'fm-decide: warning: could not add backlog item %s\n' "$id" >&2
 }
 
@@ -372,7 +372,7 @@ command_record() {
     # A --best-effort caller (the captain-hold answer hook) cannot be asked again, so the
     # decision is recorded and the gap is named; refusing would lose the captain's answer.
     if [ "$BEST_EFFORT" = 1 ]; then
-      printf 'fm-decide: warning: [%s] mentions superseding but names nothing; no reversal sweep ran. Re-record the replacement with --supersedes <ref>.\n' "$key" >&2
+      printf 'fm-decide: warning: [%s] mentions superseding but names nothing; no reversal sweep ran. Record a new key with --supersedes <ref> (it replaces %s) so the sweep runs.\n' "$key" "$key" >&2
       unclassified=1
     else
       die "the text mentions superseding, which reacts to nothing as free text; name what it replaces with --supersedes <decided key | sc-N | repo#N> (repeatable), or pass --no-supersedes if it replaces nothing"

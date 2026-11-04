@@ -338,9 +338,13 @@ test_free_text_supersede_is_refused_without_the_flag() {
   assert_grep '- [dd-11] ' "$dir/home/data/decided.md" "a best-effort answer was dropped"
   out=$(decide "$dir" record dd-11 "Replaces the old way, supersedes it." --best-effort --story sc-6523) || fail "best-effort re-record failed: $out"
   out=$(cd "$dir/code" && FM_HOME="$dir/home" "$ROOT/bin/fm-tasks-axi.sh" show supersede-unclassified-dd-11 --full 2>&1) || fail "no follow-up item for dd-11: $out"
-  assert_contains "$out" "re-record dd-11 with --supersedes <ref> so the sweep runs" "the follow-up item does not say how to fix the gap"
+  assert_contains "$out" "record a new key with --supersedes <ref> (it replaces dd-11) so the sweep runs" "the follow-up item does not say how to fix the gap"
   assert_equals 1 "$(grep -c 'supersede-unclassified-dd-11' "$dir/home/data/backlog.md")" "the follow-up item was duplicated"
   (cd "$dir/code" && FM_HOME="$dir/home" "$ROOT/bin/fm-tasks-axi.sh" show supersede-unclassified-dd-9 >/dev/null 2>&1) && fail "--no-supersedes opened a follow-up item"
+  sweep_stubs "$dir"
+  out=$(decide "$dir" record dd-12 "Replaces the old way." --supersedes dd-9 --story sc-6523) || fail "following the follow-up item was refused: $out"
+  assert_contains "$out" "[dd-12] replaces dd-9" "the sweep did not run for the new key"
+  assert_contains "$out" "rechecks opened=0 existing=0" "the sweep did not finish for the new key"
   pass "text that mentions superseding is refused without --supersedes, --no-supersedes lets it through, and best-effort queues one follow-up"
 }
 
