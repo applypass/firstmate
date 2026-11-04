@@ -6,7 +6,12 @@
 // and pops its full-account "allow CLI access" prompt. Agents must only use the
 // vault-scoped service account, so this policy denies a command whose executed
 // word is `op` unless that same command, or an earlier `export` on the same
-// command line, supplies OP_SERVICE_ACCOUNT_TOKEN. The environment check and the
+// command line, supplies OP_SERVICE_ACCOUNT_TOKEN. A literal non-empty value
+// counts. A command substitution can print nothing, and an empty token falls
+// back to the desktop app, so a substitution counts only as a plain assignment
+// chained with && to a name-only export and then to op:
+// TOKEN=$(helper) && export TOKEN && op ... (the && stops the line when the
+// helper fails; the value is not checked for emptiness). The environment check and the
 // harness transport live in bin/fm-op-pretool-check.sh.
 //
 // The shell tokenizer and command-position analysis come from
@@ -33,7 +38,7 @@ const LOAD_EXAMPLE = `OP_SERVICE_ACCOUNT_TOKEN=$("${LOADER}" "\${FM_HOME:-${FM_R
 
 const REASONS = {
   "op-bare-call":
-    `a bare \`op\` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: ${LOAD_EXAMPLE} (fm-op-service-account-token.sh prints the token from the environment, then the home .env files, and the line stops before op when no token is found). If no token is found, ask for one instead of using the desktop app.`,
+    `a bare \`op\` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow CLI access' prompt. Agents may only use the vault-scoped service account. Load its token in the same command, for example: ${LOAD_EXAMPLE} (fm-op-service-account-token.sh prints the token from the environment, then the home .env files, and the line stops before op when no token is found; keep the && chain, because an export of an empty substitution, or any ; between the steps, lets op fall back to the desktop app). If no token is found, ask for one instead of using the desktop app.`,
 };
 
 const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh"]);
@@ -51,10 +56,15 @@ const PASSTHROUGH = new Map([
 // Shell reserved words that may lead a node without being its command.
 const RESERVED = new Set(["if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "select", "!"]);
 
-// True for a `TOKEN=value` word whose value is non-empty, counting a value that
-// is only a substitution such as "$(cat file)".
+// True for a `TOKEN=value` word with a literal non-empty value. A value with a
+// substitution can be empty, so it never counts here.
 function setsToken(word) {
-  return word.value.startsWith(`${TOKEN}=`) && (word.value.length > TOKEN.length + 1 || word.subs.length > 0);
+  return word.value.startsWith(`${TOKEN}=`) && word.value.length > TOKEN.length + 1 && word.subs.length === 0;
+}
+
+// True for a `TOKEN=value` word whose value holds a substitution.
+function substitutesToken(word) {
+  return word.value.startsWith(`${TOKEN}=`) && word.subs.length > 0;
 }
 
 function base(value) {
@@ -100,13 +110,16 @@ function applyExport(name, args, state) {
   } else return false;
   const named = args.find((word) => word.value === TOKEN || word.value.startsWith(`${TOKEN}=`));
   if (!named) return false;
-  if (named.value !== TOKEN) state.assigned = setsToken(named);
+  if (named.value !== TOKEN) {
+    state.assigned = setsToken(named);
+    state.chained = false;
+  }
   state.loaded = exporting && state.assigned;
   return true;
 }
 
 function fork(state) {
-  return { loaded: state.loaded, assigned: state.assigned };
+  return { loaded: state.loaded, assigned: state.assigned, chained: state.chained };
 }
 
 function stripReserved(node) {
@@ -122,8 +135,16 @@ function violates(command, state, depth) {
   if (depth > MAX_DEPTH) return false;
   const lexed = new Lexer(command).tokenize();
   if (lexed.error) return false;
-  const { nodes } = splitProgram(lexed.tokens);
-  for (const rawNode of nodes) {
+  const { nodes, separators } = splitProgram(lexed.tokens);
+  for (let nodeIndex = 0; nodeIndex < nodes.length; nodeIndex += 1) {
+    const rawNode = nodes[nodeIndex];
+    // A substituted token holds only while every separator since its
+    // assignment is `&&`; any other separator drops it.
+    if (state.chained && nodeIndex > 0 && separators[nodeIndex - 1] !== "&&") {
+      state.chained = false;
+      state.assigned = false;
+      state.loaded = false;
+    }
     for (const token of rawNode) {
       if (token.type === "group" && violates(token.content, fork(state), depth + 1)) return true;
       if (token.type === "word") {
@@ -139,7 +160,8 @@ function violates(command, state, depth) {
     if (position.index === position.words.length) {
       for (const word of position.words) {
         if (!word.value.startsWith(`${TOKEN}=`)) continue;
-        state.assigned = setsToken(word);
+        state.chained = substitutesToken(word);
+        state.assigned = setsToken(word) || state.chained;
         state.loaded = state.loaded && state.assigned;
       }
       continue;
@@ -169,21 +191,21 @@ function violates(command, state, depth) {
       for (let i = 0; i < args.length; i += 1) {
         if (!/^-[A-Za-z]*c[A-Za-z]*$/.test(args[i].value)) continue;
         const payload = args[i + 1];
-        if (payload && payload.subs.length === 0 && violates(payload.value, { loaded, assigned: loaded }, depth + 1)) return true;
+        if (payload && payload.subs.length === 0 && violates(payload.value, { loaded, assigned: loaded, chained: false }, depth + 1)) return true;
         break;
       }
     } else if (name === "eval") {
-      if (args.length > 0 && args.every((arg) => arg.subs.length === 0) && violates(args.map((arg) => arg.value).join(" "), { loaded, assigned: state.assigned }, depth + 1)) return true;
+      if (args.length > 0 && args.every((arg) => arg.subs.length === 0) && violates(args.map((arg) => arg.value).join(" "), { loaded, assigned: state.assigned, chained: state.chained }, depth + 1)) return true;
     }
     for (const payload of position.wrapperPayloads) {
-      if (violates(payload, { loaded, assigned: state.assigned }, depth + 1)) return true;
+      if (violates(payload, { loaded, assigned: state.assigned, chained: state.chained }, depth + 1)) return true;
     }
   }
   return false;
 }
 
 function decision(command) {
-  if (violates(command, { loaded: false, assigned: false }, 0)) return { decision: "deny", code: "op-bare-call", reason: REASONS["op-bare-call"] };
+  if (violates(command, { loaded: false, assigned: false, chained: false }, 0)) return { decision: "deny", code: "op-bare-call", reason: REASONS["op-bare-call"] };
   return { decision: "allow" };
 }
 
