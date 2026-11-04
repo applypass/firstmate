@@ -27,6 +27,8 @@
 # or exactly 'no deadline - ask at standup' (case-insensitive, surrounding spaces ignored), so a
 # to-do with no timeline is visible and raised at the next standup. A row whose evidence cell is a
 # whole 'not ours' or 'done' needs no due date. A file with task rows but no Due column fails.
+# The main home's data/todos.md register uses the header '| Task | Owner | Due | Story |' with the same
+# Due cell: YYYY-MM-DD or exactly 'no deadline - ask at standup'. This gate does not check data/todos.md.
 #
 # Delete a marker by hand to waive a meeting.
 #
