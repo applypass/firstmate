@@ -7,7 +7,8 @@
 # may be zsh, where sourcing the library fails because it locates its siblings
 # through BASH_SOURCE. The shebang pins bash, so the same remedy line works from
 # any shell. Prints the token and exits 0, or prints nothing and exits 1 when no
-# token is found, so `OP_SERVICE_ACCOUNT_TOKEN=$(...) && op ...` stops before op.
+# token is found, so `OP_SERVICE_ACCOUNT_TOKEN=$(...) && export OP_SERVICE_ACCOUNT_TOKEN &&
+# op ...` stops before op.
 #
 # Usage: bin/fm-op-service-account-token.sh <home>
 set -euo pipefail
