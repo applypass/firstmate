@@ -315,6 +315,62 @@ test_captain_hold_reanswer_records_each_occurrence() {
   pass "each answer to a task held more than once is recorded and posted under its own key"
 }
 
+# A gh that finds no PRs and a ticket that only logs: the sweep runs for real, finds nothing.
+sweep_stubs() {  # <case-dir>
+  printf '#!/usr/bin/env bash\necho "[]"\n' > "$1/fakebin/gh-sweep"
+  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "%s/sweep-ticket.log"\n' "$1" > "$1/fakebin/ticket-sweep"
+  chmod +x "$1/fakebin/gh-sweep" "$1/fakebin/ticket-sweep"
+  export FM_SWEEP_GH="$1/fakebin/gh-sweep" FM_SWEEP_TICKET="$1/fakebin/ticket-sweep"
+}
+
+test_free_text_supersede_is_refused_without_the_flag() {
+  local dir out
+  dir=$(make_case supersede-text)
+  out=$(decide "$dir" record dd-9 "This supersedes the 30 Oct pills." --story sc-6523) && fail "free-text supersede was recorded: $out"
+  assert_contains "$out" "--supersedes" "the refusal does not name the flag"
+  [ ! -s "$dir/home/data/decided.md" ] || fail "a refused entry was written"
+  out=$(decide "$dir" record dd-9 "This does not supersede anything." --no-supersedes --story sc-6523) || fail "--no-supersedes was refused: $out"
+  assert_grep '- [dd-9] 2026-10-09 This does not supersede anything. (shortcut: pending sc-6523)' "$dir/home/data/decided.md" "the --no-supersedes entry is not written as given"
+  out=$(decide "$dir" record dd-10 "Replaces dd-9." --supersedes dd-9 --no-supersedes --story sc-6523) && fail "both flags together were accepted"
+  assert_contains "$out" "conflict" "the flag conflict is not named"
+  out=$(decide "$dir" record dd-11 "Replaces the old way, supersedes it." --best-effort --story sc-6523) || fail "best-effort refused: $out"
+  assert_contains "$out" "names nothing; no reversal sweep ran" "the best-effort gap is not named"
+  assert_grep '- [dd-11] ' "$dir/home/data/decided.md" "a best-effort answer was dropped"
+  out=$(decide "$dir" record dd-11 "Replaces the old way, supersedes it." --best-effort --story sc-6523) || fail "best-effort re-record failed: $out"
+  out=$(cd "$dir/code" && FM_HOME="$dir/home" "$ROOT/bin/fm-tasks-axi.sh" show supersede-unclassified-dd-11 --full 2>&1) || fail "no follow-up item for dd-11: $out"
+  assert_contains "$out" "record a new key with --supersedes <ref> (it replaces dd-11) so the sweep runs" "the follow-up item does not say how to fix the gap"
+  assert_equals 1 "$(grep -c 'supersede-unclassified-dd-11' "$dir/home/data/backlog.md")" "the follow-up item was duplicated"
+  (cd "$dir/code" && FM_HOME="$dir/home" "$ROOT/bin/fm-tasks-axi.sh" show supersede-unclassified-dd-9 >/dev/null 2>&1) && fail "--no-supersedes opened a follow-up item"
+  sweep_stubs "$dir"
+  out=$(decide "$dir" record dd-12 "Replaces the old way." --supersedes dd-9 --story sc-6523) || fail "following the follow-up item was refused: $out"
+  assert_contains "$out" "[dd-12] replaces dd-9" "the sweep did not run for the new key"
+  assert_contains "$out" "rechecks opened=0 existing=0" "the sweep did not finish for the new key"
+  pass "text that mentions superseding is refused without --supersedes, --no-supersedes lets it through, and best-effort queues one follow-up"
+}
+
+test_supersedes_writes_the_suffix_and_sweeps_before_the_post() {
+  local dir out
+  dir=$(make_case supersede-suffix)
+  sweep_stubs "$dir"
+  : > "$dir/gate"
+  decide "$dir" record dd-1 "Pills." --story sc-6523 >/dev/null || fail "setup record failed"
+  out=$(FAKE_CURL_GATE="$dir/gate" decide "$dir" record dd-2 "One dropdown." --story sc-6524 --supersedes dd-1 --supersedes sc-8740 --supersedes apply_pass_frontend#443) \
+    || fail "record with --supersedes failed: $out"
+  assert_contains "$out" "[dd-2] replaces dd-1, sc-8740, apply_pass_frontend#443" "the sweep did not run in the foreground"
+  assert_contains "$out" "rechecks opened=0 existing=0" "the sweep summary is missing"
+  assert_grep '- [dd-2] 2026-10-09 One dropdown. (supersedes: dd-1, sc-8740, apply_pass_frontend#443) (shortcut: pending sc-6524)' \
+    "$dir/home/data/decided.md" "the suffix is not written before the stamp in the shared format"
+  rm "$dir/gate"
+  wait_stamped "$dir" dd-2
+  assert_grep 'Captain decision [dd-2]: One dropdown. (supersedes: dd-1, sc-8740, apply_pass_frontend#443)' "$dir/curl.log" "the Shortcut comment lacks the suffix"
+  out=$(decide "$dir" record dd-3 "x." --story sc-6523 --supersedes nosuchkey) && fail "an unknown key ref was accepted"
+  assert_contains "$out" "no decision with that key" "the unknown key is not named"
+  out=$(decide "$dir" record dd-3 "x." --story sc-6523 --supersedes "free text") && fail "a free-text ref was accepted"
+  assert_contains "$out" "bad --supersedes ref" "the bad ref is not named"
+  unset FM_SWEEP_GH FM_SWEEP_TICKET
+  pass "--supersedes writes the shared suffix, runs the sweep before the post, and refuses refs that are not a key, story or PR"
+}
+
 test_record_with_story_posts_then_stamps
 test_post_failure_leaves_the_entry_pending
 test_no_story_files_a_chore_then_posts
@@ -327,3 +383,5 @@ test_second_sync_skips_a_key_another_run_is_posting
 test_captain_hold_answer_calls_fm_decide
 test_captain_hold_reanswer_records_each_occurrence
 test_plan_key_needs_a_plan_word
+test_free_text_supersede_is_refused_without_the_flag
+test_supersedes_writes_the_suffix_and_sweeps_before_the_post
