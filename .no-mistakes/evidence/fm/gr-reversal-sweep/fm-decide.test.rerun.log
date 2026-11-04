@@ -1,0 +1,15 @@
+ok - record writes a pending entry at once; the job posts to the named story and stamps it without touching the story
+ok - a failed post keeps the entry pending and audit lists it
+ok - a decision with no story files an Engineering/Backlog chore and posts there
+ok - replaying a key is a no-op and a changed text under it is refused
+ok - audit lists entries with no story stamp
+ok - a missing guard warns with the line to add
+ok - the guard blocks direct writes to decided.md and allows reads and the sanctioned writer
+ok - record waits out a concurrent writer that holds the lock
+ok - a second sync skips a key another run is posting, so the story gets one comment, and a dead job's lock is taken over
+ok - the captain-hold answer hook records through fm-decide and files a chore for a decision-only item
+ok - each answer to a task held more than once is recorded and posted under its own key
+ok - text that mentions superseding is refused without --supersedes, --no-supersedes lets it through, and best-effort queues one follow-up
+ok - --supersedes writes the shared suffix, runs the sweep before the post, and refuses refs that are not a key, story or PR
+bash tests/fm-decide.test.sh  16.44s user 15.12s system 14% cpu 3:42.87 total
+exit=0

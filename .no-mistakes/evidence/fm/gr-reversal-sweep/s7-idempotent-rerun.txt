@@ -1,0 +1,16 @@
+## S7: rerunning the sweep opens nothing twice and comments nowhere
+$ fm-decision-sweep.sh single-dropdown-pr
+fm-decision-sweep: [single-dropdown-pr] replaces apply_pass_backend#823
+backlog items tied to the old decision:
+  none
+PRs tied to the old decision:
+  https://github.com/applypass/apply_pass_backend/pull/823 (merged 2026-11-01) -> recheck-single-dropdown-pr-apply_pass_backend-823 already open
+  https://github.com/applypass/apply_pass_backend/pull/830 (merged 2026-11-04) -> recheck-single-dropdown-pr-apply_pass_backend-830 already open
+  https://github.com/applypass/apply_pass_backend/pull/831 (open) -> recheck-single-dropdown-pr-apply_pass_backend-831 already open
+  https://github.com/applypass/apply_pass_frontend/pull/443 (merged 2026-11-01) -> recheck-single-dropdown-pr-apply_pass_frontend-443 already open
+  https://github.com/applypass/apply_pass_frontend/pull/448 (merged 2026-11-03) -> recheck-single-dropdown-pr-apply_pass_frontend-448 already open
+  https://github.com/applypass/apply_pass_frontend/pull/451 (merged 2026-11-03) -> recheck-single-dropdown-pr-apply_pass_frontend-451 already open
+rechecks opened=0 existing=6
+exit=0
+Shortcut requests during rerun: 8
+# note: all 8 lines above came from the concurrent S6 run in a second lab home (sweep-design-v2), not from this rerun; the rerun posted no comment

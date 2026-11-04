@@ -1,0 +1,23 @@
+## S4: old decision whose Shortcut post failed (stamp "pending sc-8740") still yields its story
+# Shortcut API down; FM_DECIDE_SYNC_ATTEMPTS=1
+$ fm-decide.sh record multi-pending "Approved: several alternative languages" --story sc-8740
+fm-decide: recorded multi-pending locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.i9Fc3B/.claude/settings.local.json (merge into its "hooks"):
+- [multi-pending] 2026-11-04 Approved: several alternative languages (shortcut: pending sc-8740)
+$ fm-decide.sh record dropdown-from-pending "Back to one dropdown" --supersedes multi-pending
+fm-decision-sweep: [dropdown-from-pending] replaces multi-pending
+backlog items tied to the old decision:
+PRs tied to the old decision:
+rechecks opened=4 existing=0
+fm-decide: recorded dropdown-from-pending locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.i9Fc3B/.claude/settings.local.json (merge into its "hooks"):
+
+# Shortcut comments posted by the sweep:
+"text": "Decision [dropdown-from-pending] replaces multi-pending. Re-check before release: apply_pass_backend#823, apply_pass_frontend#443, apply_pass_frontend#448, apply_pass_frontend#451. Each has a backlog item recheck-dropdown-from-pending-*; close it with evidence that the PR matches the new decision, or link the fix PR.
+POST /api/v3/stories/8740/comments
+POST /api/v3/stories/8740/comments
+$ fm-tasks-axi.sh list | grep recheck-dropdown-from-pending
+recheck-dropdown-from-pending-apply_pass_backend-823
+recheck-dropdown-from-pending-apply_pass_frontend-443
+recheck-dropdown-from-pending-apply_pass_frontend-448
+recheck-dropdown-from-pending-apply_pass_frontend-451

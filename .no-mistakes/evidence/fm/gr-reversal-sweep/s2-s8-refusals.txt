@@ -1,0 +1,29 @@
+## S2: free-text supersede without --supersedes is refused
+$ fm-decide.sh record dropdown-again "One dropdown again; this supersedes the multi-select"
+fm-decide: the text mentions superseding, which reacts to nothing as free text; name what it replaces with --supersedes <decided key | sc-N | repo#N> (repeatable), or pass --no-supersedes if it replaces nothing
+exit=1
+entries for dropdown-again in decided.md: 0
+
+## S8: refs that name nothing real are refused
+$ ... --supersedes no-such-key
+fm-decide: --supersedes no-such-key: no decision with that key in /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.i9Fc3B/data/decided.md
+exit=1
+$ ... --supersedes sc-12ab
+fm-decide: bad --supersedes ref 'sc-12ab': a story is sc-N
+exit=1
+$ ... --supersedes apply_pass_backend#
+fm-decide: bad --supersedes ref 'apply_pass_backend#': use a decided key, sc-N, or <repo>#<N>
+exit=1
+$ ... x4 --supersedes x4
+fm-decide: a decision cannot supersede itself
+exit=1
+$ ... --supersedes multi-select --no-supersedes
+fm-decide: --supersedes and --no-supersedes conflict
+exit=1
+x1-x5 entries written: 0
+
+## S3b: --no-supersedes lets negating text through with no sweep
+$ fm-decide.sh record keep-tabs "This does not supersede multi-select" --no-supersedes
+fm-decide: recorded keep-tabs locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.i9Fc3B/.claude/settings.local.json (merge into its "hooks"):
+exit=

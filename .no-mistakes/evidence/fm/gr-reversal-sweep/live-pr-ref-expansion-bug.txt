@@ -1,0 +1,26 @@
+=== PR ref only: what PR 823 names ===
+{"headRefName":"fm/jsp-multi-alt-langs","title":"Save several alternative programming languages per job search profile (sc-9018, sc-8740)"}
+
+$ fm-decision-sweep.sh dropdown-by-pr --dry-run   # supersedes apply_pass_backend#823
+jq: error (at <stdin>:1): Cannot index array with string "headRefName"
+fm-decision-sweep: [dropdown-by-pr] replaces apply_pass_backend#823
+backlog items tied to the old decision:
+  none
+PRs tied to the old decision:
+  https://github.com/applypass/apply_pass_backend/pull/823 (merged 2026-11-01) -> would open recheck-dropdown-by-pr-apply_pass_backend-823
+rechecks opened=0 existing=0
+exit=0
+
+$ fm-decision-sweep.sh dropdown-by-story --dry-run   # supersedes sc-9018, sc-8740 (the stories PR 823 names)
+fm-decision-sweep: [dropdown-by-story] replaces sc-9018, sc-8740
+backlog items tied to the old decision:
+  none
+PRs tied to the old decision:
+  https://github.com/applypass/apply_pass_backend/pull/823 (merged 2026-11-01) -> would open recheck-dropdown-by-story-apply_pass_backend-823
+  https://github.com/applypass/apply_pass_backend/pull/830 (merged 2026-11-04) -> would open recheck-dropdown-by-story-apply_pass_backend-830
+  https://github.com/applypass/apply_pass_backend/pull/831 (open) -> would open recheck-dropdown-by-story-apply_pass_backend-831
+  https://github.com/applypass/apply_pass_frontend/pull/443 (merged 2026-11-01) -> would open recheck-dropdown-by-story-apply_pass_frontend-443
+  https://github.com/applypass/apply_pass_frontend/pull/448 (merged 2026-11-03) -> would open recheck-dropdown-by-story-apply_pass_frontend-448
+  https://github.com/applypass/apply_pass_frontend/pull/451 (merged 2026-11-03) -> would open recheck-dropdown-by-story-apply_pass_frontend-451
+rechecks opened=0 existing=0
+exit=0

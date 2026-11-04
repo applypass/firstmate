@@ -1,0 +1,35 @@
+## S6: a PR named directly but outside every searched repo list (firstmate#81, base main, firstmate not in projects.md) still gets a re-check
+$ fm-decide.sh record sweep-design-v2 "Gate the release on re-checks" --supersedes firstmate#81
+fm-decision-sweep: [sweep-design-v2] replaces firstmate#81
+backlog items tied to the old decision:
+PRs tied to the old decision:
+rechecks opened=7 existing=0
+fm-decide: recorded sweep-design-v2 locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.N3AR6z/.claude/settings.local.json (merge into its "hooks"):
+
+## S5: an open release PR whose commits cannot be read makes the sweep fail loudly (gh api fault injected)
+$ FM_SWEEP_GH=gh-fault fm-decide.sh record sweep-design-v3 "Gate on re-checks, v3" --supersedes apply_pass_backend#823
+fm-decision-sweep: warning: could not read the commits of release https://github.com/applypass/apply_pass_backend/pull/9999: HTTP 403: API rate limit exceeded (injected)
+fm-decision-sweep: [sweep-design-v3] replaces apply_pass_backend#823
+backlog items tied to the old decision:
+PRs tied to the old decision:
+rechecks opened=6 existing=0
+fm-decide: decision sweep-design-v3 is recorded, but the reversal sweep did not finish; run: /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M6JNNF8QTBJCJH9E6NGP4MJK/bin/fm-decision-sweep.sh sweep-design-v3
+fm-decide: recorded sweep-design-v3 locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.N3AR6z/.claude/settings.local.json (merge into its "hooks"):
+fm-decide exit=1
+$ grep sweep-design data/decided.md
+- [sweep-design-v2] 2026-11-04 Gate the release on re-checks (supersedes: firstmate#81) (shortcut: sc-99006 http://fake/comment)
+- [sweep-design-v3] 2026-11-04 Gate on re-checks, v3 (supersedes: apply_pass_backend#823) (shortcut: pending)
+# S6 re-check items in the backlog (list lines were indented, filtered above):
+recheck-sweep-design-v2-apply_pass_backend-823
+recheck-sweep-design-v2-apply_pass_backend-830
+recheck-sweep-design-v2-apply_pass_backend-831
+recheck-sweep-design-v2-apply_pass_frontend-443
+recheck-sweep-design-v2-apply_pass_frontend-448
+recheck-sweep-design-v2-apply_pass_frontend-451
+recheck-sweep-design-v2-firstmate-81
+$ fm-tasks-axi.sh show recheck-sweep-design-v2-firstmate-81
+  id: recheck-sweep-design-v2-firstmate-81
+  title: Re-check firstmate#81 against sweep-design-v2
+  body: "Reversal re-check: this PR is tied to a decision that [sweep-design-v2] replaces. Confirm it matches the new decision, or link the fix PR, before it ships.\npr=https://github.com/applypass/firstmate/pull/81\nold=firstmate#81\nnew=sweep-design-v2\nstate=open\nClose with: bin/fm-tasks-axi.sh done recheck-sweep-design-v2-firstmate-81 --note \"<evidence>\""

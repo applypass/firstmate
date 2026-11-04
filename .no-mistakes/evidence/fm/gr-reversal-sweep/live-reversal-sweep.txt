@@ -1,0 +1,181 @@
+=== lab home: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.eddMu7 (gh = real, read-only; Shortcut HTTP = fake curl) ===
+--- data/decided.md before ---
+- [secondary-language-multi] 2026-10-31 approved: several alternative languages per profile (shortcut: pending sc-8740)
+
+##### S1: free-text supersede is refused
+
+$ fm-decide.sh record secondary-language-dropdown-again Back to one dropdown; supersedes the multi-select.
+fm-decide: the text mentions superseding, which reacts to nothing as free text; name what it replaces with --supersedes <decided key | sc-N | repo#N> (repeatable), or pass --no-supersedes if it replaces nothing
+exit=1
+--- decided.md after refusal ---
+- [secondary-language-multi] 2026-10-31 approved: several alternative languages per profile (shortcut: pending sc-8740)
+
+##### S2: --supersedes records, sweeps real GitHub, opens re-check per PR
+
+$ fm-decide.sh record secondary-language-dropdown-again Back to one dropdown. --story sc-9018 --supersedes secondary-language-multi --supersedes firstmate#79
+jq: error (at <stdin>:1): Cannot index array with string "headRefName"
+fm-decision-sweep: [secondary-language-dropdown-again] replaces secondary-language-multi, firstmate#79
+backlog items tied to the old decision:
+  jsp-multi-alt-langs (sc-8740(secondary-language-multi))
+PRs tied to the old decision:
+  https://github.com/applypass/apply_pass_backend/pull/823 (merged 2026-11-01) -> opened recheck-secondary-language-dropdown-again-apply_pass_backend-823
+  https://github.com/applypass/apply_pass_frontend/pull/443 (merged 2026-11-01) -> opened recheck-secondary-language-dropdown-again-apply_pass_frontend-443
+  https://github.com/applypass/apply_pass_frontend/pull/448 (merged 2026-11-03) -> opened recheck-secondary-language-dropdown-again-apply_pass_frontend-448
+  https://github.com/applypass/apply_pass_frontend/pull/451 (merged 2026-11-03) -> opened recheck-secondary-language-dropdown-again-apply_pass_frontend-451
+  https://github.com/applypass/firstmate/pull/79 (merged 2026-11-04) -> opened recheck-secondary-language-dropdown-again-firstmate-79
+rechecks opened=5 existing=0
+fm-decide: recorded secondary-language-dropdown-again locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.eddMu7/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M6JNNF8QTBJCJH9E6NGP4MJK/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+exit=0
+--- decided.md after ---
+- [secondary-language-multi] 2026-10-31 approved: several alternative languages per profile (shortcut: pending sc-8740)
+- [secondary-language-dropdown-again] 2026-11-04 Back to one dropdown. (supersedes: secondary-language-multi, firstmate#79) (shortcut: pending sc-9018)
+--- recheck items in backlog ---
+8:- [ ] recheck-secondary-language-dropdown-again-apply_pass_backend-823 - Re-check apply_pass_backend#823 against secondary-language-dropdown-again (kind: recheck) (since 2026-11-04)
+14:  Close with: bin/fm-tasks-axi.sh done recheck-secondary-language-dropdown-again-apply_pass_backend-823 --note "<evidence>"
+16:- [ ] recheck-secondary-language-dropdown-again-apply_pass_frontend-443 - Re-check apply_pass_frontend#443 against secondary-language-dropdown-again (kind: recheck) (since 2026-11-04)
+22:  Close with: bin/fm-tasks-axi.sh done recheck-secondary-language-dropdown-again-apply_pass_frontend-443 --note "<evidence>"
+24:- [ ] recheck-secondary-language-dropdown-again-apply_pass_frontend-448 - Re-check apply_pass_frontend#448 against secondary-language-dropdown-again (kind: recheck) (since 2026-11-04)
+30:  Close with: bin/fm-tasks-axi.sh done recheck-secondary-language-dropdown-again-apply_pass_frontend-448 --note "<evidence>"
+32:- [ ] recheck-secondary-language-dropdown-again-apply_pass_frontend-451 - Re-check apply_pass_frontend#451 against secondary-language-dropdown-again (kind: recheck) (since 2026-11-04)
+38:  Close with: bin/fm-tasks-axi.sh done recheck-secondary-language-dropdown-again-apply_pass_frontend-451 --note "<evidence>"
+40:- [ ] recheck-secondary-language-dropdown-again-firstmate-79 - Re-check firstmate#79 against secondary-language-dropdown-again (kind: recheck) (since 2026-11-04)
+46:  Close with: bin/fm-tasks-axi.sh done recheck-secondary-language-dropdown-again-firstmate-79 --note "<evidence>"
+--- show recheck for backend #823 ---
+task:
+  id: recheck-secondary-language-dropdown-again-apply_pass_backend-823
+  title: Re-check apply_pass_backend#823 against secondary-language-dropdown-again
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: recheck
+  repo: "-"
+  priority: "-"
+  created: 2026-11-04
+  closed: "-"
+  deps: none
+  links: none
+  body: "Reversal re-check: this PR is tied to a decision that [secondary-language-dropdown-again] replaces. Confirm it matches the new decision, or link the fix PR, before it ships.\npr=https://github.com/applypass/apply_pass_backend/pull/823\nold=secondary-language-multi\nnew=secondary-language-dropdown-again\nstate=merged 2026-11-01\nClose with: bin/fm-tasks-axi.sh done recheck-secondary-language-dropdown-again-apply_pass_backend-823 --note \"<evidence>\""
+--- Shortcut comments the sweep sent (stubbed) ---
+comment sc-8740 Decision [secondary-language-dropdown-again] replaces secondary-language-multi, firstmate#79. Re-check before release: apply_pass_backend#823, apply_pass_frontend#443, apply_pass_frontend#448, apply_pass_frontend#451. Each has a backlog item recheck-secondary-language-dropdown-again-*; close it with evidence that the PR matches the new decision, or link the fix PR. --best-effort
+
+##### S3: re-running the sweep opens nothing twice
+
+$ fm-decision-sweep.sh secondary-language-dropdown-again
+jq: error (at <stdin>:1): Cannot index array with string "headRefName"
+fm-decision-sweep: [secondary-language-dropdown-again] replaces secondary-language-multi, firstmate#79
+backlog items tied to the old decision:
+  jsp-multi-alt-langs (sc-8740(secondary-language-multi))
+PRs tied to the old decision:
+  https://github.com/applypass/apply_pass_backend/pull/823 (merged 2026-11-01) -> recheck-secondary-language-dropdown-again-apply_pass_backend-823 already open
+  https://github.com/applypass/apply_pass_frontend/pull/443 (merged 2026-11-01) -> recheck-secondary-language-dropdown-again-apply_pass_frontend-443 already open
+  https://github.com/applypass/apply_pass_frontend/pull/448 (merged 2026-11-03) -> recheck-secondary-language-dropdown-again-apply_pass_frontend-448 already open
+  https://github.com/applypass/apply_pass_frontend/pull/451 (merged 2026-11-03) -> recheck-secondary-language-dropdown-again-apply_pass_frontend-451 already open
+  https://github.com/applypass/firstmate/pull/79 (merged 2026-11-04) -> recheck-secondary-language-dropdown-again-firstmate-79 already open
+rechecks opened=0 existing=5
+exit=0
+--- comments on rerun:        0 ---
+
+##### S4: best-effort free text is kept and queues one follow-up
+
+$ fm-decide.sh record hold-answer-1 Captain: this supersedes the pills. --best-effort --story sc-9018 (twice)
+fm-decide: warning: [hold-answer-1] mentions superseding but names nothing; no reversal sweep ran. Re-record the replacement with --supersedes <ref>.
+fm-decide: recorded hold-answer-1 locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.eddMu7/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M6JNNF8QTBJCJH9E6NGP4MJK/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+exit=0
+fm-decide: warning: [hold-answer-1] mentions superseding but names nothing; no reversal sweep ran. Re-record the replacement with --supersedes <ref>.
+exit=0
+- [hold-answer-1] 2026-11-04 Captain: this supersedes the pills. (shortcut: sc-9018 https://app.shortcut.com/applypass/story/9018)
+follow-up items: 1
+task:
+  id: supersede-unclassified-hold-answer-1
+  title: "Name what [hold-answer-1] supersedes"
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: task
+  repo: "-"
+  priority: "-"
+  created: 2026-11-04
+  closed: "-"
+  deps: none
+  links: none
+  body: re-record hold-answer-1 with --supersedes <ref> so the sweep runs
+
+##### S5: bad refs are refused
+
+$ fm-decide.sh record x-1 x. --story sc-9018 --supersedes nosuchkey
+fm-decide: --supersedes nosuchkey: no decision with that key in /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.eddMu7/data/decided.md
+exit=1
+
+$ fm-decide.sh record x-1 x. --story sc-9018 --supersedes free text
+fm-decide: bad --supersedes ref 'free text': use a decided key, sc-N, or <repo>#<N>
+exit=1
+
+$ fm-decide.sh record x-1 x. --story sc-9018 --supersedes apply_pass_backend#abc
+fm-decide: bad --supersedes ref 'apply_pass_backend#abc': a PR is <repo>#<N>
+exit=1
+
+$ fm-decide.sh record x-1 x. --story sc-9018 --supersedes sc-12x
+fm-decide: bad --supersedes ref 'sc-12x': a story is sc-N
+exit=1
+x-1 entries written: 0
+
+##### S6: closing a re-check with evidence
+help[1]:
+  - Run `tasks-axi ready` to dispatch work unblocked by this
+8:- [ ] recheck-secondary-language-dropdown-again-apply_pass_backend-823 - Re-check apply_pass_backend#823 against secondary-language-dropdown-again (kind: recheck) (since 2026-11-04)
+14:  Close with: bin/fm-tasks-axi.sh done recheck-secondary-language-dropdown-again-apply_pass_backend-823 --note "<evidence>"
+16:- [ ] recheck-secondary-language-dropdown-again-apply_pass_frontend-443 - Re-check apply_pass_frontend#443 against secondary-language-dropdown-again (kind: recheck) (since 2026-11-04)
+22:  Close with: bin/fm-tasks-axi.sh done recheck-secondary-language-dropdown-again-apply_pass_frontend-443 --note "<evidence>"
+24:- [ ] recheck-secondary-language-dropdown-again-apply_pass_frontend-448 - Re-check apply_pass_frontend#448 against secondary-language-dropdown-again (kind: recheck) (since 2026-11-04)
+30:  Close with: bin/fm-tasks-axi.sh done recheck-secondary-language-dropdown-again-apply_pass_frontend-448 --note "<evidence>"
+32:- [ ] recheck-secondary-language-dropdown-again-apply_pass_frontend-451 - Re-check apply_pass_frontend#451 against secondary-language-dropdown-again (kind: recheck) (since 2026-11-04)
+38:  Close with: bin/fm-tasks-axi.sh done recheck-secondary-language-dropdown-again-apply_pass_frontend-451 --note "<evidence>"
+43:- [x] recheck-secondary-language-dropdown-again-firstmate-79 - Re-check firstmate#79 against secondary-language-dropdown-again (kind: recheck) (done 2026-11-04)
+49:  Close with: bin/fm-tasks-axi.sh done recheck-secondary-language-dropdown-again-firstmate-79 --note "<evidence>"
+
+--- Shortcut HTTP calls (fake curl) ---
+POST https://api.app.shortcut.com/api/v3/stories
+POST https://api.app.shortcut.com/api/v3/story-links
+POST https://api.app.shortcut.com/api/v3/stories/9018/comments
+POST https://api.app.shortcut.com/api/v3/stories/9018/comments
+lab removed: yes

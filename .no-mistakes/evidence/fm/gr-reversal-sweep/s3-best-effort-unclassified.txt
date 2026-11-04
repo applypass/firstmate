@@ -1,0 +1,26 @@
+## S3: captain-hold answer (best-effort) with free-text "supersedes" is kept and queues one supersede-unclassified item
+$ fm-tasks-axi.sh add lang-choice "Pick the secondary-language UI" --kind captain
+  - Run `tasks-axi start lang-choice` to move it to in flight
+  - Run `tasks-axi block lang-choice --by <other>` to record a dependency
+$ fm-captain-hold.sh hold lang-choice --reason "captain must choose"
+lang-choice
+$ fm-captain-hold.sh answer lang-choice --decision-file answer.txt   # "Single dropdown; this supersedes the multi-select."
+answered: lang-choice
+fm-decide: warning: [lang-choice-1] mentions superseding but names nothing; no reversal sweep ran. Re-record the replacement with --supersedes <ref>.
+fm-decide: recorded lang-choice-1 locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.i9Fc3B/.claude/settings.local.json (merge into its "hooks"):
+exit=
+$ grep lang-choice data/decided.md
+- [lang-choice-1] 2026-11-04 Single dropdown; this supersedes the multi-select. (shortcut: pending)
+$ fm-tasks-axi.sh show supersede-unclassified-lang-choice-1
+  id: supersede-unclassified-lang-choice-1
+  title: "Name what [lang-choice-1] supersedes"
+  state: queued
+  body: re-record lang-choice-1 with --supersedes <ref> so the sweep runs
+
+# replay the same answer: no second entry, no second item
+answered: lang-choice
+fm-decide: warning: [lang-choice-1] mentions superseding but names nothing; no reversal sweep ran. Re-record the replacement with --supersedes <ref>.
+exit=
+decided.md entries for lang-choice: 1
+backlog items supersede-unclassified-*: 1

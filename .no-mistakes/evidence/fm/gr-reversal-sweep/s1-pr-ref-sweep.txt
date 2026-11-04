@@ -1,0 +1,106 @@
+$ fm-decide.sh record multi-select "Approved: save several alternative languages per profile" --story sc-8740
+fm-decide: recorded multi-select locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.i9Fc3B/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M6JNNF8QTBJCJH9E6NGP4MJK/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+exit=0
+
+$ cat data/decided.md
+- [multi-select] 2026-11-04 Approved: save several alternative languages per profile (shortcut: sc-8740 http://fake/comment)
+
+$ fm-decide.sh record single-dropdown-pr "Back to one secondary-language dropdown" --supersedes apply_pass_backend#823
+fm-decision-sweep: [single-dropdown-pr] replaces apply_pass_backend#823
+backlog items tied to the old decision:
+  none
+PRs tied to the old decision:
+  https://github.com/applypass/apply_pass_backend/pull/823 (merged 2026-11-01) -> opened recheck-single-dropdown-pr-apply_pass_backend-823
+  https://github.com/applypass/apply_pass_backend/pull/830 (merged 2026-11-04) -> opened recheck-single-dropdown-pr-apply_pass_backend-830
+  https://github.com/applypass/apply_pass_backend/pull/831 (open) -> opened recheck-single-dropdown-pr-apply_pass_backend-831
+  https://github.com/applypass/apply_pass_frontend/pull/443 (merged 2026-11-01) -> opened recheck-single-dropdown-pr-apply_pass_frontend-443
+  https://github.com/applypass/apply_pass_frontend/pull/448 (merged 2026-11-03) -> opened recheck-single-dropdown-pr-apply_pass_frontend-448
+  https://github.com/applypass/apply_pass_frontend/pull/451 (merged 2026-11-03) -> opened recheck-single-dropdown-pr-apply_pass_frontend-451
+rechecks opened=6 existing=0
+fm-decide: recorded single-dropdown-pr locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.i9Fc3B/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M6JNNF8QTBJCJH9E6NGP4MJK/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+$LAB/fake/run.sh bin/fm-decide.sh record single-dropdown-pr  --supersedes   3.41s user 2.89s system 3% cpu 3:25.76 total
+exit=0
+$ fm-tasks-axi.sh show recheck-single-dropdown-pr-apply_pass_backend-823
+task:
+  id: recheck-single-dropdown-pr-apply_pass_backend-823
+  title: Re-check apply_pass_backend#823 against single-dropdown-pr
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: recheck
+  repo: "-"
+  priority: "-"
+  created: 2026-11-04
+  closed: "-"
+  deps: none
+  links: none
+  body: "Reversal re-check: this PR is tied to a decision that [single-dropdown-pr] replaces. Confirm it matches the new decision, or link the fix PR, before it ships.\npr=https://github.com/applypass/apply_pass_backend/pull/823\nold=apply_pass_backend#823\nnew=single-dropdown-pr\nstate=merged 2026-11-01\nClose with: bin/fm-tasks-axi.sh done recheck-single-dropdown-pr-apply_pass_backend-823 --note \"<evidence>\""
+
+# fake Shortcut API request log
+GET /api/v3/stories/5 
+POST /api/v3/stories/8740/comments {
+  "text": "Captain decision [multi-select]: Approved: save several alternative languages per profile"
+}
+
+POST /api/v3/stories/8740/comments {
+  "text": "Decision [single-dropdown-pr] replaces apply_pass_backend#823. Re-check before release: apply_pass_backend#823, apply_pass_frontend#443, apply_pass_frontend#448, apply_pass_frontend#451. Each has a backlog item recheck-single-dropdown-pr-*; close it with evidence that the PR matches the new decision, or link the fix PR."
+}
+
+POST /api/v3/stories/9018/comments {
+  "text": "Decision [single-dropdown-pr] replaces apply_pass_backend#823. Re-check before release: apply_pass_backend#823, apply_pass_backend#830, apply_pass_backend#831, apply_pass_frontend#443. Each has a backlog item recheck-single-dropdown-pr-*; close it with evidence that the PR matches the new decision, or link the fix PR."
+}
+
+POST /api/v3/stories {
+  "name": "Decision: single-dropdown-pr",
+  "description": "Captain decision single-dropdown-pr: Back to one secondary-language dropdown (supersedes: apply_pass_backend#823)",
+  "story_type": "chore",
+  "group_id": "649562cb-7f18-471f-835f-7ed28a5abf0a",
+  "workflow_state_id": 500000006,
+  "owner_ids": [
+    "fake-owner"
+  ]
+}
+
+POST /api/v3/stories/99003/comments {
+  "text": "Captain decision [single-dropdown-pr]: Back to one secondary-language dropdown (supersedes: apply_pass_backend#823)"
+}
+
+$ cat data/decided.md
+- [multi-select] 2026-11-04 Approved: save several alternative languages per profile (shortcut: sc-8740 http://fake/comment)
+- [single-dropdown-pr] 2026-11-04 Back to one secondary-language dropdown (supersedes: apply_pass_backend#823) (shortcut: sc-99003 http://fake/comment)
