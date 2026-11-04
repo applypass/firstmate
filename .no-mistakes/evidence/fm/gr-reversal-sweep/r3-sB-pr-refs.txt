@@ -1,0 +1,54 @@
+=== lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.NWCRkn (commit 2d1af873; gh = real GitHub, read-only; Shortcut HTTP = fake curl) ===
+##### B1: only a PR ref - backend #823 expands to the stories it names (sc-9018, sc-8740)
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M6JNNF8QTBJCJH9E6NGP4MJK/bin/fm-decide.sh record single-dropdown-pr Back to one secondary-language dropdown. --supersedes apply_pass_backend#823
+fm-decision-sweep: [single-dropdown-pr] replaces apply_pass_backend#823
+backlog items tied to the old decision:
+  none
+PRs tied to the old decision:
+  https://github.com/applypass/apply_pass_backend/pull/823 (merged 2026-11-01) -> opened recheck-single-dropdown-pr-apply_pass_backend-823
+  https://github.com/applypass/apply_pass_backend/pull/830 (merged 2026-11-04, in release https://github.com/applypass/apply_pass_backend/pull/833) -> opened recheck-single-dropdown-pr-apply_pass_backend-830
+  https://github.com/applypass/apply_pass_backend/pull/831 (merged 2026-11-04, in release https://github.com/applypass/apply_pass_backend/pull/833) -> opened recheck-single-dropdown-pr-apply_pass_backend-831
+  https://github.com/applypass/apply_pass_frontend/pull/443 (merged 2026-11-01) -> opened recheck-single-dropdown-pr-apply_pass_frontend-443
+  https://github.com/applypass/apply_pass_frontend/pull/448 (merged 2026-11-03) -> opened recheck-single-dropdown-pr-apply_pass_frontend-448
+  https://github.com/applypass/apply_pass_frontend/pull/451 (merged 2026-11-03) -> opened recheck-single-dropdown-pr-apply_pass_frontend-451
+rechecks opened=6 existing=0
+fm-decide: recorded single-dropdown-pr locally; posting to Shortcut in the background
+exit=0
+##### B2: PR refs outside the searched repos / outside the window still get a re-check
+(firstmate is not in data/projects.md; backend #652 merged 2026-09-29, before the 30-day window)
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M6JNNF8QTBJCJH9E6NGP4MJK/bin/fm-decide.sh record named-prs Rework the reversal sweep design. --supersedes firstmate#81 --supersedes apply_pass_backend#652
+fm-decision-sweep: [named-prs] replaces firstmate#81, apply_pass_backend#652
+backlog items tied to the old decision:
+  none
+PRs tied to the old decision:
+  https://github.com/applypass/apply_pass_backend/pull/652 (merged 2026-09-29) -> opened recheck-named-prs-apply_pass_backend-652
+  https://github.com/applypass/apply_pass_backend/pull/823 (merged 2026-11-01) -> opened recheck-named-prs-apply_pass_backend-823
+  https://github.com/applypass/apply_pass_backend/pull/830 (merged 2026-11-04, in release https://github.com/applypass/apply_pass_backend/pull/833) -> opened recheck-named-prs-apply_pass_backend-830
+  https://github.com/applypass/apply_pass_backend/pull/831 (merged 2026-11-04, in release https://github.com/applypass/apply_pass_backend/pull/833) -> opened recheck-named-prs-apply_pass_backend-831
+  https://github.com/applypass/apply_pass_frontend/pull/443 (merged 2026-11-01) -> opened recheck-named-prs-apply_pass_frontend-443
+  https://github.com/applypass/apply_pass_frontend/pull/448 (merged 2026-11-03) -> opened recheck-named-prs-apply_pass_frontend-448
+  https://github.com/applypass/apply_pass_frontend/pull/451 (merged 2026-11-03) -> opened recheck-named-prs-apply_pass_frontend-451
+  https://github.com/applypass/firstmate/pull/81 (open) -> opened recheck-named-prs-firstmate-81
+rechecks opened=8 existing=0
+fm-decide: recorded named-prs locally; posting to Shortcut in the background
+exit=0
+--- recheck items:
+- [ ] recheck-single-dropdown-pr-apply_pass_backend-823 - Re-check apply_pass_backend#823 against single-dropdown-pr (kind: recheck) (since 2026-11-04)
+- [ ] recheck-single-dropdown-pr-apply_pass_backend-830 - Re-check apply_pass_backend#830 against single-dropdown-pr (kind: recheck) (since 2026-11-04)
+- [ ] recheck-single-dropdown-pr-apply_pass_backend-831 - Re-check apply_pass_backend#831 against single-dropdown-pr (kind: recheck) (since 2026-11-04)
+- [ ] recheck-single-dropdown-pr-apply_pass_frontend-443 - Re-check apply_pass_frontend#443 against single-dropdown-pr (kind: recheck) (since 2026-11-04)
+- [ ] recheck-single-dropdown-pr-apply_pass_frontend-448 - Re-check apply_pass_frontend#448 against single-dropdown-pr (kind: recheck) (since 2026-11-04)
+- [ ] recheck-single-dropdown-pr-apply_pass_frontend-451 - Re-check apply_pass_frontend#451 against single-dropdown-pr (kind: recheck) (since 2026-11-04)
+- [ ] recheck-named-prs-apply_pass_backend-652 - Re-check apply_pass_backend#652 against named-prs (kind: recheck) (since 2026-11-04)
+- [ ] recheck-named-prs-apply_pass_backend-823 - Re-check apply_pass_backend#823 against named-prs (kind: recheck) (since 2026-11-04)
+- [ ] recheck-named-prs-apply_pass_backend-830 - Re-check apply_pass_backend#830 against named-prs (kind: recheck) (since 2026-11-04)
+- [ ] recheck-named-prs-apply_pass_backend-831 - Re-check apply_pass_backend#831 against named-prs (kind: recheck) (since 2026-11-04)
+- [ ] recheck-named-prs-apply_pass_frontend-443 - Re-check apply_pass_frontend#443 against named-prs (kind: recheck) (since 2026-11-04)
+- [ ] recheck-named-prs-apply_pass_frontend-448 - Re-check apply_pass_frontend#448 against named-prs (kind: recheck) (since 2026-11-04)
+- [ ] recheck-named-prs-apply_pass_frontend-451 - Re-check apply_pass_frontend#451 against named-prs (kind: recheck) (since 2026-11-04)
+- [ ] recheck-named-prs-firstmate-81 - Re-check firstmate#81 against named-prs (kind: recheck) (since 2026-11-04)
+
+=== teardown ===
+removed /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.NWCRkn

@@ -1,0 +1,44 @@
+=== lab home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.P4PCkE (commit 2d1af873; gh = real GitHub, read-only; Shortcut HTTP = fake curl) ===
+##### D1: captain answers a hold (best-effort path) with free-text 'supersedes'
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M6JNNF8QTBJCJH9E6NGP4MJK/bin/fm-captain-hold.sh hold lang-choice --reason captain must choose
+lang-choice
+exit=0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M6JNNF8QTBJCJH9E6NGP4MJK/bin/fm-captain-hold.sh answer lang-choice --decision-file /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.P4PCkE/answer.txt
+answered: lang-choice
+fm-decide: warning: [lang-choice-1] mentions superseding but names nothing; no reversal sweep ran. Record a new key with --supersedes <ref> (it replaces lang-choice-1) so the sweep runs.
+fm-decide: recorded lang-choice-1 locally; posting to Shortcut in the background
+exit=0
+--- decided.md:
+- [secondary-language-multi] 2026-10-31 approved: several alternative languages per profile (shortcut: pending sc-8740)
+- [lang-choice-1] 2026-11-04 Single dropdown; this supersedes the multi-select. (shortcut: pending)
+--- the follow-up backlog item:
+  id: supersede-unclassified-lang-choice-1
+  title: "Name what [lang-choice-1] supersedes"
+  state: queued
+  body: record a new key with --supersedes <ref> (it replaces lang-choice-1) so the sweep runs
+##### D2: follow the note - record a new key with --supersedes (it replaces lang-choice-1)
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M6JNNF8QTBJCJH9E6NGP4MJK/bin/fm-decide.sh record lang-choice-dropdown Single dropdown (replaces lang-choice-1). --supersedes secondary-language-multi --supersedes lang-choice-1
+fm-decision-sweep: [lang-choice-dropdown] replaces secondary-language-multi, lang-choice-1
+backlog items tied to the old decision:
+  supersede-unclassified-lang-choice-1 (lang-choice-1)
+PRs tied to the old decision:
+  https://github.com/applypass/apply_pass_backend/pull/823 (merged 2026-11-01) -> opened recheck-lang-choice-dropdown-apply_pass_backend-823
+  https://github.com/applypass/apply_pass_frontend/pull/443 (merged 2026-11-01) -> opened recheck-lang-choice-dropdown-apply_pass_frontend-443
+  https://github.com/applypass/apply_pass_frontend/pull/448 (merged 2026-11-03) -> opened recheck-lang-choice-dropdown-apply_pass_frontend-448
+  https://github.com/applypass/apply_pass_frontend/pull/451 (merged 2026-11-03) -> opened recheck-lang-choice-dropdown-apply_pass_frontend-451
+rechecks opened=4 existing=0
+fm-decide: recorded lang-choice-dropdown locally; posting to Shortcut in the background
+exit=0
+--- recheck items:
+4
+##### D3: the refused path the old note pointed at - re-recording lang-choice-1 itself
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M6JNNF8QTBJCJH9E6NGP4MJK/bin/fm-decide.sh record lang-choice-1 Single dropdown; this supersedes the multi-select. --supersedes secondary-language-multi
+fm-decide: a decision with key 'lang-choice-1' is already recorded with different text; use a new key
+exit=1
+
+=== teardown ===
+removed /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.P4PCkE

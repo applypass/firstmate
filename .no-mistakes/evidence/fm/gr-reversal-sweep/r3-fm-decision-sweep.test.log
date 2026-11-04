@@ -1,0 +1,12 @@
+ok - key, story and PR refs find the item and the PRs, and each PR gets one re-check item
+ok - running the sweep again opens and comments nothing new
+ok - repos of registered projects are searched next to the backend and web app
+ok - a missing suffix, an unknown key and an unreadable repo are reported, not swept silently
+ok - an old decision whose story post is still pending gives its story to the sweep
+ok - a release PR whose commits cannot be read fails the sweep instead of dropping its PRs
+ok - a PR named as a ref gets a re-check even when no searched PR list holds it
+ok - a PR named as the only ref expands to the stories in its title, body and branch
+ok - an item's story and pr= link past the list's 500-char cut are found
+ok - a PR linked from a done item must be open, recent or in an open release
+ok - --dry-run lists and opens nothing
+exit=0
