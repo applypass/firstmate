@@ -448,7 +448,86 @@ M
   pass "an own green PR merged to dev under standing authority records captain-approval"
 }
 
+# plan_home <name> [entry lines...]: a home dir, optionally holding plan entries.
+plan_home() {
+  local h="$TMP_ROOT/plan-$1"
+  mkdir -p "$h/data" "$h/state"
+  shift
+  [ "$#" -eq 0 ] || printf '%s\n' "$@" > "$h/data/decided.md"
+  printf '%s' "$h"
+}
+
+# plan_require <home> <id> [kind]: file and plan a task, then run require spawn for that kind.
+plan_require() {
+  local h=$1 id=$2 kind=${3:-ship}
+  FM_HOME=$h "$LEDGER" record "$id" intake-start --at 1 --once
+  FM_HOME=$h "$LEDGER" record "$id" planning-done --at 2 --once --note "${PLAN_NOTE:-planned}"
+  FM_HOME=$h FM_SPAWN_KIND=$kind "$LEDGER" require spawn "$id" 2>&1
+}
+
+test_plan_gate_refuses_a_ship_with_no_plan() {
+  local h out rc
+  h=$(plan_home none)
+  out=$(plan_require "$h" s1); rc=$?
+  expect_code 1 "$rc" "a ship with no plan entry is refused"
+  assert_contains "$out" "no [plan-s1] entry" "names the missing key"
+  assert_contains "$out" 'bin/fm-decide.sh record plan-s1 "approved:' "prints the approved command"
+  assert_contains "$out" 'bin/fm-decide.sh record plan-s1 "small:' "prints the small command"
+  assert_contains "$out" 'bin/fm-decide.sh record plan-s1 "waived:' "prints the waived command"
+  pass "the plan gate refuses a ship spawn with no plan entry and names the three commands"
+}
+
+test_plan_gate_accepts_each_plan_word() {
+  local word h out rc
+  for word in approved small waived; do
+    h=$(plan_home "w-$word" "- [plan-s2] 2026-11-04 $word: because (shortcut: sc-1 u)")
+    out=$(plan_require "$h" s2); rc=$?
+    expect_code 0 "$rc" "$word: passes: $out"
+  done
+  h=$(plan_home bad "- [plan-s2] 2026-11-04 looks good (shortcut: sc-1 u)")
+  out=$(plan_require "$h" s2); rc=$?
+  expect_code 1 "$rc" "an entry with no plan word is refused"
+  assert_contains "$out" "starts with none of approved:, small:, waived:" "says why"
+  pass "approved:, small: and waived: each pass; other text is refused"
+}
+
+test_plan_gate_exempts_scouts_and_the_off_switch() {
+  local h out rc
+  h=$(plan_home scout)
+  out=$(plan_require "$h" s3 scout); rc=$?
+  expect_code 0 "$rc" "a scout needs no plan: $out"
+  out=$(plan_require "$h" s3 secondmate); rc=$?
+  expect_code 0 "$rc" "a second mate needs no plan: $out"
+  FM_HOME=$h FM_SPAWN_KIND=ship FM_TASK_LEDGER=off "$LEDGER" require spawn s3 >/dev/null 2>&1 || fail "FM_TASK_LEDGER=off must skip the plan gate"
+  pass "scouts, second mates and FM_TASK_LEDGER=off need no plan entry"
+}
+
+test_plan_gate_follows_a_shared_plan_key() {
+  local h out rc
+  h=$(plan_home shared "- [plan-umbrella] 2026-11-04 approved: ok (shortcut: sc-1 u)")
+  out=$(PLAN_NOTE="plan=plan-umbrella" plan_require "$h" s4); rc=$?
+  expect_code 0 "$rc" "a shared plan=<key> passes: $out"
+  out=$(PLAN_NOTE="plan=plan-missing" plan_require "$h" s5); rc=$?
+  expect_code 1 "$rc" "a named key that is absent is refused"
+  assert_contains "$out" "no [plan-missing] entry" "names the absent shared key"
+  pass "a planning-done note naming plan=<key> uses that key, and an absent key is refused"
+}
+
+test_plan_gate_does_not_grandfather_the_plan() {
+  local h out rc
+  h=$(plan_home grand)
+  out=$(FM_HOME=$h FM_SPAWN_KIND=ship "$LEDGER" require spawn old2 2>&1); rc=$?
+  expect_code 1 "$rc" "a ship queued before the ledger still needs a plan"
+  assert_contains "$(FM_HOME=$h "$LEDGER" show old2)" "grandfathered" "events are still grandfathered"
+  pass "grandfathering covers the ledger events, not the plan entry"
+}
+
 fm_test_run \
+  test_plan_gate_refuses_a_ship_with_no_plan \
+  test_plan_gate_accepts_each_plan_word \
+  test_plan_gate_exempts_scouts_and_the_off_switch \
+  test_plan_gate_follows_a_shared_plan_key \
+  test_plan_gate_does_not_grandfather_the_plan \
   test_record_appends_json_lines \
   test_record_rejects_unknown_event \
   test_record_defaults_time_to_now \

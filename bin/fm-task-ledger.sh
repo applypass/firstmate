@@ -30,6 +30,14 @@
 #          needs pr-ready and captain-approval. The gate is on by default:
 #          FM_TASK_LEDGER=off turns it off, and tests/lib.sh sets that for
 #          fixtures that do not model the ledger.
+#          Plan gate: when FM_SPAWN_KIND=ship (bin/fm-spawn.sh sets it for a
+#          fresh ship launch), spawn also needs a plan entry in the home's
+#          data/decided.md: [plan-<id>], or the key named by plan=<key> in the
+#          planning-done note, whose text starts with approved:, small: or
+#          waived:. Scouts, second mates and relaunches never reach it. A task
+#          queued before the ledger is grandfathered for the events only, not
+#          for the plan. The refusal prints the three fm-decide commands that
+#          clear it; bin/fm-decide.sh refuses a plan-* entry with other text.
 #
 # has      exits 0 when the task has that event.
 # wait-start / wait-end  record captain-wait-start and captain-wait-end. The
@@ -135,6 +143,43 @@ fm_ledger_has() {  # <id> <event>
   [ -s "$file" ] && jq -e --arg e "$2" 'select(.event == $e)' "$file" >/dev/null 2>&1
 }
 
+# fm_ledger_plan_key <id>: the key the planning-done note names as plan=<key>, else plan-<id>.
+fm_ledger_plan_key() {
+  local file key=''
+  file=$(fm_ledger_file "$1")
+  [ ! -s "$file" ] || key=$(jq -r 'select(.event == "planning-done") | (.note // "") | capture("(^|[[:space:]])plan=(?<k>[A-Za-z0-9._-]+)") | .k' "$file" 2>/dev/null | tail -n 1)
+  printf '%s' "${key:-plan-$1}"
+}
+
+# fm_ledger_plan_text <key>: the text of the key's entry in decided.md, empty when absent.
+fm_ledger_plan_text() {
+  local decided
+  decided="$(dirname "$(fm_ledger_dir)")/decided.md"
+  [ -f "$decided" ] || return 0
+  FM_KEY=$1 awk '
+    BEGIN { p = "- [" ENVIRON["FM_KEY"] "] " }
+    index($0, p) == 1 { print substr($0, length(p) + 12); exit }
+  ' "$decided"
+}
+
+# fm_ledger_plan_gate <id>: nonzero, with the refusal on stderr, unless the plan entry is valid.
+fm_ledger_plan_gate() {
+  local id=$1 key text
+  key=$(fm_ledger_plan_key "$id")
+  text=$(fm_ledger_plan_text "$key")
+  case "$text" in approved:* | small:* | waived:*) return 0 ;; esac
+  if [ -z "$text" ]; then
+    printf 'plan gate: ship %s has no [%s] entry in data/decided.md, so spawn is refused.\n' "$id" "$key" >&2
+  else
+    printf 'plan gate: [%s] in data/decided.md starts with none of approved:, small:, waived:, so spawn is refused.\n' "$key" >&2
+  fi
+  printf 'record one of:\n' >&2
+  printf '  bin/fm-decide.sh record %s "approved: <captain words approving the plan> <plan link>" --item %s\n' "$key" "$id" >&2
+  printf '  bin/fm-decide.sh record %s "small: <why this task is small>" --item %s\n' "$key" "$id" >&2
+  printf '  bin/fm-decide.sh record %s "waived: Captain <date>: <words waiving the plan>" --item %s\n' "$key" "$id" >&2
+  return 1
+}
+
 fm_ledger_require() {  # <spawn|merge> <id>
   local step=$1 id=$2 need missing=0 event
   [ "${FM_TASK_LEDGER:-}" != off ] || return 0
@@ -148,7 +193,9 @@ fm_ledger_require() {  # <spawn|merge> <id>
   if [ "$step" = spawn ] && [ ! -e "$(fm_ledger_file "$id")" ]; then
     fm_ledger_record "$id" intake-start --once --note "grandfathered: queued before the task ledger"
     fm_ledger_record "$id" planning-done --once --note "grandfathered: queued before the task ledger"
-    return 0
+    [ "${FM_SPAWN_KIND:-}" = ship ] || return 0
+    fm_ledger_plan_gate "$id"
+    return
   fi
   for event in $need; do
     fm_ledger_has "$id" "$event" && continue
@@ -156,7 +203,9 @@ fm_ledger_require() {  # <spawn|merge> <id>
     printf 'task ledger: task %s has no %s event, so %s is refused; record it with: bin/fm-task-ledger.sh record %s %s\n' \
       "$id" "$event" "$step" "$id" "$event" >&2
   done
-  [ "$missing" -eq 0 ]
+  [ "$missing" -eq 0 ] || return 1
+  [ "$step" = spawn ] && [ "${FM_SPAWN_KIND:-}" = ship ] || return 0
+  fm_ledger_plan_gate "$id"
 }
 
 fm_ledger_wait_end() {  # <id> [--at E]

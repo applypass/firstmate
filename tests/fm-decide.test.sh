@@ -158,6 +158,21 @@ test_same_decision_twice_is_a_noop_and_changed_text_refuses() {
   pass "replaying a key is a no-op and a changed text under it is refused"
 }
 
+test_plan_key_needs_a_plan_word() {
+  local dir out rc word
+  dir=$(make_case planword)
+  out=$(decide "$dir" record plan-job-1 "The plan looks fine." --story sc-6523); rc=$?
+  expect_code 1 "$rc" "a plan-* entry with no plan word is refused"
+  assert_contains "$out" "approved:, small: or waived:" "the refusal names the three words"
+  [ ! -e "$dir/home/data/decided.md" ] || fail "a refused plan entry was written"
+  for word in approved small waived; do
+    out=$(decide "$dir" record "plan-$word" "$word: reason" --story sc-6523) || fail "$word: refused: $out"
+  done
+  out=$(decide "$dir" record not-a-plan "Any text at all." --story sc-6523) || fail "a non-plan key was refused: $out"
+  for word in plan-approved plan-small plan-waived not-a-plan; do wait_stamped "$dir" "$word"; done
+  pass "a plan-* key must start with approved:, small: or waived:"
+}
+
 test_audit_lists_unstamped_entries() {
   local dir out
   dir=$(make_case audit)
@@ -311,3 +326,4 @@ test_record_waits_for_a_slow_concurrent_record
 test_second_sync_skips_a_key_another_run_is_posting
 test_captain_hold_answer_calls_fm_decide
 test_captain_hold_reanswer_records_each_occurrence
+test_plan_key_needs_a_plan_word
