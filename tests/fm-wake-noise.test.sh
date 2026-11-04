@@ -202,6 +202,7 @@ test_recent_activity_only_holds_an_acknowledged_reply() {
   state="$home/state"
   mkdir -p "$state"
   : > "$sent"
+  # shellcheck disable=SC2016 # $1 belongs to the generated hook, not this shell.
   printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$1" >> %q\n' "$sent" > "$hook"
   chmod +x "$hook"
   # The first repost is not held back by activity: the mate never answered.
