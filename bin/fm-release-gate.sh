@@ -9,31 +9,37 @@
 # decision it implements is recorded and still current, and a stored-data or
 # API-field change needs a reader-and-writer audit.
 #
-# A release carries the PRs behind the commits of `compare main...dev`. Per PR:
+# A dev-into-main release carries the PRs behind the commits of `compare main...dev`.
+# Any other PR into main is a single-PR release: that PR is its only row. Per PR:
 #   story     sc-N tokens in its title, body, or branch name
-#   decision  1. its backlog item (the item whose text names the PR url): decided.md
+#   decision  1. its backlog item (the item whose text names the PR url, not followed
+#                by a digit): decided.md
 #                keys plan-<item> and <item>-*;
 #             2. else the decided.md entries stamped with one of the PR's stories;
 #             3. else none
 #   current   yes unless a LATER decided.md entry's "(supersedes: ...)" suffix names
 #             a listed decision key, one of the PR's stories (sc-N), or <repo>#<N>
 #             (and that entry is not itself a listed decision), or an open re-check
-#             item exists. A re-check item has id recheck-*, body line pr=<url>;
+#             item exists. A re-check item has id recheck-*, body line pr=<url>
+#             (not followed by a digit);
 #             with re-check items, the PR is current only when every one is done.
 #   data/API  the PR diff touches a glob from config/release-gate (see below)
+#             The changed files come from the paginated pulls/<N>/files API.
 #   audit     the PR body has a "## Reader and writer audit" heading, or
 #             data/<item>/reader-writer-audit.md exists; needed only with a data/API change
 # A row fails when the decision is none, it is not current, or a data/API change has
 # no audit. A waiver passes a row: decided.md key
 #   release-waiver-<repo>-<release-pr>-<pr>   with text starting "waived:"
-# recorded with bin/fm-decide.sh. A general "ship as is" waives no row.
+# recorded with bin/fm-decide.sh, whose words after "waived:" name that PR as
+# <repo>#<pr>, #<pr>, "PR <pr>" or the PR url. A general "ship as is" waives no row.
 #
 # table    print the rows as a markdown table.
 # refresh  rewrite only the block between the fm-release-gate markers in the release
 #          PR body (appended when absent); the rest of the body is untouched.
 # check    exit 0 when every row passes; exit 1 listing every failing row and its
-#          waiver command. A PR that is not dev into main, or in a repo not listed
-#          in config/release-gate, passes with a note.
+#          waiver command. A PR whose base is not main, or in a repo not listed
+#          in config/release-gate, passes with a note. A forge read that fails
+#          exits 1, so an unreadable forge never passes the gate.
 #
 # config/release-gate (optional), one repo per line, "#" comments:
 #   <owner>/<repo> [glob ...]
@@ -130,16 +136,22 @@ items() {
   done
 }
 
-gh_json() { "$GH" "$@" 2>/dev/null; }
+# names_url <text> <prefix><url>: true when text holds it not followed by a digit,
+# so .../pull/82 does not match .../pull/823.
+names_url() {
+  [[ "$(lower "$1")" =~ "$(lower "$2")"([^0-9]|$) ]]
+}
 
-# carried_prs: PR numbers (merged to dev) behind the commits main lacks.
+# carried_prs: PR numbers (merged to dev) behind the commits main lacks;
+# returns 1 when any forge read fails.
 carried_prs() {
-  local sha
-  gh_json api "repos/$SLUG/compare/main...dev" --paginate --jq '.commits[].sha' |
-    while IFS= read -r sha; do
-      [ -n "$sha" ] || continue
-      gh_json api "repos/$SLUG/commits/$sha/pulls" --jq '.[] | select(.base.ref == "dev") | .number'
-    done | sort -n -u
+  local shas sha pulls out=''
+  shas=$("$GH" api "repos/$SLUG/compare/main...dev" --paginate --jq '.commits[].sha') || return 1
+  for sha in $shas; do
+    pulls=$("$GH" api "repos/$SLUG/commits/$sha/pulls" --jq '.[] | select(.base.ref == "dev") | .number') || return 1
+    out="$out$pulls"$'\n'
+  done
+  printf '%s' "$out" | sed '/^$/d' | sort -n -u
 }
 
 glob_hit() {  # <file> <globs>: prints the file when it matches a glob
@@ -164,10 +176,16 @@ FAILS=''     # failing row lines (with waiver command)
 build_rows() {
   local n json title body branch stories hit item decs k text line later sup ref id d f why
   local current cur_note data audit status rc_open rc_total rc_done wkey waived row url dn
-  local superseded sc
-  for n in $(carried_prs); do
+  local superseded sc prs files after
+  if [ "$HEAD_REF" = dev ]; then
+    prs=$(carried_prs) || die "could not read the PRs $URL carries"
+  else
+    prs=$NUM
+  fi
+  for n in $prs; do
     url="https://github.com/$SLUG/pull/$n"
-    json=$(gh_json pr view "$n" --repo "$SLUG" --json title,body,headRefName,files) || json='{}'
+    json=$("$GH" pr view "$n" --repo "$SLUG" --json title,body,headRefName) || die "could not read $url"
+    files=$("$GH" api "repos/$SLUG/pulls/$n/files" --paginate --jq '.[].filename') || die "could not read the files of $url"
     title=$(jq -r '.title // ""' <<<"$json")
     body=$(jq -r '.body // ""' <<<"$json")
     branch=$(jq -r '.headRefName // ""' <<<"$json")
@@ -180,7 +198,7 @@ build_rows() {
     while IFS=$'\t' read -r id _ text; do
       [ -n "$id" ] || continue
       case "$id" in recheck-*) continue ;; esac
-      if [[ "$(lower "$text")" == *"$(lower "$url")"* ]]; then
+      if names_url "$text" "$url"; then
         item=$id
         break
       fi
@@ -240,7 +258,7 @@ build_rows() {
     rc_total=0 rc_done=0 rc_open=''
     while IFS=$'\t' read -r id dn text; do
       case "$id" in recheck-*) ;; *) continue ;; esac
-      [[ "$(lower "$text")" == *"pr=$(lower "$url")"* ]] || continue
+      names_url "$text" "pr=$url" || continue
       rc_total=$((rc_total + 1))
       if [ "$dn" = 1 ]; then rc_done=$((rc_done + 1)); else rc_open="$rc_open $id"; fi
     done <<<"$ITEMS"
@@ -258,7 +276,7 @@ build_rows() {
       [ -n "$f" ] || continue
       hit=$(glob_hit "$f" "$GLOBS") && break
       hit=''
-    done < <(jq -r '(.files // [])[] | .path' <<<"$json")
+    done <<<"$files"
     if [ -n "$hit" ]; then data="yes ($hit)"; else data=no; fi
     # audit
     audit=no
@@ -277,7 +295,9 @@ build_rows() {
     wkey="release-waiver-$REPO-$NUM-$n"
     waived=0
     while IFS=$'\t' read -r line k text; do
-      [ "$(lower "$k")" = "$(lower "$wkey")" ] && [[ "$text" == waived:* ]] && waived=1
+      [ "$(lower "$k")" = "$(lower "$wkey")" ] && [[ "$text" == waived:* ]] || continue
+      after=$(lower "${text#waived:}")
+      if [[ "$after" =~ (\#|(^|[^a-z0-9_])pr\ )$n([^0-9]|$) ]] || names_url "$after" "$url"; then waived=1; fi
     done <<<"$ENTRIES"
     if [ "$status" = FAIL ] && [ "$waived" = 1 ]; then status="waived"; fi
     row="| [#$n]($url) | ${stories//$'\n'/ } | ${decs:-none} | ${current}${cur_note:+ ($cur_note)} | $data | $audit | $status |"
@@ -303,20 +323,19 @@ render_table() {
   printf '%s' "$ROWS"
 }
 
-# A release is dev into main; anything else is not gated.
-release_shape_ok() {
-  local pr
-  pr=$(gh_json pr view "$URL" --json baseRefName,headRefName) || return 0
-  [ "$(jq -r '.baseRefName // ""' <<<"$pr")" = main ] && [ "$(jq -r '.headRefName // ""' <<<"$pr")" = dev ]
-}
 
 if [ "$COVERED" = 0 ]; then
   echo "fm-release-gate: $SLUG is not covered by the release gate (config/release-gate); nothing to check" >&2
   case "$SUB" in table) echo "Release gate: $SLUG is not covered." ;; esac
   exit 0
 fi
-if ! release_shape_ok; then
-  echo "fm-release-gate: $URL is not a dev-to-main release; nothing to check" >&2
+# Only a PR into main is gated; its head picks the rows (see the header).
+pr=$("$GH" pr view "$URL" --json baseRefName,headRefName) || die "could not read $URL"
+BASE_REF=$(jq -r '.baseRefName // ""' <<<"$pr")
+HEAD_REF=$(jq -r '.headRefName // ""' <<<"$pr")
+[ -n "$BASE_REF" ] && [ -n "$HEAD_REF" ] || die "could not read the base and head of $URL"
+if [ "$BASE_REF" != main ]; then
+  echo "fm-release-gate: $URL targets $BASE_REF, not main; nothing to check" >&2
   exit 0
 fi
 

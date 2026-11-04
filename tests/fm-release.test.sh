@@ -112,8 +112,8 @@ grep -qx "release-main-app-9 $URL --release-main --merge" "$d/merge.log" || fail
 case "$OUT" in *"release merged: $URL"*) ;; *) fail "merge-ok: no merged line: $OUT" ;; esac
 case "$OUT" in *"release-done"*) fail "merge-ok: release-done unsupported, must not print it: $OUT" ;; esac
 
-# merge: the gate check runs first and a failing check stops everything.
-grep -qx "check $URL" "$d/gate.log" || fail "merge-ok: gate check not called: $(cat "$d/gate.log")"
+# merge: the gate table is rewritten, then the gate check runs; a failing check stops everything.
+[ "$(cat "$d/gate.log")" = "refresh $URL"$'\n'"check $URL" ] || fail "merge-ok: want refresh then check: $(cat "$d/gate.log")"
 d=$(make_case merge-gate)
 : > "$d/gate-refuses"
 run_rel "$d" merge "$URL" --captain-authorized "merge the release"

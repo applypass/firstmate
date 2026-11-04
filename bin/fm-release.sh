@@ -25,8 +25,8 @@
 # prints that command as the next step, to run once production is confirmed.
 #
 # Release gate (bin/fm-release-gate.sh): open writes the gate table into the new
-# PR body, and merge runs the gate's check first and stops when it fails, before
-# any record or merge. Repos outside config/release-gate pass.
+# PR body, and merge rewrites that table for the PRs dev carries now, then runs the
+# gate's check and stops when it fails, before any record or merge. Repos outside config/release-gate pass.
 #
 # FM_RELEASE_MERGE, FM_RELEASE_SHORTCUT and FM_RELEASE_GATE override the merge,
 # Shortcut and release gate commands (tests).
@@ -133,6 +133,8 @@ release_merge() {
     || die "$url is $head into $base, not a $DEV_BRANCH-to-$MAIN_BRANCH release"
   [ "$(jq -r '.state' <<<"$pr")" = OPEN ] || die "$url is not open"
   fm_pr_head_valid "$head_oid" || die "could not read the PR head commit"
+  "$GATE_CMD" refresh "$url" >&2 \
+    || echo "warning: could not rewrite the release gate table in $url; run: $GATE_CMD refresh $url" >&2
   "$GATE_CMD" check "$url" || die "the release gate refuses $url; fix the rows above or have the captain waive a row by naming its PR"
 
   id="release-$MAIN_BRANCH-$FM_PR_REPO-$FM_PR_NUMBER"

@@ -30,13 +30,15 @@ make_case() {
 #!/usr/bin/env bash
 echo "$*" >> "$CASE_DIR/gh.log"
 case "$1 $2" in
-  "api repos/acme/app/compare/main...dev") cat "$CASE_DIR/shas" ;;
-  "api repos/acme/app/commits/"*) cat "$CASE_DIR/pulls-$(basename "$(dirname "$2")")" 2>/dev/null ;;
+  "api repos/acme/app/compare/main...dev") [ ! -e "$CASE_DIR/compare-fails" ] || exit 1; cat "$CASE_DIR/shas" ;;
+  "api repos/acme/app/commits/"*) cat "$CASE_DIR/pulls-$(basename "$(dirname "$2")")" ;;
+  "api repos/acme/app/pulls/"*) jq -r '.files[].path' "$CASE_DIR/pr-$(basename "$(dirname "$2")").json" ;;
   "pr view")
     case "$3" in
       http*)
+        [ ! -e "$CASE_DIR/release-unreadable" ] || exit 1
         if [ "$5" = body ]; then jq -r .body "$CASE_DIR/release.json"; else cat "$CASE_DIR/release.json"; fi ;;
-      *) cat "$CASE_DIR/pr-$3.json" ;;
+      *) jq 'del(.files)' "$CASE_DIR/pr-$3.json" ;;
     esac ;;
   "pr edit") cp "$5" "$CASE_DIR/edited.md" ;;
   *) exit 1 ;;
@@ -154,6 +156,43 @@ rm "$d/data/it/reader-writer-audit.md"
 run_gate "$d" check
 [ "$RC" -eq 0 ] || fail "globs: schema.sql is not in the custom list: $OUT"
 
+# a PR url names only that PR: PR 7 does not take PR 70's backlog item or re-check items.
+d=$(make_case prefix)
+printf '7\n70\n' > "$d/pulls-sha1"
+mkpr "$d" 7 "No story" "none" '[]'
+mkpr "$d" 70 "Other" "none" '[]'
+printf -- '- [ ] other - x https://github.com/acme/app/pull/70 (kind: ship)\n' > "$d/data/backlog.md"
+decide "$d" plan-other "approved"
+run_gate "$d" check
+[ "$RC" -eq 1 ] || fail "prefix: PR 7 must not borrow PR 70's decision: $OUT"
+case "$OUT" in *"#7  none - no decision recorded"*) ;; *) fail "prefix: #7 reason missing: $OUT" ;; esac
+case "$OUT" in *"#70 "*) fail "prefix: #70 must pass: $OUT" ;; esac
+mkpr "$d" 7 "Thing sc-100" "none" '[]'
+decide "$d" plan-a "approved (shortcut: sc-100 u)"
+decide "$d" later "b (supersedes: plan-a)"
+printf -- '- [x] recheck-later-app-70 - recheck (kind: recheck)\n  pr=https://github.com/acme/app/pull/70\n' >> "$d/data/backlog.md"
+run_gate "$d" check
+[ "$RC" -eq 1 ] || fail "prefix: PR 70's done re-check must not make PR 7 current: $OUT"
+case "$OUT" in *"#7 sc-100"*"NOT CURRENT: superseded by later"*) ;; *) fail "prefix: #7 must be superseded: $OUT" ;; esac
+
+# an unreadable forge fails the gate: the compare, a commit's PRs, or the release PR.
+d=$(make_case forge)
+decide "$d" plan-a "approved (shortcut: sc-100 u)"
+: > "$d/compare-fails"
+run_gate "$d" check
+[ "$RC" -eq 1 ] || fail "forge: a failed compare must refuse: $OUT"
+rm "$d/compare-fails"
+printf 'sha1\nsha2\n' > "$d/shas"
+run_gate "$d" check
+[ "$RC" -eq 1 ] || fail "forge: a failed commit read must refuse: $OUT"
+printf 'sha1\n' > "$d/shas"
+: > "$d/release-unreadable"
+run_gate "$d" check
+[ "$RC" -eq 1 ] || fail "forge: an unreadable release PR must refuse: $OUT"
+rm "$d/release-unreadable"
+run_gate "$d" check
+[ "$RC" -eq 0 ] || fail "forge: readable again must pass: $OUT"
+
 # every failing row is listed, not just the first.
 d=$(make_case many)
 printf '7\n8\n' > "$d/pulls-sha1"
@@ -170,9 +209,18 @@ run_gate "$d" check
 decide "$d" release-waiver-app-50-7 "ship as is"
 run_gate "$d" check
 [ "$RC" -eq 1 ] || fail "waiver: text must start with waived:: $OUT"
-decide "$d" release-waiver-app-50-7 "waived: Captain 2026-11-04: ship PR 7"
+decide "$d" release-waiver-app-50-7 "waived: Captain 2026-11-04: ship as is"
 run_gate "$d" check
-[ "$RC" -eq 0 ] || fail "waiver: must pass: $OUT"
+[ "$RC" -eq 1 ] || fail "waiver: a general ship-as-is must not pass: $OUT"
+decide "$d" release-waiver-app-50-7 "waived: Captain 2026-11-04: ship PR 70 and #71"
+run_gate "$d" check
+[ "$RC" -eq 1 ] || fail "waiver: naming another PR must not pass: $OUT"
+for words in "ship PR 7" "ship app#7 as is" "ok #7." "ship $PR7"; do
+  d=$(make_case "waiver-${words//[^a-z0-9]/-}")
+  decide "$d" release-waiver-app-50-7 "waived: Captain 2026-11-04: $words"
+  run_gate "$d" check
+  [ "$RC" -eq 0 ] || fail "waiver: '$words' must pass: $OUT"
+done
 
 # repo not listed: passes with a note and reads nothing.
 d=$(make_case uncovered)
@@ -182,11 +230,26 @@ run_gate "$d" check
 case "$OUT" in *"not covered"*) ;; *) fail "uncovered: note missing: $OUT" ;; esac
 [ ! -s "$d/gh.log" ] || fail "uncovered: must not call gh"
 
-# not a dev-to-main PR: passes with a note.
-d=$(make_case notrelease)
-jq -n '{baseRefName:"main",headRefName:"hotfix",body:""}' > "$d/release.json"
+# a non-dev head into main is a single-PR release: that PR is its only row.
+d=$(make_case hotfix)
+jq -n '{baseRefName:"main",headRefName:"hotfix/sc-300",body:""}' > "$d/release.json"
+mkpr "$d" 50 "Hotfix sc-300" "body" '[{"path":"schema.sql"}]'
 run_gate "$d" check
-[ "$RC" -eq 0 ] || fail "notrelease: must pass: $OUT"
+[ "$RC" -eq 1 ] || fail "hotfix: must be gated: $OUT"
+case "$OUT" in *"#50 sc-300 none - no decision recorded; data/API change (schema.sql)"*) ;; *) fail "hotfix: row wrong: $OUT" ;; esac
+case "$OUT" in *"#7 "*) fail "hotfix: must not carry dev's PRs: $OUT" ;; esac
+grep -q compare "$d/gh.log" && fail "hotfix: must not compare main...dev"
+decide "$d" plan-h "approved (shortcut: sc-300 u)"
+mkpr "$d" 50 "Hotfix sc-300" $'body\n\n## Reader and writer audit\n- r' '[{"path":"schema.sql"}]'
+run_gate "$d" check
+[ "$RC" -eq 0 ] || fail "hotfix: a decided, audited hotfix must pass: $OUT"
+
+# a base other than main: passes with a note.
+d=$(make_case notmain)
+jq -n '{baseRefName:"dev",headRefName:"feature",body:""}' > "$d/release.json"
+run_gate "$d" check
+[ "$RC" -eq 0 ] || fail "notmain: must pass: $OUT"
+case "$OUT" in *"not main"*) ;; *) fail "notmain: note missing: $OUT" ;; esac
 
 # refresh: rewrites only the marked block; a second run keeps one block and the rest intact.
 d=$(make_case refresh)
