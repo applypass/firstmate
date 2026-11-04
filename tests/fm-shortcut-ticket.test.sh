@@ -604,6 +604,16 @@ test_wrapper_rm_and_parked_hold_park_the_story() {
   pass "a parked hold or a cancelled item sends its story back to Backlog, and a refused rm does not"
 }
 
+# fm-decide posts the Shortcut comment from a detached job (since #78), so the log fills a moment after the answer returns.
+wait_for_grep() {  # <pattern> <file> <message>
+  local i
+  for i in $(seq 1 60); do
+    grep -F -- "$1" "$2" >/dev/null 2>&1 && return 0
+    sleep 0.5
+  done
+  fail "$3"
+}
+
 test_captain_answer_comments_the_decision() {
   local dir out
   dir=$(make_ticketed answer lc-3)
@@ -617,13 +627,13 @@ test_captain_answer_comments_the_decision() {
   out=$(hold hold lc-3 --reason "captain must choose") || fail "hold failed: $out"
   [ ! -s "$dir/curl.log" ] || fail "holding a task touched Shortcut"
   out=$(hold answer lc-3 --decision-file "$dir/decision.txt") || fail "answer failed: $out"
-  assert_grep 'Captain decision [lc-3-1]: Use option B.' "$dir/curl.log" "the recorded decision was not commented on the story"
+  wait_for_grep 'Captain decision [lc-3-1]: Use option B.' "$dir/curl.log" "the recorded decision was not commented on the story"
   run_tasks "$dir" add lc-4 "Keyed" --body "Shortcut: sc-5001" --kind ship >/dev/null || fail "setup add failed"
   out=$(hold hold lc-4 --reason "captain go needed") || fail "hold failed: $out"
   : > "$dir/curl.log"
   out=$(printf 'lc-4\tgo\t\trelease\n' | hold answers --source "keyed fixture") || fail "keyed answers failed: $out"
   assert_contains "$out" "closed: lc-4" "the keyed release was not accepted"
-  assert_grep 'POST https://api.app.shortcut.com/api/v3/stories/5001/comments' "$dir/curl.log" \
+  wait_for_grep 'POST https://api.app.shortcut.com/api/v3/stories/5001/comments' "$dir/curl.log" \
     "a keyed release decision was not commented on the story"
   pass "a captain answer, direct or keyed, comments the recorded decision on the story"
 }
