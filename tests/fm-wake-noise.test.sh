@@ -96,7 +96,28 @@ test_watcher_absorbs_a_repeated_known_wait() {
   fi
 }
 
+test_recent_activity_is_not_a_missed_reply() {
+  local state="$TMP_ROOT/act" mate="$TMP_ROOT/act-mate"
+  mkdir -p "$state" "$mate/data/ticket-ledger"
+  printf 'kind=secondmate\nhome=%s\n' "$mate" > "$state/m1.meta"
+  : > "$state/m1.status"
+  fm_noise_task_recently_active "$state" m1 "$NOW" && fail "no sign of life is not activity"
+  printf 'working [at=%s]: reading the code\n' "$((NOW - 300))" >> "$state/m1.status"
+  fm_noise_task_recently_active "$state" m1 "$NOW" || fail "a status line 5 minutes ago is activity"
+  fm_noise_task_recently_active "$state" m1 "$((NOW + 3000))" && fail "a 55 minute old line is not activity"
+  # A turn in the mate's own ledger counts.
+  printf '{"at":%s,"event":"turn","session":"x"}\n' "$((NOW + 2900))" >> "$mate/data/ticket-ledger/_fleet-overhead.jsonl"
+  fm_noise_task_recently_active "$state" m1 "$((NOW + 3000))" || fail "a recent ledger turn is activity"
+  # The system's own lines are not the mate's activity.
+  : > "$state/m2.status"
+  printf 'blocked [key=pending-reply-0123456789abcdef] [at=%s]: pending-reply-missed: x\n' "$NOW" >> "$state/m2.status"
+  printf 'blocked [at=%s]: system: daily quota stop: x\n' "$NOW" >> "$state/m2.status"
+  fm_noise_task_recently_active "$state" m2 "$NOW" && fail "system lines are not activity"
+  pass "recent mate activity is told apart from system lines and old lines"
+}
+
 test_known_wait_is_announced_once_then_quiet
+test_recent_activity_is_not_a_missed_reply
 test_wait_wakes_again_after_it_ends
 test_daily_cap_is_one_wait_for_the_fleet
 test_other_events_are_never_quiet

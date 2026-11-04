@@ -184,6 +184,10 @@ _FM_PENDING_REPLY_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd 2>/dev/n
 # bin/fm-wake-lib.sh's single directed expansion below; a second directive
 # here would re-expand the same transitive graph.
 . "$_FM_PENDING_REPLY_LIB_DIR/fm-classify-lib.sh"
+# Fork-only: wake-noise cuts (recent activity is not a missed reply).
+# shellcheck source=bin/fm-wake-noise-lib.sh
+. "$_FM_PENDING_REPLY_LIB_DIR/fm-wake-noise-lib.sh"
+# Fork-only end
 
 FM_PENDING_REPLY_SCHEMA='fm-pending-reply.v1'
 FM_PENDING_REPLY_CORR_RE='corr=[A-Fa-f0-9]{16}'
@@ -1111,6 +1115,9 @@ fm_pending_reply_target_is_remote() {  # <state-dir> <task_id>
 # only once the mirror has been read through its end at or after <since-epoch>.
 fm_pending_reply_missing_report_is_evidence() {  # <state-dir> <task_id> <since-epoch>
   local state=$1 task_id=$2 since=$3 caught
+  # Fork-only: a mate with recent activity has not missed its reply (fm-wake-noise-lib.sh).
+  ! fm_noise_task_recently_active "$state" "$task_id" "$(fm_pending_reply_now)" || return 1
+  # Fork-only end
   fm_pending_reply_target_is_remote "$state" "$task_id" || return 0
   case "$since" in ''|*[!0-9]*) return 1 ;; esac
   caught=$(fm_pending_reply_remote_channel_epoch "$state" "$task_id")

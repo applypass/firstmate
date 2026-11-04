@@ -80,3 +80,31 @@ fm_noise_span_quiet() {  # <state-dir> <task> <events>
   done
   [ "$seen" -gt 0 ] && [ "$quiet" -eq "$seen" ]
 }
+
+# Recent activity (step 4). A mate that answered "working" and has done something since is
+# not a missed reply. fm_noise_task_recently_active <state-dir> <task> <now>: 0 when the
+# task's latest sign of life is within FM_NOISE_ACTIVE_SECS (default 1200) of <now>.
+# A sign of life is a status line stamped [at=N] or a turn event in the mate home's task ledger.
+fm_noise_task_recently_active() {
+  local state=$1 task=$2 now=$3 window=${FM_NOISE_ACTIVE_SECS:-1200} latest=0 at home f
+  case "$window" in '' | *[!0-9]*) window=1200 ;; esac
+  [ -n "$task" ] && [ -n "$now" ] || return 1
+  if [ -f "$state/$task.status" ]; then
+    # The system's own lines (machine keys, system: notes) are not the mate's activity.
+    at=$(tail -n 20 "$state/$task.status" 2>/dev/null \
+      | grep -Ev '\[key=(pending-reply|remote-reply-continuity|branch-outcome|child-outcome|captain-hold)-|\]: system:' \
+      | grep -o '\[at=[0-9]*\]' | tr -dc '0-9\n' | sort -n | tail -1)
+    [ -z "$at" ] || latest=$at
+  fi
+  if [ -f "$state/$task.meta" ]; then
+    home=$(sed -n 's/^home=//p' "$state/$task.meta" | head -1)
+    if [ -n "$home" ] && [ -d "$home/data/ticket-ledger" ]; then
+      for f in "$home"/data/ticket-ledger/*.jsonl; do
+        [ -f "$f" ] || continue
+        at=$(grep '"event":"turn"' "$f" 2>/dev/null | tail -n 1 | sed -n 's/.*"at":\([0-9][0-9]*\).*/\1/p')
+        [ -z "$at" ] || [ "$at" -le "$latest" ] || latest=$at
+      done
+    fi
+  fi
+  [ "$latest" -gt 0 ] && [ $((now - latest)) -le "$window" ] && [ "$latest" -le "$now" ]
+}

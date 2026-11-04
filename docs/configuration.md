@@ -539,6 +539,9 @@ Each wake costs the supervisor one turn, so `bin/fm-wake-noise-lib.sh` holds bac
   The watcher wakes the supervisor the first time it sees one, then stays quiet about the same wait until its end time.
   The daily quota cap is one wait for the whole fleet; any other wait belongs to its task.
   Records are plain files in `state/wake-noise/`.
+- A reply that is late is not missed while the mate is active.
+  The reply timer skips the missed and unreported escalation when the mate has a status line of its own, or a turn in its ledger, within `FM_NOISE_ACTIVE_SECS` (default 1200).
+  The system's own lines do not count as the mate's activity.
 <!-- Fork-only end -->
 
 ## Backlog backend (.tasks.toml / config/backlog-backend)
