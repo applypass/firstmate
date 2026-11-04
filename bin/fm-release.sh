@@ -24,8 +24,12 @@
 # a landed merge, when bin/fm-shortcut-ticket.sh supports release-done, it
 # prints that command as the next step, to run once production is confirmed.
 #
-# FM_RELEASE_MERGE and FM_RELEASE_SHORTCUT override the merge and Shortcut
-# commands (tests).
+# Release gate (bin/fm-release-gate.sh): open writes the gate table into the new
+# PR body, and merge rewrites that table for the PRs dev carries now, then runs the
+# gate's check and stops when it fails, before any record or merge. Repos outside config/release-gate pass.
+#
+# FM_RELEASE_MERGE, FM_RELEASE_SHORTCUT and FM_RELEASE_GATE override the merge,
+# Shortcut and release gate commands (tests).
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -34,6 +38,7 @@ FM_HOME="${FM_HOME:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}"
 STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
 MERGE_CMD="${FM_RELEASE_MERGE:-$SCRIPT_DIR/fm-pr-merge.sh}"
 SHORTCUT_CMD="${FM_RELEASE_SHORTCUT:-$SCRIPT_DIR/fm-shortcut-ticket.sh}"
+GATE_CMD="${FM_RELEASE_GATE:-$SCRIPT_DIR/fm-release-gate.sh}"
 DEV_BRANCH=dev
 MAIN_BRANCH=main
 
@@ -64,7 +69,7 @@ lower() {
 
 release_open() {
   [ "$#" -eq 1 ] || usage
-  local target=$1 slug existing commits body
+  local target=$1 slug existing commits body created
   case "$target" in
     */*) slug=$target ;;
     *)
@@ -88,8 +93,12 @@ release_open() {
     || die "could not compare $MAIN_BRANCH and $DEV_BRANCH on $slug"
   [ -n "$commits" ] || die "$DEV_BRANCH has nothing $MAIN_BRANCH lacks on $slug"
   body=$(printf '## Release\n\nPromote %s to %s.\n\n## Commits\n\n%s\n' "$DEV_BRANCH" "$MAIN_BRANCH" "$commits")
-  gh pr create --repo "$slug" --base "$MAIN_BRANCH" --head "$DEV_BRANCH" \
-    --title "Release: $DEV_BRANCH to $MAIN_BRANCH" --body "$body"
+  created=$(gh pr create --repo "$slug" --base "$MAIN_BRANCH" --head "$DEV_BRANCH" \
+    --title "Release: $DEV_BRANCH to $MAIN_BRANCH" --body "$body") || return 1
+  printf '%s\n' "$created"
+  # The gate table needs the PR number, so it is written right after the PR exists.
+  "$GATE_CMD" refresh "$(printf '%s\n' "$created" | tail -1)" >&2 \
+    || echo "warning: could not write the release gate table into $created; run: $GATE_CMD refresh $created" >&2
 }
 
 release_merge() {
@@ -124,6 +133,9 @@ release_merge() {
     || die "$url is $head into $base, not a $DEV_BRANCH-to-$MAIN_BRANCH release"
   [ "$(jq -r '.state' <<<"$pr")" = OPEN ] || die "$url is not open"
   fm_pr_head_valid "$head_oid" || die "could not read the PR head commit"
+  "$GATE_CMD" refresh "$url" >&2 \
+    || echo "warning: could not rewrite the release gate table in $url; run: $GATE_CMD refresh $url" >&2
+  "$GATE_CMD" check "$url" || die "the release gate refuses $url; fix the rows above or have the captain waive a row by naming its PR"
 
   id="release-$MAIN_BRANCH-$FM_PR_REPO-$FM_PR_NUMBER"
   meta="$STATE/$id.meta"
