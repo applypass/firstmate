@@ -29,17 +29,17 @@ write_sample() {  # <file>
 # Engineering standup $DATE - every agreed task, mapped
 Source: Krisp meeting $MID (action items + full transcript re-read).
 
-| # | Task | Owner | Where |
-|---|---|---|---|
-| 1 | Release next iteration incl. upgrade card | release-eng | FE PR 444, BE PR 826 (captain merge + prod SQL) |
-| 2 | Job card counts of notes/files/tasks | core-backend + web-frontend | BE 825 (dev), FE 445 |
-| 3 | Notes/tasks fail on Job applied (403) | core-backend + web-frontend | BE 824 (dev), FE 446 |
-| 4 | File names should wrap | web-frontend | in FE 444 (commit 9d90f4be) |
-| 5 | Secondary language = dropdown | web-frontend | captain re-confirmed 3 Nov (sc-8740) |
-| 6 | Recording stage: no default, required | interview-recordings | sc-9109 |
-| 11 | Commit inactive-jobs script | apply-delivery | sc-9113, PR auto_applier_py 127 |
-| 15 | Oracle classifier input fixed? | done | comment 3 Nov |
-| - | Education reports, BambooHR applier | Tomasz | not ours |
+| # | Task | Owner | Due | Where |
+|---|---|---|---|---|
+| 1 | Release next iteration incl. upgrade card | release-eng | 2026-11-05 | FE PR 444, BE PR 826 (captain merge + prod SQL) |
+| 2 | Job card counts of notes/files/tasks | core-backend + web-frontend | 2026-11-05 | BE 825 (dev), FE 445 |
+| 3 | Notes/tasks fail on Job applied (403) | core-backend + web-frontend | 2026-11-06 | BE 824 (dev), FE 446 |
+| 4 | File names should wrap | web-frontend | 2026-11-05 | in FE 444 (commit 9d90f4be) |
+| 5 | Secondary language = dropdown | web-frontend | 2026-11-07 | captain re-confirmed 3 Nov (sc-8740) |
+| 6 | Recording stage: no default, required | interview-recordings | 2026-11-07 | sc-9109 |
+| 11 | Commit inactive-jobs script | apply-delivery | no deadline - ask at standup | sc-9113, PR auto_applier_py 127 |
+| 15 | Oracle classifier input fixed? | done | 2026-11-03 | comment 3 Nov |
+| - | Education reports, BambooHR applier | Tomasz |  | not ours |
 EOF
 }
 
@@ -269,34 +269,88 @@ row_check() {
 }
 
 test_negated_done_and_not_ours_fail() {
-  row_check notdone 's#| Recording stage: no default, required | interview-recordings | sc-9109 |#| Recording stage required | interview-recordings | not done |#'
+  row_check notdone 's#| Recording stage: no default, required | interview-recordings | 2026-11-07 | sc-9109 |#| Recording stage required | interview-recordings | 2026-11-07 | not done |#'
   expect_code 2 "$CHECK_RC" "'not done' row blocks"
   assert_contains "$CHECK_ERR" "row 6: Recording stage required" "names the 'not done' row"
-  row_check maybenot 's#| interview-recordings | sc-9109 |#| interview-recordings | maybe not ours |#'
+  row_check maybenot 's#| interview-recordings | 2026-11-07 | sc-9109 |#| interview-recordings | 2026-11-07 | maybe not ours |#'
   expect_code 2 "$CHECK_RC" "'maybe not ours' row blocks"
   assert_contains "$CHECK_ERR" "row 6:" "names the 'maybe not ours' row"
   pass "'not done' and 'maybe not ours' are not evidence"
 }
 
 test_story_id_in_task_cell_only_fails() {
-  row_check taskcell 's#| Recording stage: no default, required | interview-recordings | sc-9109 |#| Recording stage (see sc-9109) | interview-recordings | later |#'
+  row_check taskcell 's#| Recording stage: no default, required | interview-recordings | 2026-11-07 | sc-9109 |#| Recording stage (see sc-9109) | interview-recordings | 2026-11-07 | later |#'
   expect_code 2 "$CHECK_RC" "sc id only in the Task cell blocks"
   assert_contains "$CHECK_ERR" "row 6:" "names the row whose id sits in the Task cell"
   pass "evidence in the Task cell does not count"
 }
 
 test_short_pr_numbers_fail() {
-  row_check be2 's#| interview-recordings | sc-9109 |#| interview-recordings | BE 2 |#'
+  row_check be2 's#| interview-recordings | 2026-11-07 | sc-9109 |#| interview-recordings | 2026-11-07 | BE 2 |#'
   expect_code 2 "$CHECK_RC" "'BE 2' blocks"
-  row_check fe1 's#| interview-recordings | sc-9109 |#| interview-recordings | FE 1 |#'
+  row_check fe1 's#| interview-recordings | 2026-11-07 | sc-9109 |#| interview-recordings | 2026-11-07 | FE 1 |#'
   expect_code 2 "$CHECK_RC" "'FE 1' blocks"
-  row_check pr12 's#| interview-recordings | sc-9109 |#| interview-recordings | PR 12 |#'
+  row_check pr12 's#| interview-recordings | 2026-11-07 | sc-9109 |#| interview-recordings | 2026-11-07 | PR 12 |#'
   expect_code 2 "$CHECK_RC" "'PR 12' blocks"
-  row_check be825 's#| interview-recordings | sc-9109 |#| interview-recordings | BE 825 |#'
+  row_check be825 's#| interview-recordings | 2026-11-07 | sc-9109 |#| interview-recordings | 2026-11-07 | BE 825 |#'
   expect_code 0 "$CHECK_RC" "'BE 825' passes: $CHECK_ERR"
-  row_check pullurl 's#| interview-recordings | sc-9109 |#| interview-recordings | github.com/o/r/pull/9 |#'
+  row_check pullurl 's#| interview-recordings | 2026-11-07 | sc-9109 |#| interview-recordings | 2026-11-07 | github.com/o/r/pull/9 |#'
   expect_code 0 "$CHECK_RC" "a /pull/N url passes: $CHECK_ERR"
   pass "PR shorthand needs 3+ digits; a /pull/N url passes"
+}
+
+test_due_date_and_flag_pass() {
+  row_check duedate 's#| 2026-11-07 | sc-9109 |#| 2026-12-01 | sc-9109 |#'
+  expect_code 0 "$CHECK_RC" "a YYYY-MM-DD Due passes: $CHECK_ERR"
+  row_check dueflag 's#| 2026-11-07 | sc-9109 |#|  No Deadline - Ask At Standup  | sc-9109 |#'
+  expect_code 0 "$CHECK_RC" "the no-deadline flag passes (case and spaces tolerated): $CHECK_ERR"
+  pass "a date and the no-deadline flag both pass"
+}
+
+test_empty_due_fails_naming_row() {
+  row_check dueempty 's#| 2026-11-07 | sc-9109 |#|  | sc-9109 |#'
+  expect_code 2 "$CHECK_RC" "empty Due blocks"
+  assert_contains "$CHECK_ERR" "row 6: Recording stage: no default, required" "names the row with no due date"
+  assert_contains "$CHECK_ERR" "YYYY-MM-DD" "names the date form"
+  assert_contains "$CHECK_ERR" "no deadline - ask at standup" "names the flag form"
+  case "$CHECK_ERR" in *"row 1:"*) fail "passing rows listed as failing: $CHECK_ERR" ;; esac
+  pass "an empty Due cell blocks and names the row and both forms"
+}
+
+test_tbd_due_fails() {
+  row_check duetbd 's#| 2026-11-07 | sc-9109 |#| TBD | sc-9109 |#'
+  expect_code 2 "$CHECK_RC" "'TBD' Due blocks"
+  assert_contains "$CHECK_ERR" "row 6:" "names the TBD-due row"
+  row_check duestyle 's#| 2026-11-07 | sc-9109 |#| 7 Nov | sc-9109 |#'
+  expect_code 2 "$CHECK_RC" "other date styles block"
+  pass "'TBD' and other date styles fail"
+}
+
+test_missing_due_column_fails() {
+  local h; h=$(new_home nodue)
+  run_mark "$h" "$(payload mcp__krisp__get_multiple_documents "$(transcript_response)")"
+  printf 'Source: Krisp meeting %s\n\n| # | Task | Owner | Where |\n|---|---|---|---|\n| 1 | Ship it | eng | sc-9109 |\n' "$MID" > "$h/data/standup-$DATE.md"
+  run_check "$h"
+  expect_code 2 "$CHECK_RC" "a table with no Due column blocks"
+  assert_contains "$CHECK_ERR" "standup-$DATE.md" "names the file"
+  assert_contains "$CHECK_ERR" "| # | Task | Owner | Due | Where |" "names the expected header"
+  pass "a table with no Due column blocks and names the expected header"
+}
+
+test_earlier_table_without_due_fails() {
+  local h; h=$(new_home twotables)
+  run_mark "$h" "$(payload mcp__krisp__get_multiple_documents "$(transcript_response)")"
+  printf 'Source: Krisp meeting %s\n\n| # | Task | Owner | Where |\n|---|---|---|---|\n| 1 | Coach CSV | eng | sc-9365 |\n\nLater:\n\n| # | Task | Owner | Due | Where |\n|---|---|---|---|---|\n| 2 | Ship it | eng | 2026-11-07 | sc-9109 |\n' "$MID" > "$h/data/standup-$DATE.md"
+  run_check "$h"
+  expect_code 2 "$CHECK_RC" "an earlier table with no Due column blocks"
+  assert_contains "$CHECK_ERR" "no Due column" "says the Due column is missing"
+  pass "an earlier table with no Due column blocks even when a later table has one"
+}
+
+test_not_ours_row_needs_no_due() {
+  row_check dueours 's#| 2026-11-07 | sc-9109 |#|  | not ours |#'
+  expect_code 0 "$CHECK_RC" "a 'not ours' row with no Due passes: $CHECK_ERR"
+  pass "a 'not ours' row needs no due date"
 }
 
 test_installer_is_idempotent() {
@@ -330,4 +384,10 @@ test_idless_transcript_without_input_id_marks_unknown
 test_negated_done_and_not_ours_fail
 test_story_id_in_task_cell_only_fails
 test_short_pr_numbers_fail
+test_due_date_and_flag_pass
+test_empty_due_fails_naming_row
+test_tbd_due_fails
+test_missing_due_column_fails
+test_earlier_table_without_due_fails
+test_not_ours_row_needs_no_due
 test_installer_is_idempotent
