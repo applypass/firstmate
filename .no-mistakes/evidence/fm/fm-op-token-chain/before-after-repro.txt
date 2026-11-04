@@ -1,0 +1,7 @@
+=== [base ccbd1f1e] export OP_SERVICE_ACCOUNT_TOKEN="$(./bin/fm-op-service-account-token.sh $LAB/emptyhome)"; op read op://v/i/f
+HOOK: ALLOW
+FAKE-OP REACHED args=[read op://v/i/f] token=[<empty: desktop-app fallback>]
+
+=== [target 0a37b8d6] export OP_SERVICE_ACCOUNT_TOKEN="$(./bin/fm-op-service-account-token.sh $LAB/emptyhome)"; op read op://v/i/f
+HOOK: DENY
+

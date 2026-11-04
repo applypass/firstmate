@@ -1,0 +1,14 @@
+# claude -p (sonnet) in a scratch dir with bin/fm-op-guard-install.sh hooks; OP_SERVICE_ACCOUNT_TOKEN unset
+## Bash tool calls
+export OP_SERVICE_ACCOUNT_TOKEN="$(./bin/fm-op-service-account-token.sh $LAB/emptyhome)"; op read op://v/i/f
+OP_SERVICE_ACCOUNT_TOKEN=$(./bin/fm-op-service-account-token.sh $LAB/fullhome) && export OP_SERVICE_ACCOUNT_TOKEN && op read op://v/i/f
+export OP_SERVICE_ACCOUNT_TOKEN="$EMPTY"; op read op://v/i/f
+## Tool results
+PreToolUse:Bash hook error: [./bin/fm-op-pretool-check.sh --claude]: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow C
+Exit code 1
+[ERROR] 2026/11/04 22:20:40 could not read secret 'op://v/i/f': error initializing client: Validation: (failed to session.DecodeSACredentials), Server: (failed to DecodeSACredentials), invalid character '}' looking for beginning of value
+PreToolUse:Bash hook error: [./bin/fm-op-pretool-check.sh --claude]: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[op-bare-call] a bare `op` call is refused: without OP_SERVICE_ACCOUNT_TOKEN, op falls back to the 1Password desktop app and pops its full-account 'allow C
+## Final answer
+1. BLOCKED
+2. [ERROR] 2026/11/04 22:20:40 could not read secret 'op://v/i/f': error initializing client: Validation: (failed to session.DecodeSACredentials), Server: (failed to DecodeSACredentials), invalid character '}' looking for beginning of value
+3. BLOCKED

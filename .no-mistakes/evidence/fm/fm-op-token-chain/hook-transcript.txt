@@ -1,0 +1,63 @@
+# Bug shape (before: allowed, op reached with empty token)
+=== export OP_SERVICE_ACCOUNT_TOKEN="$(./bin/fm-op-service-account-token.sh $LAB/emptyhome)"; op read op://v/i/f
+HOOK: DENY (deny) - command not run
+
+=== export OP_SERVICE_ACCOUNT_TOKEN="$(./bin/fm-op-service-account-token.sh $LAB/emptyhome)" && op read op://v/i/f
+HOOK: DENY (deny) - command not run
+
+# Loader chain, no token in home: hook allows, && stops before op
+=== OP_SERVICE_ACCOUNT_TOKEN=$(./bin/fm-op-service-account-token.sh $LAB/emptyhome) && export OP_SERVICE_ACCOUNT_TOKEN && op read op://v/i/f
+HOOK: ALLOW (rc=0)
+--- running in bash:
+--- shell exit=1
+
+# Loader chain, token in home: op gets the service-account token
+=== OP_SERVICE_ACCOUNT_TOKEN=$(./bin/fm-op-service-account-token.sh $LAB/fullhome) && export OP_SERVICE_ACCOUNT_TOKEN && op read op://v/i/f
+HOOK: ALLOW (rc=0)
+--- running in bash:
+FAKE-OP REACHED args=[read op://v/i/f] token=[ops_fake_lab_token]
+--- shell exit=0
+
+# Chain broken by ; or ||
+=== OP_SERVICE_ACCOUNT_TOKEN=$(./bin/fm-op-service-account-token.sh $LAB/emptyhome); export OP_SERVICE_ACCOUNT_TOKEN; op read op://v/i/f
+HOOK: DENY (deny) - command not run
+
+=== OP_SERVICE_ACCOUNT_TOKEN=$(./bin/fm-op-service-account-token.sh $LAB/emptyhome) && export OP_SERVICE_ACCOUNT_TOKEN; op read op://v/i/f
+HOOK: DENY (deny) - command not run
+
+=== OP_SERVICE_ACCOUNT_TOKEN=$(./bin/fm-op-service-account-token.sh $LAB/emptyhome) || export OP_SERVICE_ACCOUNT_TOKEN && op read op://v/i/f
+HOOK: DENY (deny) - command not run
+
+=== OP_SERVICE_ACCOUNT_TOKEN=$(./bin/fm-op-service-account-token.sh $LAB/emptyhome) op read op://v/i/f
+HOOK: DENY (deny) - command not run
+
+# Parameter expansion (review decision)
+=== export OP_SERVICE_ACCOUNT_TOKEN="$EMPTY"; op read x
+HOOK: DENY (deny) - command not run
+
+=== OP_SERVICE_ACCOUNT_TOKEN=${X:-} && export OP_SERVICE_ACCOUNT_TOKEN; op read x
+HOOK: DENY (deny) - command not run
+
+=== OP_SERVICE_ACCOUNT_TOKEN=${X:-} && export OP_SERVICE_ACCOUNT_TOKEN && op read x
+HOOK: DENY (deny) - command not run
+
+=== OP_SERVICE_ACCOUNT_TOKEN=$X op read x
+HOOK: DENY (deny) - command not run
+
+# Literal values still allowed
+=== export OP_SERVICE_ACCOUNT_TOKEN=ops_literal; op read x
+HOOK: ALLOW (rc=0)
+--- running in bash:
+FAKE-OP REACHED args=[read x] token=[ops_literal]
+--- shell exit=0
+
+=== OP_SERVICE_ACCOUNT_TOKEN=ops_literal op read x
+HOOK: ALLOW (rc=0)
+--- running in bash:
+FAKE-OP REACHED args=[read x] token=[ops_literal]
+--- shell exit=0
+
+# Bare op still refused
+=== op read x
+HOOK: DENY (deny) - command not run
+
