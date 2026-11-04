@@ -64,7 +64,7 @@ done
 FLEET=$(fm_dq_fleet_home "$HOME_DIR")
 
 report_once() {  # <level>
-  local level=$1 now day marker_dir marker tag line until_utc
+  local level=$1 now day marker_dir marker tag line until_utc reason
   now=$(fm_dq_now)
   day=$(fm_dq_date %F "$now") || return 0
   marker_dir="$FLEET/state/daily-quota-reported"
@@ -76,7 +76,13 @@ report_once() {  # <level>
     until_utc=$(TZ=UTC fm_dq_date '%Y-%m-%dT%H:%MZ' "$(( $(fm_dq_midnight "$now") + 86400 ))")
     line="paused [at=$now]: system: $(fm_dq_message "$WHAT" | tr -d '\n') until $until_utc"
   else
-    line="blocked [at=$now]: system: $(fm_dq_message "$WHAT" | tr -d '\n')"
+    # A refusal at the daily cap is a known wait that ends at the next local midnight.
+    reason=''
+    if [ "$level" = refuse ]; then
+      until_utc=$(TZ=UTC fm_dq_date '%Y-%m-%dT%H:%MZ' "$(( $(fm_dq_midnight "$now") + 86400 ))")
+      reason="resource-exhausted (daily quota cap) external-wait until=$until_utc: "
+    fi
+    line="blocked [at=$now]: system: $reason$(fm_dq_message "$WHAT" | tr -d '\n')"
   fi
   line=$(fm_parent_channel_clean_note "$line")
   if [ -n "$STATUS_FILE" ]; then
