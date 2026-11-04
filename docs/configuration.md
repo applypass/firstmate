@@ -414,6 +414,8 @@ A local `config/final-run-cap` holding a positive integer caps the final runs li
 This fork holds a standing dev-merge authority: when `bin/fm-pr-check.sh` registers a ship's ready report, it tries the merge once, with no retry, through `bin/fm-pr-merge.sh`.
 It covers only our own unflagged PRs whose base is `dev`, and `bin/fm-pr-merge.sh` merges only when every check is green at the head; a PR to `main` or any other base stays the captain's to merge.
 `bin/fm-pr-merge.sh` refuses any merge whose live base is `main` unless the caller passes `--release-main`, which a caller passes only on the captain's explicit word for that merge; [`bin/fm-main-merge-guard.sh`](../bin/fm-main-merge-guard.sh)'s header owns the check.
+A `--release-main` merge on GitHub, and `bin/fm-release.sh merge`, also run the release gate, which refuses a release unless each PR it carries has a current recorded decision and, for a stored-data or API change, a reader and writer audit; an optional local `config/release-gate` lists the covered repos and their data/API globs.
+[`bin/fm-release-gate.sh`](../bin/fm-release-gate.sh)'s header owns the rows, waivers, and config format.
 Set `FM_AUTO_DEV_MERGE=off` to get upstream behaviour.
 [`bin/fm-auto-dev-merge.sh`](../bin/fm-auto-dev-merge.sh)'s header owns the exact conditions and the quiet and `paused` skip outcomes.
 <!-- Fork-only: review fix-round cap config; bin/fm-review-round-cap.sh owns the contract. -->
