@@ -21,7 +21,7 @@
 #                keys plan-<item> and <item>-*;
 #             2. else the decided.md entries stamped with one of the PR's stories,
 #                except an entry whose "(supersedes: ...)" suffix names one of the
-#                PR's stories or another such entry (it stays a superseder);
+#                PR's stories, <repo>#<N>, or another such entry (it stays a superseder);
 #             3. else none
 #   current   yes unless a LATER decided.md entry's "(supersedes: ...)" suffix names
 #             a listed decision key, one of the PR's stories (sc-N), or <repo>#<N>
@@ -267,6 +267,7 @@ build_rows() {
             ref=$(lower "$ref")
             for sc in $stories; do [ "$ref" = "$sc" ] && hit=1; done
             for d in $decs; do [ "$d" != "$k" ] && [ "$ref" = "$(lower "$d")" ] && hit=1; done
+            [ "$ref" = "$(lower "$REPO")#$n" ] && hit=1
           done
           [ "$hit" = 1 ] && continue
         fi

@@ -129,6 +129,16 @@ case "$OUT" in *"NOT CURRENT: superseded by secondary-language-dropdown-again"*)
 run_gate "$d" table
 case "$OUT" in *"| plan-jsp-multi-alt-langs |"*) ;; *) fail "sc9018: only the old decision must be listed: $OUT" ;; esac
 
+# sc-9018 replay with a <repo>#<N> ref: the reversal names the PR, not the story.
+d=$(make_case sc9018-repo)
+mkpr "$d" 823 "Multi-select alt languages sc-8740" "body" '[]'
+printf '823\n' > "$d/pulls-sha1"
+decide "$d" plan-jsp-multi-alt-langs "approved: multi-select (shortcut: sc-8740 u)"
+decide "$d" secondary-language-dropdown-again "single dropdown (shortcut: sc-8740 u) (supersedes: APP#823)"
+run_gate "$d" check
+[ "$RC" -eq 1 ] || fail "sc9018-repo: must exit 1: $OUT"
+case "$OUT" in *"NOT CURRENT: superseded by secondary-language-dropdown-again"*) ;; *) fail "sc9018-repo: reason missing: $OUT" ;; esac
+
 # re-check items: open fails; all done passes a superseded PR.
 d=$(make_case recheck)
 decide "$d" plan-a "approved: a (shortcut: sc-100 u)"
