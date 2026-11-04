@@ -66,7 +66,11 @@ fm_noise_span_quiet() {  # <state-dir> <task> <events>
       *) ev=$rest; rest='' ;;
     esac
     # Any other event keeps the span loud; a known wait beside it still counts as announced.
-    wait=$(fm_noise_known_wait "$task" "$ev") || { seen=$((seen + 1)); continue; }
+    if ! wait=$(fm_noise_known_wait "$task" "$ev"); then
+      seen=$((seen + 1))
+      if fm_noise_open_problem_repeat "$state" "$task" "$ev"; then quiet=$((quiet + 1)); fi
+      continue
+    fi
     scope=${wait%%|*}; epoch=${wait#*|}
     key=$(printf '%s|%s' "$scope" "$epoch" | cksum | cut -d' ' -f1)
     rec="$dir/known-wait-$key"
@@ -107,4 +111,53 @@ fm_noise_task_recently_active() {
     fi
   fi
   [ "$latest" -gt 0 ] && [ $((now - latest)) -le "$window" ] && [ "$latest" -le "$now" ]
+}
+
+# Open problems (step 5). A blocked or needs-decision line with a key opens a problem; the same
+# key stated again while the problem is still open adds nothing, so it stays quiet and is
+# counted instead. A "resolved" line for the key closes the problem, and the next line for the
+# key is a new problem. Outcome keys are one report each and never coalesce.
+# The count of held repeats lives in state/wake-noise/problem-<cksum>, as "<announced-at> <repeats> <key>".
+fm_noise_event_key() {  # <event>: the [key=...] of a blocked or needs-decision line
+  local ev=$1 verb re='\[key=([^]]+)\]'
+  verb=${ev%%[[:space:]]*}
+  case "$verb" in blocked | needs-decision) ;; *) return 1 ;; esac
+  [[ "$ev" =~ $re ]] || return 1
+  case "${BASH_REMATCH[1]}" in branch-outcome-* | child-outcome-*) return 1 ;; esac
+  printf '%s' "${BASH_REMATCH[1]}"
+}
+
+# fm_noise_open_problem_repeat <state-dir> <task> <event>: 0 for a repeat of an open problem
+# (counted, to stay quiet); 1 for a new problem or any other event (recorded as announced).
+fm_noise_open_problem_repeat() {
+  local state=$1 task=$2 ev=$3 key at rec dir sum announced repeats rest re='\[at=([0-9]+)\]'
+  key=$(fm_noise_event_key "$ev") || return 1
+  at=0; [[ "$ev" =~ $re ]] && at=${BASH_REMATCH[1]}
+  dir="$state/wake-noise"
+  sum=$(printf '%s|%s' "$task" "$key" | cksum | cut -d' ' -f1)
+  rec="$dir/problem-$sum"
+  if [ -f "$rec" ]; then
+    read -r announced repeats rest < "$rec" || true
+    case "$announced$repeats" in *[!0-9]* | '') announced=0; repeats=0 ;; esac
+    # Still open when no resolved line for the key came after the announcement.
+    if ! fm_noise_key_resolved_after "$state/$task.status" "$key" "$announced"; then
+      printf '%s %s %s\n' "$announced" "$((repeats + 1))" "$key" > "$rec" 2>/dev/null || return 1
+      return 0
+    fi
+  fi
+  mkdir -p "$dir" 2>/dev/null || return 1
+  printf '%s 0 %s\n' "$at" "$key" > "$rec" 2>/dev/null || return 1
+  return 1
+}
+
+# fm_noise_key_resolved_after <status-file> <key> <epoch>: 0 when a resolved line for the key is stamped later.
+fm_noise_key_resolved_after() {
+  local f=$1 key=$2 since=$3 line at re='\[at=([0-9]+)\]'
+  [ -f "$f" ] || return 1
+  while IFS= read -r line; do
+    case "$line" in resolved*"[key=$key]"*) ;; *) continue ;; esac
+    at=0; [[ "$line" =~ $re ]] && at=${BASH_REMATCH[1]}
+    [ "$at" -ge "$since" ] && return 0
+  done < <(grep -F "[key=$key]" "$f" 2>/dev/null)
+  return 1
 }

@@ -41,13 +41,13 @@ SWEEP_EVERY=1800                 # virtual seconds between sweep and reply-timer
 # Wake count before any fix, and after each step (one commit per step). The
 # replay asserts the latest value, and that every step lowered the one before it.
 # Append the next step's count here when its commit lands.
-COUNTS=(86 86 86 86 85)          # # COUNTS[0] = baseline, COUNTS[n] = after step n
+COUNTS=(86 86 86 86 85 84)       # # COUNTS[0] = baseline, COUNTS[n] = after step n
 # Never-wait findings (SELF-FIX or ALARM text), counting those read inside an open turn.
 # Steps 1 to 3 remove notices but not turns: on this day each one landed in a turn that
 # another mate's status line had already started, so those steps keep the wake count
 # flat. Steps 1 and 2 are checked by the findings they remove, step 3 by the spans it
 # keeps quiet (ABSORBED). Every later step must lower COUNTS.
-FINDINGS=(11 1 0 0 0)
+FINDINGS=(11 1 0 0 0 0)
 FLAT_STEPS=" 1 2 3 "
 
 H="$TMP_ROOT/home"

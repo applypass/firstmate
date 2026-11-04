@@ -542,6 +542,9 @@ Each wake costs the supervisor one turn, so `bin/fm-wake-noise-lib.sh` holds bac
 - A reply that is late is not missed while the mate is active.
   The reply timer skips the missed and unreported escalation when the mate has a status line of its own, or a turn in its ledger, within `FM_NOISE_ACTIVE_SECS` (default 1200).
   The system's own lines do not count as the mate's activity.
+- An open problem wakes once.
+  A `blocked` or `needs-decision` line with a `[key=...]` opens a problem; the same key stated again for the same task before a `resolved [key=...]` line stays quiet and is counted in `state/wake-noise/problem-*` (announced time, repeat count, key).
+  Outcome keys (`branch-outcome-`, `child-outcome-`) are one report each and never coalesce.
 <!-- Fork-only end -->
 
 ## Backlog backend (.tasks.toml / config/backlog-backend)

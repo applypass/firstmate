@@ -116,7 +116,29 @@ test_recent_activity_is_not_a_missed_reply() {
   pass "recent mate activity is told apart from system lines and old lines"
 }
 
+test_open_problem_wakes_once_and_repeats_are_counted() {
+  local state="$TMP_ROOT/prob" ev="needs-decision [key=captain-hold-ab12-1] [at=$NOW]: pick a or b"
+  mkdir -p "$state"
+  : > "$state/m1.status"
+  printf '%s\n' "$ev" >> "$state/m1.status"
+  fm_noise_span_quiet "$state" m1 "$ev" && fail "a new problem wakes"
+  printf '%s\n' "$ev" >> "$state/m1.status"
+  fm_noise_span_quiet "$state" m1 "$ev" || fail "the same open problem stated again is quiet"
+  fm_noise_span_quiet "$state" m1 "$ev" || fail "and again"
+  assert_grep " 2 captain-hold-ab12-1" "$(ls "$state"/wake-noise/problem-*)" "two repeats are counted"
+  fm_noise_span_quiet "$state" m2 "$ev" && fail "another task's problem is its own"
+  # A resolved line closes the problem: the next statement of the key is new.
+  printf 'resolved [key=captain-hold-ab12-1] [at=%s]: answered\n' "$((NOW + 10))" >> "$state/m1.status"
+  fm_noise_span_quiet "$state" m1 "needs-decision [key=captain-hold-ab12-1] [at=$((NOW + 20))]: pick again" && fail "a closed problem opens anew"
+  # Outcome reports are one each and never coalesce.
+  local out="blocked [key=branch-outcome-7] [at=$NOW]: captain outcome for m1: x"
+  fm_noise_span_quiet "$state" m1 "$out" && fail "first outcome"
+  fm_noise_span_quiet "$state" m1 "$out" && fail "an outcome line is never coalesced"
+  pass "an open problem wakes once; repeats are counted until it is resolved"
+}
+
 test_known_wait_is_announced_once_then_quiet
+test_open_problem_wakes_once_and_repeats_are_counted
 test_recent_activity_is_not_a_missed_reply
 test_wait_wakes_again_after_it_ends
 test_daily_cap_is_one_wait_for_the_fleet
