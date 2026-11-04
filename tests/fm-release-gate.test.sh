@@ -31,7 +31,8 @@ make_case() {
 echo "$*" >> "$CASE_DIR/gh.log"
 case "$1 $2" in
   "api repos/acme/app/compare/main...dev") [ ! -e "$CASE_DIR/compare-fails" ] || exit 1; cat "$CASE_DIR/shas" ;;
-  "api repos/acme/app/commits/"*) cat "$CASE_DIR/pulls-$(basename "$(dirname "$2")")" ;;
+  "api repos/acme/app/commits/"*/pulls) cat "$CASE_DIR/pulls-$(basename "$(dirname "$2")")" ;;
+  "api repos/acme/app/commits/"*) cat "$CASE_DIR/files-$(basename "$2")" ;;
   "api repos/acme/app/pulls/"*) jq -r '.files[].path' "$CASE_DIR/pr-$(basename "$(dirname "$2")").json" ;;
   "pr view")
     case "$3" in
@@ -192,6 +193,29 @@ run_gate "$d" check
 rm "$d/release-unreadable"
 run_gate "$d" check
 [ "$RC" -eq 0 ] || fail "forge: readable again must pass: $OUT"
+
+# a carried commit with no PR: a note row, unless it touches a data/API glob; a named waiver passes it.
+d=$(make_case lone)
+decide "$d" plan-a "approved (shortcut: sc-100 u)"
+printf 'sha1\nabcdef1234567\n' > "$d/shas"
+: > "$d/pulls-abcdef1234567"
+printf 'src/x.ts\n' > "$d/files-abcdef1234567"
+run_gate "$d" check
+[ "$RC" -eq 0 ] || fail "lone: a plain commit must pass: $OUT"
+run_gate "$d" table
+case "$OUT" in *"| commit abcdef1: no PR | | | | no | | note |"*) ;; *) fail "lone: note row missing: $OUT" ;; esac
+printf 'src/x.ts\nmigrations/9/up.sql\n' > "$d/files-abcdef1234567"
+run_gate "$d" check
+[ "$RC" -eq 1 ] || fail "lone: a data-touching commit must fail: $OUT"
+case "$OUT" in *"commit abcdef1: no PR - data/API change (migrations/9/up.sql)"*"record release-waiver-app-50-abcdef1"*) ;; *) fail "lone: reason or waiver missing: $OUT" ;; esac
+decide "$d" release-waiver-app-50-abcdef1 "waived: Captain 2026-11-04: ship as is"
+run_gate "$d" check
+[ "$RC" -eq 1 ] || fail "lone: a waiver not naming the sha must not pass: $OUT"
+decide "$d" release-waiver-app-50-abcdef1 "waived: Captain 2026-11-04: ship commit abcdef1"
+run_gate "$d" check
+[ "$RC" -eq 0 ] || fail "lone: a waiver naming the sha must pass: $OUT"
+run_gate "$d" table
+case "$OUT" in *"| commit abcdef1: no PR | | | | yes (migrations/9/up.sql) | | waived |"*) ;; *) fail "lone: waived row missing: $OUT" ;; esac
 
 # every failing row is listed, not just the first.
 d=$(make_case many)

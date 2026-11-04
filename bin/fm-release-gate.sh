@@ -10,7 +10,11 @@
 # API-field change needs a reader-and-writer audit.
 #
 # A dev-into-main release carries the PRs behind the commits of `compare main...dev`.
-# Any other PR into main is a single-PR release: that PR is its only row. Per PR:
+# Any other PR into main is a single-PR release: that PR is its only row.
+# A carried commit with no PR into dev adds a row "commit <shortsha>: no PR". It fails
+# only when the commit's diff touches a data/API glob, and then passes only with a
+# waiver key release-waiver-<repo>-<release-pr>-<shortsha> whose words after
+# "waived:" name the sha; otherwise it is a note row and passes. Per PR:
 #   story     sc-N tokens in its title, body, or branch name
 #   decision  1. its backlog item (the item whose text names the PR url, not followed
 #                by a digit): decided.md
@@ -142,16 +146,17 @@ names_url() {
   [[ "$(lower "$1")" =~ "$(lower "$2")"([^0-9]|$) ]]
 }
 
-# carried_prs: PR numbers (merged to dev) behind the commits main lacks;
-# returns 1 when any forge read fails.
+# carried_prs: PR numbers (merged to dev) behind the commits main lacks, then
+# "c:<sha>" for each such commit with no PR into dev; returns 1 when any forge read fails.
 carried_prs() {
-  local shas sha pulls out=''
+  local shas sha pulls out='' lone=''
   shas=$("$GH" api "repos/$SLUG/compare/main...dev" --paginate --jq '.commits[].sha') || return 1
   for sha in $shas; do
     pulls=$("$GH" api "repos/$SLUG/commits/$sha/pulls" --jq '.[] | select(.base.ref == "dev") | .number') || return 1
-    out="$out$pulls"$'\n'
+    if [ -n "$pulls" ]; then out="$out$pulls"$'\n'; else lone="${lone}c:$sha"$'\n'; fi
   done
   printf '%s' "$out" | sed '/^$/d' | sort -n -u
+  printf '%s' "$lone"
 }
 
 glob_hit() {  # <file> <globs>: prints the file when it matches a glob
@@ -176,13 +181,41 @@ FAILS=''     # failing row lines (with waiver command)
 build_rows() {
   local n json title body branch stories hit item decs k text line later sup ref id d f why
   local current cur_note data audit status rc_open rc_total rc_done wkey waived row url dn
-  local superseded sc prs files after
+  local superseded sc prs files after short
   if [ "$HEAD_REF" = dev ]; then
     prs=$(carried_prs) || die "could not read the PRs $URL carries"
   else
     prs=$NUM
   fi
   for n in $prs; do
+    case "$n" in
+      c:*)
+        n=${n#c:}
+        short=$(lower "${n:0:7}")
+        files=$("$GH" api "repos/$SLUG/commits/$n" --paginate --jq '.files[].filename') || die "could not read the files of commit $n"
+        hit=''
+        while IFS= read -r f; do
+          [ -n "$f" ] || continue
+          hit=$(glob_hit "$f" "$GLOBS") && break
+          hit=''
+        done <<<"$files"
+        status=note data=no
+        if [ -n "$hit" ]; then
+          status=FAIL data="yes ($hit)"
+          wkey="release-waiver-$REPO-$NUM-$short"
+          while IFS=$'\t' read -r line k text; do
+            [ "$(lower "$k")" = "$(lower "$wkey")" ] && [[ "$text" == waived:* ]] || continue
+            [[ "$(lower "${text#waived:}")" == *"$short"* ]] && status=waived
+          done <<<"$ENTRIES"
+        fi
+        ROWS="$ROWS| commit $short: no PR | | | | $data | | $status |"$'\n'
+        if [ "$status" = FAIL ]; then
+          FAILS="${FAILS}commit $short: no PR - data/API change ($hit) with no PR, decision or audit"$'\n'
+          FAILS="$FAILS  waive: bin/fm-decide.sh record $wkey \"waived: Captain <date>: <words naming commit $short>\""$'\n'
+        fi
+        continue
+        ;;
+    esac
     url="https://github.com/$SLUG/pull/$n"
     json=$("$GH" pr view "$n" --repo "$SLUG" --json title,body,headRefName) || die "could not read $url"
     files=$("$GH" api "repos/$SLUG/pulls/$n/files" --paginate --jq '.[].filename') || die "could not read the files of $url"
