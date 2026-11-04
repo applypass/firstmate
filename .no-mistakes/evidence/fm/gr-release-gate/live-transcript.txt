@@ -1,0 +1,102 @@
+=================== S1 no decision recorded: check refuses and prints waiver commands ===================
+$ fm-release-gate.sh check https://github.com/applypass/apply_pass_backend/pull/826
+release gate: https://github.com/applypass/apply_pass_backend/pull/826 carries PRs that fail the gate:
+#829 sc-8728 sc-8964 none - no decision recorded; data/API change (schema.sql) without a reader and writer audit
+  waive: bin/fm-decide.sh record release-waiver-apply_pass_backend-826-829 "waived: Captain <date>: <words naming apply_pass_backend#829>"
+#830 sc-9018 sc-9274 sc-9299 none - no decision recorded; data/API change (schema.sql) without a reader and writer audit
+  waive: bin/fm-decide.sh record release-waiver-apply_pass_backend-826-830 "waived: Captain <date>: <words naming apply_pass_backend#830>"
+Fix each row, or the captain waives a row by naming that PR. A general ship-as-is waives none.
+[exit 1]
+
+=================== S2 decisions stamped on each PR's story; schema.sql change without audit still fails ===================
+$ fm-release-gate.sh table https://github.com/applypass/apply_pass_backend/pull/826
+| PR | Story | Decision it implements | Current? | Data or API change | Reader and writer audit | Status |
+|---|---|---|---|---|---|---|
+| [#829](https://github.com/applypass/apply_pass_backend/pull/829) | sc-8728 sc-8964 | plan-try-cap-rollback | yes | yes (schema.sql) | no | FAIL |
+| [#830](https://github.com/applypass/apply_pass_backend/pull/830) | sc-9018 sc-9274 sc-9299 | plan-alt-language-revert | yes | yes (schema.sql) | no | FAIL |
+[exit 0]
+
+$ fm-release-gate.sh check https://github.com/applypass/apply_pass_backend/pull/826
+release gate: https://github.com/applypass/apply_pass_backend/pull/826 carries PRs that fail the gate:
+#829 sc-8728 sc-8964 plan-try-cap-rollback - data/API change (schema.sql) without a reader and writer audit
+  waive: bin/fm-decide.sh record release-waiver-apply_pass_backend-826-829 "waived: Captain <date>: <words naming apply_pass_backend#829>"
+#830 sc-9018 sc-9274 sc-9299 plan-alt-language-revert - data/API change (schema.sql) without a reader and writer audit
+  waive: bin/fm-decide.sh record release-waiver-apply_pass_backend-826-830 "waived: Captain <date>: <words naming apply_pass_backend#830>"
+Fix each row, or the captain waives a row by naming that PR. A general ship-as-is waives none.
+[exit 1]
+
+=================== S3 sc-9018 replay: a later reversal stamped on PR 830's own story supersedes its decision -> NOT CURRENT ===================
+$ fm-release-gate.sh table https://github.com/applypass/apply_pass_backend/pull/826
+| PR | Story | Decision it implements | Current? | Data or API change | Reader and writer audit | Status |
+|---|---|---|---|---|---|---|
+| [#829](https://github.com/applypass/apply_pass_backend/pull/829) | sc-8728 sc-8964 | plan-try-cap-rollback | yes | yes (schema.sql) | no | waived |
+| [#830](https://github.com/applypass/apply_pass_backend/pull/830) | sc-9018 sc-9274 sc-9299 | plan-alt-language-revert | no (superseded by multi-select-again (supersedes: plan-alt-language-revert)) | yes (schema.sql) | no | FAIL |
+[exit 0]
+
+$ fm-release-gate.sh check https://github.com/applypass/apply_pass_backend/pull/826
+release gate: https://github.com/applypass/apply_pass_backend/pull/826 carries PRs that fail the gate:
+#830 sc-9018 sc-9274 sc-9299 plan-alt-language-revert - NOT CURRENT: superseded by multi-select-again (supersedes: plan-alt-language-revert); data/API change (schema.sql) without a reader and writer audit
+  waive: bin/fm-decide.sh record release-waiver-apply_pass_backend-826-830 "waived: Captain <date>: <words naming apply_pass_backend#830>"
+Fix each row, or the captain waives a row by naming that PR. A general ship-as-is waives none.
+[exit 1]
+
+=================== S3b reversal names the PR as REPO#N (case-insensitive) -> NOT CURRENT ===================
+$ fm-release-gate.sh check https://github.com/applypass/apply_pass_backend/pull/826
+release gate: https://github.com/applypass/apply_pass_backend/pull/826 carries PRs that fail the gate:
+#829 sc-8728 sc-8964 none - no decision recorded; data/API change (schema.sql) without a reader and writer audit
+  waive: bin/fm-decide.sh record release-waiver-apply_pass_backend-826-829 "waived: Captain <date>: <words naming apply_pass_backend#829>"
+#830 sc-9018 sc-9274 sc-9299 plan-alt-language-revert - NOT CURRENT: superseded by flip (supersedes: apply_pass_backend#830); data/API change (schema.sql) without a reader and writer audit
+  waive: bin/fm-decide.sh record release-waiver-apply_pass_backend-826-830 "waived: Captain <date>: <words naming apply_pass_backend#830>"
+Fix each row, or the captain waives a row by naming that PR. A general ship-as-is waives none.
+[exit 1]
+
+=================== S4 general 'ship as is' waiver waives nothing ===================
+$ fm-release-gate.sh check https://github.com/applypass/apply_pass_backend/pull/826
+release gate: https://github.com/applypass/apply_pass_backend/pull/826 carries PRs that fail the gate:
+#829 sc-8728 sc-8964 none - no decision recorded; data/API change (schema.sql) without a reader and writer audit
+  waive: bin/fm-decide.sh record release-waiver-apply_pass_backend-826-829 "waived: Captain <date>: <words naming apply_pass_backend#829>"
+#830 sc-9018 sc-9274 sc-9299 none - no decision recorded; data/API change (schema.sql) without a reader and writer audit
+  waive: bin/fm-decide.sh record release-waiver-apply_pass_backend-826-830 "waived: Captain <date>: <words naming apply_pass_backend#830>"
+Fix each row, or the captain waives a row by naming that PR. A general ship-as-is waives none.
+[exit 1]
+
+=================== S5 waivers that name each PR pass every row ===================
+$ fm-release-gate.sh check https://github.com/applypass/apply_pass_backend/pull/826
+release gate: every PR in https://github.com/applypass/apply_pass_backend/pull/826 passes
+[exit 0]
+
+=================== S6 merge guard with --release-main: refuses when the gate fails, passes when waived (no merge is made) ===================
+$ fm-main-merge-guard.sh github applypass/apply_pass_backend 826 true   (gate fails)
+  waive: bin/fm-decide.sh record release-waiver-apply_pass_backend-826-829 "waived: Captain <date>: <words naming apply_pass_backend#829>"
+#830 sc-9018 sc-9274 sc-9299 none - no decision recorded; data/API change (schema.sql) without a reader and writer audit
+  waive: bin/fm-decide.sh record release-waiver-apply_pass_backend-826-830 "waived: Captain <date>: <words naming apply_pass_backend#830>"
+Fix each row, or the captain waives a row by naming that PR. A general ship-as-is waives none.
+[exit 1]
+$ fm-main-merge-guard.sh github applypass/apply_pass_backend 826 true   (all waived)
+release gate: every PR in https://github.com/applypass/apply_pass_backend/pull/826 passes
+[exit 0]
+$ fm-main-merge-guard.sh github applypass/apply_pass_backend 826 false  (no captain word)
+error: applypass/apply_pass_backend#826 targets main, and a merge into main deploys prod; pass --release-main only after the captain's explicit word for this specific merge
+[exit 1]
+
+=================== S7 uncovered repo / non-main base pass with a note ===================
+$ fm-release-gate.sh check https://github.com/applypass/apply_pass_backend/pull/830
+fm-release-gate: https://github.com/applypass/apply_pass_backend/pull/830 targets dev, not main; nothing to check
+[exit 0]
+
+$ fm-release-gate.sh check https://github.com/applypass/firstmate/pull/80
+fm-release-gate: applypass/firstmate is not covered by the release gate (config/release-gate); nothing to check
+[exit 0]
+
+=================== S8 data/API glob stays a pattern when cwd holds a matching file ===================
+$ fm-release-gate.sh table https://github.com/applypass/apply_pass_backend/pull/826
+| PR | Story | Decision it implements | Current? | Data or API change | Reader and writer audit | Status |
+|---|---|---|---|---|---|---|
+| [#829](https://github.com/applypass/apply_pass_backend/pull/829) | sc-8728 sc-8964 | none | yes | yes (schema.sql) | no | FAIL |
+| [#830](https://github.com/applypass/apply_pass_backend/pull/830) | sc-9018 sc-9274 sc-9299 | none | yes | yes (schema.sql) | no | FAIL |
+[exit 0]
+
+=================== S9 unreadable forge fails closed ===================
+$ GH stub that always fails
+fm-release-gate: could not read https://github.com/applypass/apply_pass_backend/pull/826
+[exit 1]
