@@ -1,0 +1,47 @@
+=== S1/S2: daily quota stop writes a labelled system line with the cap reason ===
+baseline check exit=0
+daily quota stop: refusing a new worker launch. The fleet has used 21% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+refuse check exit=3
+--- mate1.status:
+blocked [at=1793830739]: system: resource-exhausted (daily quota cap) external-wait until=2026-11-05T18:30Z: daily quota stop: refusing a new worker launch. The fleet has used 21% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+--- never-wait sweep 20 min later (a system line must not be judged as the worker's block):
+(sweep exit=0)
+
+=== S2b: never-wait judges the latest blocked line, not the first ===
+blocked [at=1793830739]: waiting on stuff
+blocked [at=1793830799]: external-wait until=2026-11-05T00:18Z: vendor fix in flight
+--- sweep output:
+(sweep exit=0)
+--- adversarial: legal first line, illegal latest line must be rejected
+ALARM mate2: blocked 50 minutes with no action (external-wait until=2026-11-05T00:18Z: vendor fix in flight); act on it now and tell the captain | SELF-FIX mate3: its blocked line carries no legal reason (captain-credential, captain-decision, resource-exhausted, or external-wait until=<UTC time>), so it is not a wait: no known playbook: diagnose it, fix it, and steer the worker with fm-send; only a captain credential, a captain decision, an exhausted resource, or a timed external wait may stay blocked | ALARM mate3: blocked 50 minutes with no action (waiting on stuff); act on it now and tell the captain
+
+=== S3: a known wait wakes once, then stays quiet until it ends ===
+[first sight] watcher WOKE: signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.GiJvB2/state/kw.status
+[same wait again] watcher STAYED UP for 6s (no wake)
+--- adversarial: a changed clear time is a new fact
+[new clear time] watcher WOKE: signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.GiJvB2/state/kw.status
+--- adversarial: a wait whose time has passed wakes
+[past wait] watcher WOKE: signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.GiJvB2/state/kw.status
+[past wait again] watcher WOKE: signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.GiJvB2/state/kw.status
+records:
+known-wait-3603212369
+known-wait-482746136
+known-wait-516926470
+
+=== S5: one wake per open problem; a new fact wakes; closure reopens ===
+[open problem first] watcher WOKE: signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.GiJvB2/state/op.status
+[same key/verb/note repeat] watcher STAYED UP for 6s (no wake)
+problem record: 1 deploy
+[changed note (new fact)] watcher WOKE: signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.GiJvB2/state/op.status
+[captain-held transfer] watcher WOKE: signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.GiJvB2/state/op.status
+[same line after captain-held closure] watcher WOKE: signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.GiJvB2/state/op.status
+
+=== S6: a routine child-outcome notice rides the next real wake, or its hold limit ===
+[lone routine notice] watcher STAYED UP for 6s (no wake)
+[real event after held notice] watcher WOKE: signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.GiJvB2/state/rt.status
+held record after the wake: none
+[lone notice with FM_NOISE_HOLD_SECS=3] watcher WOKE: signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.GiJvB2/state/rt2.status
+--- adversarial: captain-held beside a held notice
+[lone notice rt3] watcher STAYED UP for 5s (no wake)
+[captain-held beside held notice] watcher WOKE: signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.GiJvB2/state/rt3.status
+lab removed on exit: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.GiJvB2

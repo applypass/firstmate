@@ -1,0 +1,9 @@
+##### code at: fm-base.ZhPOaS
+quota line: blocked [at=1793830993]: daily quota stop: refusing a new worker launch. The fleet has used 21% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+sweep findings: SELF-FIX mate1: its blocked line carries no legal reason (captain-credential, captain-decision, resource-exhausted, or external-wait until=<UTC time>), so it is not a wait: no known playbook: diagnose it, fix it, and steer the worker with fm-send; only a captain credential, a captain decision, an exhausted resource, or a timed external wait may stay blocked
+  SELF-FIX mate2: its blocked line carries no legal reason (captain-credential, captain-decision, resource-exhausted, or external-wait until=<UTC time>), so it is not a wait: no known playbook: diagnose it, fix it, and steer the worker with fm-send; only a captain credential, a captain decision, an exhausted resource, or a timed external wait may stay blocked
+
+##### code at: 01M6M7XQAEMSP6R2THE73JB4PV
+quota line: blocked [at=1793830994]: system: resource-exhausted (daily quota cap) external-wait until=2026-11-05T18:30Z: daily quota stop: refusing a new worker launch. The fleet has used 21% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+sweep findings: 
+

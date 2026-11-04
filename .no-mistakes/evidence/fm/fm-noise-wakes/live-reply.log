@@ -1,0 +1,16 @@
+=== A: acknowledged, progress since the request (working at T0+600), checked at T0+1000
+  phase after ack pass: acknowledged
+  watcher stayed up 8s
+  phase at T0+1000: acknowledged  (expect acknowledged: not a missed reply)
+  ra.status:
+    working [corr=733330329183c760] [at=1793830925]: on it
+    working [at=1793831515]: halfway through the tests
+=== B (adversarial): acknowledged, NO progress since the ack (ack stamped T0+10)
+  phase after ack pass: acknowledged
+  watcher stayed up 8s
+  phase at T0+1000 (ack line still inside the 1200s activity window): acknowledged
+  watcher woke: signal: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.dt8aEb/state/rb.status 
+  phase at T0+1300 (past the window, no progress): escalated  (expect escalated)
+  rb.status:
+    working [corr=5d967ba22c6c50b1] [at=1793830925]: on it
+    blocked [key=pending-reply-5d967ba22c6c50b1] [at=1793830968]: pending-reply-unreported: task=rb pending-reply-id=5d967ba22c6c50b1 request=status of phase 7 - acknowledged only, no result reached main
