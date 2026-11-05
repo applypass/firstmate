@@ -111,13 +111,15 @@ fm_reemit_extract() {
 }
 
 # fm_reemit_seen_load: reads the hash record, dropping it when it belongs to
-# another session (another lock pid).
+# another session (another lock pid). A read-only session never received the
+# owner's records, so it reads none.
 FM_REEMIT_SEEN=
 fm_reemit_seen_load() {
   local key
   key=$(cat "$STATE/.lock" 2>/dev/null || true)
   FM_REEMIT_KEY=${key:-none}
   FM_REEMIT_SEEN=
+  [ "${READ_ONLY:-0}" -eq 0 ] || return 0
   [ -f "$FM_REEMIT_SEEN_FILE" ] || return 0
   [ "$(sed -n '1p' "$FM_REEMIT_SEEN_FILE" 2>/dev/null)" = "$FM_REEMIT_KEY" ] || return 0
   FM_REEMIT_SEEN=$(sed '1d' "$FM_REEMIT_SEEN_FILE" 2>/dev/null)

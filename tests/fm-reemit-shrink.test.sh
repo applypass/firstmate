@@ -267,11 +267,13 @@ FIXTURE
   run_reemit "$home" "$root" "$fakebin" >/dev/null
   sup_before=$(cat "$home/state/.reemit-supervision.txt")
   full_before=$(cat "$home/state/.reemit-full-digest.txt")
-  seen_before=$(cat "$home/state/.reemit-seen")
 
   sleep 300 &
   holder_pid=$!
   printf '%s\n' "$holder_pid" > "$home/state/.lock"
+  { printf '%s\n' "$holder_pid"; sed '1d' "$home/state/.reemit-seen"; } > "$home/state/.reemit-seen.new"
+  mv "$home/state/.reemit-seen.new" "$home/state/.reemit-seen"
+  seen_before=$(cat "$home/state/.reemit-seen")
   out=$(FM_FAKE_LIVE_HOLDER_PID="$holder_pid" run_reemit "$home" "$root" "$fakebin")
   kill "$holder_pid" 2>/dev/null || true
   wait "$holder_pid" 2>/dev/null || true
@@ -279,10 +281,12 @@ FIXTURE
   assert_contains "$out" "READ-ONLY SESSION" "a competing live lock owner did not force read-only mode"
   assert_contains "$out" "- Lock: read-only" "the read-only re-emit did not print its own Current state"
   assert_not_contains "$out" "$home/state/.reemit-supervision.txt" "the read-only re-emit pointed at the owner's supervision file"
+  assert_contains "$out" "task-12 | " "the read-only re-emit hid a task line behind the owner's unchanged-record hashes"
+  assert_not_contains "$out" "unchanged since the last re-emit" "the read-only re-emit called records it never received unchanged"
   [ "$(cat "$home/state/.reemit-supervision.txt")" = "$sup_before" ] || fail "a read-only re-emit overwrote the owner's supervision file"
   [ "$(cat "$home/state/.reemit-full-digest.txt")" = "$full_before" ] || fail "a read-only re-emit overwrote the owner's full digest"
   [ "$(cat "$home/state/.reemit-seen")" = "$seen_before" ] || fail "a read-only re-emit rewrote the owner's unchanged-record hashes"
-  pass "a read-only re-emit writes its files elsewhere and leaves the owner's re-emit files alone"
+  pass "a read-only re-emit ignores the owner's unchanged-record hashes and leaves the owner's re-emit files alone"
 }
 
 test_a_slow_network_worker_does_not_hold_the_reemit_output_open() {
