@@ -39,17 +39,17 @@
 #   fm_reemit_capture_supervision   send the supervision block to its file
 #   fm_reemit_capture_bulk          send the rest of the bulk digest to its file
 #   fm_reemit_finish     print the summary
+#   fm_reemit_next_step  print the NEXT STEP section with the file pointers
+#
+# FM_REEMIT_SHRINK=0 turns every hook into a no-op, so --reemit prints the
+# full upstream re-emit digest.
 
 FM_REEMIT_SUP_FILE=
 FM_REEMIT_FULL_FILE=
 FM_REEMIT_SEEN_FILE=
 FM_REEMIT_MAX_TASKS=${FM_REEMIT_MAX_TASKS:-30}
-# The NEXT STEP wording for where the supervision block is.
-FM_SUP_BLOCK='block above'
-# The NEXT STEP wording for where the read-once contract is.
-FM_READ_ONCE_WHERE='near the top of it'
 
-fm_reemit_active() { [ "${REEMIT:-0}" -eq 1 ]; }
+fm_reemit_active() { [ "${REEMIT:-0}" -eq 1 ] && [ "${FM_REEMIT_SHRINK:-1}" != 0 ]; }
 
 fm_reemit_hide() {
   fm_reemit_active || return 0
@@ -83,10 +83,6 @@ fm_reemit_capture_supervision() {
     FM_REEMIT_FULL_FILE="$dir/.reemit-full-digest.txt"
   fi
   FM_REEMIT_SEEN_FILE="$STATE/.reemit-seen"
-  # shellcheck disable=SC2034  # read by bin/fm-session-start.sh
-  FM_SUP_BLOCK="block in $FM_REEMIT_SUP_FILE (its key lines are in the summary above)"
-  # shellcheck disable=SC2034  # read by bin/fm-session-start.sh
-  FM_READ_ONCE_WHERE="in $FM_REEMIT_FULL_FILE"
   exec 7>&1 1>"$FM_REEMIT_SUP_FILE"
 }
 
@@ -245,4 +241,51 @@ EOF
   if [ "${READ_ONLY:-0}" -eq 0 ]; then
     { printf '%s\n' "$FM_REEMIT_KEY"; printf '%s' "$FM_REEMIT_NEXT"; } > "$FM_REEMIT_SEEN_FILE" 2>/dev/null || true
   fi
+}
+
+# fm_reemit_next_step: the re-emit NEXT STEP section. It names the supervision
+# file instead of a block above, because the summary does not print the block.
+fm_reemit_next_step() {
+  local sup="block in $FM_REEMIT_SUP_FILE (its key lines are in the summary above)"
+  section "NEXT STEP"
+  if [ "$READ_ONLY" -eq 1 ]; then
+    cat <<'EOF'
+This session did not acquire the fleet lock. Stay read-only: do not arm,
+drain, spawn, steer, merge, or repair fleet state from here. Only a session
+with verified fleet-lock ownership may perform mutable follow-up.
+
+EOF
+  elif [ "$AFK_PRESENT" -eq 1 ] && [ "$AFK_MODE" = quiet ]; then
+    cat <<EOF
+Quiet mode is active. Follow the supervision operating instructions
+$sup: load /quiet and ensure the daemon is running, because the daemon owns
+watcher supervision. Ordinary captain chat does not exit it; only an
+explicit /quiet off does.
+
+EOF
+  elif [ "$AFK_PRESENT" -eq 1 ]; then
+    cat <<EOF
+Away mode is active. Follow the supervision operating instructions $sup:
+load /afk and ensure the daemon is running, because the daemon owns watcher
+supervision.
+
+EOF
+  elif [ -f "$CONFIG/x-mode.env" ]; then
+    cat <<EOF
+Follow the supervision operating instructions $sup for harness '$PRIMARY_HARNESS'.
+X mode is active, so the emitted block's cadence instruction applies.
+This script never starts supervision itself.
+
+EOF
+  else
+    cat <<EOF
+Follow the supervision operating instructions $sup for harness '$PRIMARY_HARNESS'.
+This script never starts supervision itself.
+
+EOF
+  fi
+  cat <<EOF
+The digest above is complete for this session start. The READ-ONCE CONTRACT
+section in $FM_REEMIT_FULL_FILE governs what may still be read from disk.
+EOF
 }
