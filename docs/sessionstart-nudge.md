@@ -64,6 +64,7 @@ The run wrapper learns the source in one of two ways:
 - Otherwise it reads the `source` field from a Claude/Codex-shaped JSON hook payload on stdin.
 
 A re-emit (`--reemit`) reprints the digest for a process that already has the helm and lost only its context.
+<!-- Fork-only: short re-emit --> In this fork, `bin/fm-reemit-lib.sh` prints that re-emit as a short summary with pointers to `state/.reemit-*.txt` files, and skips records unchanged since the last re-emit in the same session; `FM_REEMIT_SHRINK=0` keeps the full re-emit.
 
 | Source | Action | Why |
 | --- | --- | --- |

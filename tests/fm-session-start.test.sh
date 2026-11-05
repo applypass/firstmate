@@ -36,6 +36,8 @@ set -u
 # shellcheck source=tests/wake-helpers.sh
 . "$(dirname "${BASH_SOURCE[0]}")/wake-helpers.sh"
 
+# Fork-only: these tests cover the upstream full re-emit; tests/fm-reemit-shrink.test.sh covers the fork's short one.
+export FM_REEMIT_SHRINK=0
 SESSION_START="$ROOT/bin/fm-session-start.sh"
 BASE_PATH=${FM_TEST_BASE_PATH:-/usr/bin:/bin:/usr/sbin:/sbin}
 TMP_ROOT=$(fm_test_tmproot fm-session-start-tests)

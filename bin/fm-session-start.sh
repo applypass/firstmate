@@ -224,6 +224,11 @@
 #             ordinary read-only path. A re-emit prints a short RE-EMIT CUE
 #             first, so a harness that spills a large output and shows only its
 #             head still tells the model to read the saved full output.
+#             Fork-only: bin/fm-reemit-lib.sh shrinks the re-emit to a short
+#             summary with pointers to state/.reemit-*.txt files and skips
+#             records unchanged since the last re-emit in the same session; it
+#             also prints the re-emit NEXT STEP. FM_REEMIT_SHRINK=0 keeps the
+#             full re-emit above.
 #
 #   --source  The native session-open source, supplied only by
 #             fm-sessionstart-run.sh. A genuine `startup` that owns the active
@@ -673,6 +678,10 @@ if [ "$REEMIT" -eq 0 ] && [ "$SESSION_SOURCE" = startup ]; then
   AGENTS_START_HASH=$(hash_file_sha256 "$FM_ROOT/AGENTS.md" 2>/dev/null || true)
 fi
 
+# Fork-only: a re-emit prints a short summary instead of the full digest (bin/fm-reemit-lib.sh).
+# shellcheck source=bin/fm-reemit-lib.sh
+. "$SCRIPT_DIR/fm-reemit-lib.sh"
+fm_reemit_hide
 if [ "$REEMIT" -eq 1 ]; then
   # First in the output on purpose: a harness that spills a large hook output
   # delivers only a short head inline (Claude: about 2,000 characters), and
@@ -690,6 +699,8 @@ if [ "$REEMIT" -eq 1 ]; then
 else
   section "SESSION START - $FM_HOME"
 fi
+# Fork-only: print the short re-emit cue and header, then stop hiding output.
+fm_reemit_cue
 # --- 1. lock -----------------------------------------------------------
 stage lock
 subsection "LOCK"
@@ -829,6 +840,8 @@ else
 fi
 
 # --- 4. supervision operating instructions ----------------------------------
+# Fork-only: send the supervision block to its file; the re-emit summary prints its key lines and the file.
+fm_reemit_capture_supervision
 stage supervision-instructions
 AFK_PRESENT=0
 [ -e "$STATE/.afk" ] && AFK_PRESENT=1
@@ -888,6 +901,8 @@ fi
   --afk "$AFK_PRESENT" \
   --afk-mode "$AFK_MODE" \
   --x-mode "$X_MODE_PRESENT"
+# Fork-only: send the read-once, fleet, network and context sections to the full-digest file.
+fm_reemit_capture_bulk
 
 # --- 5. read-once contract -------------------------------------------------
 # Ahead of the two digests it governs, not after them: a truncated tail is
@@ -1063,6 +1078,13 @@ print_file_or_absent "$DATA/captain-shared.md" "data/captain-shared.md (shared, 
 print_file_or_absent "$DATA/learnings.md" "data/learnings.md"
 
 # --- 9. closing reminder -----------------------------------------------
+# Fork-only: a shrunk re-emit prints its summary and its own NEXT STEP, then ends here.
+if fm_reemit_active; then
+  fm_reemit_finish
+  stage next-step
+  fm_reemit_next_step
+  exit 0
+fi
 stage next-step
 section "NEXT STEP"
 if [ "$READ_ONLY" -eq 1 ]; then

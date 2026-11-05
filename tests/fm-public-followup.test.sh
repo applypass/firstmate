@@ -1473,6 +1473,12 @@ test_session_start_surfaces_only_when_owed() {
     "the startup summary must carry the public-safe summary"
   assert_not_contains "$out" "please fix worker placement" \
     "the startup summary must not carry raw request text"
+  # Fork-only: the short context re-emit summary (bin/fm-reemit-lib.sh) still surfaces the commitment.
+  out=$(PATH="$on/fakebin:$PATH" FM_ROOT_OVERRIDE="$ROOT" FM_HOME="$on" \
+    FM_STATE_OVERRIDE="$on/state" FM_DATA_OVERRIDE="$on/data" \
+    FM_CONFIG_OVERRIDE="$on/config" "$SESSION_START" --reemit 2>&1)
+  assert_contains "$out" "unresolved pf-start state=pending-work platform=discord" \
+    "a context re-emit summary must still surface an unresolved commitment"
   pass "startup surfaces unresolved public commitments only in a relay home that owes one"
 }
 
