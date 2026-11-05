@@ -213,9 +213,16 @@
 #             sync, same-home backlog reconciliation, secondmate convergence and
 #             liveness, pending remote handoff retry, X-mode
 #             artifact writes) - and
-#             re-emit the rest. Wake-queue presentation is NOT skipped: queued
-#             records are this turn's work queue, they arrived after startup,
-#             and a session that owns the lock is exactly the session that must
+#             re-emit the rest as a short summary (bin/fm-reemit-lib.sh owns
+#             it): the lock, home role, bootstrap, wake queue, and NEXT STEP
+#             sections print in full, while the supervision block and the bulky
+#             fleet, network, and context sections go to state/.reemit-*.txt
+#             files that the summary names, with the supervision Current state
+#             and wake-handling lines inline. A task line, network result, or
+#             context file unchanged since the last re-emit in the same session
+#             is not resent; the summary names the file that holds it.
+#             Wake-queue presentation is NOT skipped: queued records are this
+#             turn's work queue, they arrived after startup, and a session that owns the lock is exactly the session that must
 #             handle and acknowledge them. Lock acquisition still runs, because
 #             ownership must be re-verified rather than assumed: fm-lock.sh
 #             already treats a lock owned through shared ancestry or a trusted
@@ -835,7 +842,7 @@ else
 fi
 
 # --- 4. supervision operating instructions ----------------------------------
-# Fork-only: send the supervision block to its file; the re-emit summary resends it only when changed.
+# Fork-only: send the supervision block to its file; the re-emit summary prints its key lines and the file.
 fm_reemit_capture_supervision
 stage supervision-instructions
 AFK_PRESENT=0
@@ -1085,37 +1092,37 @@ with verified fleet-lock ownership may perform mutable follow-up.
 
 EOF
 elif [ "$AFK_PRESENT" -eq 1 ] && [ "$AFK_MODE" = quiet ]; then
-  cat <<'EOF'
-Quiet mode is active. Follow the supervision operating instructions block
-above: load /quiet and ensure the daemon is running, because the daemon owns
+  cat <<EOF
+Quiet mode is active. Follow the supervision operating instructions ${FM_SUP_BLOCK%% *}
+${FM_SUP_BLOCK#* }: load /quiet and ensure the daemon is running, because the daemon owns
 watcher supervision. Ordinary captain chat does not exit it; only an
 explicit /quiet off does.
 
 EOF
 elif [ "$AFK_PRESENT" -eq 1 ]; then
-  cat <<'EOF'
-Away mode is active. Follow the supervision operating instructions block above:
+  cat <<EOF
+Away mode is active. Follow the supervision operating instructions $FM_SUP_BLOCK:
 load /afk and ensure the daemon is running, because the daemon owns watcher
 supervision.
 
 EOF
 elif [ -f "$CONFIG/x-mode.env" ]; then
   cat <<EOF
-Follow the supervision operating instructions block above for harness '$PRIMARY_HARNESS'.
+Follow the supervision operating instructions $FM_SUP_BLOCK for harness '$PRIMARY_HARNESS'.
 X mode is active, so the emitted block's cadence instruction applies.
 This script never starts supervision itself.
 
 EOF
 else
 cat <<EOF
-Follow the supervision operating instructions block above for harness '$PRIMARY_HARNESS'.
+Follow the supervision operating instructions $FM_SUP_BLOCK for harness '$PRIMARY_HARNESS'.
 This script never starts supervision itself.
 
 EOF
 fi
-cat <<'EOF'
+cat <<EOF
 The digest above is complete for this session start. The READ-ONCE CONTRACT
-section near the top of it governs what may still be read from disk.
+section $FM_READ_ONCE_WHERE governs what may still be read from disk.
 EOF
 
 if [ "$READ_ONLY" -eq 0 ] && [ "$REEMIT" -eq 0 ]; then

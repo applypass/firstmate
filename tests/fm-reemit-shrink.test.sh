@@ -5,12 +5,16 @@
 # Builds a home shaped like a busy main home (many tasks with long status
 # tails, large captain, shared-captain and learnings files, a large backlog),
 # with neutral names. Asserts:
-#   - the re-emit stays under 15 KB while the full digest is far larger
-#   - every safety line survives: lock, wake queue, open decisions, the wake
-#     acknowledgement command, and the closing NEXT STEP
-#   - a second re-emit with no change omits the unchanged records, and a changed
-#     record is sent again
+#   - the re-emit stays under Claude's 10,000-character hook cap while the full
+#     digest is far larger
+#   - every safety line survives: lock, wake queue, the wake acknowledgement
+#     command, the supervision Current state and wake-handling lines, and the
+#     closing NEXT STEP, which points at the supervision file
+#   - a second re-emit with no change names the file of each unchanged record
+#     instead of resending it, and a changed record is sent again
 #   - a different session (new lock pid) starts over with a full summary
+#   - a read-only re-emit leaves the lock owner's re-emit files alone
+#   - a slow detached network worker does not hold the hook output open
 # Prints the before (full digest) and after (re-emit) sizes in bytes.
 set -u
 
@@ -53,6 +57,9 @@ SH
   chmod +x "$fakebin/gh-axi"
   cat > "$fakebin/gh" <<'SH'
 #!/usr/bin/env bash
+if [ "${1:-} ${2:-}" = "auth status" ] && [ -n "${FM_FAKE_GH_AUTH_SLEEP:-}" ]; then
+  sleep "$FM_FAKE_GH_AUTH_SLEEP"
+fi
 exit 0
 SH
   chmod +x "$fakebin/gh"
@@ -153,8 +160,25 @@ run_reemit() {  # <home> <root> <fakebin>
     "$SESSION_START" --reemit
 }
 
+# assert_supervision_summary <output> <home> <label>: the supervision pointer,
+# its key lines, and a NEXT STEP that points at the file, not at a block above.
+assert_supervision_summary() {
+  local out=$1 home=$2 label=$3
+  assert_contains "$out" "Full block: $home/state/.reemit-supervision.txt" "$label did not point at the supervision file"
+  assert_contains "$out" "- Lock: held by this session" "$label dropped the Current state lock line"
+  assert_contains "$out" "- Away/quiet mode: inactive." "$label dropped the Current state away line"
+  assert_contains "$out" "1. Drain first with \`bin/fm-wake-drain.sh\`." "$label dropped the drain-first step"
+  assert_contains "$out" "run the exact \`--ack-through\` command printed as \`WAKE_ACK_REQUIRED\`" "$label dropped the ack step"
+  assert_contains "$out" "Do not run \`bin/fm-watch-arm.sh\` after an ordinary wake" "$label dropped the do-not-arm step"
+  assert_contains "$out" "Follow the supervision operating instructions block in $home/state/.reemit-supervision.txt" \
+    "$label NEXT STEP did not point at the supervision file"
+  assert_not_contains "$out" "instructions block above" "$label NEXT STEP pointed at a block that is not above"
+  assert_contains "$(cat "$home/state/.reemit-supervision.txt")" "SUPERVISION OPERATING INSTRUCTIONS" \
+    "$label did not write the supervision file"
+}
+
 test_reemit_is_short_keeps_safety_lines_and_omits_unchanged_records() {
-  local rec root home fakebin full first second third before after1 after2 sequence
+  local rec root home fakebin full first second third before after1 after2 sequence generation unchanged_line
   rec=$(new_world busy)
   IFS='|' read -r root home fakebin <<FIXTURE
 $rec
@@ -169,7 +193,7 @@ FIXTURE
   first=$(run_reemit "$home" "$root" "$fakebin")
   after1=${#first}
   printf 'reemit size: before (full digest) %s bytes, after (first re-emit) %s bytes\n' "$before" "$after1"
-  [ "$after1" -lt 15360 ] || fail "first re-emit is $after1 bytes, not under 15 KB"
+  [ "$after1" -lt 10000 ] || fail "first re-emit is $after1 bytes, not under the 10,000-character hook cap"
   [ "$before" -gt $((after1 * 4)) ] || fail "the fixture full digest ($before bytes) is not much larger than the re-emit"
 
   assert_contains "$first" "RE-EMIT CUE" "re-emit lost its cue"
@@ -185,25 +209,37 @@ FIXTURE
   assert_not_contains "$first" "step 3 of task-1 finished" "re-emit still carried status tails"
   assert_present "$home/state/.reemit-full-digest.txt" "the full digest file was not written"
   assert_contains "$(cat "$home/state/.reemit-full-digest.txt")" "preference line 0001" "the full digest file lost the captain file"
+  assert_supervision_summary "$first" "$home" "first re-emit"
 
-  # Acknowledge the wake so the second re-emit differs only by what we change.
   sequence=$(printf '%s\n' "$first" | sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through \([0-9][0-9]*\) --recovery-generation [A-Za-z0-9._-][A-Za-z0-9._-]*$/\1/p' | tail -1)
-  [ -n "$sequence" ] || fail "no wake acknowledgement sequence in the first re-emit"
+  generation=$(printf '%s\n' "$first" | sed -n 's/^WAKE_ACK_REQUIRED:.*--ack-through [0-9][0-9]* --recovery-generation \([A-Za-z0-9._-][A-Za-z0-9._-]*\)$/\1/p' | tail -1)
+  [ -n "$sequence" ] && [ -n "$generation" ] || fail "no wake acknowledgement in the first re-emit"
+  FM_STATE_OVERRIDE="$home/state" "$ROOT/bin/fm-wake-drain.sh" --ack-through "$sequence" \
+    --recovery-generation "$generation" >/dev/null || fail "the first re-emit wake acknowledgement failed"
 
   second=$(run_reemit "$home" "$root" "$fakebin")
   after2=${#second}
   printf 'reemit size: second re-emit with no change %s bytes\n' "$after2"
-  assert_contains "$second" "unchanged since the last re-emit" "second re-emit did not mark unchanged records"
-  assert_not_contains "$second" "task-12 | " "second re-emit resent an unchanged task line"
+  [ "$after2" -lt 10000 ] || fail "second re-emit is $after2 bytes, not under the 10,000-character hook cap"
+  assert_not_contains "$second" "done: queued after startup" "second re-emit showed an acknowledged wake"
+  unchanged_line=$(printf '%s\n' "$second" | grep -F 'unchanged since the last re-emit, not resent:')
+  assert_contains "$unchanged_line" " task-12 " "second re-emit did not name an unchanged task"
+  assert_contains "$unchanged_line" "(each in $home/state/<id>.status and $home/state/<id>.meta)" \
+    "second re-emit did not name the files that hold an unchanged task"
+  assert_not_contains "$second" "step 60 of task-12" "second re-emit resent an unchanged task line"
+  assert_contains "$second" "$home/data/captain.md: unchanged since the last re-emit" \
+    "second re-emit did not name an unchanged context file"
+  assert_supervision_summary "$second" "$home" "second re-emit"
   [ "$after2" -lt "$after1" ] || fail "second re-emit ($after2) is not smaller than the first ($after1)"
-  assert_contains "$second" "WAKE_ACK_REQUIRED" "second re-emit dropped the wake acknowledgement command"
 
   printf 'working [at=1800000000]: a brand new line for task-7\n' >> "$home/state/task-7.status"
   third=$(run_reemit "$home" "$root" "$fakebin")
   assert_contains "$third" "a brand new line for task-7" "a changed record was not resent"
-  assert_not_contains "$third" "task-8 | " "a record that did not change was resent"
+  assert_not_contains "$third" "step 60 of task-8" "a record that did not change was resent"
+  assert_contains "$(printf '%s\n' "$third" | grep -F 'unchanged since the last re-emit, not resent:')" " task-8 " \
+    "a record that did not change was not named as unchanged"
 
-  pass "re-emit is under 15 KB, keeps its safety lines, and omits unchanged records"
+  pass "re-emit is under the hook cap, keeps its safety lines, and names the files of unchanged records"
 }
 
 test_a_new_session_starts_over_with_the_full_summary() {
@@ -221,7 +257,52 @@ FIXTURE
   pass "a re-emit record from another session never suppresses a summary"
 }
 
+test_a_read_only_reemit_leaves_the_owner_files_alone() {
+  local rec root home fakebin holder_pid out sup_before full_before seen_before
+  rec=$(new_world busy-read-only)
+  IFS='|' read -r root home fakebin <<FIXTURE
+$rec
+FIXTURE
+  build_busy_home "$root" "$home" "$fakebin"
+  run_reemit "$home" "$root" "$fakebin" >/dev/null
+  sup_before=$(cat "$home/state/.reemit-supervision.txt")
+  full_before=$(cat "$home/state/.reemit-full-digest.txt")
+  seen_before=$(cat "$home/state/.reemit-seen")
+
+  sleep 300 &
+  holder_pid=$!
+  printf '%s\n' "$holder_pid" > "$home/state/.lock"
+  out=$(FM_FAKE_LIVE_HOLDER_PID="$holder_pid" run_reemit "$home" "$root" "$fakebin")
+  kill "$holder_pid" 2>/dev/null || true
+  wait "$holder_pid" 2>/dev/null || true
+
+  assert_contains "$out" "READ-ONLY SESSION" "a competing live lock owner did not force read-only mode"
+  assert_contains "$out" "- Lock: read-only" "the read-only re-emit did not print its own Current state"
+  assert_not_contains "$out" "$home/state/.reemit-supervision.txt" "the read-only re-emit pointed at the owner's supervision file"
+  [ "$(cat "$home/state/.reemit-supervision.txt")" = "$sup_before" ] || fail "a read-only re-emit overwrote the owner's supervision file"
+  [ "$(cat "$home/state/.reemit-full-digest.txt")" = "$full_before" ] || fail "a read-only re-emit overwrote the owner's full digest"
+  [ "$(cat "$home/state/.reemit-seen")" = "$seen_before" ] || fail "a read-only re-emit rewrote the owner's unchanged-record hashes"
+  pass "a read-only re-emit writes its files elsewhere and leaves the owner's re-emit files alone"
+}
+
+test_a_slow_network_worker_does_not_hold_the_reemit_output_open() {
+  local rec root home fakebin started elapsed out
+  rec=$(new_world busy-slow-network)
+  IFS='|' read -r root home fakebin <<FIXTURE
+$rec
+FIXTURE
+  build_busy_home "$root" "$home" "$fakebin"
+  started=$(date +%s)
+  out=$(FM_FAKE_GH_AUTH_SLEEP=30 run_reemit "$home" "$root" "$fakebin" | cat)
+  elapsed=$(($(date +%s) - started))
+  assert_contains "$out" "NEXT STEP" "the re-emit did not finish"
+  [ "$elapsed" -lt 20 ] || fail "the re-emit output stayed open ${elapsed}s behind the detached network worker"
+  pass "a slow detached network worker does not hold the re-emit output open"
+}
+
 test_reemit_is_short_keeps_safety_lines_and_omits_unchanged_records
 test_a_new_session_starts_over_with_the_full_summary
+test_a_read_only_reemit_leaves_the_owner_files_alone
+test_a_slow_network_worker_does_not_hold_the_reemit_output_open
 
 echo "# fm-reemit-shrink.test.sh: all assertions passed"

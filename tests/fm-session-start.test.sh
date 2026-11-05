@@ -2439,12 +2439,12 @@ FIXTURE
   reemit=$(FM_HOME="$home" FM_ROOT_OVERRIDE="$root" FM_FAKE_HARNESS_PID=$$ PATH="$fakebin:$BASE_PATH" \
     env -u CLAUDECODE -u PI_CODING_AGENT -u FM_PI_HARNESS -u GROK_AGENT \
     "$SESSION_START" --reemit)
-  [ "${#reemit}" -gt 10000 ] || fail "re-emit fixture did not exceed the hook output limit"
+  [ "${#reemit}" -lt 10000 ] || fail "re-emit is ${#reemit} characters, over the 10,000-character hook output limit"
   head2k=$(printf '%s' "$reemit" | head -c 2000)
   assert_contains "$head2k" "RE-EMIT CUE" "the re-emit cue is not inside the first 2000 characters"
   assert_contains "$head2k" "Full output saved to" "the re-emit cue does not point at the saved output"
 
-  pass "--reemit puts its read cue in the first 2000 characters and a normal start omits it"
+  pass "--reemit stays under the hook output limit with its read cue in the first 2000 characters, and a normal start omits it"
 }
 
 test_reemit_skips_startup_sweeps_but_keeps_the_wake_drain() {

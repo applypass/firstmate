@@ -11,19 +11,27 @@
 # closing NEXT STEP section (read-only, away, quiet and X-mode guidance). Only
 # the bulky sections change: the supervision instructions, the read-once
 # contract, the fleet state, the network checks and the curated context files.
-# Those go to files under state/ and the re-emit prints a summary with counts,
-# one line per task in flight, and the file pointers to read on demand.
+# Those go to files under state/ and the re-emit prints a summary: the
+# supervision block's Current state lines and wake-handling steps, one line per
+# task in flight, counts, any public commitments, and the file pointers to read
+# on demand. NEXT STEP points at the supervision file, not at a block above.
 #
-# Unchanged records are not resent. Each record (the supervision block, each
-# task line, the network lines, each context file) has a content hash kept in
-# state/.reemit-seen, keyed to the session lock pid. The next re-emit in the
-# same session prints "unchanged" for records whose hash matches; a different
-# session starts with an empty record.
+# Unchanged records are not resent. Each task line, the network lines and each
+# context file has a content hash kept in state/.reemit-seen, keyed to the
+# session lock pid. The next re-emit in the same session names the file that
+# holds a record whose hash matches instead of printing it; a different session
+# starts with an empty record.
 #
-# Files written (all under state/, never tracked):
-#   .reemit-supervision.txt   the supervision instructions block
+# Files written (under state/, never tracked):
+#   .reemit-supervision.txt   the supervision instructions block, every re-emit
 #   .reemit-full-digest.txt   the read-once, fleet, network and context sections
 #   .reemit-seen              "<lock pid>" then "<record> <hash>" lines
+# A read-only re-emit does not own the helm, so it writes its two text files to
+# a fresh temporary directory and leaves state/ alone.
+#
+# The real stdout is saved on fd 7 only while output is hidden or captured, and
+# only synchronous children run then, so no detached worker inherits the hook
+# pipe.
 #
 # Hooks, in the order bin/fm-session-start.sh calls them:
 #   fm_reemit_hide       start hiding the upstream cue and header
@@ -36,6 +44,10 @@ FM_REEMIT_SUP_FILE=
 FM_REEMIT_FULL_FILE=
 FM_REEMIT_SEEN_FILE=
 FM_REEMIT_MAX_TASKS=${FM_REEMIT_MAX_TASKS:-30}
+# The NEXT STEP wording for where the supervision block is.
+FM_SUP_BLOCK='block above'
+# The NEXT STEP wording for where the read-once contract is.
+FM_READ_ONCE_WHERE='near the top of it'
 
 fm_reemit_active() { [ "${REEMIT:-0}" -eq 1 ]; }
 
@@ -46,12 +58,9 @@ fm_reemit_hide() {
 
 fm_reemit_cue() {
   fm_reemit_active || return 0
-  exec 1>&7
-  FM_REEMIT_SUP_FILE="$STATE/.reemit-supervision.txt"
-  FM_REEMIT_FULL_FILE="$STATE/.reemit-full-digest.txt"
-  FM_REEMIT_SEEN_FILE="$STATE/.reemit-seen"
+  exec 1>&7 7>&-
   printf 'RE-EMIT CUE: this is a short re-emit. If this output ends with "Output too large ... Full output saved to <path>",\n'
-  printf 'read that whole file now, before acting. The full digest is %s;\n' "$FM_REEMIT_FULL_FILE"
+  printf 'read that whole file now, before acting. The summary below names the files that hold the full digest;\n'
   printf 'read data/captain.md, data/captain-shared.md, and data/learnings.md under %s when you need them.\n' "$DATA"
   section "SESSION START (CONTEXT RE-EMIT) - $FM_HOME"
   printf 'This session already took the helm and has only lost its context. Lock ownership is\n'
@@ -61,8 +70,24 @@ fm_reemit_cue() {
 }
 
 fm_reemit_capture_supervision() {
+  local dir="$STATE"
   fm_reemit_active || return 0
-  exec 1>"$FM_REEMIT_SUP_FILE"
+  if [ "${READ_ONLY:-0}" -eq 1 ]; then
+    dir=$(mktemp -d "${TMPDIR:-/tmp}/fm-reemit-read-only.XXXXXX" 2>/dev/null) || dir=/dev/null
+  fi
+  if [ "$dir" = /dev/null ]; then
+    FM_REEMIT_SUP_FILE=/dev/null
+    FM_REEMIT_FULL_FILE=/dev/null
+  else
+    FM_REEMIT_SUP_FILE="$dir/.reemit-supervision.txt"
+    FM_REEMIT_FULL_FILE="$dir/.reemit-full-digest.txt"
+  fi
+  FM_REEMIT_SEEN_FILE="$STATE/.reemit-seen"
+  # shellcheck disable=SC2034  # read by bin/fm-session-start.sh
+  FM_SUP_BLOCK="block in $FM_REEMIT_SUP_FILE (its key lines are in the summary above)"
+  # shellcheck disable=SC2034  # read by bin/fm-session-start.sh
+  FM_READ_ONCE_WHERE="in $FM_REEMIT_FULL_FILE"
+  exec 7>&1 1>"$FM_REEMIT_SUP_FILE"
 }
 
 fm_reemit_capture_bulk() {
@@ -111,23 +136,24 @@ fm_reemit_unchanged() {
 fm_reemit_finish() {
   fm_reemit_active || return 0
   exec 1>&7 7>&-
-  local sup sup_hash tasks line id n_same=0 n_tasks=0 net net_hash n_ctx=0 n_ctx_same=0
-  local path label size lines hash fname backlog afk
+  local sup_state sup_steps tasks line id same='' n_tasks=0 net net_hash
+  local path size lines hash fname backlog afk public n_orphans
   fm_reemit_seen_load
   FM_REEMIT_NEXT=
 
   subsection "FLEET STATE (re-emit summary)"
   printf 'Full digest of this re-emit: %s\n' "$FM_REEMIT_FULL_FILE"
 
-  # Supervision instructions: the one record a model needs verbatim to resume
-  # the watch, so it is resent in full unless unchanged since the last re-emit.
-  sup=$(cat "$FM_REEMIT_SUP_FILE" 2>/dev/null || true)
-  sup_hash=$(fm_reemit_hash "$sup")
+  # Supervision instructions: the full block is always in its file; the lines a
+  # model needs to resume the watch are always printed here.
   subsection "Supervision instructions"
-  if fm_reemit_unchanged supervision "$sup_hash"; then
-    printf 'unchanged since the last re-emit in this session (not resent); read %s to see it again.\n' "$FM_REEMIT_SUP_FILE"
-  else
-    printf '%s\n' "$sup"
+  printf 'Full block: %s (read it before arming, repairing, or changing supervision).\n' "$FM_REEMIT_SUP_FILE"
+  sup_state=$(awk '/^Current state:$/ { p = 1 } p && /^$/ { exit } p' "$FM_REEMIT_SUP_FILE" 2>/dev/null)
+  printf '%s\n' "${sup_state:-(no Current state lines found; read the full block)}"
+  # shellcheck disable=SC2016  # the backticks are literal text in the block
+  sup_steps=$(grep -E 'Drain first with|WAKE_ACK_REQUIRED|Do not run `bin/fm-watch-arm.sh`' "$FM_REEMIT_SUP_FILE" 2>/dev/null | head -4)
+  if [ -n "$sup_steps" ]; then
+    printf 'Ordinary-wake handling:\n%s\n' "$sup_steps"
   fi
 
   subsection "Work in flight (one line per task: id | endpoint | last status line)"
@@ -149,16 +175,18 @@ fm_reemit_finish() {
       if [ "$n_tasks" -gt "$FM_REEMIT_MAX_TASKS" ]; then
         continue
       elif fm_reemit_unchanged "task:$id" "$(fm_reemit_hash "$line")"; then
-        n_same=$((n_same + 1))
+        same="$same $id"
       else
         printf '%s\n' "$line"
       fi
     done <<EOF
 $tasks
 EOF
+    [ -z "$same" ] || printf 'unchanged since the last re-emit, not resent:%s (each in %s/<id>.status and %s/<id>.meta)\n' "$same" "$STATE" "$STATE"
     [ "$n_tasks" -le "$FM_REEMIT_MAX_TASKS" ] || printf '(%s more task line(s) not listed; see the full digest)\n' "$((n_tasks - FM_REEMIT_MAX_TASKS))"
-    [ "$n_same" -eq 0 ] || printf '(%s of %s task line(s) unchanged since the last re-emit, not resent; full tails: %s)\n' "$n_same" "$n_tasks" "$FM_REEMIT_FULL_FILE"
   fi
+  n_orphans=$(fm_reemit_extract "$FM_REEMIT_FULL_FILE" "Orphan status logs (state/*.status without matching .meta)" | grep -c '^--- .* ---$')
+  [ "$n_orphans" -eq 0 ] || printf 'Orphan status logs (state/*.status without matching .meta): %s; tails in the full digest.\n' "$n_orphans"
 
   subsection "Backlog counts"
   backlog=$(fm_reemit_extract "$FM_REEMIT_FULL_FILE" "data/backlog.md" | grep -E '^(tasks: |count: |ready\[|\(shown )' | head -8)
@@ -169,13 +197,19 @@ EOF
   afk=$(fm_reemit_extract "$FM_REEMIT_FULL_FILE" "AFK" | head -3)
   printf '%s\n' "${afk:-(unknown)}"
 
+  public=$(fm_reemit_extract "$FM_REEMIT_FULL_FILE" "Public commitments")
+  if [ -n "$public" ]; then
+    subsection "Public commitments"
+    printf '%s\n' "$public"
+  fi
+
   net=$(fm_reemit_extract "$FM_REEMIT_FULL_FILE" "NETWORK CHECKS" | grep . | head -12)
   net_hash=$(fm_reemit_hash "$net")
   subsection "Network checks"
   if [ -z "$net" ]; then
     printf '(nothing reported)\n'
   elif fm_reemit_unchanged network "$net_hash"; then
-    printf 'unchanged since the last re-emit (not resent).\n'
+    printf 'unchanged since the last re-emit; see NETWORK CHECKS in %s.\n' "$FM_REEMIT_FULL_FILE"
   else
     printf '%s\n' "$net"
   fi
@@ -183,22 +217,19 @@ EOF
   subsection "Context files (read on demand)"
   for fname in projects.md secondmates.md captain.md captain-shared.md learnings.md; do
     path="$DATA/$fname"
-    label="data/$fname"
-    n_ctx=$((n_ctx + 1))
     if [ ! -f "$path" ]; then
-      printf '%s: ABSENT\n' "$label"
+      printf '%s: ABSENT\n' "$path"
       continue
     fi
     size=$(wc -c < "$path" | tr -d ' ')
     lines=$(wc -l < "$path" | tr -d ' ')
     hash=$(cksum < "$path" | awk '{ print $1 "-" $2 }')
     if fm_reemit_unchanged "file:$fname" "$hash"; then
-      n_ctx_same=$((n_ctx_same + 1))
+      printf '%s: unchanged since the last re-emit\n' "$path"
     else
-      printf '%s: %s bytes, %s lines\n' "$label" "$size" "$lines"
+      printf '%s: %s bytes, %s lines\n' "$path" "$size" "$lines"
     fi
   done
-  [ "$n_ctx_same" -eq 0 ] || printf '(%s of %s context file(s) unchanged since the last re-emit, not listed)\n' "$n_ctx_same" "$n_ctx"
 
   # Remember what was sent, for this session only. A read-only session does not
   # own the helm, so it writes nothing.

@@ -63,7 +63,7 @@ The run wrapper learns the source in one of two ways:
 - It takes `--source <name>` when the adapter knows the source natively.
 - Otherwise it reads the `source` field from a Claude/Codex-shaped JSON hook payload on stdin.
 
-A re-emit (`--reemit`) reprints the digest for a process that already has the helm and lost only its context.
+A re-emit (`--reemit`) prints a short summary of the digest, with pointers to files that hold the full sections, for a process that already has the helm and lost only its context.
 
 | Source | Action | Why |
 | --- | --- | --- |
@@ -115,6 +115,7 @@ The requested session start remains idempotent.
 `bin/fm-session-start.sh --reemit` owns these re-emit details:
 
 - Which work a re-emit skips.
+- What its short summary prints and which records it does not resend.
 - Its true-start AGENTS.md baseline.
 - Its supported stale-instruction refresh pairs.
 
