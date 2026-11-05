@@ -242,6 +242,59 @@ FIXTURE
   pass "re-emit is under the hook cap, keeps its safety lines, and names the files of unchanged records"
 }
 
+# make_fake_tasks_axi <fakebin>: a compatible tasks-axi whose backlog holds one
+# in-flight, one held, one blocked and two ready items, rendered the way the
+# real tool prints each group (a bare `count: N` line, then a table).
+make_fake_tasks_axi() {
+  local fakebin=$1
+  cat > "$fakebin/tasks-axi" <<'SH'
+#!/usr/bin/env bash
+group() {
+  printf 'count: 1\ntasks[1]{id,state,kind,repo,title,blocked_by,hold_kind,hold_reason}:\n  %s\n' "$1"
+  printf 'help[1]:\n  - Run `tasks-axi show <id> --full` for full notes on a task\n'
+}
+case "${1:-}" in
+  --version) printf '0.2.6\n' ;;
+  update) printf 'usage: tasks-axi update <id> [--archive-body]\n' ;;
+  mv) printf 'usage: tasks-axi mv <dest> [<id>...]\n' ;;
+  ready)
+    printf 'count: 2\nready[2]{id,state,kind,repo,title}:\n'
+    printf '  beta-b2,queued,task,"-",beta ready\n  gamma-g3,queued,task,"-",gamma ready\n'
+    printf 'ready_public_followups: 0 delivery-ready obligations\nhelp[1]:\n  - Run `tasks-axi start <id>`\n'
+    ;;
+  list)
+    case "$*" in
+      *'--state in_flight'*) group 'alpha-a1,in_flight,task,"-",alpha in flight,none,"-","-"' ;;
+      *'--state held'*) group 'delta-d4,queued,task,"-",delta held,none,captain,pending' ;;
+      *'--blocked'*) group 'eps-e5,queued,task,"-",eps blocked,beta-b2,"-","-"' ;;
+      *) exit 9 ;;
+    esac
+    ;;
+  *) exit 1 ;;
+esac
+SH
+  chmod +x "$fakebin/tasks-axi"
+}
+
+test_backlog_counts_name_each_tasks_axi_group() {
+  local rec root home fakebin out counts
+  rec=$(new_world busy-tasks-axi)
+  IFS='|' read -r root home fakebin <<FIXTURE
+$rec
+FIXTURE
+  build_busy_home "$root" "$home" "$fakebin"
+  make_fake_tasks_axi "$fakebin"
+  out=$(run_reemit "$home" "$root" "$fakebin")
+  assert_contains "$(cat "$home/state/.reemit-full-digest.txt")" "compact backlog listing (tasks-axi;" \
+    "the fixture did not render the tasks-axi backlog listing"
+  counts=$(printf '%s\n' "$out" | sed -n '/^Backlog counts$/,/^Task bodies:/p')
+  assert_contains "$counts" "in flight: 1, held: 1, blocked queued: 1, ready queued: 2" \
+    "the re-emit backlog counts did not name each tasks-axi group"
+  assert_not_contains "$counts" "count: " "the re-emit backlog counts kept a bare count line"
+  assert_not_contains "$counts" "ready[" "the re-emit backlog counts kept a ready table header with no rows"
+  pass "re-emit backlog counts name each tasks-axi group"
+}
+
 test_a_new_session_starts_over_with_the_full_summary() {
   local rec root home fakebin first again
   rec=$(new_world busy-newsession)
@@ -305,6 +358,7 @@ FIXTURE
 }
 
 test_reemit_is_short_keeps_safety_lines_and_omits_unchanged_records
+test_backlog_counts_name_each_tasks_axi_group
 test_a_new_session_starts_over_with_the_full_summary
 test_a_read_only_reemit_leaves_the_owner_files_alone
 test_a_slow_network_worker_does_not_hold_the_reemit_output_open

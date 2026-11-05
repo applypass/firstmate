@@ -191,7 +191,14 @@ EOF
   [ "$n_orphans" -eq 0 ] || printf 'Orphan status logs (state/*.status without matching .meta): %s; tails in the full digest.\n' "$n_orphans"
 
   subsection "Backlog counts"
-  backlog=$(fm_reemit_extract "$FM_REEMIT_FULL_FILE" "data/backlog.md" | grep -E '^(tasks: |count: |ready\[|\(shown )' | head -8)
+  # tasks-axi prints each group as a "<label>:" line, then a bare "count: N";
+  # join them as "label: N" so each count says which group it is. The manual
+  # listing has no groups and ends with one "(shown N in-flight, ...)" line.
+  backlog=$(fm_reemit_extract "$FM_REEMIT_FULL_FILE" "data/backlog.md" | awk '
+    /^[^[:space:]].*:$/ && !/[[{]/ { label = $0; sub(/:$/, "", label); sub(/ [(].*$/, "", label); next }
+    /^count: / && label != "" { n = $0; sub(/^count: /, "", n); counts = counts (counts == "" ? "" : ", ") label ": " n; label = ""; next }
+    /^[(]shown [0-9]+ in-flight/ { manual = $0 }
+    END { if (counts != "") print counts; if (manual != "") print manual }')
   printf '%s\n' "${backlog:-(no counts found)}"
   printf 'Task bodies: bin/fm-tasks-axi.sh show <id> --full, or data/backlog.md.\n'
 
