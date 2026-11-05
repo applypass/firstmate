@@ -55,8 +55,9 @@ fm_reemit_cue() {
   printf 'read data/captain.md, data/captain-shared.md, and data/learnings.md under %s when you need them.\n' "$DATA"
   section "SESSION START (CONTEXT RE-EMIT) - $FM_HOME"
   printf 'This session already took the helm and has only lost its context. Lock ownership is\n'
-  printf 're-verified, queued wakes are still drained, and the sweeps startup ran are not\n'
-  printf 'repeated. The bulky sections are summarized below with file pointers.\n'
+  printf 're-verified. Queued wakes ARE still drained. The sweeps startup already ran\n'
+  printf '(clone refresh, secondmate checks, handoff retry) are NOT repeated. The bulky sections\n'
+  printf 'are summarized below with file pointers.\n'
 }
 
 fm_reemit_capture_supervision() {
