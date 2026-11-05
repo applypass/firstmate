@@ -1,0 +1,87 @@
+RE-EMIT CUE: this is a short re-emit. If this output ends with "Output too large ... Full output saved to <path>",
+read that whole file now, before acting. The summary below names the files that hold the full digest;
+read data/captain.md, data/captain-shared.md, and data/learnings.md under /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.asHXLz/data when you need them.
+
+================================================================================
+SESSION START (CONTEXT RE-EMIT) - /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.asHXLz
+================================================================================
+This session already took the helm and has only lost its context. Lock ownership is
+re-verified. Queued wakes ARE still drained. The sweeps startup already ran
+(clone refresh, secondmate checks, handoff retry) are NOT repeated. The bulky sections
+are summarized below with file pointers.
+
+LOCK
+--------------------------------------------------------------------------------
+lock acquired: harness pid 87224
+
+HOME ROLE
+--------------------------------------------------------------------------------
+fm-role: user (default)
+
+BOOTSTRAP
+--------------------------------------------------------------------------------
+BOOTSTRAP_INFO: lavish-axi >=0.1.80 enables confirmed board replies; this older compatible version retains the legacy reply path, but upgrade to prevent handing back a board before its reply is accepted
+
+WAKE QUEUE
+--------------------------------------------------------------------------------
+1793841235	1	signal	task-1	done: queued after startup
+WAKE_ACK_REQUIRED: after handling completes run bin/fm-wake-drain.sh --ack-through 1 --recovery-generation 22342.1793841235.vVVmd5
+STATUS OUTCOME BACKSTOP (newest captain-facing task event has no covering branch outcome):
+task-3 done [at=1700009999]: task-3 PR merged LIVE-CHANGE
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+
+FLEET STATE (re-emit summary)
+--------------------------------------------------------------------------------
+Full digest of this re-emit: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.asHXLz/state/.reemit-full-digest.txt
+
+Supervision instructions
+--------------------------------------------------------------------------------
+Full block: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.asHXLz/state/.reemit-supervision.txt (read it before arming, repairing, or changing supervision).
+Current state:
+- Lock: held by this session; this session owns normal supervision unless away mode says otherwise.
+- Away/quiet mode: inactive.
+- X mode: inactive; use the default watcher cadence.
+- Supervision host: on; it takes away-posture wakes and, where the dialog mirror is verified, eligible attended wakes itself, and hands the rest to you (protocol at the end of this block).
+- Ordinary wake: the Stop-owned auto-arm (bin/fm-claude-stop-autoarm.sh) already owns watcher continuity; drain and handle the wake, and do not arm another cycle yourself.
+- Reply first: answer the captain in plain words before digging; after 3 commands without a reply the hook refuses the next. Hand digging to a worker or second mate. Run bin/fm-spawn.sh, bin/fm-dispatch-resolve.sh, and bin/fm-shortcut-ticket.sh with the Bash tool run_in_background (never shell &) so the reply is not held behind them.
+Ordinary-wake handling:
+1. Drain first with `bin/fm-wake-drain.sh`.
+   After handling all emitted wakes and reconciling open decisions and unread status lines, run the exact `--ack-through` command printed as `WAKE_ACK_REQUIRED`; until then the work remains durable for idempotent re-handling after interruption.
+   Do not run `bin/fm-watch-arm.sh` after an ordinary wake; the next turn end re-arms automatically when supervision is still needed.
+
+Work in flight (one line per task: id | endpoint | last status line)
+--------------------------------------------------------------------------------
+task-3 | dead | done [at=1700009999]: task-3 PR merged LIVE-CHANGE
+unchanged since the last re-emit, not resent: task-1 task-10 task-11 task-12 task-2 task-4 task-5 task-6 task-7 task-8 task-9 (each in /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.asHXLz/state/<id>.status and /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.asHXLz/state/<id>.meta)
+
+Backlog counts
+--------------------------------------------------------------------------------
+in flight: 1, held: 0, blocked queued: 1, ready queued: 2
+Task bodies: bin/fm-tasks-axi.sh show <id> --full, or data/backlog.md.
+
+AFK
+--------------------------------------------------------------------------------
+absent
+
+Network checks
+--------------------------------------------------------------------------------
+completed off the startup path in 0s: GitHub authentication.
+(silent - no problems found)
+
+Context files (read on demand)
+--------------------------------------------------------------------------------
+/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.asHXLz/data/projects.md: ABSENT
+/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.asHXLz/data/secondmates.md: ABSENT
+/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.asHXLz/data/captain.md: 34527 bytes, 501 lines
+/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.asHXLz/data/captain-shared.md: unchanged since the last re-emit
+/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.asHXLz/data/learnings.md: unchanged since the last re-emit
+
+================================================================================
+NEXT STEP
+================================================================================
+Follow the supervision operating instructions block in /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.asHXLz/state/.reemit-supervision.txt (its key lines are in the summary above) for harness 'claude'.
+This script never starts supervision itself.
+
+The digest above is complete for this session start. The READ-ONCE CONTRACT
+section in /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.asHXLz/state/.reemit-full-digest.txt governs what may still be read from disk.

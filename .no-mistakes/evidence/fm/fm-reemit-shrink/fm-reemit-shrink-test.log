@@ -1,0 +1,7 @@
+reemit size: before (full digest) 120789 bytes, after (first re-emit) 7097 bytes
+reemit size: second re-emit with no change 6273 bytes
+ok - re-emit is under the hook cap, keeps its safety lines, and names the files of unchanged records
+ok - a re-emit record from another session never suppresses a summary
+ok - a read-only re-emit ignores the owner's unchanged-record hashes and leaves the owner's re-emit files alone
+ok - a slow detached network worker does not hold the re-emit output open
+# fm-reemit-shrink.test.sh: all assertions passed

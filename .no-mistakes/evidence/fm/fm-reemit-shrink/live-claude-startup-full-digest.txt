@@ -1,0 +1,1431 @@
+================================================================================
+SESSION START - /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.UVnBfC
+================================================================================
+
+LOCK
+--------------------------------------------------------------------------------
+lock acquired: harness pid 49454
+
+HOME ROLE
+--------------------------------------------------------------------------------
+fm-role: user (default)
+
+BOOTSTRAP
+--------------------------------------------------------------------------------
+BOOTSTRAP_INFO: lavish-axi >=0.1.80 enables confirmed board replies; this older compatible version retains the legacy reply path, but upgrade to prevent handing back a board before its reply is accepted
+
+WAKE QUEUE
+--------------------------------------------------------------------------------
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+================================================================================
+SUPERVISION OPERATING INSTRUCTIONS - primary harness: claude
+================================================================================
+Current state:
+- Lock: held by this session; this session owns normal supervision unless away mode says otherwise.
+- Away/quiet mode: inactive.
+- X mode: inactive; use the default watcher cadence.
+- Supervision host: on; it takes away-posture wakes and, where the dialog mirror is verified, eligible attended wakes itself, and hands the rest to you (protocol at the end of this block).
+- Ordinary wake: the Stop-owned auto-arm (bin/fm-claude-stop-autoarm.sh) already owns watcher continuity; drain and handle the wake, and do not arm another cycle yourself.
+- Reply first: answer the captain in plain words before digging; after 3 commands without a reply the hook refuses the next. Hand digging to a worker or second mate. Run bin/fm-spawn.sh, bin/fm-dispatch-resolve.sh, and bin/fm-shortcut-ticket.sh with the Bash tool run_in_background (never shell &) so the reply is not held behind them.
+
+Mode: Claude Stop-hook-owned supervision.
+
+When this session owns supervision and away mode is not active:
+1. Drain first with `bin/fm-wake-drain.sh`.
+   After handling all emitted wakes and reconciling open decisions and unread status lines, run the exact `--ack-through` command printed as `WAKE_ACK_REQUIRED`; until then the work remains durable for idempotent re-handling after interruption.
+2. Routine watcher arm and re-arm are owned by the Stop `asyncRewake` hook (`bin/fm-claude-stop-autoarm.sh`), never by you.
+   Every turn end while supervision is needed launches or attaches one home-scoped watcher cycle with no model command and no model tokens.
+   An actionable close wakes you through the hook's exit-2 rewake, delivered as a `Stop hook feedback` message.
+3. On a `Stop hook feedback` wake (`signal:`, `stale:`, `check:`, or `heartbeat`), run `bin/fm-wake-drain.sh` first and handle the wake.
+   Do not run `bin/fm-watch-arm.sh` after an ordinary wake; the next turn end re-arms automatically when supervision is still needed.
+   Do not invent a wake from an attach-status line alone; drain and act only on real wake records, the drain's `OPEN DECISIONS` and `UNREAD STATUS` entries, or a real watcher reason line.
+4. On the one `Stop hook feedback` automatic-mechanism failure notice (`firstmate watcher auto-arm FAILED ...`), drain, inspect the automatic mechanism failure, and do not turn the notice into a repeating manual-arm loop.
+5. If the Stop hook does not claim the home or reports an exhausted failure, inspect its registration and watcher startup path before ending blind.
+   Keep the Stop-owned automatic mechanism as the only Claude arm owner.
+6. Treat `watcher: started ...` and `watcher: attached ...` inside automatic arm output as proof that one live cycle exists.
+   On attach, the arm follows verified identity-matched successors instead of exiting when the first cycle ends.
+7. The durable wake queue preserves actionable events between a rewake and the next Stop-launched arm, while the bounded turn-end guard prevents a blind Stop when recovery did not start.
+   No PreToolUse hook denies fleet commands based on watcher status.
+   [`watcher-continuity.md`](../watcher-continuity.md) owns the exact session-lock recovery boundary.
+8. The turn-end guard (`bin/fm-turnend-guard.sh --claude`) remains the final backstop.
+   It requires the PID-strict live-watcher and fresh-beacon predicate at the Stop boundary, except for the Claude-specific foreign-live-owner safe exit owned by [`turnend-guard.md`](../turnend-guard.md#guard-predicates); that document also owns the distinct model-aware mid-turn pull-guard rules.
+   Otherwise, it allows the stop when a watcher is healthy or an open auto-arm generation claim owns recovery, while fresh failure epochs advance the bounded one-time attended fail-open progression described there.
+9. Waiting on the hook-owned cycle is silent: do not send idle progress while the watcher is parked.
+
+The watcher itself remains `bin/fm-watch.sh`, and `bin/fm-watch-arm.sh` remains the verified arm wrapper that the Stop hook foregrounds on a home that opted out of the [supervision host](../supervision-host.md) (`config/supervision-host-off`).
+Re-arm attaches to an existing healthy cycle when one is already present and follows its verified successor chain.
+See [`watcher-continuity.md`](../watcher-continuity.md) for the arm-layer successor and clean-close failure contract and the Claude ownership model.
+
+Supervision host: on for this home (`config/supervision-host-off` turns it off; [`supervision-host.md`](../supervision-host.md) owns the design).
+The Stop hook runs the supervision host in the arm's place, and everything above still holds with these additions:
+1. Attended (no away record, including a quiet-mode record; see [Postures](../supervision-host.md#postures)): a headless supervision session takes the wakes the supervision branch may take and never wakes you for a routine outcome, so fewer wakes reach you; check wakes, decision wakes, and whatever it cannot take still reach you exactly as above.
+   `supervision-host: branch-outcome: ...` means it handled a wake and recorded captain outcomes for you: run `bin/fm-wake-drain.sh`, process each entry of its `BRANCH OUTCOMES` section as firstmate from the task's current state, because each entry says how long ago it was recorded (tell the captain, land or merge what is ready, answer or escalate a decision, or act on a blocker; your reply covers only entries still open, as if a settled one, such as a PR since merged, had never been listed), then run the `mark-processed` acknowledgement it prints; every drain presents them again until you do.
+   `supervision-host: the supervision session could not take this wake ...` means the wake is yours: handle it as above.
+   A failing turn may include a `supervision-host:` health note about repeated engine errors: tell the captain when it matters and handle the handed-back wake as usual; during cooldown later attended closes reach you unchanged.
+   Routine outcomes never wake you; your next drain lists only visible routine outcomes under `BRANCH OUTCOMES, ROUTINE` for awareness, with nothing to acknowledge. Silent rows do not appear there, but remain available through `bin/fm-branch-outcome.sh list`.
+2. Away (an away record exists and no daemon runs): the host hands each wake to a headless away session that runs the supervision branch's contract under the record, and you are parked.
+   Only a wake the host hands back reaches you, as `Stop hook feedback` carrying the close plus one `supervision-host: <why>` line.
+   That wake is automatic supervision, not the captain's return: drain and handle it under the away posture, and never run the return from it.
+   After the return, a `supervision-host:` line naming the captain's return during a turn means that turn has visible outcomes missing from the return brief, whether the wake was handled or handed back: relay every following `supervision-host: outcome ...` line to the captain (the rows also remain in `bin/fm-branch-outcome.sh list`), then drain and handle any queued wake before acknowledging.
+   Each such visible outcome is also a queued `check: supervision-host outcome <n> ... was recorded after the captain returned` wake, which the drain presents until acknowledged: relay each outcome once, whichever arrives first, and acknowledge its `BRANCH OUTCOMES` entry too when it has one. Silent outcomes remain in the store but do not generate a handoff line or check wake.
+3. `supervision-host: cycle boundary ...` means the host ended its park at its bound: run `bin/fm-wake-drain.sh`, handle whatever it presents, run its printed acknowledgement (an empty queue prints `--ack-through 0`), and end the turn; the next park starts at that turn end.
+4. A guarded command that exits 6 naming the branch actor's lease means the supervision session is handling that task right now: leave the lease alone and retry after it releases, which it does when its turn ends.
+5. Captain outcomes the away session records stay in the outcome store until the return drain presents them; the return brief (`bin/fm-afk-return.sh`) counts them and points you to the `BRANCH OUTCOMES` section for processing and acknowledgement ([Captain outcomes](../supervision-host.md#captain-outcomes)).
+6. `/afk` writes only the record here (`bin/fm-afk-launch.sh start-native` refuses the away daemon on this home); for `/quiet`, follow the [quiet skill](../../.agents/skills/quiet/SKILL.md).
+
+
+================================================================================
+READ-ONCE CONTRACT
+================================================================================
+Everything below is printed in full for this session start: every state/*.meta,
+a compact data/backlog.md listing, a bounded tail of every state/*.status,
+data/projects.md, data/secondmates.md, data/captain.md, data/captain-shared.md,
+and data/learnings.md.
+Do NOT re-read any of them after reading this digest, and do NOT bulk-read
+data/backlog.md or state/*.status: re-reading everything defeats the entire
+point of this command.
+
+Go to a source directly only when:
+  - this digest flagged it ABSENT (then rebuild or create it per AGENTS.md),
+  - its contents looked unparseable or corrupt,
+  - an individual full status log is needed for older wake-event history, or a
+    status line was capped and its tail matters (each task's full log path is
+    printed with its tail),
+  - a full task body is needed (bin/fm-tasks-axi.sh show <id> --full, or data/backlog.md),
+  - the backlog listing disclosed omitted queued items and this turn needs them,
+  - the NETWORK CHECKS section reported its checks still IN PROGRESS and this
+    turn needs their verdict (bin/fm-startup-network.sh report),
+  - or a STARTUP TRUNCATED banner named the stage that would have printed it, in
+    which case that stage's sources were never emitted and must be reconciled,
+  - or a context re-emit opened with a read cue because the
+    harness cut the digest short.
+
+================================================================================
+FLEET STATE
+================================================================================
+
+data/backlog.md
+--------------------------------------------------------------------------------
+compact backlog listing (tasks-axi; done rows omitted; every in-flight, held, and blocked row shown in full; ready queued bounded to 20; task bodies omitted)
+
+in flight:
+count: 0
+tasks: 0 in_flight tasks in this backlog
+
+held (captain- or time-gated; an in-flight item that is also held appears in both groups):
+count: 0
+tasks: 0 held tasks in this backlog
+
+blocked queued:
+count: 0
+tasks: 0 blocked queued tasks in this backlog
+
+ready queued (dispatchable now):
+count: 0
+ready: 0 unblocked queued tasks
+ready_public_followups: 0 delivery-ready obligations
+Full task bodies remain available on demand: bin/fm-tasks-axi.sh show <id> --full when compatible tasks-axi is available, or data/backlog.md.
+
+Work under way (state/*.meta)
+--------------------------------------------------------------------------------
+
+--- task-1 ---
+window=fm-sess:w1
+kind=ship
+project=proj-1
+branch=fm/task-1
+endpoint: dead (backend=tmux window=fm-sess:w1)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.UVnBfC/state/task-1.status):
+working [at=1700000056]: step 56 of task-1 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000057]: step 57 of task-1 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000058]: step 58 of task-1 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000059]: step 59 of task-1 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000060]: step 60 of task-1 finished, waiting on the next gate, padding padding padding padding
+
+--- task-10 ---
+window=fm-sess:w10
+kind=ship
+project=proj-10
+branch=fm/task-10
+endpoint: dead (backend=tmux window=fm-sess:w10)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.UVnBfC/state/task-10.status):
+working [at=1700000056]: step 56 of task-10 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000057]: step 57 of task-10 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000058]: step 58 of task-10 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000059]: step 59 of task-10 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000060]: step 60 of task-10 finished, waiting on the next gate, padding padding padding padding
+
+--- task-11 ---
+window=fm-sess:w11
+kind=ship
+project=proj-11
+branch=fm/task-11
+endpoint: dead (backend=tmux window=fm-sess:w11)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.UVnBfC/state/task-11.status):
+working [at=1700000056]: step 56 of task-11 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000057]: step 57 of task-11 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000058]: step 58 of task-11 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000059]: step 59 of task-11 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000060]: step 60 of task-11 finished, waiting on the next gate, padding padding padding padding
+
+--- task-12 ---
+window=fm-sess:w12
+kind=ship
+project=proj-12
+branch=fm/task-12
+endpoint: dead (backend=tmux window=fm-sess:w12)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.UVnBfC/state/task-12.status):
+working [at=1700000056]: step 56 of task-12 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000057]: step 57 of task-12 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000058]: step 58 of task-12 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000059]: step 59 of task-12 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000060]: step 60 of task-12 finished, waiting on the next gate, padding padding padding padding
+
+--- task-2 ---
+window=fm-sess:w2
+kind=ship
+project=proj-2
+branch=fm/task-2
+endpoint: dead (backend=tmux window=fm-sess:w2)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.UVnBfC/state/task-2.status):
+working [at=1700000056]: step 56 of task-2 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000057]: step 57 of task-2 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000058]: step 58 of task-2 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000059]: step 59 of task-2 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000060]: step 60 of task-2 finished, waiting on the next gate, padding padding padding padding
+
+--- task-3 ---
+window=fm-sess:w3
+kind=ship
+project=proj-3
+branch=fm/task-3
+endpoint: dead (backend=tmux window=fm-sess:w3)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.UVnBfC/state/task-3.status):
+working [at=1700000056]: step 56 of task-3 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000057]: step 57 of task-3 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000058]: step 58 of task-3 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000059]: step 59 of task-3 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000060]: step 60 of task-3 finished, waiting on the next gate, padding padding padding padding
+
+--- task-4 ---
+window=fm-sess:w4
+kind=ship
+project=proj-4
+branch=fm/task-4
+endpoint: dead (backend=tmux window=fm-sess:w4)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.UVnBfC/state/task-4.status):
+working [at=1700000056]: step 56 of task-4 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000057]: step 57 of task-4 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000058]: step 58 of task-4 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000059]: step 59 of task-4 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000060]: step 60 of task-4 finished, waiting on the next gate, padding padding padding padding
+
+--- task-5 ---
+window=fm-sess:w5
+kind=ship
+project=proj-5
+branch=fm/task-5
+endpoint: dead (backend=tmux window=fm-sess:w5)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.UVnBfC/state/task-5.status):
+working [at=1700000056]: step 56 of task-5 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000057]: step 57 of task-5 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000058]: step 58 of task-5 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000059]: step 59 of task-5 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000060]: step 60 of task-5 finished, waiting on the next gate, padding padding padding padding
+
+--- task-6 ---
+window=fm-sess:w6
+kind=ship
+project=proj-6
+branch=fm/task-6
+endpoint: dead (backend=tmux window=fm-sess:w6)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.UVnBfC/state/task-6.status):
+working [at=1700000056]: step 56 of task-6 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000057]: step 57 of task-6 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000058]: step 58 of task-6 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000059]: step 59 of task-6 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000060]: step 60 of task-6 finished, waiting on the next gate, padding padding padding padding
+
+--- task-7 ---
+window=fm-sess:w7
+kind=ship
+project=proj-7
+branch=fm/task-7
+endpoint: dead (backend=tmux window=fm-sess:w7)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.UVnBfC/state/task-7.status):
+working [at=1700000056]: step 56 of task-7 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000057]: step 57 of task-7 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000058]: step 58 of task-7 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000059]: step 59 of task-7 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000060]: step 60 of task-7 finished, waiting on the next gate, padding padding padding padding
+
+--- task-8 ---
+window=fm-sess:w8
+kind=ship
+project=proj-8
+branch=fm/task-8
+endpoint: dead (backend=tmux window=fm-sess:w8)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.UVnBfC/state/task-8.status):
+working [at=1700000056]: step 56 of task-8 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000057]: step 57 of task-8 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000058]: step 58 of task-8 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000059]: step 59 of task-8 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000060]: step 60 of task-8 finished, waiting on the next gate, padding padding padding padding
+
+--- task-9 ---
+window=fm-sess:w9
+kind=ship
+project=proj-9
+branch=fm/task-9
+endpoint: dead (backend=tmux window=fm-sess:w9)
+status tail (last 5 line(s), each capped at 220 characters, wake-EVENT history, not current state; full log: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.UVnBfC/state/task-9.status):
+working [at=1700000056]: step 56 of task-9 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000057]: step 57 of task-9 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000058]: step 58 of task-9 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000059]: step 59 of task-9 finished, waiting on the next gate, padding padding padding padding
+working [at=1700000060]: step 60 of task-9 finished, waiting on the next gate, padding padding padding padding
+
+Orphan status logs (state/*.status without matching .meta)
+--------------------------------------------------------------------------------
+(none)
+
+AFK
+--------------------------------------------------------------------------------
+absent
+
+================================================================================
+NETWORK CHECKS
+================================================================================
+completed off the startup path in 6s: GitHub authentication, dead-secondmate relaunch, secondmate convergence, pending handoff delivery, project clone refresh with its drift reporting, and inactive terminal-outcome reconciliation.
+(silent - no problems found)
+
+================================================================================
+CONTEXT
+================================================================================
+
+data/projects.md
+--------------------------------------------------------------------------------
+ABSENT
+
+data/secondmates.md
+--------------------------------------------------------------------------------
+ABSENT
+
+data/captain.md
+--------------------------------------------------------------------------------
+preference line 0000 padding padding padding padding padding padding
+preference line 0001 padding padding padding padding padding padding
+preference line 0002 padding padding padding padding padding padding
+preference line 0003 padding padding padding padding padding padding
+preference line 0004 padding padding padding padding padding padding
+preference line 0005 padding padding padding padding padding padding
+preference line 0006 padding padding padding padding padding padding
+preference line 0007 padding padding padding padding padding padding
+preference line 0008 padding padding padding padding padding padding
+preference line 0009 padding padding padding padding padding padding
+preference line 0010 padding padding padding padding padding padding
+preference line 0011 padding padding padding padding padding padding
+preference line 0012 padding padding padding padding padding padding
+preference line 0013 padding padding padding padding padding padding
+preference line 0014 padding padding padding padding padding padding
+preference line 0015 padding padding padding padding padding padding
+preference line 0016 padding padding padding padding padding padding
+preference line 0017 padding padding padding padding padding padding
+preference line 0018 padding padding padding padding padding padding
+preference line 0019 padding padding padding padding padding padding
+preference line 0020 padding padding padding padding padding padding
+preference line 0021 padding padding padding padding padding padding
+preference line 0022 padding padding padding padding padding padding
+preference line 0023 padding padding padding padding padding padding
+preference line 0024 padding padding padding padding padding padding
+preference line 0025 padding padding padding padding padding padding
+preference line 0026 padding padding padding padding padding padding
+preference line 0027 padding padding padding padding padding padding
+preference line 0028 padding padding padding padding padding padding
+preference line 0029 padding padding padding padding padding padding
+preference line 0030 padding padding padding padding padding padding
+preference line 0031 padding padding padding padding padding padding
+preference line 0032 padding padding padding padding padding padding
+preference line 0033 padding padding padding padding padding padding
+preference line 0034 padding padding padding padding padding padding
+preference line 0035 padding padding padding padding padding padding
+preference line 0036 padding padding padding padding padding padding
+preference line 0037 padding padding padding padding padding padding
+preference line 0038 padding padding padding padding padding padding
+preference line 0039 padding padding padding padding padding padding
+preference line 0040 padding padding padding padding padding padding
+preference line 0041 padding padding padding padding padding padding
+preference line 0042 padding padding padding padding padding padding
+preference line 0043 padding padding padding padding padding padding
+preference line 0044 padding padding padding padding padding padding
+preference line 0045 padding padding padding padding padding padding
+preference line 0046 padding padding padding padding padding padding
+preference line 0047 padding padding padding padding padding padding
+preference line 0048 padding padding padding padding padding padding
+preference line 0049 padding padding padding padding padding padding
+preference line 0050 padding padding padding padding padding padding
+preference line 0051 padding padding padding padding padding padding
+preference line 0052 padding padding padding padding padding padding
+preference line 0053 padding padding padding padding padding padding
+preference line 0054 padding padding padding padding padding padding
+preference line 0055 padding padding padding padding padding padding
+preference line 0056 padding padding padding padding padding padding
+preference line 0057 padding padding padding padding padding padding
+preference line 0058 padding padding padding padding padding padding
+preference line 0059 padding padding padding padding padding padding
+preference line 0060 padding padding padding padding padding padding
+preference line 0061 padding padding padding padding padding padding
+preference line 0062 padding padding padding padding padding padding
+preference line 0063 padding padding padding padding padding padding
+preference line 0064 padding padding padding padding padding padding
+preference line 0065 padding padding padding padding padding padding
+preference line 0066 padding padding padding padding padding padding
+preference line 0067 padding padding padding padding padding padding
+preference line 0068 padding padding padding padding padding padding
+preference line 0069 padding padding padding padding padding padding
+preference line 0070 padding padding padding padding padding padding
+preference line 0071 padding padding padding padding padding padding
+preference line 0072 padding padding padding padding padding padding
+preference line 0073 padding padding padding padding padding padding
+preference line 0074 padding padding padding padding padding padding
+preference line 0075 padding padding padding padding padding padding
+preference line 0076 padding padding padding padding padding padding
+preference line 0077 padding padding padding padding padding padding
+preference line 0078 padding padding padding padding padding padding
+preference line 0079 padding padding padding padding padding padding
+preference line 0080 padding padding padding padding padding padding
+preference line 0081 padding padding padding padding padding padding
+preference line 0082 padding padding padding padding padding padding
+preference line 0083 padding padding padding padding padding padding
+preference line 0084 padding padding padding padding padding padding
+preference line 0085 padding padding padding padding padding padding
+preference line 0086 padding padding padding padding padding padding
+preference line 0087 padding padding padding padding padding padding
+preference line 0088 padding padding padding padding padding padding
+preference line 0089 padding padding padding padding padding padding
+preference line 0090 padding padding padding padding padding padding
+preference line 0091 padding padding padding padding padding padding
+preference line 0092 padding padding padding padding padding padding
+preference line 0093 padding padding padding padding padding padding
+preference line 0094 padding padding padding padding padding padding
+preference line 0095 padding padding padding padding padding padding
+preference line 0096 padding padding padding padding padding padding
+preference line 0097 padding padding padding padding padding padding
+preference line 0098 padding padding padding padding padding padding
+preference line 0099 padding padding padding padding padding padding
+preference line 0100 padding padding padding padding padding padding
+preference line 0101 padding padding padding padding padding padding
+preference line 0102 padding padding padding padding padding padding
+preference line 0103 padding padding padding padding padding padding
+preference line 0104 padding padding padding padding padding padding
+preference line 0105 padding padding padding padding padding padding
+preference line 0106 padding padding padding padding padding padding
+preference line 0107 padding padding padding padding padding padding
+preference line 0108 padding padding padding padding padding padding
+preference line 0109 padding padding padding padding padding padding
+preference line 0110 padding padding padding padding padding padding
+preference line 0111 padding padding padding padding padding padding
+preference line 0112 padding padding padding padding padding padding
+preference line 0113 padding padding padding padding padding padding
+preference line 0114 padding padding padding padding padding padding
+preference line 0115 padding padding padding padding padding padding
+preference line 0116 padding padding padding padding padding padding
+preference line 0117 padding padding padding padding padding padding
+preference line 0118 padding padding padding padding padding padding
+preference line 0119 padding padding padding padding padding padding
+preference line 0120 padding padding padding padding padding padding
+preference line 0121 padding padding padding padding padding padding
+preference line 0122 padding padding padding padding padding padding
+preference line 0123 padding padding padding padding padding padding
+preference line 0124 padding padding padding padding padding padding
+preference line 0125 padding padding padding padding padding padding
+preference line 0126 padding padding padding padding padding padding
+preference line 0127 padding padding padding padding padding padding
+preference line 0128 padding padding padding padding padding padding
+preference line 0129 padding padding padding padding padding padding
+preference line 0130 padding padding padding padding padding padding
+preference line 0131 padding padding padding padding padding padding
+preference line 0132 padding padding padding padding padding padding
+preference line 0133 padding padding padding padding padding padding
+preference line 0134 padding padding padding padding padding padding
+preference line 0135 padding padding padding padding padding padding
+preference line 0136 padding padding padding padding padding padding
+preference line 0137 padding padding padding padding padding padding
+preference line 0138 padding padding padding padding padding padding
+preference line 0139 padding padding padding padding padding padding
+preference line 0140 padding padding padding padding padding padding
+preference line 0141 padding padding padding padding padding padding
+preference line 0142 padding padding padding padding padding padding
+preference line 0143 padding padding padding padding padding padding
+preference line 0144 padding padding padding padding padding padding
+preference line 0145 padding padding padding padding padding padding
+preference line 0146 padding padding padding padding padding padding
+preference line 0147 padding padding padding padding padding padding
+preference line 0148 padding padding padding padding padding padding
+preference line 0149 padding padding padding padding padding padding
+preference line 0150 padding padding padding padding padding padding
+preference line 0151 padding padding padding padding padding padding
+preference line 0152 padding padding padding padding padding padding
+preference line 0153 padding padding padding padding padding padding
+preference line 0154 padding padding padding padding padding padding
+preference line 0155 padding padding padding padding padding padding
+preference line 0156 padding padding padding padding padding padding
+preference line 0157 padding padding padding padding padding padding
+preference line 0158 padding padding padding padding padding padding
+preference line 0159 padding padding padding padding padding padding
+preference line 0160 padding padding padding padding padding padding
+preference line 0161 padding padding padding padding padding padding
+preference line 0162 padding padding padding padding padding padding
+preference line 0163 padding padding padding padding padding padding
+preference line 0164 padding padding padding padding padding padding
+preference line 0165 padding padding padding padding padding padding
+preference line 0166 padding padding padding padding padding padding
+preference line 0167 padding padding padding padding padding padding
+preference line 0168 padding padding padding padding padding padding
+preference line 0169 padding padding padding padding padding padding
+preference line 0170 padding padding padding padding padding padding
+preference line 0171 padding padding padding padding padding padding
+preference line 0172 padding padding padding padding padding padding
+preference line 0173 padding padding padding padding padding padding
+preference line 0174 padding padding padding padding padding padding
+preference line 0175 padding padding padding padding padding padding
+preference line 0176 padding padding padding padding padding padding
+preference line 0177 padding padding padding padding padding padding
+preference line 0178 padding padding padding padding padding padding
+preference line 0179 padding padding padding padding padding padding
+preference line 0180 padding padding padding padding padding padding
+preference line 0181 padding padding padding padding padding padding
+preference line 0182 padding padding padding padding padding padding
+preference line 0183 padding padding padding padding padding padding
+preference line 0184 padding padding padding padding padding padding
+preference line 0185 padding padding padding padding padding padding
+preference line 0186 padding padding padding padding padding padding
+preference line 0187 padding padding padding padding padding padding
+preference line 0188 padding padding padding padding padding padding
+preference line 0189 padding padding padding padding padding padding
+preference line 0190 padding padding padding padding padding padding
+preference line 0191 padding padding padding padding padding padding
+preference line 0192 padding padding padding padding padding padding
+preference line 0193 padding padding padding padding padding padding
+preference line 0194 padding padding padding padding padding padding
+preference line 0195 padding padding padding padding padding padding
+preference line 0196 padding padding padding padding padding padding
+preference line 0197 padding padding padding padding padding padding
+preference line 0198 padding padding padding padding padding padding
+preference line 0199 padding padding padding padding padding padding
+preference line 0200 padding padding padding padding padding padding
+preference line 0201 padding padding padding padding padding padding
+preference line 0202 padding padding padding padding padding padding
+preference line 0203 padding padding padding padding padding padding
+preference line 0204 padding padding padding padding padding padding
+preference line 0205 padding padding padding padding padding padding
+preference line 0206 padding padding padding padding padding padding
+preference line 0207 padding padding padding padding padding padding
+preference line 0208 padding padding padding padding padding padding
+preference line 0209 padding padding padding padding padding padding
+preference line 0210 padding padding padding padding padding padding
+preference line 0211 padding padding padding padding padding padding
+preference line 0212 padding padding padding padding padding padding
+preference line 0213 padding padding padding padding padding padding
+preference line 0214 padding padding padding padding padding padding
+preference line 0215 padding padding padding padding padding padding
+preference line 0216 padding padding padding padding padding padding
+preference line 0217 padding padding padding padding padding padding
+preference line 0218 padding padding padding padding padding padding
+preference line 0219 padding padding padding padding padding padding
+preference line 0220 padding padding padding padding padding padding
+preference line 0221 padding padding padding padding padding padding
+preference line 0222 padding padding padding padding padding padding
+preference line 0223 padding padding padding padding padding padding
+preference line 0224 padding padding padding padding padding padding
+preference line 0225 padding padding padding padding padding padding
+preference line 0226 padding padding padding padding padding padding
+preference line 0227 padding padding padding padding padding padding
+preference line 0228 padding padding padding padding padding padding
+preference line 0229 padding padding padding padding padding padding
+preference line 0230 padding padding padding padding padding padding
+preference line 0231 padding padding padding padding padding padding
+preference line 0232 padding padding padding padding padding padding
+preference line 0233 padding padding padding padding padding padding
+preference line 0234 padding padding padding padding padding padding
+preference line 0235 padding padding padding padding padding padding
+preference line 0236 padding padding padding padding padding padding
+preference line 0237 padding padding padding padding padding padding
+preference line 0238 padding padding padding padding padding padding
+preference line 0239 padding padding padding padding padding padding
+preference line 0240 padding padding padding padding padding padding
+preference line 0241 padding padding padding padding padding padding
+preference line 0242 padding padding padding padding padding padding
+preference line 0243 padding padding padding padding padding padding
+preference line 0244 padding padding padding padding padding padding
+preference line 0245 padding padding padding padding padding padding
+preference line 0246 padding padding padding padding padding padding
+preference line 0247 padding padding padding padding padding padding
+preference line 0248 padding padding padding padding padding padding
+preference line 0249 padding padding padding padding padding padding
+preference line 0250 padding padding padding padding padding padding
+preference line 0251 padding padding padding padding padding padding
+preference line 0252 padding padding padding padding padding padding
+preference line 0253 padding padding padding padding padding padding
+preference line 0254 padding padding padding padding padding padding
+preference line 0255 padding padding padding padding padding padding
+preference line 0256 padding padding padding padding padding padding
+preference line 0257 padding padding padding padding padding padding
+preference line 0258 padding padding padding padding padding padding
+preference line 0259 padding padding padding padding padding padding
+preference line 0260 padding padding padding padding padding padding
+preference line 0261 padding padding padding padding padding padding
+preference line 0262 padding padding padding padding padding padding
+preference line 0263 padding padding padding padding padding padding
+preference line 0264 padding padding padding padding padding padding
+preference line 0265 padding padding padding padding padding padding
+preference line 0266 padding padding padding padding padding padding
+preference line 0267 padding padding padding padding padding padding
+preference line 0268 padding padding padding padding padding padding
+preference line 0269 padding padding padding padding padding padding
+preference line 0270 padding padding padding padding padding padding
+preference line 0271 padding padding padding padding padding padding
+preference line 0272 padding padding padding padding padding padding
+preference line 0273 padding padding padding padding padding padding
+preference line 0274 padding padding padding padding padding padding
+preference line 0275 padding padding padding padding padding padding
+preference line 0276 padding padding padding padding padding padding
+preference line 0277 padding padding padding padding padding padding
+preference line 0278 padding padding padding padding padding padding
+preference line 0279 padding padding padding padding padding padding
+preference line 0280 padding padding padding padding padding padding
+preference line 0281 padding padding padding padding padding padding
+preference line 0282 padding padding padding padding padding padding
+preference line 0283 padding padding padding padding padding padding
+preference line 0284 padding padding padding padding padding padding
+preference line 0285 padding padding padding padding padding padding
+preference line 0286 padding padding padding padding padding padding
+preference line 0287 padding padding padding padding padding padding
+preference line 0288 padding padding padding padding padding padding
+preference line 0289 padding padding padding padding padding padding
+preference line 0290 padding padding padding padding padding padding
+preference line 0291 padding padding padding padding padding padding
+preference line 0292 padding padding padding padding padding padding
+preference line 0293 padding padding padding padding padding padding
+preference line 0294 padding padding padding padding padding padding
+preference line 0295 padding padding padding padding padding padding
+preference line 0296 padding padding padding padding padding padding
+preference line 0297 padding padding padding padding padding padding
+preference line 0298 padding padding padding padding padding padding
+preference line 0299 padding padding padding padding padding padding
+preference line 0300 padding padding padding padding padding padding
+preference line 0301 padding padding padding padding padding padding
+preference line 0302 padding padding padding padding padding padding
+preference line 0303 padding padding padding padding padding padding
+preference line 0304 padding padding padding padding padding padding
+preference line 0305 padding padding padding padding padding padding
+preference line 0306 padding padding padding padding padding padding
+preference line 0307 padding padding padding padding padding padding
+preference line 0308 padding padding padding padding padding padding
+preference line 0309 padding padding padding padding padding padding
+preference line 0310 padding padding padding padding padding padding
+preference line 0311 padding padding padding padding padding padding
+preference line 0312 padding padding padding padding padding padding
+preference line 0313 padding padding padding padding padding padding
+preference line 0314 padding padding padding padding padding padding
+preference line 0315 padding padding padding padding padding padding
+preference line 0316 padding padding padding padding padding padding
+preference line 0317 padding padding padding padding padding padding
+preference line 0318 padding padding padding padding padding padding
+preference line 0319 padding padding padding padding padding padding
+preference line 0320 padding padding padding padding padding padding
+preference line 0321 padding padding padding padding padding padding
+preference line 0322 padding padding padding padding padding padding
+preference line 0323 padding padding padding padding padding padding
+preference line 0324 padding padding padding padding padding padding
+preference line 0325 padding padding padding padding padding padding
+preference line 0326 padding padding padding padding padding padding
+preference line 0327 padding padding padding padding padding padding
+preference line 0328 padding padding padding padding padding padding
+preference line 0329 padding padding padding padding padding padding
+preference line 0330 padding padding padding padding padding padding
+preference line 0331 padding padding padding padding padding padding
+preference line 0332 padding padding padding padding padding padding
+preference line 0333 padding padding padding padding padding padding
+preference line 0334 padding padding padding padding padding padding
+preference line 0335 padding padding padding padding padding padding
+preference line 0336 padding padding padding padding padding padding
+preference line 0337 padding padding padding padding padding padding
+preference line 0338 padding padding padding padding padding padding
+preference line 0339 padding padding padding padding padding padding
+preference line 0340 padding padding padding padding padding padding
+preference line 0341 padding padding padding padding padding padding
+preference line 0342 padding padding padding padding padding padding
+preference line 0343 padding padding padding padding padding padding
+preference line 0344 padding padding padding padding padding padding
+preference line 0345 padding padding padding padding padding padding
+preference line 0346 padding padding padding padding padding padding
+preference line 0347 padding padding padding padding padding padding
+preference line 0348 padding padding padding padding padding padding
+preference line 0349 padding padding padding padding padding padding
+preference line 0350 padding padding padding padding padding padding
+preference line 0351 padding padding padding padding padding padding
+preference line 0352 padding padding padding padding padding padding
+preference line 0353 padding padding padding padding padding padding
+preference line 0354 padding padding padding padding padding padding
+preference line 0355 padding padding padding padding padding padding
+preference line 0356 padding padding padding padding padding padding
+preference line 0357 padding padding padding padding padding padding
+preference line 0358 padding padding padding padding padding padding
+preference line 0359 padding padding padding padding padding padding
+preference line 0360 padding padding padding padding padding padding
+preference line 0361 padding padding padding padding padding padding
+preference line 0362 padding padding padding padding padding padding
+preference line 0363 padding padding padding padding padding padding
+preference line 0364 padding padding padding padding padding padding
+preference line 0365 padding padding padding padding padding padding
+preference line 0366 padding padding padding padding padding padding
+preference line 0367 padding padding padding padding padding padding
+preference line 0368 padding padding padding padding padding padding
+preference line 0369 padding padding padding padding padding padding
+preference line 0370 padding padding padding padding padding padding
+preference line 0371 padding padding padding padding padding padding
+preference line 0372 padding padding padding padding padding padding
+preference line 0373 padding padding padding padding padding padding
+preference line 0374 padding padding padding padding padding padding
+preference line 0375 padding padding padding padding padding padding
+preference line 0376 padding padding padding padding padding padding
+preference line 0377 padding padding padding padding padding padding
+preference line 0378 padding padding padding padding padding padding
+preference line 0379 padding padding padding padding padding padding
+preference line 0380 padding padding padding padding padding padding
+preference line 0381 padding padding padding padding padding padding
+preference line 0382 padding padding padding padding padding padding
+preference line 0383 padding padding padding padding padding padding
+preference line 0384 padding padding padding padding padding padding
+preference line 0385 padding padding padding padding padding padding
+preference line 0386 padding padding padding padding padding padding
+preference line 0387 padding padding padding padding padding padding
+preference line 0388 padding padding padding padding padding padding
+preference line 0389 padding padding padding padding padding padding
+preference line 0390 padding padding padding padding padding padding
+preference line 0391 padding padding padding padding padding padding
+preference line 0392 padding padding padding padding padding padding
+preference line 0393 padding padding padding padding padding padding
+preference line 0394 padding padding padding padding padding padding
+preference line 0395 padding padding padding padding padding padding
+preference line 0396 padding padding padding padding padding padding
+preference line 0397 padding padding padding padding padding padding
+preference line 0398 padding padding padding padding padding padding
+preference line 0399 padding padding padding padding padding padding
+preference line 0400 padding padding padding padding padding padding
+preference line 0401 padding padding padding padding padding padding
+preference line 0402 padding padding padding padding padding padding
+preference line 0403 padding padding padding padding padding padding
+preference line 0404 padding padding padding padding padding padding
+preference line 0405 padding padding padding padding padding padding
+preference line 0406 padding padding padding padding padding padding
+preference line 0407 padding padding padding padding padding padding
+preference line 0408 padding padding padding padding padding padding
+preference line 0409 padding padding padding padding padding padding
+preference line 0410 padding padding padding padding padding padding
+preference line 0411 padding padding padding padding padding padding
+preference line 0412 padding padding padding padding padding padding
+preference line 0413 padding padding padding padding padding padding
+preference line 0414 padding padding padding padding padding padding
+preference line 0415 padding padding padding padding padding padding
+preference line 0416 padding padding padding padding padding padding
+preference line 0417 padding padding padding padding padding padding
+preference line 0418 padding padding padding padding padding padding
+preference line 0419 padding padding padding padding padding padding
+preference line 0420 padding padding padding padding padding padding
+preference line 0421 padding padding padding padding padding padding
+preference line 0422 padding padding padding padding padding padding
+preference line 0423 padding padding padding padding padding padding
+preference line 0424 padding padding padding padding padding padding
+preference line 0425 padding padding padding padding padding padding
+preference line 0426 padding padding padding padding padding padding
+preference line 0427 padding padding padding padding padding padding
+preference line 0428 padding padding padding padding padding padding
+preference line 0429 padding padding padding padding padding padding
+preference line 0430 padding padding padding padding padding padding
+preference line 0431 padding padding padding padding padding padding
+preference line 0432 padding padding padding padding padding padding
+preference line 0433 padding padding padding padding padding padding
+preference line 0434 padding padding padding padding padding padding
+preference line 0435 padding padding padding padding padding padding
+preference line 0436 padding padding padding padding padding padding
+preference line 0437 padding padding padding padding padding padding
+preference line 0438 padding padding padding padding padding padding
+preference line 0439 padding padding padding padding padding padding
+preference line 0440 padding padding padding padding padding padding
+preference line 0441 padding padding padding padding padding padding
+preference line 0442 padding padding padding padding padding padding
+preference line 0443 padding padding padding padding padding padding
+preference line 0444 padding padding padding padding padding padding
+preference line 0445 padding padding padding padding padding padding
+preference line 0446 padding padding padding padding padding padding
+preference line 0447 padding padding padding padding padding padding
+preference line 0448 padding padding padding padding padding padding
+preference line 0449 padding padding padding padding padding padding
+preference line 0450 padding padding padding padding padding padding
+preference line 0451 padding padding padding padding padding padding
+preference line 0452 padding padding padding padding padding padding
+preference line 0453 padding padding padding padding padding padding
+preference line 0454 padding padding padding padding padding padding
+preference line 0455 padding padding padding padding padding padding
+preference line 0456 padding padding padding padding padding padding
+preference line 0457 padding padding padding padding padding padding
+preference line 0458 padding padding padding padding padding padding
+preference line 0459 padding padding padding padding padding padding
+preference line 0460 padding padding padding padding padding padding
+preference line 0461 padding padding padding padding padding padding
+preference line 0462 padding padding padding padding padding padding
+preference line 0463 padding padding padding padding padding padding
+preference line 0464 padding padding padding padding padding padding
+preference line 0465 padding padding padding padding padding padding
+preference line 0466 padding padding padding padding padding padding
+preference line 0467 padding padding padding padding padding padding
+preference line 0468 padding padding padding padding padding padding
+preference line 0469 padding padding padding padding padding padding
+preference line 0470 padding padding padding padding padding padding
+preference line 0471 padding padding padding padding padding padding
+preference line 0472 padding padding padding padding padding padding
+preference line 0473 padding padding padding padding padding padding
+preference line 0474 padding padding padding padding padding padding
+preference line 0475 padding padding padding padding padding padding
+preference line 0476 padding padding padding padding padding padding
+preference line 0477 padding padding padding padding padding padding
+preference line 0478 padding padding padding padding padding padding
+preference line 0479 padding padding padding padding padding padding
+preference line 0480 padding padding padding padding padding padding
+preference line 0481 padding padding padding padding padding padding
+preference line 0482 padding padding padding padding padding padding
+preference line 0483 padding padding padding padding padding padding
+preference line 0484 padding padding padding padding padding padding
+preference line 0485 padding padding padding padding padding padding
+preference line 0486 padding padding padding padding padding padding
+preference line 0487 padding padding padding padding padding padding
+preference line 0488 padding padding padding padding padding padding
+preference line 0489 padding padding padding padding padding padding
+preference line 0490 padding padding padding padding padding padding
+preference line 0491 padding padding padding padding padding padding
+preference line 0492 padding padding padding padding padding padding
+preference line 0493 padding padding padding padding padding padding
+preference line 0494 padding padding padding padding padding padding
+preference line 0495 padding padding padding padding padding padding
+preference line 0496 padding padding padding padding padding padding
+preference line 0497 padding padding padding padding padding padding
+preference line 0498 padding padding padding padding padding padding
+preference line 0499 padding padding padding padding padding padding
+
+data/captain-shared.md (shared, main-authoritative, read-only in secondmate homes)
+--------------------------------------------------------------------------------
+ABSENT
+
+data/learnings.md
+--------------------------------------------------------------------------------
+learning 0000 padding padding padding padding padding padding padding
+learning 0001 padding padding padding padding padding padding padding
+learning 0002 padding padding padding padding padding padding padding
+learning 0003 padding padding padding padding padding padding padding
+learning 0004 padding padding padding padding padding padding padding
+learning 0005 padding padding padding padding padding padding padding
+learning 0006 padding padding padding padding padding padding padding
+learning 0007 padding padding padding padding padding padding padding
+learning 0008 padding padding padding padding padding padding padding
+learning 0009 padding padding padding padding padding padding padding
+learning 0010 padding padding padding padding padding padding padding
+learning 0011 padding padding padding padding padding padding padding
+learning 0012 padding padding padding padding padding padding padding
+learning 0013 padding padding padding padding padding padding padding
+learning 0014 padding padding padding padding padding padding padding
+learning 0015 padding padding padding padding padding padding padding
+learning 0016 padding padding padding padding padding padding padding
+learning 0017 padding padding padding padding padding padding padding
+learning 0018 padding padding padding padding padding padding padding
+learning 0019 padding padding padding padding padding padding padding
+learning 0020 padding padding padding padding padding padding padding
+learning 0021 padding padding padding padding padding padding padding
+learning 0022 padding padding padding padding padding padding padding
+learning 0023 padding padding padding padding padding padding padding
+learning 0024 padding padding padding padding padding padding padding
+learning 0025 padding padding padding padding padding padding padding
+learning 0026 padding padding padding padding padding padding padding
+learning 0027 padding padding padding padding padding padding padding
+learning 0028 padding padding padding padding padding padding padding
+learning 0029 padding padding padding padding padding padding padding
+learning 0030 padding padding padding padding padding padding padding
+learning 0031 padding padding padding padding padding padding padding
+learning 0032 padding padding padding padding padding padding padding
+learning 0033 padding padding padding padding padding padding padding
+learning 0034 padding padding padding padding padding padding padding
+learning 0035 padding padding padding padding padding padding padding
+learning 0036 padding padding padding padding padding padding padding
+learning 0037 padding padding padding padding padding padding padding
+learning 0038 padding padding padding padding padding padding padding
+learning 0039 padding padding padding padding padding padding padding
+learning 0040 padding padding padding padding padding padding padding
+learning 0041 padding padding padding padding padding padding padding
+learning 0042 padding padding padding padding padding padding padding
+learning 0043 padding padding padding padding padding padding padding
+learning 0044 padding padding padding padding padding padding padding
+learning 0045 padding padding padding padding padding padding padding
+learning 0046 padding padding padding padding padding padding padding
+learning 0047 padding padding padding padding padding padding padding
+learning 0048 padding padding padding padding padding padding padding
+learning 0049 padding padding padding padding padding padding padding
+learning 0050 padding padding padding padding padding padding padding
+learning 0051 padding padding padding padding padding padding padding
+learning 0052 padding padding padding padding padding padding padding
+learning 0053 padding padding padding padding padding padding padding
+learning 0054 padding padding padding padding padding padding padding
+learning 0055 padding padding padding padding padding padding padding
+learning 0056 padding padding padding padding padding padding padding
+learning 0057 padding padding padding padding padding padding padding
+learning 0058 padding padding padding padding padding padding padding
+learning 0059 padding padding padding padding padding padding padding
+learning 0060 padding padding padding padding padding padding padding
+learning 0061 padding padding padding padding padding padding padding
+learning 0062 padding padding padding padding padding padding padding
+learning 0063 padding padding padding padding padding padding padding
+learning 0064 padding padding padding padding padding padding padding
+learning 0065 padding padding padding padding padding padding padding
+learning 0066 padding padding padding padding padding padding padding
+learning 0067 padding padding padding padding padding padding padding
+learning 0068 padding padding padding padding padding padding padding
+learning 0069 padding padding padding padding padding padding padding
+learning 0070 padding padding padding padding padding padding padding
+learning 0071 padding padding padding padding padding padding padding
+learning 0072 padding padding padding padding padding padding padding
+learning 0073 padding padding padding padding padding padding padding
+learning 0074 padding padding padding padding padding padding padding
+learning 0075 padding padding padding padding padding padding padding
+learning 0076 padding padding padding padding padding padding padding
+learning 0077 padding padding padding padding padding padding padding
+learning 0078 padding padding padding padding padding padding padding
+learning 0079 padding padding padding padding padding padding padding
+learning 0080 padding padding padding padding padding padding padding
+learning 0081 padding padding padding padding padding padding padding
+learning 0082 padding padding padding padding padding padding padding
+learning 0083 padding padding padding padding padding padding padding
+learning 0084 padding padding padding padding padding padding padding
+learning 0085 padding padding padding padding padding padding padding
+learning 0086 padding padding padding padding padding padding padding
+learning 0087 padding padding padding padding padding padding padding
+learning 0088 padding padding padding padding padding padding padding
+learning 0089 padding padding padding padding padding padding padding
+learning 0090 padding padding padding padding padding padding padding
+learning 0091 padding padding padding padding padding padding padding
+learning 0092 padding padding padding padding padding padding padding
+learning 0093 padding padding padding padding padding padding padding
+learning 0094 padding padding padding padding padding padding padding
+learning 0095 padding padding padding padding padding padding padding
+learning 0096 padding padding padding padding padding padding padding
+learning 0097 padding padding padding padding padding padding padding
+learning 0098 padding padding padding padding padding padding padding
+learning 0099 padding padding padding padding padding padding padding
+learning 0100 padding padding padding padding padding padding padding
+learning 0101 padding padding padding padding padding padding padding
+learning 0102 padding padding padding padding padding padding padding
+learning 0103 padding padding padding padding padding padding padding
+learning 0104 padding padding padding padding padding padding padding
+learning 0105 padding padding padding padding padding padding padding
+learning 0106 padding padding padding padding padding padding padding
+learning 0107 padding padding padding padding padding padding padding
+learning 0108 padding padding padding padding padding padding padding
+learning 0109 padding padding padding padding padding padding padding
+learning 0110 padding padding padding padding padding padding padding
+learning 0111 padding padding padding padding padding padding padding
+learning 0112 padding padding padding padding padding padding padding
+learning 0113 padding padding padding padding padding padding padding
+learning 0114 padding padding padding padding padding padding padding
+learning 0115 padding padding padding padding padding padding padding
+learning 0116 padding padding padding padding padding padding padding
+learning 0117 padding padding padding padding padding padding padding
+learning 0118 padding padding padding padding padding padding padding
+learning 0119 padding padding padding padding padding padding padding
+learning 0120 padding padding padding padding padding padding padding
+learning 0121 padding padding padding padding padding padding padding
+learning 0122 padding padding padding padding padding padding padding
+learning 0123 padding padding padding padding padding padding padding
+learning 0124 padding padding padding padding padding padding padding
+learning 0125 padding padding padding padding padding padding padding
+learning 0126 padding padding padding padding padding padding padding
+learning 0127 padding padding padding padding padding padding padding
+learning 0128 padding padding padding padding padding padding padding
+learning 0129 padding padding padding padding padding padding padding
+learning 0130 padding padding padding padding padding padding padding
+learning 0131 padding padding padding padding padding padding padding
+learning 0132 padding padding padding padding padding padding padding
+learning 0133 padding padding padding padding padding padding padding
+learning 0134 padding padding padding padding padding padding padding
+learning 0135 padding padding padding padding padding padding padding
+learning 0136 padding padding padding padding padding padding padding
+learning 0137 padding padding padding padding padding padding padding
+learning 0138 padding padding padding padding padding padding padding
+learning 0139 padding padding padding padding padding padding padding
+learning 0140 padding padding padding padding padding padding padding
+learning 0141 padding padding padding padding padding padding padding
+learning 0142 padding padding padding padding padding padding padding
+learning 0143 padding padding padding padding padding padding padding
+learning 0144 padding padding padding padding padding padding padding
+learning 0145 padding padding padding padding padding padding padding
+learning 0146 padding padding padding padding padding padding padding
+learning 0147 padding padding padding padding padding padding padding
+learning 0148 padding padding padding padding padding padding padding
+learning 0149 padding padding padding padding padding padding padding
+learning 0150 padding padding padding padding padding padding padding
+learning 0151 padding padding padding padding padding padding padding
+learning 0152 padding padding padding padding padding padding padding
+learning 0153 padding padding padding padding padding padding padding
+learning 0154 padding padding padding padding padding padding padding
+learning 0155 padding padding padding padding padding padding padding
+learning 0156 padding padding padding padding padding padding padding
+learning 0157 padding padding padding padding padding padding padding
+learning 0158 padding padding padding padding padding padding padding
+learning 0159 padding padding padding padding padding padding padding
+learning 0160 padding padding padding padding padding padding padding
+learning 0161 padding padding padding padding padding padding padding
+learning 0162 padding padding padding padding padding padding padding
+learning 0163 padding padding padding padding padding padding padding
+learning 0164 padding padding padding padding padding padding padding
+learning 0165 padding padding padding padding padding padding padding
+learning 0166 padding padding padding padding padding padding padding
+learning 0167 padding padding padding padding padding padding padding
+learning 0168 padding padding padding padding padding padding padding
+learning 0169 padding padding padding padding padding padding padding
+learning 0170 padding padding padding padding padding padding padding
+learning 0171 padding padding padding padding padding padding padding
+learning 0172 padding padding padding padding padding padding padding
+learning 0173 padding padding padding padding padding padding padding
+learning 0174 padding padding padding padding padding padding padding
+learning 0175 padding padding padding padding padding padding padding
+learning 0176 padding padding padding padding padding padding padding
+learning 0177 padding padding padding padding padding padding padding
+learning 0178 padding padding padding padding padding padding padding
+learning 0179 padding padding padding padding padding padding padding
+learning 0180 padding padding padding padding padding padding padding
+learning 0181 padding padding padding padding padding padding padding
+learning 0182 padding padding padding padding padding padding padding
+learning 0183 padding padding padding padding padding padding padding
+learning 0184 padding padding padding padding padding padding padding
+learning 0185 padding padding padding padding padding padding padding
+learning 0186 padding padding padding padding padding padding padding
+learning 0187 padding padding padding padding padding padding padding
+learning 0188 padding padding padding padding padding padding padding
+learning 0189 padding padding padding padding padding padding padding
+learning 0190 padding padding padding padding padding padding padding
+learning 0191 padding padding padding padding padding padding padding
+learning 0192 padding padding padding padding padding padding padding
+learning 0193 padding padding padding padding padding padding padding
+learning 0194 padding padding padding padding padding padding padding
+learning 0195 padding padding padding padding padding padding padding
+learning 0196 padding padding padding padding padding padding padding
+learning 0197 padding padding padding padding padding padding padding
+learning 0198 padding padding padding padding padding padding padding
+learning 0199 padding padding padding padding padding padding padding
+learning 0200 padding padding padding padding padding padding padding
+learning 0201 padding padding padding padding padding padding padding
+learning 0202 padding padding padding padding padding padding padding
+learning 0203 padding padding padding padding padding padding padding
+learning 0204 padding padding padding padding padding padding padding
+learning 0205 padding padding padding padding padding padding padding
+learning 0206 padding padding padding padding padding padding padding
+learning 0207 padding padding padding padding padding padding padding
+learning 0208 padding padding padding padding padding padding padding
+learning 0209 padding padding padding padding padding padding padding
+learning 0210 padding padding padding padding padding padding padding
+learning 0211 padding padding padding padding padding padding padding
+learning 0212 padding padding padding padding padding padding padding
+learning 0213 padding padding padding padding padding padding padding
+learning 0214 padding padding padding padding padding padding padding
+learning 0215 padding padding padding padding padding padding padding
+learning 0216 padding padding padding padding padding padding padding
+learning 0217 padding padding padding padding padding padding padding
+learning 0218 padding padding padding padding padding padding padding
+learning 0219 padding padding padding padding padding padding padding
+learning 0220 padding padding padding padding padding padding padding
+learning 0221 padding padding padding padding padding padding padding
+learning 0222 padding padding padding padding padding padding padding
+learning 0223 padding padding padding padding padding padding padding
+learning 0224 padding padding padding padding padding padding padding
+learning 0225 padding padding padding padding padding padding padding
+learning 0226 padding padding padding padding padding padding padding
+learning 0227 padding padding padding padding padding padding padding
+learning 0228 padding padding padding padding padding padding padding
+learning 0229 padding padding padding padding padding padding padding
+learning 0230 padding padding padding padding padding padding padding
+learning 0231 padding padding padding padding padding padding padding
+learning 0232 padding padding padding padding padding padding padding
+learning 0233 padding padding padding padding padding padding padding
+learning 0234 padding padding padding padding padding padding padding
+learning 0235 padding padding padding padding padding padding padding
+learning 0236 padding padding padding padding padding padding padding
+learning 0237 padding padding padding padding padding padding padding
+learning 0238 padding padding padding padding padding padding padding
+learning 0239 padding padding padding padding padding padding padding
+learning 0240 padding padding padding padding padding padding padding
+learning 0241 padding padding padding padding padding padding padding
+learning 0242 padding padding padding padding padding padding padding
+learning 0243 padding padding padding padding padding padding padding
+learning 0244 padding padding padding padding padding padding padding
+learning 0245 padding padding padding padding padding padding padding
+learning 0246 padding padding padding padding padding padding padding
+learning 0247 padding padding padding padding padding padding padding
+learning 0248 padding padding padding padding padding padding padding
+learning 0249 padding padding padding padding padding padding padding
+learning 0250 padding padding padding padding padding padding padding
+learning 0251 padding padding padding padding padding padding padding
+learning 0252 padding padding padding padding padding padding padding
+learning 0253 padding padding padding padding padding padding padding
+learning 0254 padding padding padding padding padding padding padding
+learning 0255 padding padding padding padding padding padding padding
+learning 0256 padding padding padding padding padding padding padding
+learning 0257 padding padding padding padding padding padding padding
+learning 0258 padding padding padding padding padding padding padding
+learning 0259 padding padding padding padding padding padding padding
+learning 0260 padding padding padding padding padding padding padding
+learning 0261 padding padding padding padding padding padding padding
+learning 0262 padding padding padding padding padding padding padding
+learning 0263 padding padding padding padding padding padding padding
+learning 0264 padding padding padding padding padding padding padding
+learning 0265 padding padding padding padding padding padding padding
+learning 0266 padding padding padding padding padding padding padding
+learning 0267 padding padding padding padding padding padding padding
+learning 0268 padding padding padding padding padding padding padding
+learning 0269 padding padding padding padding padding padding padding
+learning 0270 padding padding padding padding padding padding padding
+learning 0271 padding padding padding padding padding padding padding
+learning 0272 padding padding padding padding padding padding padding
+learning 0273 padding padding padding padding padding padding padding
+learning 0274 padding padding padding padding padding padding padding
+learning 0275 padding padding padding padding padding padding padding
+learning 0276 padding padding padding padding padding padding padding
+learning 0277 padding padding padding padding padding padding padding
+learning 0278 padding padding padding padding padding padding padding
+learning 0279 padding padding padding padding padding padding padding
+learning 0280 padding padding padding padding padding padding padding
+learning 0281 padding padding padding padding padding padding padding
+learning 0282 padding padding padding padding padding padding padding
+learning 0283 padding padding padding padding padding padding padding
+learning 0284 padding padding padding padding padding padding padding
+learning 0285 padding padding padding padding padding padding padding
+learning 0286 padding padding padding padding padding padding padding
+learning 0287 padding padding padding padding padding padding padding
+learning 0288 padding padding padding padding padding padding padding
+learning 0289 padding padding padding padding padding padding padding
+learning 0290 padding padding padding padding padding padding padding
+learning 0291 padding padding padding padding padding padding padding
+learning 0292 padding padding padding padding padding padding padding
+learning 0293 padding padding padding padding padding padding padding
+learning 0294 padding padding padding padding padding padding padding
+learning 0295 padding padding padding padding padding padding padding
+learning 0296 padding padding padding padding padding padding padding
+learning 0297 padding padding padding padding padding padding padding
+learning 0298 padding padding padding padding padding padding padding
+learning 0299 padding padding padding padding padding padding padding
+learning 0300 padding padding padding padding padding padding padding
+learning 0301 padding padding padding padding padding padding padding
+learning 0302 padding padding padding padding padding padding padding
+learning 0303 padding padding padding padding padding padding padding
+learning 0304 padding padding padding padding padding padding padding
+learning 0305 padding padding padding padding padding padding padding
+learning 0306 padding padding padding padding padding padding padding
+learning 0307 padding padding padding padding padding padding padding
+learning 0308 padding padding padding padding padding padding padding
+learning 0309 padding padding padding padding padding padding padding
+learning 0310 padding padding padding padding padding padding padding
+learning 0311 padding padding padding padding padding padding padding
+learning 0312 padding padding padding padding padding padding padding
+learning 0313 padding padding padding padding padding padding padding
+learning 0314 padding padding padding padding padding padding padding
+learning 0315 padding padding padding padding padding padding padding
+learning 0316 padding padding padding padding padding padding padding
+learning 0317 padding padding padding padding padding padding padding
+learning 0318 padding padding padding padding padding padding padding
+learning 0319 padding padding padding padding padding padding padding
+learning 0320 padding padding padding padding padding padding padding
+learning 0321 padding padding padding padding padding padding padding
+learning 0322 padding padding padding padding padding padding padding
+learning 0323 padding padding padding padding padding padding padding
+learning 0324 padding padding padding padding padding padding padding
+learning 0325 padding padding padding padding padding padding padding
+learning 0326 padding padding padding padding padding padding padding
+learning 0327 padding padding padding padding padding padding padding
+learning 0328 padding padding padding padding padding padding padding
+learning 0329 padding padding padding padding padding padding padding
+learning 0330 padding padding padding padding padding padding padding
+learning 0331 padding padding padding padding padding padding padding
+learning 0332 padding padding padding padding padding padding padding
+learning 0333 padding padding padding padding padding padding padding
+learning 0334 padding padding padding padding padding padding padding
+learning 0335 padding padding padding padding padding padding padding
+learning 0336 padding padding padding padding padding padding padding
+learning 0337 padding padding padding padding padding padding padding
+learning 0338 padding padding padding padding padding padding padding
+learning 0339 padding padding padding padding padding padding padding
+learning 0340 padding padding padding padding padding padding padding
+learning 0341 padding padding padding padding padding padding padding
+learning 0342 padding padding padding padding padding padding padding
+learning 0343 padding padding padding padding padding padding padding
+learning 0344 padding padding padding padding padding padding padding
+learning 0345 padding padding padding padding padding padding padding
+learning 0346 padding padding padding padding padding padding padding
+learning 0347 padding padding padding padding padding padding padding
+learning 0348 padding padding padding padding padding padding padding
+learning 0349 padding padding padding padding padding padding padding
+learning 0350 padding padding padding padding padding padding padding
+learning 0351 padding padding padding padding padding padding padding
+learning 0352 padding padding padding padding padding padding padding
+learning 0353 padding padding padding padding padding padding padding
+learning 0354 padding padding padding padding padding padding padding
+learning 0355 padding padding padding padding padding padding padding
+learning 0356 padding padding padding padding padding padding padding
+learning 0357 padding padding padding padding padding padding padding
+learning 0358 padding padding padding padding padding padding padding
+learning 0359 padding padding padding padding padding padding padding
+learning 0360 padding padding padding padding padding padding padding
+learning 0361 padding padding padding padding padding padding padding
+learning 0362 padding padding padding padding padding padding padding
+learning 0363 padding padding padding padding padding padding padding
+learning 0364 padding padding padding padding padding padding padding
+learning 0365 padding padding padding padding padding padding padding
+learning 0366 padding padding padding padding padding padding padding
+learning 0367 padding padding padding padding padding padding padding
+learning 0368 padding padding padding padding padding padding padding
+learning 0369 padding padding padding padding padding padding padding
+learning 0370 padding padding padding padding padding padding padding
+learning 0371 padding padding padding padding padding padding padding
+learning 0372 padding padding padding padding padding padding padding
+learning 0373 padding padding padding padding padding padding padding
+learning 0374 padding padding padding padding padding padding padding
+learning 0375 padding padding padding padding padding padding padding
+learning 0376 padding padding padding padding padding padding padding
+learning 0377 padding padding padding padding padding padding padding
+learning 0378 padding padding padding padding padding padding padding
+learning 0379 padding padding padding padding padding padding padding
+learning 0380 padding padding padding padding padding padding padding
+learning 0381 padding padding padding padding padding padding padding
+learning 0382 padding padding padding padding padding padding padding
+learning 0383 padding padding padding padding padding padding padding
+learning 0384 padding padding padding padding padding padding padding
+learning 0385 padding padding padding padding padding padding padding
+learning 0386 padding padding padding padding padding padding padding
+learning 0387 padding padding padding padding padding padding padding
+learning 0388 padding padding padding padding padding padding padding
+learning 0389 padding padding padding padding padding padding padding
+learning 0390 padding padding padding padding padding padding padding
+learning 0391 padding padding padding padding padding padding padding
+learning 0392 padding padding padding padding padding padding padding
+learning 0393 padding padding padding padding padding padding padding
+learning 0394 padding padding padding padding padding padding padding
+learning 0395 padding padding padding padding padding padding padding
+learning 0396 padding padding padding padding padding padding padding
+learning 0397 padding padding padding padding padding padding padding
+learning 0398 padding padding padding padding padding padding padding
+learning 0399 padding padding padding padding padding padding padding
+learning 0400 padding padding padding padding padding padding padding
+learning 0401 padding padding padding padding padding padding padding
+learning 0402 padding padding padding padding padding padding padding
+learning 0403 padding padding padding padding padding padding padding
+learning 0404 padding padding padding padding padding padding padding
+learning 0405 padding padding padding padding padding padding padding
+learning 0406 padding padding padding padding padding padding padding
+learning 0407 padding padding padding padding padding padding padding
+learning 0408 padding padding padding padding padding padding padding
+learning 0409 padding padding padding padding padding padding padding
+learning 0410 padding padding padding padding padding padding padding
+learning 0411 padding padding padding padding padding padding padding
+learning 0412 padding padding padding padding padding padding padding
+learning 0413 padding padding padding padding padding padding padding
+learning 0414 padding padding padding padding padding padding padding
+learning 0415 padding padding padding padding padding padding padding
+learning 0416 padding padding padding padding padding padding padding
+learning 0417 padding padding padding padding padding padding padding
+learning 0418 padding padding padding padding padding padding padding
+learning 0419 padding padding padding padding padding padding padding
+learning 0420 padding padding padding padding padding padding padding
+learning 0421 padding padding padding padding padding padding padding
+learning 0422 padding padding padding padding padding padding padding
+learning 0423 padding padding padding padding padding padding padding
+learning 0424 padding padding padding padding padding padding padding
+learning 0425 padding padding padding padding padding padding padding
+learning 0426 padding padding padding padding padding padding padding
+learning 0427 padding padding padding padding padding padding padding
+learning 0428 padding padding padding padding padding padding padding
+learning 0429 padding padding padding padding padding padding padding
+learning 0430 padding padding padding padding padding padding padding
+learning 0431 padding padding padding padding padding padding padding
+learning 0432 padding padding padding padding padding padding padding
+learning 0433 padding padding padding padding padding padding padding
+learning 0434 padding padding padding padding padding padding padding
+learning 0435 padding padding padding padding padding padding padding
+learning 0436 padding padding padding padding padding padding padding
+learning 0437 padding padding padding padding padding padding padding
+learning 0438 padding padding padding padding padding padding padding
+learning 0439 padding padding padding padding padding padding padding
+learning 0440 padding padding padding padding padding padding padding
+learning 0441 padding padding padding padding padding padding padding
+learning 0442 padding padding padding padding padding padding padding
+learning 0443 padding padding padding padding padding padding padding
+learning 0444 padding padding padding padding padding padding padding
+learning 0445 padding padding padding padding padding padding padding
+learning 0446 padding padding padding padding padding padding padding
+learning 0447 padding padding padding padding padding padding padding
+learning 0448 padding padding padding padding padding padding padding
+learning 0449 padding padding padding padding padding padding padding
+learning 0450 padding padding padding padding padding padding padding
+learning 0451 padding padding padding padding padding padding padding
+learning 0452 padding padding padding padding padding padding padding
+learning 0453 padding padding padding padding padding padding padding
+learning 0454 padding padding padding padding padding padding padding
+learning 0455 padding padding padding padding padding padding padding
+learning 0456 padding padding padding padding padding padding padding
+learning 0457 padding padding padding padding padding padding padding
+learning 0458 padding padding padding padding padding padding padding
+learning 0459 padding padding padding padding padding padding padding
+learning 0460 padding padding padding padding padding padding padding
+learning 0461 padding padding padding padding padding padding padding
+learning 0462 padding padding padding padding padding padding padding
+learning 0463 padding padding padding padding padding padding padding
+learning 0464 padding padding padding padding padding padding padding
+learning 0465 padding padding padding padding padding padding padding
+learning 0466 padding padding padding padding padding padding padding
+learning 0467 padding padding padding padding padding padding padding
+learning 0468 padding padding padding padding padding padding padding
+learning 0469 padding padding padding padding padding padding padding
+learning 0470 padding padding padding padding padding padding padding
+learning 0471 padding padding padding padding padding padding padding
+learning 0472 padding padding padding padding padding padding padding
+learning 0473 padding padding padding padding padding padding padding
+learning 0474 padding padding padding padding padding padding padding
+learning 0475 padding padding padding padding padding padding padding
+learning 0476 padding padding padding padding padding padding padding
+learning 0477 padding padding padding padding padding padding padding
+learning 0478 padding padding padding padding padding padding padding
+learning 0479 padding padding padding padding padding padding padding
+learning 0480 padding padding padding padding padding padding padding
+learning 0481 padding padding padding padding padding padding padding
+learning 0482 padding padding padding padding padding padding padding
+learning 0483 padding padding padding padding padding padding padding
+learning 0484 padding padding padding padding padding padding padding
+learning 0485 padding padding padding padding padding padding padding
+learning 0486 padding padding padding padding padding padding padding
+learning 0487 padding padding padding padding padding padding padding
+learning 0488 padding padding padding padding padding padding padding
+learning 0489 padding padding padding padding padding padding padding
+learning 0490 padding padding padding padding padding padding padding
+learning 0491 padding padding padding padding padding padding padding
+learning 0492 padding padding padding padding padding padding padding
+learning 0493 padding padding padding padding padding padding padding
+learning 0494 padding padding padding padding padding padding padding
+learning 0495 padding padding padding padding padding padding padding
+learning 0496 padding padding padding padding padding padding padding
+learning 0497 padding padding padding padding padding padding padding
+learning 0498 padding padding padding padding padding padding padding
+learning 0499 padding padding padding padding padding padding padding
+learning 0500 padding padding padding padding padding padding padding
+learning 0501 padding padding padding padding padding padding padding
+learning 0502 padding padding padding padding padding padding padding
+learning 0503 padding padding padding padding padding padding padding
+learning 0504 padding padding padding padding padding padding padding
+learning 0505 padding padding padding padding padding padding padding
+learning 0506 padding padding padding padding padding padding padding
+learning 0507 padding padding padding padding padding padding padding
+learning 0508 padding padding padding padding padding padding padding
+learning 0509 padding padding padding padding padding padding padding
+learning 0510 padding padding padding padding padding padding padding
+learning 0511 padding padding padding padding padding padding padding
+learning 0512 padding padding padding padding padding padding padding
+learning 0513 padding padding padding padding padding padding padding
+learning 0514 padding padding padding padding padding padding padding
+learning 0515 padding padding padding padding padding padding padding
+learning 0516 padding padding padding padding padding padding padding
+learning 0517 padding padding padding padding padding padding padding
+learning 0518 padding padding padding padding padding padding padding
+learning 0519 padding padding padding padding padding padding padding
+learning 0520 padding padding padding padding padding padding padding
+learning 0521 padding padding padding padding padding padding padding
+learning 0522 padding padding padding padding padding padding padding
+learning 0523 padding padding padding padding padding padding padding
+learning 0524 padding padding padding padding padding padding padding
+learning 0525 padding padding padding padding padding padding padding
+learning 0526 padding padding padding padding padding padding padding
+learning 0527 padding padding padding padding padding padding padding
+learning 0528 padding padding padding padding padding padding padding
+learning 0529 padding padding padding padding padding padding padding
+learning 0530 padding padding padding padding padding padding padding
+learning 0531 padding padding padding padding padding padding padding
+learning 0532 padding padding padding padding padding padding padding
+learning 0533 padding padding padding padding padding padding padding
+learning 0534 padding padding padding padding padding padding padding
+learning 0535 padding padding padding padding padding padding padding
+learning 0536 padding padding padding padding padding padding padding
+learning 0537 padding padding padding padding padding padding padding
+learning 0538 padding padding padding padding padding padding padding
+learning 0539 padding padding padding padding padding padding padding
+learning 0540 padding padding padding padding padding padding padding
+learning 0541 padding padding padding padding padding padding padding
+learning 0542 padding padding padding padding padding padding padding
+learning 0543 padding padding padding padding padding padding padding
+learning 0544 padding padding padding padding padding padding padding
+learning 0545 padding padding padding padding padding padding padding
+learning 0546 padding padding padding padding padding padding padding
+learning 0547 padding padding padding padding padding padding padding
+learning 0548 padding padding padding padding padding padding padding
+learning 0549 padding padding padding padding padding padding padding
+learning 0550 padding padding padding padding padding padding padding
+learning 0551 padding padding padding padding padding padding padding
+learning 0552 padding padding padding padding padding padding padding
+learning 0553 padding padding padding padding padding padding padding
+learning 0554 padding padding padding padding padding padding padding
+learning 0555 padding padding padding padding padding padding padding
+learning 0556 padding padding padding padding padding padding padding
+learning 0557 padding padding padding padding padding padding padding
+learning 0558 padding padding padding padding padding padding padding
+learning 0559 padding padding padding padding padding padding padding
+learning 0560 padding padding padding padding padding padding padding
+learning 0561 padding padding padding padding padding padding padding
+learning 0562 padding padding padding padding padding padding padding
+learning 0563 padding padding padding padding padding padding padding
+learning 0564 padding padding padding padding padding padding padding
+learning 0565 padding padding padding padding padding padding padding
+learning 0566 padding padding padding padding padding padding padding
+learning 0567 padding padding padding padding padding padding padding
+learning 0568 padding padding padding padding padding padding padding
+learning 0569 padding padding padding padding padding padding padding
+learning 0570 padding padding padding padding padding padding padding
+learning 0571 padding padding padding padding padding padding padding
+learning 0572 padding padding padding padding padding padding padding
+learning 0573 padding padding padding padding padding padding padding
+learning 0574 padding padding padding padding padding padding padding
+learning 0575 padding padding padding padding padding padding padding
+learning 0576 padding padding padding padding padding padding padding
+learning 0577 padding padding padding padding padding padding padding
+learning 0578 padding padding padding padding padding padding padding
+learning 0579 padding padding padding padding padding padding padding
+learning 0580 padding padding padding padding padding padding padding
+learning 0581 padding padding padding padding padding padding padding
+learning 0582 padding padding padding padding padding padding padding
+learning 0583 padding padding padding padding padding padding padding
+learning 0584 padding padding padding padding padding padding padding
+learning 0585 padding padding padding padding padding padding padding
+learning 0586 padding padding padding padding padding padding padding
+learning 0587 padding padding padding padding padding padding padding
+learning 0588 padding padding padding padding padding padding padding
+learning 0589 padding padding padding padding padding padding padding
+learning 0590 padding padding padding padding padding padding padding
+learning 0591 padding padding padding padding padding padding padding
+learning 0592 padding padding padding padding padding padding padding
+learning 0593 padding padding padding padding padding padding padding
+learning 0594 padding padding padding padding padding padding padding
+learning 0595 padding padding padding padding padding padding padding
+learning 0596 padding padding padding padding padding padding padding
+learning 0597 padding padding padding padding padding padding padding
+learning 0598 padding padding padding padding padding padding padding
+learning 0599 padding padding padding padding padding padding padding
+
+================================================================================
+NEXT STEP
+================================================================================
+Follow the supervision operating instructions block above for harness 'claude'.
+This script never starts supervision itself.
+
+The digest above is complete for this session start. The READ-ONCE CONTRACT
+section near the top of it governs what may still be read from disk.

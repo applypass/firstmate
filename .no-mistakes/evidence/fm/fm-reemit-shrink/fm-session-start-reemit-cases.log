@@ -1,0 +1,4 @@
+ok - --reemit stays under the hook output limit with its read cue in the first 2000 characters, and a normal start omits it
+ok - --reemit reprints the digest without repeating startup's mutating sweeps and still drains queued wakes
+ok - --reemit re-verifies lock ownership and keeps repair ownership with whoever holds it
+# selected re-emit cases passed
