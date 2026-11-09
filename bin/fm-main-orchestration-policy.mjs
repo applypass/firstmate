@@ -18,7 +18,7 @@
 //   deny   refused; group names the kind of work, summary says what, safe to log
 
 import { Lexer, splitProgram, commandPosition } from "./fm-arm-command-policy.mjs";
-import { readFileSync, realpathSync } from "node:fs";
+import { readFileSync, realpathSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -165,6 +165,42 @@ function isHarnessOutput(abs, ctx) {
 }
 
 const isArtifactHtml = (abs) => /\.html?$/i.test(abs) || abs.includes("/.lavish/");
+
+// Artifact page content is not a fleet record, so a recursive read of a directory
+// under data/ must exclude HTML. A positive glob must name one non-HTML extension (or a
+// brace list of them); a negative glob must exclude HTML.
+const isHtmlGlob = (g) => /html?|lavish/i.test(g);
+function globsExcludeHtml(globs, types = []) {
+  const positive = globs.filter((g) => !g.startsWith("!"));
+  const negative = globs.filter((g) => g.startsWith("!"));
+  if (negative.some(isHtmlGlob)) return true;
+  if (types.length > 0 && types.every((t) => !/^(html?|all|web)$/i.test(t))) return true;
+  return positive.length > 0 && positive.every((g) => !isHtmlGlob(g) && /\.(\w+|\{\w+(,\w+)*\})$/.test(g));
+}
+function isDirUnderData(abs, ctx) {
+  const inData = [...new Set([ctx.home, path.normalize(ctx.homeRaw)])].some((b) => abs === path.join(b, "data") || abs.startsWith(`${path.join(b, "data")}/`));
+  if (!inData) return false;
+  try { return statSync(abs).isDirectory(); } catch { return false; }
+}
+// Globs and types a recursive grep, rg, or Grep call names, from command words.
+function wordGlobs(words) {
+  const globs = []; const types = [];
+  for (let i = 1; i < words.length; i += 1) {
+    const v = words[i].value;
+    let m;
+    if ((m = v.match(/^--include=(.*)$/))) globs.push(m[1]);
+    else if (v === "--include" || v === "-g" || v === "--glob") { if (words[i + 1]) globs.push(words[i + 1].value); i += 1; }
+    else if ((m = v.match(/^--exclude=(.*)$/))) globs.push(`!${m[1]}`);
+    else if (v === "--exclude") { if (words[i + 1]) globs.push(`!${words[i + 1].value}`); i += 1; }
+    else if (v === "-t" || v === "--type") { if (words[i + 1]) types.push(words[i + 1].value); i += 1; }
+  }
+  return { globs, types };
+}
+function isRecursiveGrep(name, words) {
+  if (name === "rg") return true;
+  if (!/^(grep|egrep|fgrep)$/.test(name)) return false;
+  return words.slice(1).some((w) => w.value === "--recursive" || w.value === "--dereference-recursive" || /^-[A-Za-z]*[rR][A-Za-z]*$/.test(w.value));
+}
 
 function groupOfPath(abs, ctx) {
   if (/\/(projects|\.treehouse|conductor)\//.test(abs) || abs.includes("/apply_pass_")) return "project-read";
@@ -330,6 +366,10 @@ function classifyNode(tokens, state, depth) {
     for (const operand of operands) {
       const abs = resolvePath(operand, cwd, ctx, state.vars);
       if (abs && isArtifactHtml(abs)) return deny("artifact-read", display);
+      if (abs && isRecursiveGrep(name, cmdWords) && isDirUnderData(abs, ctx)) {
+        const { globs, types } = wordGlobs(cmdWords);
+        if (!globsExcludeHtml(globs, types)) return deny("artifact-read", `${display} (recursive over data/ reaches html)`);
+      }
       if (!abs || !(isFleetRecord(abs, ctx) || isHarnessOutput(abs, ctx))) return deny(abs ? groupOfPath(abs, ctx) : "other", abs ? display : `${display} <dynamic path>`);
     }
     return result;
@@ -427,11 +467,18 @@ export function classifyCall(payload, baseCtx) {
   }
   if (tool === "Grep" || tool === "Glob") {
     const p = abs(input.path || cwd);
-    if (isFleetRecord(p, ctx) && !isArtifactHtml(p)) return allow();
+    if (isArtifactHtml(p) || (tool === "Glob" && isHtmlGlob(String(input.pattern || "")))) return deny("artifact-read", `${tool} ${path.basename(p)}`);
+    if (tool === "Grep" && isDirUnderData(p, ctx)) {
+      const globs = typeof input.glob === "string" && input.glob ? [input.glob] : [];
+      const types = typeof input.type === "string" && input.type ? [input.type] : [];
+      if (!globsExcludeHtml(globs, types)) return deny("artifact-read", `Grep ${path.basename(p)} (directory under data/ reaches html)`);
+    }
+    if (isFleetRecord(p, ctx)) return allow();
     return deny(groupOfPath(p, ctx), `${tool} ${path.basename(p)}`);
   }
   if (tool === "Edit" || tool === "Write" || tool === "NotebookEdit" || tool === "MultiEdit") {
     const p = abs(toolPath(input));
+    if (p && isArtifactHtml(p)) return deny("artifact-read", `${tool} ${path.basename(p)} (artifact page, not a fleet record)`);
     if (p && isFleetRecord(p, ctx)) return allow();
     const group = /\/(\.claude[^/]*|sys-config)\//.test(p) || /settings(\.local)?\.json$/.test(p) ? "config-edit" : "project-edit";
     return deny(group, `${tool} ${p ? path.basename(p) : ""}`);

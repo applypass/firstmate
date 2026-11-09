@@ -142,6 +142,28 @@ test_allowlist_is_narrow_and_documented() {
   pass "the allowlist is narrow, every script has a header reason, and media, memory, and harness output are scoped"
 }
 
+test_artifact_html_is_refused_on_every_path() {
+  make_home htmlpaths main
+  gcall Grep '{"pattern":"label","path":"'"$H"'/data/label-audit"}'; expect_code 2 "$RC" "the labelling-page case through the Grep tool (a directory under data/) is refused"
+  assert_contains "$(log_text)" "group=artifact-read" "logged as an artifact read"
+  gcall Grep '{"pattern":"label","path":"'"$H"'/data/label-audit/labelling-page.html"}'; expect_code 2 "$RC" "Grep on the HTML file is refused"
+  gcall Grep '{"pattern":"label","path":"'"$H"'/data/label-audit","glob":"*.md"}'; expect_code 0 "$RC" "Grep with a glob that excludes html is allowed"
+  gcall Grep '{"pattern":"label","path":"'"$H"'/data/label-audit","glob":"*.{md,html}"}'; expect_code 2 "$RC" "a brace glob that includes html is refused"
+  gcall Grep '{"pattern":"label","path":"'"$H"'/data/label-audit","type":"md"}'; expect_code 0 "$RC" "a non-html type is allowed"
+  gcall Grep '{"pattern":"label","path":"'"$H"'/data/label-audit","type":"html"}'; expect_code 2 "$RC" "the html type is refused"
+  gcall Grep '{"pattern":"x","path":"'"$H"'/state"}'; expect_code 0 "$RC" "Grep over state/ is allowed"
+  gcall Glob '{"pattern":"**/*.html","path":"'"$H"'/data"}'; expect_code 2 "$RC" "Glob for html under data/ is refused"
+  gcall Glob '{"pattern":"**/*.md","path":"'"$H"'/data"}'; expect_code 0 "$RC" "Glob for md files is allowed"
+  gcall Write '{"file_path":"'"$H"'/data/label-audit/page.html","content":"<html></html>"}'; expect_code 2 "$RC" "Write of data/**/*.html is refused"
+  gcall Edit '{"file_path":"'"$H"'/data/label-audit/labelling-page.html","old_string":"a","new_string":"b"}'; expect_code 2 "$RC" "Edit of data/**/*.html is refused"
+  bash_call 'grep -rn label data/label-audit'; expect_code 2 "$RC" "a recursive grep over the directory is refused"
+  bash_call 'rg label data/label-audit'; expect_code 2 "$RC" "rg over the directory is refused"
+  bash_call 'grep -rn --include=*.md label data/label-audit'; expect_code 0 "$RC" "a recursive grep limited to md files is allowed"
+  bash_call 'rg -g "!*.html" label data/label-audit'; expect_code 0 "$RC" "rg that excludes html is allowed"
+  bash_call 'grep -n backlog data/backlog.md'; expect_code 0 "$RC" "a plain fleet record is still read"
+  pass "artifact HTML under data/ is refused through Read, Bash readers, Grep, Glob, Edit, and Write"
+}
+
 test_default_deny_refuses_and_logs_unknown_work() {
   make_home deny main
   local c group
@@ -351,6 +373,7 @@ test_9_nov_labelling_page_grep_is_refused
 test_9_nov_quota_script_read_is_refused
 test_orchestration_is_never_refused
 test_allowlist_is_narrow_and_documented
+test_artifact_html_is_refused_on_every_path
 test_default_deny_refuses_and_logs_unknown_work
 test_quick_lookups_are_limited_per_captain_message
 test_captain_messages_reset_the_lookup_count
