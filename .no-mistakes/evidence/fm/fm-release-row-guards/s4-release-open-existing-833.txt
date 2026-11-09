@@ -1,0 +1,12 @@
+# release #833 stands in as the already-open dev->main release (gh shim answers the open-release list with it; all other reads are real gh; PR body writes are captured)
+$ bin/fm-release.sh open applypass/apply_pass_backend
+release PR already open: https://github.com/applypass/apply_pass_backend/pull/833
+https://github.com/applypass/apply_pass_backend/pull/833
+release gate table refreshed: https://github.com/applypass/apply_pass_backend/pull/833
+exit=0
+
+--- state/release-main-apply_pass_backend-833.status:
+cat: /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.lqz3iJ/state/release-main-apply_pass_backend-833.status: No such file or directory
+
+--- gh writes:
+CAPTURED: gh pr edit https://github.com/applypass/apply_pass_backend/pull/833 --body-file /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/tmp.Zw1dw5iCtd

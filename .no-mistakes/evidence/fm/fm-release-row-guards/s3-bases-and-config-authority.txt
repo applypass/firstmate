@@ -1,0 +1,30 @@
+# a main-base PR: row passes untouched; guard without --release-main still refuses
+$ bin/fm-release-gate.sh row https://github.com/applypass/ai_backend/pull/257
+fm-release-gate: https://github.com/applypass/ai_backend/pull/257 targets main, not dev; no dev row to check
+exit=0
+$ bin/fm-main-merge-guard.sh github applypass/ai_backend 257 false
+error: applypass/ai_backend#257 targets main, and a merge into main deploys prod; pass --release-main only after the captain's explicit word for this specific merge
+exit=1
+
+# config/release-gate is the single authority: list only apply_pass_backend
+$ cat config/release-gate
+applypass/apply_pass_backend
+$ bin/fm-main-merge-guard.sh github applypass/ai_backend 262 false   # ai_backend now uncovered
+fm-release-gate: applypass/ai_backend is not covered by the release gate (config/release-gate); nothing to check
+exit=0
+$ bin/fm-main-merge-guard.sh github applypass/apply_pass_frontend 459 false   # frontend now uncovered
+fm-release-gate: applypass/apply_pass_frontend is not covered by the release gate (config/release-gate); nothing to check
+exit=0
+# no config file: defaults cover all three
+$ bin/fm-main-merge-guard.sh github applypass/ai_backend 262 false
+dev merge guard: https://github.com/applypass/ai_backend/pull/262 has no passing release row, so it cannot merge to dev:
+#262  none - no decision recorded; no story (sc-N) in the PR title, body or branch, and no backlog item names the PR
+  fix: add an sc-N story to the PR title or body (or a backlog item naming https://github.com/applypass/ai_backend/pull/262), then bin/fm-decide.sh record plan-ai_backend-262 "<the decision this PR implements>" --story <that sc-N>
+Record the row, then merge again.
+exit=1
+$ bin/fm-main-merge-guard.sh github applypass/apply_pass_frontend 459 false
+dev merge guard: https://github.com/applypass/apply_pass_frontend/pull/459 has no passing release row, so it cannot merge to dev:
+#459  none - no decision recorded; no story (sc-N) in the PR title, body or branch, and no backlog item names the PR
+  fix: add an sc-N story to the PR title or body (or a backlog item naming https://github.com/applypass/apply_pass_frontend/pull/459), then bin/fm-decide.sh record plan-apply_pass_frontend-459 "<the decision this PR implements>" --story <that sc-N>
+Record the row, then merge again.
+exit=1

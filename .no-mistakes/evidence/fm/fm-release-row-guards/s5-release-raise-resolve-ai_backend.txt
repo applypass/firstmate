@@ -1,0 +1,50 @@
+# firstmate supervisor view (scan_open_decisions over lab state/) after the first open:
+release-main-ai_backend-257	release-gate-ai_backend-257	needs-decision	release https://github.com/applypass/ai_backend/pull/257 carries PRs failing the release gate: #253 sc-5224 none - no decision re
+
+# re-open with the same failures: no duplicate raise
+status lines:        1
+
+# fix every failing row via the printed fix/waive commands
+$ bin/fm-decide.sh record plan-ai_backend-253 "approved: ..." --story sc-5224
+fm-decide: recorded plan-ai_backend-253 locally; posting to Shortcut in the background
+$ bin/fm-decide.sh record plan-ai_backend-258 "approved: ..." --story sc-8046
+fm-decide: recorded plan-ai_backend-258 locally; posting to Shortcut in the background
+$ bin/fm-decide.sh record release-waiver-ai_backend-257-254 "waived: Captain 2026-11-09: lab waiver for ai_backend#254"
+fm-decide: recorded release-waiver-ai_backend-257-254 locally; posting to Shortcut in the background
+$ bin/fm-decide.sh record release-waiver-ai_backend-257-255 "waived: Captain 2026-11-09: lab waiver for ai_backend#255"
+fm-decide: recorded release-waiver-ai_backend-257-255 locally; posting to Shortcut in the background
+$ bin/fm-decide.sh record release-waiver-ai_backend-257-259 "waived: Captain 2026-11-09: lab waiver for ai_backend#259"
+fm-decide: recorded release-waiver-ai_backend-257-259 locally; posting to Shortcut in the background
+$ bin/fm-decide.sh record release-waiver-ai_backend-257-260 "waived: Captain 2026-11-09: lab waiver for ai_backend#260"
+fm-decide: recorded release-waiver-ai_backend-257-260 locally; posting to Shortcut in the background
+
+$ bin/fm-release.sh open applypass/ai_backend   # re-open after the fixes
+release PR already open: https://github.com/applypass/ai_backend/pull/257
+https://github.com/applypass/ai_backend/pull/257
+release gate table refreshed: https://github.com/applypass/ai_backend/pull/257
+exit=0
+
+--- status file tail:
+resolved [at=1794216480] [key=release-gate-ai_backend-257]: every row in https://github.com/applypass/ai_backend/pull/257 passes the release gate
+
+# supervisor view after the clean re-open:
+(end of open decisions)
+
+--- captured table:
+<!-- fm-release-gate:start -->
+## Release gate
+
+| PR | Story | Decision it implements | Current? | Data or API change | Reader and writer audit | Status |
+|---|---|---|---|---|---|---|
+| [#253](https://github.com/applypass/ai_backend/pull/253) | sc-5224 | plan-ai_backend-253 | yes | no | n/a | ok |
+| [#254](https://github.com/applypass/ai_backend/pull/254) |  | none | yes | no | n/a | waived |
+| [#255](https://github.com/applypass/ai_backend/pull/255) |  | none | yes | no | n/a | waived |
+| [#258](https://github.com/applypass/ai_backend/pull/258) | sc-8046 | plan-ai_backend-258 | yes | no | n/a | ok |
+| [#259](https://github.com/applypass/ai_backend/pull/259) |  | none | yes | no | n/a | waived |
+| [#260](https://github.com/applypass/ai_backend/pull/260) |  | none | yes | no | n/a | waived |
+| [#261](https://github.com/applypass/ai_backend/pull/261) |  | plan-ap-wj7w-gate | yes | no | n/a | ok |
+<!-- fm-release-gate:end -->
+
+$ bin/fm-release-gate.sh check https://github.com/applypass/ai_backend/pull/257
+release gate: every PR in https://github.com/applypass/ai_backend/pull/257 passes
+exit=0

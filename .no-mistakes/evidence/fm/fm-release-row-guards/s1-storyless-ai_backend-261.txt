@@ -1,0 +1,72 @@
+$ bin/fm-main-merge-guard.sh github applypass/ai_backend 261 false
+dev merge guard: https://github.com/applypass/ai_backend/pull/261 has no passing release row, so it cannot merge to dev:
+#261  none - no decision recorded; no story (sc-N) in the PR title, body or branch, and no backlog item names the PR
+  fix: add an sc-N story to the PR title or body (or a backlog item naming https://github.com/applypass/ai_backend/pull/261), then bin/fm-decide.sh record plan-ai_backend-261 "<the decision this PR implements>" --story <that sc-N>
+Record the row, then merge again.
+exit=1
+
+# follow the fix: create a backlog item naming the PR url
+$ bin/fm-tasks-axi.sh add ap-wj7w-gate "training gate degraded" --body "PR https://github.com/applypass/ai_backend/pull/261"
+ok: added ap-wj7w-gate -> Queued
+task:
+  id: ap-wj7w-gate
+  title: training gate degraded
+  state: queued
+  blocked: no
+  blocked_by: none
+  held: no
+  hold_reason: "-"
+  hold_kind: "-"
+  hold_until: "-"
+  kind: task
+  repo: "-"
+  priority: "-"
+  created: 2026-11-09
+  closed: "-"
+  deps: none
+  links: none
+  body: "PR https://github.com/applypass/ai_backend/pull/261"
+help[2]:
+  - Run `tasks-axi start ap-wj7w-gate` to move it to in flight
+  - Run `tasks-axi block ap-wj7w-gate --by <other>` to record a dependency
+exit=0
+$ bin/fm-main-merge-guard.sh github applypass/ai_backend 261 false   # item exists, still no decision
+dev merge guard: https://github.com/applypass/ai_backend/pull/261 has no passing release row, so it cannot merge to dev:
+#261  none - no decision recorded
+  fix: bin/fm-decide.sh record plan-ap-wj7w-gate "<the decision this PR implements>" --story sc-NNNN
+Record the row, then merge again.
+exit=1
+$ bin/fm-decide.sh record plan-ap-wj7w-gate "approved: kept-PCA-init refusal counts as degraded" --story sc-9999
+fm-decide: Shortcut ticket sync is off in this home, so a decision cannot be given a story; turn it on (see docs/configuration.md)
+exit=1
+--- lab data/decided.md:
+$ bin/fm-main-merge-guard.sh github applypass/ai_backend 261 false
+dev merge guard: https://github.com/applypass/ai_backend/pull/261 has no passing release row, so it cannot merge to dev:
+#261  none - no decision recorded
+  fix: bin/fm-decide.sh record plan-ap-wj7w-gate "<the decision this PR implements>" --story sc-NNNN
+Record the row, then merge again.
+exit=1
+$ bin/fm-decide.sh record plan-ap-wj7w-gate "approved: kept-PCA-init refusal counts as degraded" --story sc-9999   # (Shortcut sync on, no token in the lab, so nothing posts)
+fm-decide: recorded plan-ap-wj7w-gate locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.lqz3iJ/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M6ZRDMKNPZZECSV2J7WTN68J/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+exit=0
+--- lab data/decided.md:
+- [plan-ap-wj7w-gate] 2026-11-09 approved: kept-PCA-init refusal counts as degraded (shortcut: pending sc-9999)
+$ bin/fm-main-merge-guard.sh github applypass/ai_backend 261 false
+dev merge guard: the row for https://github.com/applypass/ai_backend/pull/261 passes
+exit=0

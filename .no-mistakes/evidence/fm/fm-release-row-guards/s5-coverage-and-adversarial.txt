@@ -1,0 +1,40 @@
+# S5: dev guard covers ai_backend and apply_pass_frontend (real merged dev PRs, real gh read-only, empty lab decision log, no config/release-gate)
+
+$ bin/fm-main-merge-guard.sh github applypass/ai_backend 261 false
+dev merge guard: https://github.com/applypass/ai_backend/pull/261 has no passing release row, so it cannot merge to dev:
+#261  none - no decision recorded
+  fix: bin/fm-decide.sh record plan-ai_backend-261 "<the decision this PR implements>" --story sc-NNNN
+Record the row, then merge again.
+exit=1
+
+$ bin/fm-main-merge-guard.sh github applypass/apply_pass_frontend 458 false
+dev merge guard: https://github.com/applypass/apply_pass_frontend/pull/458 has no passing release row, so it cannot merge to dev:
+#458 sc-9112 none - no decision recorded
+  fix: bin/fm-decide.sh record plan-apply_pass_frontend-458 "<the decision this PR implements>" --story sc-9112
+Record the row, then merge again.
+exit=1
+
+# adversarial: a dev waiver or a release waiver does not open the dev guard
+- [dev-waiver-apply_pass_backend-834] 2026-11-09 waived: Captain 2026-11-09: ship apply_pass_backend#834 as is
+- [release-waiver-apply_pass_backend-834-834] 2026-11-09 waived: Captain 2026-11-09: ship apply_pass_backend#834 as is
+$ bin/fm-main-merge-guard.sh github applypass/apply_pass_backend 834 false
+dev merge guard: https://github.com/applypass/apply_pass_backend/pull/834 has no passing release row, so it cannot merge to dev:
+#834 sc-9112 sc-9559 none - no decision recorded
+  fix: bin/fm-decide.sh record plan-apply_pass_backend-834 "<the decision this PR implements>" --story sc-9112
+Record the row, then merge again.
+exit=1
+
+# adversarial: a superseded decision is NOT CURRENT at the dev merge
+- [plan-apply_pass_backend-834] 2026-11-04 approved: send recording_id as a number (shortcut: sc-9112 u)
+- [later-834] 2026-11-06 recording_id stays a string (supersedes: plan-apply_pass_backend-834)
+$ bin/fm-main-merge-guard.sh github applypass/apply_pass_backend 834 false
+dev merge guard: https://github.com/applypass/apply_pass_backend/pull/834 has no passing release row, so it cannot merge to dev:
+#834 sc-9112 sc-9559 plan-apply_pass_backend-834 - NOT CURRENT: superseded by later-834 (supersedes: plan-apply_pass_backend-834)
+  fix: record the decision this PR now implements: bin/fm-decide.sh record plan-apply_pass_backend-834 "<current decision>" --story sc-9112, or close the re-check item
+Record the row, then merge again.
+exit=1
+
+# a main-base release PR without --release-main is still refused by the main guard (unchanged)
+$ bin/fm-main-merge-guard.sh github applypass/apply_pass_backend 833 false
+error: applypass/apply_pass_backend#833 targets main, and a merge into main deploys prod; pass --release-main only after the captain's explicit word for this specific merge
+exit=1

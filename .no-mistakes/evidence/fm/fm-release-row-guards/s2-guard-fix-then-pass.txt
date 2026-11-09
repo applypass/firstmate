@@ -1,0 +1,34 @@
+# S2: the exact guard call bin/fm-pr-merge.sh makes before a GitHub merge (real gh, read-only)
+$ FM_HOME=$LAB bin/fm-main-merge-guard.sh github applypass/apply_pass_backend 834 false
+dev merge guard: https://github.com/applypass/apply_pass_backend/pull/834 has no passing release row, so it cannot merge to dev:
+#834 sc-9112 sc-9559 none - no decision recorded
+  fix: bin/fm-decide.sh record plan-apply_pass_backend-834 "<the decision this PR implements>" --story sc-9112
+Record the row, then merge again.
+exit=1
+
+# after recording the printed fix in the lab decision log with the real bin/fm-decide.sh
+$ env -u SHORTCUT_API_TOKEN PATH=<shim with failing op/curl>:$PATH FM_HOME=$LAB FM_DECIDE_SYNC_ATTEMPTS=1 bin/fm-decide.sh record plan-apply_pass_backend-834 "approved: send recording_id as a number" --story sc-9112
+fm-decide: recorded plan-apply_pass_backend-834 locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.0Dzr7H/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M6ZRDMKNPZZECSV2J7WTN68J/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+exit=0
+--- lab decided.md:
+- [plan-apply_pass_backend-834] 2026-11-09 approved: send recording_id as a number (shortcut: pending sc-9112)
+
+$ FM_HOME=$LAB bin/fm-main-merge-guard.sh github applypass/apply_pass_backend 834 false
+dev merge guard: the row for https://github.com/applypass/apply_pass_backend/pull/834 passes
+exit=0

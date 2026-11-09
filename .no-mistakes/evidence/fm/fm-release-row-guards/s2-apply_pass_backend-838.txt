@@ -1,0 +1,22 @@
+$ bin/fm-main-merge-guard.sh github applypass/apply_pass_backend 838 false
+dev merge guard: https://github.com/applypass/apply_pass_backend/pull/838 has no passing release row, so it cannot merge to dev:
+#838 sc-9697 none - no decision recorded; data/API change (schema.sql) without a reader and writer audit
+  fix: bin/fm-decide.sh record plan-apply_pass_backend-838 "<the decision this PR implements>" --story sc-9697
+  fix: add a '## Reader and writer audit' section to the PR body, or create data/<item>/reader-writer-audit.md
+Record the row, then merge again.
+exit=1
+# follow fix 1 literally
+$ bin/fm-decide.sh record plan-apply_pass_backend-838 "approved: work-arrangement filter on by default" --story sc-9697
+fm-decide: recorded plan-apply_pass_backend-838 locally; posting to Shortcut in the background
+exit=
+$ bin/fm-main-merge-guard.sh github applypass/apply_pass_backend 838 false
+dev merge guard: https://github.com/applypass/apply_pass_backend/pull/838 has no passing release row, so it cannot merge to dev:
+#838 sc-9697 plan-apply_pass_backend-838 - data/API change (schema.sql) without a reader and writer audit
+  fix: add a '## Reader and writer audit' section to the PR body, or create data/<item>/reader-writer-audit.md
+Record the row, then merge again.
+exit=1
+# follow fix 2: backlog item naming the PR + data/<item>/reader-writer-audit.md
+item added exit=0
+$ bin/fm-main-merge-guard.sh github applypass/apply_pass_backend 838 false
+dev merge guard: the row for https://github.com/applypass/apply_pass_backend/pull/838 passes
+exit=0

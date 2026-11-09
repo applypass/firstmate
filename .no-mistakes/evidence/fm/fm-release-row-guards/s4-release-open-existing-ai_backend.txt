@@ -1,0 +1,27 @@
+# ai_backend release #257 (main<-dev) stands in as the already-open release; dev is 7 commits ahead of main (real reads); PR body writes captured by the gh shim
+$ bin/fm-release.sh open applypass/ai_backend
+release PR already open: https://github.com/applypass/ai_backend/pull/257
+https://github.com/applypass/ai_backend/pull/257
+release gate table refreshed: https://github.com/applypass/ai_backend/pull/257
+exit=0
+
+--- state/release-main-ai_backend-257.status:
+needs-decision [at=1794216397] [key=release-gate-ai_backend-257]: release https://github.com/applypass/ai_backend/pull/257 carries PRs failing the release gate: #253 sc-5224 none - no decision recorded; fix: bin/fm-decide.sh record plan-ai_backend-253 "<the decision this PR implements>" --story sc-5224; waive: bin/fm-decide.sh record release-waiver-ai_backend-257-253 "waived: Captain <date>: <words naming ai_backend#253>"; #254  none - no decision recorded;  no story (sc-N) in the PR title, body or branch, and no backlog item names the PR; fix: add an sc-N story to the PR title or body (or a backlog item naming https://github.com/applypass/ai_backend/pull/254), then bin/fm-decide.sh record plan-ai_backend-254 "<the decision this PR implements>" --story <that sc-N>; waive: bin/fm-decide.sh record release-waiver-ai_backend-257-254 "waived: Captain <date>: <words naming ai_backend#254>"; #255  none - no decision recorded;  no story (sc-N) in the PR title, body or branch, and no backlog item names the PR; fix: add an sc-N story to the PR title or body (or a backlog item naming https://github.com/applypass/ai_backend/pull/255), then bin/fm-decide.sh record plan-ai_backend-255 "<the decision this PR implements>" --story <that sc-N>; waive: bin/fm-decide.sh record release-waiver-ai_backend-257-255 "waived: Captain <date>: <words naming ai_backend#255>"; #258 sc-8046 none - no decision recorded; fix: bin/fm-decide.sh record plan-ai_backend-258 "<the decision this PR implements>" --story sc-8046; waive: bin/fm-decide.sh record release-waiver-ai_backend-257-258 "waived: Captain <date>: <words naming ai_backend#258>"; #259  none - no decision recorded;  no story (sc-N) in the PR title, body or branch, and no backlog item names the PR; fix: add an sc-N story to the PR title or body (or a backlog item naming https://github.com/applypass/ai_backend/pull/259), then bin/fm-decide.sh record plan-ai_backend-259 "<the decision this PR implements>" --story <that sc-N>; waive: bin/fm-decide.sh record release-waiver-ai_backend-257-259 "waived: Captain <date>: <words naming ai_backend#259>"; #260  none - no decision recorded;  no story (sc-N) in the PR title, body or branch, and no backlog item names the PR; fix: add an sc-N story to the PR title or body (or a backlog item naming https://github.com/applypass/ai_backend/pull/260), then bin/fm-decide.sh record plan-ai_backend-260 "<the decision this PR implements>" --story <that sc-N>; waive: bin/fm-decide.sh record release-waiver-ai_backend-257-260 "waived: Captain <date>: <words naming ai_backend#260>"
+
+--- gate table written to the PR body (captured):
+<!-- fm-release-gate:start -->
+## Release gate
+
+| PR | Story | Decision it implements | Current? | Data or API change | Reader and writer audit | Status |
+|---|---|---|---|---|---|---|
+| [#253](https://github.com/applypass/ai_backend/pull/253) | sc-5224 | none | yes | no | n/a | FAIL |
+| [#254](https://github.com/applypass/ai_backend/pull/254) |  | none | yes | no | n/a | FAIL |
+| [#255](https://github.com/applypass/ai_backend/pull/255) |  | none | yes | no | n/a | FAIL |
+| [#258](https://github.com/applypass/ai_backend/pull/258) | sc-8046 | none | yes | no | n/a | FAIL |
+| [#259](https://github.com/applypass/ai_backend/pull/259) |  | none | yes | no | n/a | FAIL |
+| [#260](https://github.com/applypass/ai_backend/pull/260) |  | none | yes | no | n/a | FAIL |
+| [#261](https://github.com/applypass/ai_backend/pull/261) |  | plan-ap-wj7w-gate | yes | no | n/a | ok |
+<!-- fm-release-gate:end -->
+
+--- gh writes:
+CAPTURED: gh pr edit https://github.com/applypass/ai_backend/pull/257 --body-file /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/tmp.sFAMiaxHdu

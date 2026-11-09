@@ -1,0 +1,51 @@
+# S4: record each printed fix with the real bin/fm-decide.sh (lab home, Shortcut sync blocked), then re-run open
+$ bin/fm-decide.sh record plan-apply_pass_backend-829 "approved: lab replay decision for #829" --story sc-8728
+fm-decide: recorded plan-apply_pass_backend-829 locally; posting to Shortcut in the background
+$ bin/fm-decide.sh record plan-apply_pass_backend-830 "approved: lab replay decision for #830" --story sc-9018
+fm-decide: recorded plan-apply_pass_backend-830 locally; posting to Shortcut in the background
+$ bin/fm-decide.sh record plan-apply_pass_backend-831 "approved: lab replay decision for #831" --story sc-9018
+fm-decide: recorded plan-apply_pass_backend-831 locally; posting to Shortcut in the background
+$ bin/fm-decide.sh record plan-apply_pass_backend-834 "approved: lab replay decision for #834" --story sc-9112
+fm-decide: recorded plan-apply_pass_backend-834 locally; posting to Shortcut in the background
+$ bin/fm-decide.sh record plan-apply_pass_backend-835 "approved: lab replay decision for #835" --story sc-9299
+fm-decide: recorded plan-apply_pass_backend-835 locally; posting to Shortcut in the background
+$ bin/fm-decide.sh record plan-apply_pass_backend-836 "approved: lab replay decision for #836" --story sc-9444
+fm-decide: recorded plan-apply_pass_backend-836 locally; posting to Shortcut in the background
+$ bin/fm-decide.sh record plan-apply_pass_backend-837 "approved: lab replay decision for #837" --story sc-9306
+fm-decide: recorded plan-apply_pass_backend-837 locally; posting to Shortcut in the background
+$ bin/fm-decide.sh record plan-apply_pass_backend-839 "approved: lab replay decision for #839" --story sc-8247
+fm-decide: recorded plan-apply_pass_backend-839 locally; posting to Shortcut in the background
+
+$ FM_HOME=$LAB bin/fm-release.sh open applypass/apply_pass_backend
+release PR already open: https://github.com/applypass/apply_pass_backend/pull/833
+https://github.com/applypass/apply_pass_backend/pull/833
+release gate table refreshed: https://github.com/applypass/apply_pass_backend/pull/833
+exit=0
+
+--- status file tail:
+resolved [at=1794215840] [key=release-gate-apply_pass_backend-833]: every row in https://github.com/applypass/apply_pass_backend/pull/833 passes the release gate
+
+--- open decisions now (scan_open_decisions):
+(end)
+
+--- merge-time check: $ bin/fm-release-gate.sh check https://github.com/applypass/apply_pass_backend/pull/833
+release gate: every PR in https://github.com/applypass/apply_pass_backend/pull/833 passes
+exit=0
+
+--- re-run open once more (no duplicate resolved line):
+1
+
+<!-- fm-release-gate:start -->
+## Release gate
+
+| PR | Story | Decision it implements | Current? | Data or API change | Reader and writer audit | Status |
+|---|---|---|---|---|---|---|
+| [#829](https://github.com/applypass/apply_pass_backend/pull/829) | sc-8728 sc-8964 | plan-apply_pass_backend-829 | yes | yes (schema.sql) | yes | ok |
+| [#830](https://github.com/applypass/apply_pass_backend/pull/830) | sc-9018 sc-9274 sc-9299 | plan-apply_pass_backend-830 plan-apply_pass_backend-831 plan-apply_pass_backend-835 | yes | yes (schema.sql) | yes | ok |
+| [#831](https://github.com/applypass/apply_pass_backend/pull/831) | sc-9018 sc-9287 sc-9305 sc-9306 | plan-apply_pass_backend-830 plan-apply_pass_backend-831 plan-apply_pass_backend-837 | yes | yes (schema.sql) | yes | ok |
+| [#834](https://github.com/applypass/apply_pass_backend/pull/834) | sc-9112 sc-9559 | plan-apply_pass_backend-834 | yes | no | n/a | ok |
+| [#835](https://github.com/applypass/apply_pass_backend/pull/835) | sc-9299 sc-9306 sc-9570 | plan-apply_pass_backend-835 plan-apply_pass_backend-837 | yes | yes (schema.sql) | yes | ok |
+| [#836](https://github.com/applypass/apply_pass_backend/pull/836) | sc-9444 | plan-apply_pass_backend-836 | yes | no | n/a | ok |
+| [#837](https://github.com/applypass/apply_pass_backend/pull/837) | sc-9306 sc-9571 | plan-apply_pass_backend-837 | yes | yes (schema.sql) | yes | ok |
+| [#839](https://github.com/applypass/apply_pass_backend/pull/839) | sc-8247 | plan-apply_pass_backend-839 | yes | yes (scripts/reclassify_since_oct15/counts_readonly.sql) | yes | ok |
+<!-- fm-release-gate:end -->

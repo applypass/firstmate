@@ -1,0 +1,21 @@
+# S6 (adversarial): follow the printed fix for a dev PR with no sc-N story (ai_backend#261, real gh read-only)
+$ bin/fm-main-merge-guard.sh github applypass/ai_backend 261 false
+dev merge guard: https://github.com/applypass/ai_backend/pull/261 has no passing release row, so it cannot merge to dev:
+#261  none - no decision recorded
+  fix: bin/fm-decide.sh record plan-ai_backend-261 "<the decision this PR implements>" --story sc-NNNN
+Record the row, then merge again.
+exit=1
+
+# run the printed fix, choosing a real story for the work (sc-5224)
+$ bin/fm-decide.sh record plan-ai_backend-261 "approved: count an all-runs-kept PCA-init refusal as degraded" --story sc-5224
+fm-decide: recorded plan-ai_backend-261 locally; posting to Shortcut in the background
+--- lab decided.md:
+- [plan-ai_backend-261] 2026-11-09 approved: count an all-runs-kept PCA-init refusal as degraded (shortcut: pending sc-5224)
+
+# retry the dev merge guard
+$ bin/fm-main-merge-guard.sh github applypass/ai_backend 261 false
+dev merge guard: https://github.com/applypass/ai_backend/pull/261 has no passing release row, so it cannot merge to dev:
+#261  none - no decision recorded
+  fix: bin/fm-decide.sh record plan-ai_backend-261 "<the decision this PR implements>" --story sc-NNNN
+Record the row, then merge again.
+exit=1

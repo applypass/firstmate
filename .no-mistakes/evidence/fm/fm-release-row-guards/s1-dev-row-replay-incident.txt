@@ -1,0 +1,33 @@
+# S1: replay of the 4 Nov incident - dev row guard against the REAL merged PRs (real gh, read-only), empty disposable decision log
+
+$ FM_HOME=$LAB bin/fm-release-gate.sh row https://github.com/applypass/apply_pass_backend/pull/829
+dev merge guard: https://github.com/applypass/apply_pass_backend/pull/829 has no passing release row, so it cannot merge to dev:
+#829 sc-8728 sc-8964 none - no decision recorded
+  fix: bin/fm-decide.sh record plan-apply_pass_backend-829 "<the decision this PR implements>" --story sc-8728
+Record the row, then merge again.
+exit=1
+
+$ FM_HOME=$LAB bin/fm-release-gate.sh row https://github.com/applypass/apply_pass_backend/pull/830
+dev merge guard: https://github.com/applypass/apply_pass_backend/pull/830 has no passing release row, so it cannot merge to dev:
+#830 sc-9018 sc-9274 sc-9299 none - no decision recorded
+  fix: bin/fm-decide.sh record plan-apply_pass_backend-830 "<the decision this PR implements>" --story sc-9018
+Record the row, then merge again.
+exit=1
+
+$ FM_HOME=$LAB bin/fm-release-gate.sh row https://github.com/applypass/apply_pass_backend/pull/831
+dev merge guard: https://github.com/applypass/apply_pass_backend/pull/831 has no passing release row, so it cannot merge to dev:
+#831 sc-9018 sc-9287 sc-9305 sc-9306 none - no decision recorded
+  fix: bin/fm-decide.sh record plan-apply_pass_backend-831 "<the decision this PR implements>" --story sc-9018
+Record the row, then merge again.
+exit=1
+
+$ FM_HOME=$LAB bin/fm-release-gate.sh row https://github.com/applypass/apply_pass_backend/pull/834
+dev merge guard: https://github.com/applypass/apply_pass_backend/pull/834 has no passing release row, so it cannot merge to dev:
+#834 sc-9112 sc-9559 none - no decision recorded
+  fix: bin/fm-decide.sh record plan-apply_pass_backend-834 "<the decision this PR implements>" --story sc-9112
+Record the row, then merge again.
+exit=1
+
+# release PR (base main) is not a dev row
+fm-release-gate: https://github.com/applypass/apply_pass_backend/pull/833 targets main, not dev; no dev row to check
+exit=0
