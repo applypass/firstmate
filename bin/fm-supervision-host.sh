@@ -1341,6 +1341,7 @@ while :; do
 
   # The captain returned during that turn: the return brief was rendered
   # before its visible outcomes existed, so main relays them now, handled or not.
+  fm_secondmate_host_merge_handbacks_clear "$STATE"
   handle_wake "$REASON"
   HANDLE_RC=$?
   # Fork-only: the branch may not merge a covered own PR to dev (exit 6), but the

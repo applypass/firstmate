@@ -2675,6 +2675,16 @@ test_merge_handback_rides_with_every_hand_back_of_its_turn() {
   assert_re '^supervision-host: merge-handback: .*demo https://github.com/acme/app/pull/841' "$home/host.out" \
     "a failed turn's hand-back must still name the merge its turn handed back"
   [ ! -e "$home/state/demo.merge-handback" ] || fail "handback fail: a failed turn left the marker for a later unrelated wake"
+  stop_home_processes "$home"
+
+  home=$(make_mate_home handback-stale)
+  printf '%s\n' "https://github.com/acme/app/pull/841" > "$home/state/demo.merge-handback"
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "handback stale: the host never started a watcher cycle"
+  append_status "$home" 'ready for review'
+  wait_until 250 handled_at_least "$home" 1 || fail "handback stale: the wake was not handled: $(cat "$home/state/.supervision-host.log")"
+  [ ! -s "$home/host.rc" ] || fail "handback stale: an earlier turn's marker woke the mate: $(cat "$home/host.out")"
+  [ ! -e "$home/state/demo.merge-handback" ] || fail "handback stale: an earlier turn's marker survived the next turn"
   pass "host: a merge handback rides with the branch-outcome and failed-turn hand-backs of its turn and never outlives it"
 }
 

@@ -219,7 +219,7 @@ The engine runs the Claude engine's default model (`sonnet`) there, as in every 
   The host never marks a row read or processed: the rows stay unacknowledged until the mate's next drain, which presents them with every unread routine row, and the mate acknowledges each one it finds settled.
   A row the turn recorded that is missing from the channel keeps the `branch-outcome:` exit.
 - **Own PR to dev.** The branch actor may not run `bin/fm-pr-merge.sh`, so for a covered green PR `bin/fm-auto-dev-merge.sh` leaves `state/<task>.merge-handback` naming it.
-  The host removes the marker right after that turn and wakes the mate session, which is allowed to merge, with a `merge-handback:` line instead of parking; the outcome still reaches the parent channel.
+  The host drops any marker left before an engine turn, takes the markers that turn wrote right after it, and wakes the mate session, which is allowed to merge, with a `merge-handback:` line instead of parking; the outcome still reaches the parent channel.
   The same line rides on any other hand-back of that turn, such as a `branch-outcome:` wake or a failed turn.
 - **Checks first.** The absorb path makes the same checks as a handled wake: the home must still run the host and this session must still own supervision, and a successor that fails to start or confirm its handoff is retired and the close goes to the mate.
 
