@@ -299,6 +299,28 @@ cmd_prompt() {
   exit 0
 }
 
+# lookup [--peek]: the quick-lookup count and the override flag of the open
+# window, printed as "<count> <override> <epoch>"; "0 0 -" with no window. Without
+# --peek it counts one more lookup first. bin/fm-main-orchestration-guard.sh calls it.
+cmd_lookup() {
+  local peek=0
+  [ "${1:-}" != --peek ] || peek=1
+  if ! enabled || [ ! -f "$WINDOW" ]; then echo "0 0 -"; return 0; fi
+  lock_take || { echo "0 0 -"; return 0; }
+  if [ ! -f "$WINDOW" ]; then lock_drop; echo "0 0 -"; return 0; fi
+  w_epoch=$(win_get epoch) w_count=$(win_get count)
+  w_replied=$(win_get replied) w_fired=$(win_get fired) w_transcript=$(win_get transcript) w_base=$(win_get base)
+  w_lookups=$(win_get lookups) w_override=$(win_get override)
+  case "$w_lookups" in ''|*[!0-9]*) w_lookups=0 ;; esac
+  case "$w_override" in 1) ;; *) w_override=0 ;; esac
+  if [ "$peek" = 0 ]; then
+    w_lookups=$((w_lookups + 1))
+    win_write
+  fi
+  lock_drop
+  echo "$w_lookups $w_override $w_epoch"
+}
+
 cmd_pretool() {
   local payload command transcript
   payload=$(cat 2>/dev/null || true)
@@ -379,6 +401,7 @@ cmd_pretool() {
 case "${1:-}" in
   pretool) shift; cmd_pretool "$@" ;;
   midturn) shift; cmd_midturn "$@"; exit 0 ;;
+  lookup) shift; cmd_lookup "$@"; exit 0 ;;
   prompt) shift; cmd_prompt "$@" ;;
   arm) shift; cmd_arm "$@" ;;
   clear) cmd_clear ;;
