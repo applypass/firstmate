@@ -26,7 +26,7 @@
 #
 # Release gate (bin/fm-release-gate.sh): open writes the gate table into the new
 # or already-open PR body and raises any failing row, and merge rewrites that table for the PRs dev carries now, then runs the
-# gate's check and stops when it fails, before any record or merge. Repos outside config/release-gate pass.
+# gate's check and stops when it fails, before any record or merge. Repos the gate does not cover pass.
 #
 # FM_RELEASE_MERGE, FM_RELEASE_SHORTCUT and FM_RELEASE_GATE override the merge,
 # Shortcut and release gate commands (tests).
