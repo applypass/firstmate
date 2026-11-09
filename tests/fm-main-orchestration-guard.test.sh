@@ -301,6 +301,104 @@ test_the_log_names_the_midturn_message_id() {
   pass "the refusal log holds the real message id from the transcript, and - only when none exists"
 }
 
+test_the_guard_cannot_switch_itself_off() {
+  make_home selfoff main
+  local c
+  while IFS= read -r c; do
+    bash_call "$c"; expect_code 2 "$RC" "refused: $c"
+  done <<'EOF2'
+echo off > config/main-orchestration-guard
+echo off > config/reply-first
+rm state/.reply-first
+sed -i 's/override=0/override=1/' state/.reply-first
+rm state/main-orchestration-refusals.log
+tee state/.reply-first-wake < /dev/null
+cp data/backlog.md state/.reply-first
+EOF2
+  gcall Write '{"file_path":"'"$H"'/config/reply-first","content":"off"}'; expect_code 2 "$RC" "Write of a guard switch is refused"
+  gcall Edit '{"file_path":"'"$H"'/state/.reply-first","old_string":"a","new_string":"b"}'; expect_code 2 "$RC" "Edit of the window state is refused"
+  bash_call 'cat state/.reply-first'; expect_code 0 "$RC" "the window state can be read"
+  bash_call 'echo x > state/note.txt'; expect_code 0 "$RC" "other state files are still writable"
+  bash_call 'echo x > config/other-setting'; expect_code 0 "$RC" "other config files are still writable"
+  pass "the guard's own switches, window state, and refusal log are readable but never writable"
+}
+
+test_readers_that_run_or_write_are_refused() {
+  make_home readers main
+  local c
+  while IFS= read -r c; do
+    bash_call "$c"; expect_code 2 "$RC" "refused: $c"
+  done <<'EOF2'
+find state -maxdepth 0 -exec python3 /tmp/x.py \;
+find state -name '*.status' -delete
+find state -fprint /tmp/out
+awk 'BEGIN{system("ls")}' state/x
+awk '{print > "/tmp/o"}' state/x
+awk '{print | "sh"}' state/x
+sed -n '1e ls' state/x
+sed 'w /tmp/o' state/x
+sed -i s/a/b/ state/x
+sort -o /tmp/out state/x
+f=$(echo ../../x); cat state/$f
+cat state/$UNKNOWN_VAR
+EOF2
+  while IFS= read -r c; do
+    bash_call "$c"; expect_code 0 "$RC" "allowed: $c"
+  done <<'EOF2'
+find state -maxdepth 1 -name '*.status'
+awk '{print $1}' state/x
+sed -n '1,5p' state/x
+sed 's/a/b/g' state/x
+sort -o state/sorted state/x
+for t in a b; do cat state/$t.status; done
+m=task-a; tail -n 2 state/$m.status
+EOF2
+  pass "find actions, awk and sed programs that run or write, sort -o outside the records, and unknown variables in paths are refused"
+}
+
+test_a_compound_command_counts_each_lookup() {
+  make_home count main
+  prompt 'status of three PRs?'
+  bash_call 'gh pr view 1; gh pr view 2; gh pr view 3'; expect_code 2 "$RC" "three lookups in one call are three lookups"
+  make_home count2 main
+  prompt 'status of two PRs?'
+  bash_call 'gh pr view 1 && gh pr view 2'; expect_code 0 "$RC" "two lookups in one call are allowed"
+  bash_call 'gh pr view 3'; expect_code 2 "$RC" "the next lookup is the third"
+  pass "a compound command counts each quick lookup it holds"
+}
+
+test_the_override_and_count_work_with_reply_first_off() {
+  make_home rfoff main
+  printf 'off\n' > "$H/config/reply-first"
+  prompt 'look yourself at the page'
+  bash_call 'cat bin/fm-send.sh'; expect_code 0 "$RC" "the override works with config/reply-first off"
+  prompt 'plain question'
+  bash_call 'gh pr view 1'; bash_call 'gh pr view 2'
+  bash_call 'gh pr view 3'; expect_code 2 "$RC" "lookups are counted with config/reply-first off"
+  midturn 'another question'
+  bash_call 'gh pr view 4'; expect_code 0 "$RC" "a mid-turn message resets the count with config/reply-first off"
+  for i in 1 2 3 4 5; do bash_call 'echo hi'; done
+  expect_code 0 "$RC" "the 3-call cap itself stays off"
+  pass "reply-first off turns off its 3-call cap only; the guard's window, count, and override keep working"
+}
+
+test_replay_closes_the_window_at_a_non_captain_prompt() {
+  make_home replay2 main
+  local t="$TMP_ROOT/recorded2.jsonl" out
+  {
+    jq -cn '{type:"user",origin:{kind:"human"},message:{content:"look yourself: what is in the page?"},cwd:"'"$H"'"}'
+    jq -cn '{type:"assistant",message:{content:[{type:"tool_use",name:"Bash",input:{command:"cat bin/fm-send.sh"}}]}}'
+    jq -cn '{type:"user",origin:{kind:"task-notification"},message:{content:"<task-notification>x</task-notification>"}}'
+    jq -cn '{type:"assistant",message:{content:[{type:"tool_use",name:"Bash",input:{command:"cat bin/fm-send.sh"}},{type:"tool_use",name:"Bash",input:{command:"gh-axi pr view 1"}},{type:"tool_use",name:"Bash",input:{command:"gh-axi pr view 2"}},{type:"tool_use",name:"Bash",input:{command:"gh-axi pr view 3"}}]}}'
+  } > "$t"
+  out=$(FM_MAIN_LOOKUP_LIMIT=2 node "$ROOT/bin/fm-main-orchestration-replay.mjs" --home "$H" --json "$t") || fail "the replay failed"
+  [ "$(printf '%s' "$out" | jq -r .counts.overridden)" = 1 ] || fail "only the call inside the override window is lifted: $out"
+  [ "$(printf '%s' "$out" | jq -r .counts.quick)" = 2 ] || fail "the wake turn gets its own 2 lookups: $out"
+  [ "$(printf '%s' "$out" | jq -r '.blockedByGroup["quick-lookup-limit"].total')" = 1 ] || fail "the third wake-turn lookup is the one limit block: $out"
+  [ "$(printf '%s' "$out" | jq -r '.blockedByGroup["script-read"].total')" = 1 ] || fail "the script read in the wake turn is refused: $out"
+  pass "the replay closes the captain window at a wake prompt, counts the wake turn on its own, and reads FM_MAIN_LOOKUP_LIMIT"
+}
+
 test_override_lifts_the_check_for_one_message() {
   make_home over main
   prompt 'look yourself at the labelling page and tell me what it shows'
@@ -438,6 +536,11 @@ test_quick_lookups_are_limited_per_captain_message
 test_captain_messages_reset_the_lookup_count
 test_a_turn_without_a_captain_message_gets_two_lookups
 test_the_log_names_the_midturn_message_id
+test_the_guard_cannot_switch_itself_off
+test_readers_that_run_or_write_are_refused
+test_a_compound_command_counts_each_lookup
+test_the_override_and_count_work_with_reply_first_off
+test_replay_closes_the_window_at_a_non_captain_prompt
 test_override_lifts_the_check_for_one_message
 test_publishing_is_for_mate_produced_pages
 test_the_log_never_holds_secrets_or_contents

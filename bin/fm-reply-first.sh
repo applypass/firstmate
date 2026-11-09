@@ -56,7 +56,9 @@
 # SCOPE. A secondmate home (a .fm-secondmate-home marker) and the primary
 # firstmate home. A main home closes its window on the Stop hook too, so a wake
 # turn that follows a captain turn is never counted against it. A home turns it
-# off with the word "off" in config/reply-first.
+# off with the word "off" in config/reply-first. That switch turns off the 3-call
+# refusal only: the window, lookup count, and override bookkeeping the main orchestration
+# guard reads keep running while that guard is on (config/main-orchestration-guard).
 #
 # FILES. state/.reply-first holds the window as key=value lines (epoch, count,
 # replied, fired, transcript, base); state/.reply-first.lock is a mkdir
@@ -96,6 +98,17 @@ enabled() {
   [ -d "$STATE" ] || return 1
   [ -f "$CONFIG/reply-first" ] && [ "$(tr -d '[:space:]' < "$CONFIG/reply-first")" = off ] && return 1
   fm_root_is_secondmate_home "$FM_HOME" || fm_primary_root_matches "$FM_HOME"
+}
+
+# 0 when the window bookkeeping (arm, clear, midturn) must run for this home: the hook
+# itself is on, or the main orchestration guard is on and reads the window's lookup
+# count and override. Only the 3-call refusal in pretool follows config/reply-first.
+bookkeeping_enabled() {
+  enabled && return 0
+  [ -d "$STATE" ] || return 1
+  [ -f "$CONFIG/main-orchestration-guard" ] && [ "$(tr -d '[:space:]' < "$CONFIG/main-orchestration-guard")" = off ] && return 1
+  fm_root_is_secondmate_home "$FM_HOME" && return 1
+  fm_primary_root_matches "$FM_HOME"
 }
 
 # 0 when the prompt text came from a person at the keyboard.
@@ -152,7 +165,7 @@ lock_take() {
 lock_drop() { rmdir "$LOCK" 2>/dev/null || true; }
 
 cmd_clear() {
-  enabled || exit 0
+  bookkeeping_enabled || exit 0
   lock_take || exit 0
   rm -f "$WINDOW"
   lock_drop
@@ -192,7 +205,7 @@ cmd_arm() {
       *) usage >&2; exit 2 ;;
     esac
   done
-  enabled || exit 0
+  bookkeeping_enabled || exit 0
   w_base=0
   if [ -n "$transcript" ] && [ -f "$transcript" ]; then
     w_base=$(wc -l < "$transcript" 2>/dev/null | tr -d ' ')
@@ -249,7 +262,7 @@ midturn_text() {  # <json line>
 # so it never re-arms. Callers: pretool (every call) and bin/fm-main-orchestration-guard.sh.
 cmd_midturn() {
   local transcript=${1:-} total seen_path seen_line cand n json text last_n=0 last_text='' last_id=''
-  enabled || return 0
+  bookkeeping_enabled || return 0
   [ -n "$transcript" ] && [ -f "$transcript" ] || return 0
   command -v jq >/dev/null 2>&1 || return 0
   lock_take || return 0
@@ -304,7 +317,7 @@ cmd_prompt() {
   [ -n "$payload" ] || exit 0
   command -v jq >/dev/null 2>&1 || exit 0
   fm_hook_payload_is_foreign_host "$payload" && exit 0
-  enabled || exit 0
+  bookkeeping_enabled || exit 0
   parsed=$(printf '%s' "$payload" | jq -r '
     if type != "object" or ((.hook_event_name // "UserPromptSubmit") != "UserPromptSubmit") then empty
     else [((.transcript_path // "") | tostring), ((.prompt // "") | tostring)] | "\(.[0])\n\(.[1])" end' 2>/dev/null) || exit 0
@@ -381,10 +394,11 @@ resolve_msgid() {  # <transcript> <checksum>
 # queued_command in the transcript, and a new turn resets the count (state/.reply-first-wake).
 # Without --peek it counts one more lookup first. bin/fm-main-orchestration-guard.sh calls it.
 cmd_lookup() {
-  local peek=0 transcript='' marker turn_seen n
+  local peek=0 transcript='' marker turn_seen n inc=1
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --peek) peek=1; shift ;;
+      --count) inc=${2:-1}; shift 2 || break ;;
       --transcript) transcript=${2:-}; shift 2 || break ;;
       *) shift ;;
     esac
@@ -398,7 +412,8 @@ cmd_lookup() {
     if [ -z "$w_msgid" ] && [ -n "$w_msgsum" ]; then
       w_msgid=$(resolve_msgid "${transcript:-$w_transcript}" "$w_msgsum")
     fi
-    if [ "$peek" = 0 ]; then w_lookups=$((w_lookups + 1)); fi
+    case "$inc" in ''|*[!0-9]*) inc=1 ;; esac
+    if [ "$peek" = 0 ]; then w_lookups=$((w_lookups + inc)); fi
     if [ "$peek" = 0 ] || [ -n "$w_msgid" ]; then win_write; fi
     lock_drop
     echo "$w_lookups $w_override ${w_msgid:--}"
@@ -411,7 +426,8 @@ cmd_lookup() {
   case "$n" in ''|*[!0-9]*) n=0 ;; esac
   [ "$turn_seen" = "$marker" ] || n=0
   if [ "$peek" = 0 ]; then
-    n=$((n + 1))
+    case "$inc" in ''|*[!0-9]*) inc=1 ;; esac
+    n=$((n + inc))
     if printf 'turn=%s\nlookups=%s\n' "$marker" "$n" > "$WAKE.tmp.$$"; then mv -f "$WAKE.tmp.$$" "$WAKE"; else rm -f "$WAKE.tmp.$$"; fi
   fi
   lock_drop
@@ -423,10 +439,11 @@ cmd_pretool() {
   payload=$(cat 2>/dev/null || true)
   [ -n "$payload" ] || exit 0
   command -v jq >/dev/null 2>&1 || exit 0
-  enabled || exit 0
+  bookkeeping_enabled || exit 0
   command=$(printf '%s' "$payload" | jq -r '(.tool_input.command // .toolInput.command // empty)' 2>/dev/null) || exit 0
   transcript=$(printf '%s' "$payload" | jq -r '(.transcript_path // empty)' 2>/dev/null) || transcript=
   cmd_midturn "$transcript"
+  enabled || exit 0
   [ -f "$WINDOW" ] || exit 0
   lock_take || exit 0
   win_load

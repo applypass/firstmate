@@ -59,11 +59,14 @@ const QUICK_GH = new Set(["view", "status"]);
 
 const rank = { allow: 0, quick: 1, deny: 2 };
 
+// The worse verdict of two, carrying the number of quick lookups both hold, so a
+// compound command of three `gh pr view` calls counts as three lookups.
 function worse(a, b) {
-  return rank[b.verdict] > rank[a.verdict] ? b : a;
+  const winner = rank[b.verdict] > rank[a.verdict] ? b : a;
+  return { ...winner, quickCount: (a.quickCount || 0) + (b.quickCount || 0) };
 }
 const allow = () => ({ verdict: "allow", group: "allow", summary: "" });
-const quick = (summary) => ({ verdict: "quick", group: "quick-lookup", summary });
+const quick = (summary) => ({ verdict: "quick", group: "quick-lookup", summary, quickCount: 1 });
 const deny = (group, summary) => ({ verdict: "deny", group, summary: clip(summary) });
 const clip = (s) => String(s).replace(/\s+/g, " ").slice(0, 160);
 
@@ -107,6 +110,19 @@ function isMemoryDir(p, ctx) {
   return false;
 }
 
+// The guard's own switches and counters: readable, never writable by the guarded session.
+function isGuardControl(abs, ctx) {
+  for (const base of new Set([ctx.home, path.normalize(ctx.homeRaw)])) {
+    for (const f of ["config/main-orchestration-guard", "config/reply-first", "state/main-orchestration-refusals.log"]) {
+      if (abs === path.join(base, f)) return true;
+    }
+    if (abs.startsWith(`${path.join(base, "state")}/.reply-first`)) return true;
+  }
+  return false;
+}
+// A path a command may write: a fleet record that is not a guard control file.
+const isWritable = (abs, ctx) => isFleetRecord(abs, ctx) && !isGuardControl(abs, ctx);
+
 // 0 when abs is a fleet record of the main home or the memory dir (or a null sink).
 function isFleetRecord(abs, ctx) {
   if (["/dev/null", "/dev/stdout", "/dev/stderr", "/dev/stdin"].includes(abs)) return true;
@@ -143,13 +159,8 @@ function expandVars(v, ctx, vars) {
 function resolvePath(word, cwd, ctx, vars = {}) {
   if (word.subs.length > 0) return null;
   const v = expandVars(word.value, ctx, vars);
-  if (v.includes("$")) {
-    if (v.includes("..")) return null;
-    const prefix = v.slice(0, v.indexOf("$"));
-    const dir = prefix.endsWith("/") ? prefix : path.dirname(prefix);
-    if (!prefix || (!path.isAbsolute(dir) && !cwd)) return null;
-    return path.normalize(path.join(path.isAbsolute(dir) ? "/" : cwd, dir, "__dynamic__"));
-  }
+  // A variable this command did not assign a literal value to can hold anything, "../" included.
+  if (v.includes("$")) return null;
   if (path.isAbsolute(v)) return path.normalize(v);
   if (!cwd) return null;
   return path.normalize(path.join(cwd, v));
@@ -254,7 +265,7 @@ function checkRedirections(tokens, cwd, ctx, desc, vars) {
     if (!target || target.type !== "word") return deny("other", `${desc} redirect with no target`);
     if (/^[0-9-]+$/.test(target.value) && t.value === ">&") continue;
     const abs = resolvePath(target, cwd, ctx, vars);
-    if (!abs || !isFleetRecord(abs, ctx)) {
+    if (!abs || !(isWrite ? isWritable(abs, ctx) : isFleetRecord(abs, ctx))) {
       result = worse(result, deny(isWrite ? "project-edit" : groupOfPath(abs || "", ctx), `${desc} ${t.value} ${abs ? path.basename(abs) : "<dynamic>"}`));
     }
   }
@@ -323,7 +334,13 @@ function classifyNode(tokens, state, depth) {
   const display = describe(name, cmdWords.slice(1));
 
   if (KEYWORDS_BARE.has(cmdWords[0].value) && cmdWords.length === 1) return result;
-  if (cmdWords[0].value === "for" || cmdWords[0].value === "select") return result; // header: words and substitutions were classified above
+  if (cmdWords[0].value === "for" || cmdWords[0].value === "select") {
+    // for NAME in WORDS: NAME is known when every word is a plain literal (no path separator, no "..", no "$").
+    const inAt = cmdWords.findIndex((w) => w.value === "in");
+    const list = inAt > 0 ? cmdWords.slice(inAt + 1) : [];
+    if (cmdWords[1] && inAt > 1 && list.length > 0 && list.every((w) => w.literal && w.subs.length === 0 && /^[A-Za-z0-9_.-]+$/.test(w.value) && !w.value.includes(".."))) state.vars[cmdWords[1].value] = list[0].value;
+    return result; // header: words and substitutions were classified above
+  }
   if (cmdWords[0].value === "case") return deny("other", "case statement");
 
   // fm-* script: bare name or a bin/ path, exact.
@@ -356,6 +373,8 @@ function classifyNode(tokens, state, depth) {
   if (FILTERS.has(name)) return result;
 
   if (READERS.has(name)) {
+    const risky = readerRunsOrWrites(name, cmdWords, ctx, state);
+    if (risky) return deny("run-script", `${display} (${risky})`);
     const operands = name === "find" ? findRoots(cmdWords) : readerOperands(name, cmdWords);
     if (operands.length === 0) {
       // A bare reader reads its pipe, except ls and find, which read the cwd.
@@ -379,12 +398,51 @@ function classifyNode(tokens, state, depth) {
     if (operands.length === 0 && name !== "tee") return deny("project-edit", display);
     for (const operand of operands) {
       const abs = resolvePath(operand, cwd, ctx, state.vars);
-      if (!abs || !isFleetRecord(abs, ctx)) return deny("project-edit", `${display} ${abs ? path.basename(abs) : "<dynamic path>"}`);
+      if (!abs || !isWritable(abs, ctx)) return deny("project-edit", `${display} ${abs ? path.basename(abs) : "<dynamic path>"}`);
     }
     return result;
   }
 
   return deny(commandGroup(name, cmdWords), display);
+}
+
+// A reader that can run a command or write a file is not a reader: find actions, an
+// awk program that runs a command or redirects, a sed program with a w, W, e, r, or R
+// command or an s///w|e flag (or -i), and sort -o to a path that is not writable.
+function readerRunsOrWrites(name, words, ctx, state) {
+  const vals = words.slice(1).map((w) => w.value);
+  if (name === "find" && vals.some((v) => /^-(exec|execdir|ok|okdir|delete|fprint0?|fprintf|fls)$/.test(v))) return "find action";
+  if (name === "awk") {
+    const programs = [];
+    for (let i = 0; i < vals.length; i += 1) {
+      if (vals[i] === "-f" || vals[i] === "--file") return "awk program file";
+      if (vals[i] === "-v" || vals[i] === "-F") { i += 1; continue; }
+      if (!vals[i].startsWith("-")) { programs.push(vals[i]); break; }
+    }
+    if (programs.some((pg) => /system\s*\(|getline|\||>|\bclose\s*\(/.test(pg))) return "awk program runs a command or redirects";
+  }
+  if (name === "sed") {
+    if (vals.some((v) => v === "--in-place" || v.startsWith("--in-place=") || v === "--file" || /^-[A-Za-z]*[if][A-Za-z]*$/.test(v))) return "sed edits in place or reads a program file";
+    const programs = [];
+    for (let i = 0; i < vals.length; i += 1) {
+      if (vals[i] === "-e" || vals[i] === "--expression") { if (vals[i + 1]) programs.push(vals[i + 1]); i += 1; continue; }
+      if (vals[i] === "-n" || vals[i] === "-E" || vals[i] === "-r" || vals[i] === "-s" || vals[i].startsWith("--")) continue;
+      if (!vals[i].startsWith("-") ) { programs.push(vals[i]); break; }
+    }
+    for (const pg of programs) {
+      if (/(^|[;{}\n]\s*)(\d+|\$|\/[^/]*\/)?(,\s*(\d+|\$|\/[^/]*\/))?\s*!?\s*[wWerR]\b/.test(pg) || /\bs(.).*?\1.*?\1[gpiI0-9]*[we]/.test(pg)) return "sed program runs a command or writes";
+    }
+  }
+  if (name === "sort") {
+    for (let i = 0; i < vals.length; i += 1) {
+      const target = vals[i] === "-o" || vals[i] === "--output" ? words[i + 2] : (vals[i].startsWith("--output=") ? { ...words[i + 1], value: vals[i].slice(9) } : null);
+      if (target) {
+        const abs = resolvePath(target, state.cwd, ctx, state.vars);
+        if (!abs || !isWritable(abs, ctx)) return "sort -o to a path that is not a fleet record";
+      }
+    }
+  }
+  return "";
 }
 
 function findRoots(words) {
@@ -479,8 +537,8 @@ export function classifyCall(payload, baseCtx) {
   if (tool === "Edit" || tool === "Write" || tool === "NotebookEdit" || tool === "MultiEdit") {
     const p = abs(toolPath(input));
     if (p && isArtifactHtml(p)) return deny("artifact-read", `${tool} ${path.basename(p)} (artifact page, not a fleet record)`);
-    if (p && isFleetRecord(p, ctx)) return allow();
-    const group = /\/(\.claude[^/]*|sys-config)\//.test(p) || /settings(\.local)?\.json$/.test(p) ? "config-edit" : "project-edit";
+    if (p && isFleetRecord(p, ctx) && !isGuardControl(p, ctx)) return allow();
+    const group = /\/(\.claude[^/]*|sys-config)\//.test(p) || /settings(\.local)?\.json$/.test(p) || (p && isGuardControl(p, ctx)) ? "config-edit" : "project-edit";
     return deny(group, `${tool} ${p ? path.basename(p) : ""}`);
   }
   if (tool === "Artifact") {

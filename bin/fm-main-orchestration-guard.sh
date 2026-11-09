@@ -65,7 +65,7 @@
 #     registered second mate's home data/ (data/secondmates.md) or is a worker
 #     report path, data/<id>/report*.
 #   - QUICK LOOKUPS, 2 per captain message (a typed or mid-turn message resets the
-#     count): `gh pr view`, `gh pr status`, `gh-axi pr view`, `gh-axi pr status`, and
+#     count; each command in a compound command counts once): `gh pr view`, `gh pr status`, `gh-axi pr view`, `gh-axi pr status`, and
 #     Artifact list. The third in one message is refused.
 #
 # REFUSED AND LOGGED: Agent and Workflow subagents, MCP tools (SigNoz, Vercel,
@@ -140,7 +140,7 @@ refuse() {  # <tool> <group> <msg> <summary> <reason>
 }
 
 cmd_pretool() {
-  local payload verdict group summary tool transcript state window count override msg reason
+  local payload verdict group summary tool transcript state window count override msg reason quick_n
   payload=$(cat 2>/dev/null || true)
   [ -n "$payload" ] || exit 0
   command -v jq >/dev/null 2>&1 || exit 0
@@ -154,11 +154,13 @@ cmd_pretool() {
   group=$(printf '%s' "$verdict" | jq -r '.group // empty' 2>/dev/null) || exit 0
   state=$(printf '%s' "$verdict" | jq -r '.verdict // empty' 2>/dev/null) || exit 0
   summary=$(printf '%s' "$verdict" | jq -r '.summary // empty' 2>/dev/null) || summary=
+  quick_n=$(printf '%s' "$verdict" | jq -r '.quickCount // 1' 2>/dev/null) || quick_n=1
+  case "$quick_n" in ''|*[!0-9]*|0) quick_n=1 ;; esac
   [ "$state" != allow ] || exit 0
   case "$state" in quick|deny) ;; *) exit 0 ;; esac
   # The window's lookup count and override; a quick lookup counts as it is read.
   if [ "$state" = quick ]; then
-    window=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-reply-first.sh" lookup --transcript "$transcript" 2>/dev/null) || exit 0
+    window=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-reply-first.sh" lookup --count "$quick_n" --transcript "$transcript" 2>/dev/null) || exit 0
   else
     window=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-reply-first.sh" lookup --peek --transcript "$transcript" 2>/dev/null) || exit 0
   fi
