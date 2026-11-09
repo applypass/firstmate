@@ -31,7 +31,7 @@ for (let i = 0; i < args.length; i += 1) {
 }
 if (files.length === 0) { console.error("usage: fm-main-orchestration-replay.mjs [--home DIR] [--json] <transcript.jsonl>..."); process.exit(2); }
 
-const LIMIT = 2;
+const LIMIT = Number(process.env.FM_MAIN_LOOKUP_LIMIT) > 0 ? Number(process.env.FM_MAIN_LOOKUP_LIMIT) : 2;
 const OVERRIDE = /look yourself|look it up yourself|look at it yourself|check yourself|check it yourself|dig yourself|dig in yourself/i;
 const ctx = makeContext(home);
 
@@ -45,6 +45,15 @@ function messageText(entry) {
     return typeof a.prompt === "string" ? a.prompt : (a.prompt || []).filter((b) => b.type === "text").map((b) => b.text).join("\n");
   }
   return null;
+}
+
+// A user prompt (string or text block, not a tool result or meta line) or a queued_command
+// attachment starts a turn, the same entries bin/fm-reply-first.sh's turn marker reads.
+function startsTurn(entry) {
+  if (entry.type === "attachment") return entry.attachment?.type === "queued_command";
+  if (entry.type !== "user" || entry.isMeta) return false;
+  const c = entry.message?.content;
+  return typeof c === "string" || (Array.isArray(c) && c.some((b) => b.type === "text"));
 }
 
 // Pass 1: collect distinct message texts, ask the real classifier once.
@@ -93,6 +102,12 @@ for (const file of files) {
     const text = messageText(entry);
     if (text !== null && texts.get(text.trim())) {
       lookups = 0; override = OVERRIDE.test(text); windowOpen = true; messages += 1;
+    } else if (startsTurn(entry) && (entry.type === "user" || !windowOpen)) {
+      // A user prompt that is not the captain's (wake, notification, doorbell) closes the
+      // captain window as the live prompt hook does; a queued_command with no window open
+      // starts a new turn. Either way the turn counts its own 2 quick lookups from zero.
+      // A queued_command inside an open captain window changes nothing.
+      lookups = 0; override = false; windowOpen = false;
     }
     if (entry.type !== "assistant") return;
     for (const block of entry.message?.content || []) {
@@ -101,8 +116,8 @@ for (const file of files) {
       const v = classifyCall({ tool_name: block.name, tool_input: block.input || {}, cwd }, ctx);
       let state = v.verdict;
       let group = v.group;
-      if (state === "quick" && windowOpen) {
-        lookups += 1;
+      if (state === "quick") {
+        lookups += v.quickCount || 1;
         if (lookups > LIMIT) { state = "deny"; group = "quick-lookup-limit"; }
       }
       if (state === "deny" && override) { counts.overridden += 1; continue; }

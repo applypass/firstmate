@@ -82,13 +82,20 @@
 # WINDOW. The captain-message window is bin/fm-reply-first.sh's (state/.reply-first):
 # this hook calls `fm-reply-first.sh midturn` first, so a message typed at the prompt
 # and a message the captain sent mid-turn both reset the lookup count and the
-# override. With no window (a wake turn, after the Stop hook), quick lookups are not
-# counted; everything else is classified the same way.
+# override. A turn with no captain message (a wake, a notification, a doorbell) gets the
+# same allowance of 2 quick lookups, counted per turn: the turn starts at the latest
+# user prompt or queued_command in the transcript (state/.reply-first-wake keeps the
+# count and resets when a new turn starts). The reply-first 3-call window stays
+# captain-only. With an unreadable transcript no turn can be found and the lookup
+# is not counted.
 #
 # LOG. state/main-orchestration-refusals.log is append-only, one line per refusal:
-#   <UTC time> tool=<name> group=<kind of work> msg=<window epoch or -> args=<short summary>
-# The summary is the command name, flags, and path-like operands only: no quoted
-# text, no file contents, nothing near a token or password word.
+#   <UTC time> tool=<name> group=<kind of work> msg=<message id> args=<short summary>
+# The message id is the transcript's own: the queued_command attachment's source_uuid
+# (else its uuid) for a mid-turn message, the prompt entry's uuid for a typed one, the
+# latest turn-start entry's id on a turn with no captain message, and "-" when the
+# transcript holds none. The summary is the command name, flags, and path-like operands
+# only: no quoted text, no file contents, nothing near a token or password word.
 #
 # SCOPE. The primary firstmate home only. It is inert in a second mate home (a
 # .fm-secondmate-home marker), in a linked task worktree, and outside a firstmate
@@ -151,9 +158,9 @@ cmd_pretool() {
   case "$state" in quick|deny) ;; *) exit 0 ;; esac
   # The window's lookup count and override; a quick lookup counts as it is read.
   if [ "$state" = quick ]; then
-    window=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-reply-first.sh" lookup 2>/dev/null) || exit 0
+    window=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-reply-first.sh" lookup --transcript "$transcript" 2>/dev/null) || exit 0
   else
-    window=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-reply-first.sh" lookup --peek 2>/dev/null) || exit 0
+    window=$(FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-reply-first.sh" lookup --peek --transcript "$transcript" 2>/dev/null) || exit 0
   fi
   read -r count override msg <<< "$window"
   case "$count" in ''|*[!0-9]*) exit 0 ;; esac

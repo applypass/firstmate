@@ -220,8 +220,7 @@ test_quick_lookups_are_limited_per_captain_message() {
   bash_call 'gh-axi pr view 1'; expect_code 0 "$RC" "second"
   gcall Artifact '{"action":"read","url":"https://x"}'; expect_code 2 "$RC" "Artifact read is digging"
   make_home quick3 main
-  local i
-  for i in 1 2 3 4 5; do bash_call 'gh-axi pr view 1'; expect_code 0 "$RC" "no window, lookup $i is not counted"; done
+  bash_call 'gh-axi pr view 1'; expect_code 0 "$RC" "no transcript turn to count from: allowed silently"
   pass "two quick lookups per captain message, the third is refused, other PR reads are refused"
 }
 
@@ -240,6 +239,66 @@ test_captain_messages_reset_the_lookup_count() {
   bash_call 'gh-axi pr view 8'; expect_code 0 "$RC" "(2)"
   bash_call 'gh-axi pr view 9'; expect_code 2 "$RC" "a doorbell does not reset the count"
   pass "a typed or mid-turn captain message resets the quick-lookup count; a doorbell does not"
+}
+
+turn_start() {  # <kind: wake|doorbell> : the start of a turn that has no captain message
+  case "$1" in
+    wake) jq -cn --arg u "$2" '{type:"user",uuid:$u,origin:{kind:"task-notification"},message:{role:"user",content:"<task-notification>done</task-notification>"}}' >> "$TRANSCRIPT" ;;
+    doorbell) jq -cn --arg u "$2" '{type:"attachment",uuid:$u,attachment:{type:"queued_command",prompt:": Firstmate instruction waiting: list the inbox",origin:{kind:"human"},source_uuid:$u}}' >> "$TRANSCRIPT" ;;
+  esac
+}
+
+test_a_turn_without_a_captain_message_gets_two_lookups() {
+  make_home wake main
+  turn_start wake u-wake-1
+  bash_call 'gh-axi pr view 1'; expect_code 0 "$RC" "wake turn lookup 1"
+  bash_call 'gh-axi pr view 2'; expect_code 0 "$RC" "wake turn lookup 2"
+  bash_call 'gh-axi pr view 3'; expect_code 2 "$RC" "wake turn lookup 3 is refused"
+  assert_contains "$ERR" "quick lookups are used" "limit reason"
+  assert_contains "$(log_text)" "group=quick-lookup-limit" "logged as the limit"
+  assert_contains "$(log_text)" "msg=u-wake-1" "the log names the turn's own message id"
+  bash_call 'gh-axi pr status'; expect_code 2 "$RC" "still refused later in the same turn"
+  turn_start wake u-wake-2
+  bash_call 'gh-axi pr view 4'; expect_code 0 "$RC" "a new wake turn starts a fresh count"
+  bash_call 'gh-axi pr view 5'; expect_code 0 "$RC" "(2)"
+  bash_call 'gh-axi pr view 6'; expect_code 2 "$RC" "third in the new turn refused"
+  turn_start doorbell u-bell-1
+  bash_call 'gh-axi pr view 7'; expect_code 0 "$RC" "a doorbell starts a new turn too: count (1)"
+  prompt 'a captain question'
+  jq -cn '{type:"user",uuid:"u-typed-1",origin:{kind:"human"},message:{role:"user",content:"a captain question"}}' >> "$TRANSCRIPT"
+  bash_call 'gh-axi pr view 8'; expect_code 0 "$RC" "a captain message resets to 2 (1)"
+  bash_call 'gh-axi pr view 9'; expect_code 0 "$RC" "(2)"
+  bash_call 'gh-axi pr view 10'; expect_code 2 "$RC" "third refused in the captain window"
+  assert_contains "$(log_text)" "msg=u-typed-1" "a typed message logs the prompt entry's uuid"
+  # The reply-first 3-call window stays captain-only: a wake turn opens none.
+  make_home wake2 main
+  turn_start wake u-wake-3
+  [ ! -f "$H/state/.reply-first" ] || fail "a wake turn opened a reply-first window"
+  pass "a turn without a captain message gets 2 quick lookups per turn; a new turn or a captain message resets it"
+}
+
+test_the_log_names_the_midturn_message_id() {
+  make_home logid main
+  prompt 'first question?'
+  jq -cn '{type:"attachment",uuid:"att-uuid-9",attachment:{type:"queued_command",prompt:"and what about the other one?",origin:{kind:"human"},humanTurn:true,source_uuid:"src-uuid-7"}}' >> "$TRANSCRIPT"
+  bash_call 'gh-axi pr view 1'; bash_call 'gh-axi pr view 2'
+  bash_call 'gh-axi pr view 3'; expect_code 2 "$RC" "third refused"
+  assert_contains "$(log_text)" "msg=src-uuid-7" "a mid-turn message logs the attachment's source_uuid"
+  make_home logid2 main
+  prompt 'second?'
+  jq -cn '{type:"attachment",uuid:"att-uuid-10",attachment:{type:"queued_command",prompt:"one more thing",origin:{kind:"human"},humanTurn:true}}' >> "$TRANSCRIPT"
+  bash_call 'python3 x.py'; expect_code 2 "$RC" "refused"
+  assert_contains "$(log_text)" "msg=att-uuid-10" "without a source_uuid it logs the entry's uuid"
+  make_home logid3 main
+  jq -cn '{type:"user",uuid:"typed-uuid-3",origin:{kind:"human"},message:{role:"user",content:"dig into this"}}' >> "$TRANSCRIPT"
+  prompt 'dig into this'
+  bash_call 'python3 x.py'; expect_code 2 "$RC" "refused"
+  assert_contains "$(log_text)" "msg=typed-uuid-3" "a typed message logs the prompt entry's uuid"
+  make_home logid4 main
+  prompt 'no transcript line for this'
+  bash_call 'python3 x.py'; expect_code 2 "$RC" "refused"
+  assert_contains "$(log_text)" "msg=- " "a message with no transcript entry logs -"
+  pass "the refusal log holds the real message id from the transcript, and - only when none exists"
 }
 
 test_override_lifts_the_check_for_one_message() {
@@ -359,7 +418,7 @@ test_replay_counts_a_recorded_session() {
   [ "$(printf '%s' "$out" | jq -r .counts.quick)" = 2 ] || fail "quick count: $out"
   [ "$(printf '%s' "$out" | jq -r .counts.deny)" = 4 ] || fail "blocked count: $out"
   [ "$(printf '%s' "$out" | jq -r .counts.overridden)" = 1 ] || fail "overridden count: $out"
-  [ "$(printf '%s' "$out" | jq -r '.blockedByGroup["quick-lookup-limit"].total')" = 2 ] || fail "the lookups after the second (a doorbell does not reset the count) are not in the limit group: $out"
+  [ "$(printf '%s' "$out" | jq -r '.blockedByGroup["quick-lookup-limit"].total')" = 2 ] || fail "the lookups after the second (a doorbell inside a captain window does not reset the count) are not in the limit group: $out"
   pass "the replay rebuilds windows from a transcript and counts allowed, quick, blocked, and overridden calls"
 }
 
@@ -377,6 +436,8 @@ test_artifact_html_is_refused_on_every_path
 test_default_deny_refuses_and_logs_unknown_work
 test_quick_lookups_are_limited_per_captain_message
 test_captain_messages_reset_the_lookup_count
+test_a_turn_without_a_captain_message_gets_two_lookups
+test_the_log_names_the_midturn_message_id
 test_override_lifts_the_check_for_one_message
 test_publishing_is_for_mate_produced_pages
 test_the_log_never_holds_secrets_or_contents
