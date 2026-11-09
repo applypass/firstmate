@@ -1,0 +1,57 @@
+== base 117afc16 guard ==
+[base] rc=2 DENY
+    bin/fm-task-ledger.sh record task-a pr-ready --note "https://github.com/applypass/firstmate/pull/91"
+    stderr: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[main-orchestration] This call was not run: the main session routes work and answers the captain, and 
+[base] rc=2 DENY
+    bin/fm-task-ledger.sh record task-a captain-approval --note "merge"
+    stderr: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[main-orchestration] This call was not run: the main session routes work and answers the captain, and 
+[base] rc=0 ALLOW
+    bin/fm-pr-merge.sh task-a https://github.com/applypass/firstmate/pull/91 --release-main -- --merge
+[base] rc=0 ALLOW
+    bin/fm-merge-local.sh task-a
+[base] rc=0 ALLOW
+    bin/fm-branch-outcome.sh mark-processed --through 7
+-- refusal log after base --
+2026-11-09T18:07:47Z tool=Bash group=other-script msg=- args=fm-task-ledger.sh --note https://github.com/applypass/firstmate/pull/91
+2026-11-09T18:07:48Z tool=Bash group=other-script msg=- args=fm-task-ledger.sh --note
+
+== target 238f9bbf guard ==
+[target] rc=0 ALLOW
+    bin/fm-task-ledger.sh record task-a pr-ready --note "https://github.com/applypass/firstmate/pull/91"
+[target] rc=0 ALLOW
+    bin/fm-task-ledger.sh record task-a captain-approval --note "merge"
+[target] rc=0 ALLOW
+    bin/fm-pr-merge.sh task-a https://github.com/applypass/firstmate/pull/91 --release-main -- --merge
+[target] rc=0 ALLOW
+    bin/fm-merge-local.sh task-a
+[target] rc=0 ALLOW
+    bin/fm-branch-outcome.sh mark-processed --through 7
+[target] rc=0 ALLOW
+    bin/fm-task-ledger.sh show task-a
+
+== target adversarial: neighbours stay refused ==
+[target] rc=2 DENY
+    bin/fm-lint.sh
+    stderr: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[main-orchestration] This call was not run: the main session routes work and answers the captain, and 
+[target] rc=2 DENY
+    bin/fm-branch-report.sh x
+    stderr: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[main-orchestration] This call was not run: the main session routes work and answers the captain, and 
+[target] rc=2 DENY
+    bin/fm-task-ledger.sh record task-a pr-ready; git push origin main
+    stderr: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[main-orchestration] This call was not run: the main session routes work and answers the captain, and 
+[target] rc=2 DENY
+    bin/fm-task-ledger.sh record task-a pr-ready && bin/fm-daily-quota-stop.sh
+    stderr: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[main-orchestration] This call was not run: the main session routes work and answers the captain, and 
+[target] rc=2 DENY
+    cat bin/fm-task-ledger.sh
+    stderr: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[main-orchestration] This call was not run: the main session routes work and answers the captain, and 
+[target] rc=0 ALLOW
+    bash bin/fm-task-ledger.sh record task-a pr-ready
+[target] rc=0 ALLOW
+    projects/x/bin/fm-task-ledger.sh record t pr-ready
+-- refusal log after target --
+2026-11-09T18:07:53Z tool=Bash group=other-script msg=- args=fm-lint.sh
+2026-11-09T18:07:54Z tool=Bash group=other-script msg=- args=fm-branch-report.sh
+2026-11-09T18:07:54Z tool=Bash group=project-read msg=- args=git
+2026-11-09T18:07:55Z tool=Bash group=other-script msg=- args=fm-daily-quota-stop.sh
+2026-11-09T18:07:55Z tool=Bash group=script-read msg=- args=cat bin/fm-task-ledger.sh

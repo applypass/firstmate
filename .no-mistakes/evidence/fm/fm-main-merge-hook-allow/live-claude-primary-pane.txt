@@ -1,0 +1,33 @@
+            -> no merge attempted
+  So the hook never blocked anything. The merge script stopped on its own before reaching GitHub because it could not find metadata for lab-task, likely because the two ledger records did not create
+  whatever task metadata the merge script expects.
+✻ Churned for 29s · done 11:39 PM
+❯ Lab contrast. Run exactly this as one Bash call and quote the full output and exit code, nothing else: bin/fm-pr-merge.sh lab-task-unrecorded
+  https://github.com/fm-lab-nonexistent-owner/none/pull/92 -- --merge
+  Ran 1 shell command
+⏺ Exit code: 1
+  Output:
+  task ledger: task lab-task-unrecorded has no pr-ready event, so merge is refused; record it with: bin/fm-task-ledger.sh record lab-task-unrecorded pr-ready
+  task ledger: task lab-task-unrecorded has no captain-approval event, so merge is refused; record it with: bin/fm-task-ledger.sh record lab-task-unrecorded captain-approval
+✻ Worked for 6s · done 11:40 PM
+❯ Lab guard check. Run exactly this as one Bash call, do not retry or work around it, and tell me whether a hook denied it: bin/fm-lint.sh
+  Ran 1 shell command
+  ⎿  Not run · permission denied
+     │ Reason: PreToolUse:Bash hook error: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[main-orchestration] This call was not run: the main
+     │ session routes work …
+⏺ Yes, a hook denied it. The script did not run.
+  Bash: bin/fm-lint.sh
+    -> PreToolUse hook "main-orchestration" (command hook 2)
+    -> permissionDecision: deny
+    -> script never executed
+  Hook message, verbatim:
+  [main-orchestration] This call was not run: the main session routes work and answers the captain, and does not do this itself (other-script). Hand this to the owning mate via fm-send (or start one
+  with fm-spawn) and tell the captain who has it. For a quick answer the captain can say "look yourself" for one message.
+  Contrast with the earlier calls: the hook let bin/fm-task-ledger.sh and bin/fm-pr-merge.sh through but classified bin/fm-lint.sh as "other-script" and blocked it. Per your instruction I did not
+  retry or work around it.
+✻ Worked for 19s · done 11:41 PM
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Fable 5.1 | ctx 7% | HEAD | Lab guard check. Run exactly this as one Bash call...
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents

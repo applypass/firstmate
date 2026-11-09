@@ -1,0 +1,11 @@
+== ledger data/ticket-ledger ==
+-- lab-task.jsonl
+{"at":1794247759,"event":"pr-ready","session":"none","note":"https://github.com/fm-lab-nonexistent-owner/none/pull/91"}
+{"at":1794247765,"event":"captain-approval","session":"none","note":"merge"}
+== state/main-orchestration-refusals.log (live session appended after hook-drive lines) ==
+2026-11-09T18:07:53Z tool=Bash group=other-script msg=- args=fm-lint.sh
+2026-11-09T18:07:54Z tool=Bash group=other-script msg=- args=fm-branch-report.sh
+2026-11-09T18:07:54Z tool=Bash group=project-read msg=- args=git
+2026-11-09T18:07:55Z tool=Bash group=other-script msg=- args=fm-daily-quota-stop.sh
+2026-11-09T18:07:55Z tool=Bash group=script-read msg=- args=cat bin/fm-task-ledger.sh
+2026-11-09T18:11:13Z tool=Bash group=other-script msg=43b62582-6cc0-44aa-bcb2-de0d05fbb75a args=fm-lint.sh
