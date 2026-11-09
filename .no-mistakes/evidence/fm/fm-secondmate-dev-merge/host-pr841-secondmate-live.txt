@@ -1,0 +1,25 @@
+### secondmate home: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.spq8Rw/live841
+### task status (worker report that started the wake):
+done [at=1794245152]: PR https://github.com/applypass/apply_pass_backend/pull/841 checks green
+
+### inside the supervision-branch turn (real fm-auto-dev-merge.sh -> real fm-pr-merge.sh):
+engine actor=branch
+auto-dev-merge: skipped https://github.com/applypass/apply_pass_backend/pull/841: this actor is not the merge authority; the visible session merges it
+auto-dev-merge exit=0
+
+### parent channel (/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.spq8Rw/live841-parent/state/mate-live841.status):
+done [key=child-outcome-demo-done-53389dd4] [at=1794245153]: child demo done: PR https://github.com/applypass/apply_pass_backend/pull/841 checks green pr=https://github.com/applypass/apply_pass_backend/pull/841
+needs-decision [key=branch-outcome-1] [at=1794245163]: captain outcome for demo: stub escalated: 1794245154 2 signal demo.status signal: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.spq8Rw/live841/state/demo.status wake annotation: latest wake-EVENT observed at drain, not current state: demo.status: done [at=1794245152]: PR https://github.com/applypass/apply_pass_backend/pull/841 checks green
+
+### what the supervision host printed to the secondmate's visible session (exit rc=0):
+watcher: started pid=82561 (beacon fresh)
+supervision-host: the supervision session handled this wake and handed back own PRs to dev that only this session may merge
+supervision-host: merge-handback: the supervision session may not merge these own PRs to dev, this session may; merge each with bin/fm-pr-merge.sh under the standing dev-merge authority: demo https://github.com/applypass/apply_pass_backend/pull/841
+
+### merge-handback marker after the wake: consumed
+
+### host ledger:
+1794245152	start	gen=host-82042-1794245151	primary=claude
+1794245164	handled	turn=host-82042-1794245151.1	posture=attended	rc=0	reports=1	error=0 cost=0.25 conversation_cost=0.25 input=5 cache_read=100 cache_write=10 output=20 turns=3	signal: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-supervision-host.spq8Rw/live841/state/demo.status
+1794245164	published	secondmate	store rows 1 reached the parent channel
+1794245164	to-main	the supervision session handled this wake and handed back own PRs to dev that only this session may merge

@@ -1,0 +1,30 @@
+(each case records pr-open and pr-ready in the task ledger, as bin/fm-pr-check.sh does before calling fm-auto-dev-merge.sh; gh is a local stub, fm-pr-merge.sh is real)
+
+== 1. supervision-branch actor, covered own green PR to dev (PR 841 sequence)
+$ FM_SUPERVISION_ACTOR=branch bin/fm-auto-dev-merge.sh match-regen https://github.com/applypass/apply_pass_backend/pull/841
+auto-dev-merge: skipped https://github.com/applypass/apply_pass_backend/pull/841: this actor is not the merge authority; the visible session merges it
+exit=0
+state/match-regen.merge-handback: https://github.com/applypass/apply_pass_backend/pull/841
+last status line: done [at=1]: PR https://github.com/applypass/apply_pass_backend/pull/841 checks green
+
+== 2. visible session (main actor), same PR: passes the role gate; fails later only because gh is a stub
+$ FM_SUPERVISION_ACTOR=main bin/fm-auto-dev-merge.sh match-regen https://github.com/applypass/apply_pass_backend/pull/841
+auto-dev-merge: skipped https://github.com/applypass/apply_pass_backend/pull/841: merge refused: ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━; ●  WATCHER DOWN - SUPERVISION IS OFF; ●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).; ●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.; ●  This is a supervision warning only; the guarded operation WILL still run.; ●  watcher supervision needs Stop-owned automatic recovery; inspect the hook registration and startup status before ending the turn.; ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━; error: named head cannot be verified: worktree missing
+exit=0
+state/match-regen.merge-handback: <none>
+last status line: paused [at=1794245118]: auto-dev-merge skipped https://github.com/applypass/apply_pass_backend/pull/841: merge refused: ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━; ●  WATCHER DOWN - SUPERVISION IS OFF; ●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).; ●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.; ●  This is a supervision warning only; the guarded operation WILL still run.; ●  watcher supervision needs Stop-owned automatic recovery; inspect the hook registration and startup status before ending the turn.; ●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━; error: named head cannot be verified: worktree missing; merge it with bin/fm-pr-merge.sh once green
+
+== 3. adversarial: branch actor, foreign-author PR (not covered)
+$ FM_SUPERVISION_ACTOR=branch bin/fm-auto-dev-merge.sh match-regen https://github.com/applypass/apply_pass_backend/pull/841
+auto-dev-merge: skipped https://github.com/applypass/apply_pass_backend/pull/841: PR was not opened by uayyagari
+exit=0
+state/match-regen.merge-handback: <none>
+last status line: done [at=1]: PR https://github.com/applypass/apply_pass_backend/pull/841 checks green
+
+== 4. adversarial: branch actor, own PR based on main (not dev)
+$ FM_SUPERVISION_ACTOR=branch bin/fm-auto-dev-merge.sh match-regen https://github.com/applypass/apply_pass_backend/pull/841
+auto-dev-merge: skipped https://github.com/applypass/apply_pass_backend/pull/841: base is main, not dev
+exit=0
+state/match-regen.merge-handback: <none>
+last status line: paused [at=1794245118]: auto-dev-merge skipped https://github.com/applypass/apply_pass_backend/pull/841: base is main, not dev; merge it with bin/fm-pr-merge.sh once green
+
