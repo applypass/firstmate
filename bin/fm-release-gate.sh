@@ -66,7 +66,8 @@
 # row      the dev-merge guard (bin/fm-main-merge-guard.sh): evaluate the one PR at <dev-pr-url>
 #          with the same per-PR code as check, and exit 1 with the failing fields and a
 #          fix: line (the fm-decide.sh record command, or the audit to add) when the row
-#          fails. There is no dev waiver: the row must be recorded before the merge. Only
+#          fails. A PR with no story and no backlog item is told to add an sc-N story to
+#          its title or body first, since a decision only matches through one. There is no dev waiver: the row must be recorded before the merge. Only
 #          a PR whose base is dev is checked; any other base passes untouched. Covered
 #          repos are the same as for check.
 #
@@ -358,7 +359,11 @@ build_rows() {
     # status
     status=ok
     why=''
+    # with no backlog item, a decision matches only through a story the PR names
+    nostory=''
+    [ -n "$item" ] || [ -n "$stories" ] || nostory=1
     [ -n "$decs" ] || { status=FAIL; why="no decision recorded"; }
+    [ -z "$nostory" ] || { status=FAIL; why="${why:+$why; }no story (sc-N) in the PR title, body or branch, and no backlog item names the PR"; }
     [ "$current" = yes ] || { status=FAIL; why="${why:+$why; }NOT CURRENT: $cur_note"; }
     if [ -n "$hit" ] && [ "$audit" = no ]; then status=FAIL; why="${why:+$why; }data/API change ($hit) without a reader and writer audit"; fi
     wkey="release-waiver-$REPO-$NUM-$n"
@@ -375,7 +380,9 @@ build_rows() {
       FAILS="$FAILS#$n ${stories//$'\n'/ } ${decs:-none} - $why"$'\n'
       fixkey="plan-${item:-$REPO-$n}"
       fixsc=${stories%%$'\n'*}
-      if [ -z "$decs" ]; then
+      if [ -n "$nostory" ]; then
+        FAILS="$FAILS  fix: add an sc-N story to the PR title or body (or a backlog item naming $url), then bin/fm-decide.sh record $fixkey \"<the decision this PR implements>\" --story <that sc-N>"$'\n'
+      elif [ -z "$decs" ]; then
         FAILS="$FAILS  fix: bin/fm-decide.sh record $fixkey \"<the decision this PR implements>\" --story ${fixsc:-sc-NNNN}"$'\n'
       elif [ "$current" != yes ]; then
         FAILS="$FAILS  fix: record the decision this PR now implements: bin/fm-decide.sh record $fixkey \"<current decision>\" --story ${fixsc:-sc-NNNN}, or close the re-check item"$'\n'

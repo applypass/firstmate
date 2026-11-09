@@ -65,6 +65,22 @@ case "$OUT" in *"#7"*"no decision recorded"*) ;; *) fail "nodec: reason missing:
 case "$OUT" in *"fix: bin/fm-decide.sh record "*"sc-100"*) ;; *) fail "nodec: fix command missing: $OUT" ;; esac
 case "$OUT" in *waive*) fail "nodec: the dev guard must offer no waiver: $OUT" ;; esac
 
+# a PR with no story and no backlog item: the refusal names the missing story, and
+# following the printed fix (story on the PR, then the decision under it) passes.
+d=$(make_case nostory)
+jq '.title="Add a thing ap-42"' "$d/pr-7.json" > "$d/p.tmp" && mv "$d/p.tmp" "$d/pr-7.json"
+run_guard "$d"
+[ "$RC" -eq 1 ] || fail "nostory: must refuse, got $RC: $OUT"
+case "$OUT" in *"#7"*"no story"*) ;; *) fail "nostory: missing story not named: $OUT" ;; esac
+case "$OUT" in *"fix: add an sc-N story to the PR title or body"*"then bin/fm-decide.sh record "*) ;; *) fail "nostory: story fix missing: $OUT" ;; esac
+decide "$d" plan-app-7 "approved: the plan (shortcut: pending)"
+run_guard "$d"
+[ "$RC" -eq 1 ] || fail "nostory: a decision alone cannot match a PR with no story: $OUT"
+jq '.body="body text\n\nStory: sc-200"' "$d/pr-7.json" > "$d/p.tmp" && mv "$d/p.tmp" "$d/pr-7.json"
+decide "$d" plan-app-7-b "approved: the plan (shortcut: pending sc-200)"
+run_guard "$d"
+[ "$RC" -eq 0 ] || fail "nostory: story on the PR plus its decision must pass: $OUT"
+
 # a recorded current decision lets the dev merge through.
 d=$(make_case withdec)
 decide "$d" plan-x "approved: the plan (shortcut: sc-100 https://example.test/100)"
