@@ -303,7 +303,7 @@ test_replay_counts_a_recorded_session() {
   [ "$(printf '%s' "$out" | jq -r .counts.quick)" = 2 ] || fail "quick count: $out"
   [ "$(printf '%s' "$out" | jq -r .counts.deny)" = 4 ] || fail "blocked count: $out"
   [ "$(printf '%s' "$out" | jq -r .counts.overridden)" = 1 ] || fail "overridden count: $out"
-  [ "$(printf '%s' "$out" | jq -r '.blockedByGroup["quick-lookup-limit"].total')" = 1 ] || fail "the third lookup is not in the limit group: $out"
+  [ "$(printf '%s' "$out" | jq -r '.blockedByGroup["quick-lookup-limit"].total')" = 2 ] || fail "the lookups after the second (a doorbell does not reset the count) are not in the limit group: $out"
   pass "the replay rebuilds windows from a transcript and counts allowed, quick, blocked, and overridden calls"
 }
 

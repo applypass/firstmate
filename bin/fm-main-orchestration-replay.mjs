@@ -1,6 +1,6 @@
 // Fork-only: replay recorded main-session tool calls through the orchestration guard classifier (applypass fork).
 //
-// usage: node fm-main-orchestration-replay.mjs [--home <main FM_HOME>] [--json] <transcript.jsonl>...
+// usage: node fm-main-orchestration-replay.mjs [--home <main FM_HOME>] [--json] [--examples <n>] <transcript.jsonl>...
 //
 // Feeds every recorded tool call through bin/fm-main-orchestration-policy.mjs with the
 // captain message windows rebuilt from the transcript: a typed prompt or a mid-turn
@@ -21,10 +21,12 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
 let home = process.env.FM_HOME || path.join(process.env.HOME || "", "workspace/firstmate");
 let asJson = false;
+let examples = 3;
 const files = [];
 for (let i = 0; i < args.length; i += 1) {
   if (args[i] === "--home") home = args[++i];
   else if (args[i] === "--json") asJson = true;
+  else if (args[i] === "--examples") examples = Number(args[++i]) || 3;
   else files.push(args[i]);
 }
 if (files.length === 0) { console.error("usage: fm-main-orchestration-replay.mjs [--home DIR] [--json] <transcript.jsonl>..."); process.exit(2); }
@@ -125,7 +127,7 @@ const top = (map, n) => [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 
 const report = {
   transcripts: files.length, calls, captainMessages: messages, counts,
   blockedByGroup: Object.fromEntries([...groups.entries()].sort((a, b) => [...b[1].values()].reduce((x, y) => x + y, 0) - [...a[1].values()].reduce((x, y) => x + y, 0))
-    .map(([g, m]) => [g, { total: [...m.values()].reduce((x, y) => x + y, 0), examples: top(m, 3).map(([k, n]) => `${n}x ${k}`) }])),
+    .map(([g, m]) => [g, { total: [...m.values()].reduce((x, y) => x + y, 0), examples: top(m, examples).map(([k, n]) => `${n}x ${k}`) }])),
   allowedThatLookLikeWork: top(looksLikeWork, 12).map(([k, n]) => `${n}x ${k}`),
 };
 if (asJson) console.log(JSON.stringify(report, null, 2));

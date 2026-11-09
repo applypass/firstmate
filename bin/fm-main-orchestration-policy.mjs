@@ -109,20 +109,45 @@ function isFleetRecord(abs, ctx) {
   return false;
 }
 
-// Resolve a word to an absolute path, or null when it cannot be known statically.
-function resolvePath(word, cwd, ctx) {
-  let v = word.value;
-  if (!word.literal || word.subs.length > 0) {
-    const m = v.match(/^\$\{?FM_HOME\}?(\/.*)?$/);
-    if (!m || word.subs.length > 0) return null;
-    v = ctx.home + (m[1] || "");
-    return path.normalize(v);
+// Replace $NAME and ${NAME} with what is known: FM_HOME, HOME, and variables the
+// same command assigned with a literal value.
+function expandVars(v, ctx, vars) {
+  let out = v;
+  for (let round = 0; round < 4 && out.includes("$"); round += 1) {
+    const next = out.replace(/\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?/g, (m, n) => {
+      if (n === "FM_HOME") return ctx.home;
+      if (n === "HOME") return ctx.env.HOME || m;
+      return Object.prototype.hasOwnProperty.call(vars, n) ? vars[n] : m;
+    });
+    if (next === out) break;
+    out = next;
   }
-  if (v === "~" || v.startsWith("~/")) v = path.join(ctx.env.HOME || "/nonexistent", v.slice(1));
-  if (v.includes("$")) return null;
+  if (out === "~" || out.startsWith("~/")) out = path.join(ctx.env.HOME || "/nonexistent", out.slice(1));
+  return out;
+}
+
+// Resolve a word to an absolute path, or null when it cannot be known statically.
+// A path whose literal front part is already inside one directory, with a variable
+// only in the file name (state/$m.status), resolves to that directory.
+function resolvePath(word, cwd, ctx, vars = {}) {
+  if (word.subs.length > 0) return null;
+  const v = expandVars(word.value, ctx, vars);
+  if (v.includes("$")) {
+    if (v.includes("..")) return null;
+    const prefix = v.slice(0, v.indexOf("$"));
+    const dir = prefix.endsWith("/") ? prefix : path.dirname(prefix);
+    if (!prefix || (!path.isAbsolute(dir) && !cwd)) return null;
+    return path.normalize(path.join(path.isAbsolute(dir) ? "/" : cwd, dir, "__dynamic__"));
+  }
   if (path.isAbsolute(v)) return path.normalize(v);
   if (!cwd) return null;
   return path.normalize(path.join(cwd, v));
+}
+
+// Output files the harness writes for a command the session ran: readable, never writable.
+function isHarnessOutput(abs) {
+  return /^\/(private\/)?tmp\/claude-\d+\/[^/]+\/(?:[^/]+\/)?(tool-results|tasks)\//.test(abs)
+    || /\/\.claude[^/]*\/projects\/[^/]+\/[^/]+\/tool-results\//.test(abs);
 }
 
 const isArtifactHtml = (abs) => /\.html?$/i.test(abs) || abs.includes("/.lavish/");
@@ -167,7 +192,7 @@ function readerOperands(name, words) {
   return ops;
 }
 
-function checkRedirections(tokens, cwd, ctx, desc) {
+function checkRedirections(tokens, cwd, ctx, desc, vars) {
   let result = allow();
   for (let i = 0; i < tokens.length; i += 1) {
     const t = tokens[i];
@@ -178,7 +203,7 @@ function checkRedirections(tokens, cwd, ctx, desc) {
     const target = tokens[i + 1];
     if (!target || target.type !== "word") return deny("other", `${desc} redirect with no target`);
     if (/^[0-9-]+$/.test(target.value) && t.value === ">&") continue;
-    const abs = resolvePath(target, cwd, ctx);
+    const abs = resolvePath(target, cwd, ctx, vars);
     if (!abs || !isFleetRecord(abs, ctx)) {
       result = worse(result, deny(isWrite ? "project-edit" : groupOfPath(abs || "", ctx), `${desc} ${t.value} ${abs ? path.basename(abs) : "<dynamic>"}`));
     }
@@ -217,7 +242,12 @@ function classifyNode(tokens, state, depth) {
   if (result.verdict === "deny") return result;
   const words = tokens.filter((t) => t.type === "word");
   if (words.length === 0) return result;
-  const redirects = checkRedirections(tokens, cwd, ctx, "command");
+  for (const w of words) {
+    const m = w.type === "word" && w.subs.length === 0 ? w.value.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/s) : null;
+    if (!m) break;
+    state.vars[m[1]] = m[2];
+  }
+  const redirects = checkRedirections(tokens, cwd, ctx, "command", state.vars);
   result = worse(result, redirects);
   if (result.verdict === "deny") return result;
 
@@ -229,11 +259,17 @@ function classifyNode(tokens, state, depth) {
   if (!position.command) return result; // assignments only
   let pos = position.index;
   let cmdWords = position.words.slice(pos);
+  // A command word written with a variable (B=.../bin; $B/fm-send.sh) is read with the
+  // variables this command assigned; an unknown variable in front of an fm-*.sh name stays
+  // checkable by that name.
+  if (cmdWords[0].subs.length === 0 && cmdWords[0].value.includes("$")) {
+    const expanded = expandVars(cmdWords[0].value, ctx, state.vars);
+    cmdWords = [{ ...cmdWords[0], value: expanded, literal: !expanded.includes("$") }, ...cmdWords.slice(1)];
+  }
   let name = path.basename(cmdWords[0].value);
   if (name === "rtk" && cmdWords[1]) { cmdWords = cmdWords.slice(1); name = path.basename(cmdWords[0].value); }
-  if (!cmdWords[0].literal && !scriptName(cmdWords[0])) {
-    if (!/^\$\{?FM_HOME\}?\/bin\/fm-[a-z0-9-]+\.sh$/.test(cmdWords[0].value)) return deny("other", "dynamic command word");
-  }
+  const dynamicScript = /^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?\/(?:bin\/)?(fm-[a-z0-9-]+\.sh)$/.exec(cmdWords[0].value);
+  if (!cmdWords[0].literal && !dynamicScript) return deny("other", "dynamic command word");
   const display = describe(name, cmdWords.slice(1));
 
   if (KEYWORDS_BARE.has(cmdWords[0].value) && cmdWords.length === 1) return result;
@@ -241,7 +277,7 @@ function classifyNode(tokens, state, depth) {
   if (cmdWords[0].value === "case") return deny("other", "case statement");
 
   // fm-* script: bare name or a bin/ path, exact.
-  const script = scriptName(cmdWords[0]) || (/^\$\{?FM_HOME\}?\/bin\/(fm-[a-z0-9-]+\.sh)$/.exec(cmdWords[0].value) || [])[1];
+  const script = scriptName(cmdWords[0]) || (dynamicScript || [])[1];
   if (script) return ALLOWED_SCRIPTS.has(script) ? result : deny(script === "fm-test-run.sh" || script.includes("test") ? "run-script" : "other-script", describe(script, cmdWords.slice(1)));
   if (name === "bash" || name === "sh") {
     const args = cmdWords.slice(1).filter((w) => !w.value.startsWith("-"));
@@ -259,6 +295,12 @@ function classifyNode(tokens, state, depth) {
   if (name === "gh" || name === "gh-axi") return worse(result, ghVerdict(name, cmdWords));
   if (name === "tasks-axi" || name === "quota-axi") return result;
   if (BUILTINS.has(name)) {
+    if (name === "export" || name === "declare" || name === "local") {
+      for (const w of cmdWords.slice(1)) {
+        const m = w.subs.length === 0 ? w.value.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/s) : null;
+        if (m) state.vars[m[1]] = m[2];
+      }
+    }
     return result;
   }
   if (FILTERS.has(name)) return result;
@@ -272,9 +314,9 @@ function classifyNode(tokens, state, depth) {
       return deny(cwd ? groupOfPath(cwd, ctx) : "other", display);
     }
     for (const operand of operands) {
-      const abs = resolvePath(operand, cwd, ctx);
+      const abs = resolvePath(operand, cwd, ctx, state.vars);
       if (abs && isArtifactHtml(abs)) return deny("artifact-read", display);
-      if (!abs || !isFleetRecord(abs, ctx)) return deny(abs ? groupOfPath(abs, ctx) : "other", abs ? display : `${display} <dynamic path>`);
+      if (!abs || !(isFleetRecord(abs, ctx) || isHarnessOutput(abs))) return deny(abs ? groupOfPath(abs, ctx) : "other", abs ? display : `${display} <dynamic path>`);
     }
     return result;
   }
@@ -282,7 +324,7 @@ function classifyNode(tokens, state, depth) {
     const operands = cmdWords.slice(1).filter((w) => !(w.value.startsWith("-") && w.value.length > 1) && !/^[0-7]{3,4}$/.test(w.value));
     if (operands.length === 0 && name !== "tee") return deny("project-edit", display);
     for (const operand of operands) {
-      const abs = resolvePath(operand, cwd, ctx);
+      const abs = resolvePath(operand, cwd, ctx, state.vars);
       if (!abs || !isFleetRecord(abs, ctx)) return deny("project-edit", `${display} ${abs ? path.basename(abs) : "<dynamic path>"}`);
     }
     return result;
@@ -332,7 +374,7 @@ function classifyProgram(source, state, depth) {
       // A cd moves the cwd for the commands after it at this level.
       const words = current.filter((t) => t.type === "word");
       if (words[0] && words[0].value === "cd" && token.value !== "|" && token.value !== "&") {
-        state.cwd = words[1] ? resolvePath(words[1], state.cwd, state.ctx) : null;
+        state.cwd = words[1] ? resolvePath(words[1], state.cwd, state.ctx, state.vars) : null;
       }
       flush();
       piped = token.value === "|" || token.value === "|&";
@@ -357,13 +399,13 @@ export function classifyCall(payload, ctx) {
   if (tool === "Bash") {
     const command = String(input.command ?? "");
     if (!command.trim()) return allow();
-    return classifyProgram(command, { cwd, ctx, piped: false }, 0);
+    return classifyProgram(command, { cwd, ctx, piped: false, vars: {} }, 0);
   }
   if (TOOLS_ALLOWED.has(tool)) return allow();
   if (tool === "Read") {
     const p = abs(toolPath(input));
     if (p && MEDIA.test(p)) return allow();
-    if (p && !isArtifactHtml(p) && isFleetRecord(p, ctx)) return allow();
+    if (p && !isArtifactHtml(p) && (isFleetRecord(p, ctx) || isHarnessOutput(p))) return allow();
     return deny(groupOfPath(p, ctx), `Read ${p ? path.basename(p) : ""}`);
   }
   if (tool === "Grep" || tool === "Glob") {
