@@ -22,18 +22,22 @@ import { readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
-// Exact bin/fm-* names the main firstmate runs itself: routing, spawn, send,
-// control, decide, captain-hold, pr-merge, tasks-axi, wake-drain, crew-state,
-// peek, update, plus the supervision and landing steps its own contract names.
+// Exact bin/fm-* names the main firstmate runs itself. One rule: a script stays here
+// only when AGENTS.md, an agent skill, or the emitted supervision protocol directs the
+// main firstmate to run it as part of routing, spawning, steering, lifecycle control,
+// landing or merge, decisions and holds, backlog, wake, crew state, session start, or
+// secondmate lifecycle. The one-line reason for each is in the header of
+// bin/fm-main-orchestration-guard.sh, and a test keeps the two lists equal. A script
+// that runs tests, analysis, footprint or audit checks does not belong.
 export const ALLOWED_SCRIPTS = new Set([
   "fm-wake-drain.sh", "fm-send.sh", "fm-spawn.sh", "fm-control.sh", "fm-decide.sh",
   "fm-captain-hold.sh", "fm-pr-merge.sh", "fm-tasks-axi.sh", "fm-crew-state.sh",
   "fm-peek.sh", "fm-update.sh", "fm-fleet-sync.sh",
   "fm-dispatch-resolve.sh", "fm-project-mode.sh", "fm-brief.sh", "fm-home-seed.sh",
-  "fm-branch-report.sh", "fm-branch-outcome.sh", "fm-teardown.sh", "fm-pr-check.sh",
+  "fm-branch-outcome.sh", "fm-teardown.sh", "fm-pr-check.sh",
   "fm-shortcut-ticket.sh", "fm-fleet-view.sh", "fm-lease.sh", "fm-watch-arm.sh",
   "fm-session-start.sh", "fm-afk-return.sh", "fm-secondmate-restart.sh",
-  "fm-backlog-handoff.sh", "fm-task-ledger.sh", "fm-check-register.sh", "fm-inbox.sh",
+  "fm-backlog-handoff.sh", "fm-check-register.sh", "fm-inbox.sh",
   "fm-merge-local.sh", "fm-capacity.sh",
 ]);
 
@@ -50,7 +54,7 @@ const WRITERS = new Set(["mkdir", "cp", "mv", "rm", "touch", "tee", "ln", "chmod
 const KEYWORDS_SKIP = new Set(["do", "then", "else", "elif", "if", "while", "until", "!", "{", "}"]);
 const KEYWORDS_BARE = new Set(["done", "fi", "esac", "}", "{", "do", "then", "else"]);
 const TOOLS_ALLOWED = new Set(["Skill", "ToolSearch", "ReadNotifications", "SendUserFile", "AskUserQuestion"]);
-const MEDIA = /\.(png|jpe?g|gif|webp|mp4|mov|webm)$/i;
+const MEDIA = /\.(png|mp4)$/i;
 const QUICK_GH = new Set(["view", "status"]);
 
 const rank = { allow: 0, quick: 1, deny: 2 };
@@ -93,14 +97,20 @@ export function makeContext(home, env = process.env) {
   return { home: root, homeRaw: home, mateHomes, env };
 }
 
-function isMemoryDir(p) {
-  return /(^|\/)\.claude[^/]*\/projects\/[^/]+\/memory(\/|$)/.test(p);
+// The main home's own project memory dir: <config>/projects/<home path with every
+// non-alphanumeric character as "-">/memory, not the memory of any other project.
+function isMemoryDir(p, ctx) {
+  for (const base of new Set([ctx.home, path.normalize(ctx.homeRaw)])) {
+    const enc = base.replace(/[^A-Za-z0-9]/g, "-");
+    if (p.includes("/.claude") && new RegExp(`/\\.claude[^/]*/projects/${enc}/memory(/|$)`).test(p)) return true;
+  }
+  return false;
 }
 
 // 0 when abs is a fleet record of the main home or the memory dir (or a null sink).
 function isFleetRecord(abs, ctx) {
   if (["/dev/null", "/dev/stdout", "/dev/stderr", "/dev/stdin"].includes(abs)) return true;
-  if (isMemoryDir(abs)) return true;
+  if (isMemoryDir(abs, ctx)) return true;
   for (const dir of ["data", "state", "config"]) {
     for (const base of new Set([ctx.home, path.normalize(ctx.homeRaw)])) {
       const root = path.join(base, dir);
@@ -145,10 +155,13 @@ function resolvePath(word, cwd, ctx, vars = {}) {
   return path.normalize(path.join(cwd, v));
 }
 
-// Output files the harness writes for a command the session ran: readable, never writable.
-function isHarnessOutput(abs) {
-  return /^\/(private\/)?tmp\/claude-\d+\/[^/]+\/(?:[^/]+\/)?(tool-results|tasks)\//.test(abs)
-    || /\/\.claude[^/]*\/projects\/[^/]+\/[^/]+\/tool-results\//.test(abs);
+// Output files the harness wrote for a command THIS session ran: readable, never
+// writable. Only the current session's own directories count (ctx.sessionId).
+function isHarnessOutput(abs, ctx) {
+  const sid = ctx.sessionId;
+  if (!sid || !/^[A-Za-z0-9-]+$/.test(sid)) return false;
+  return new RegExp(`^/(private/)?tmp/claude-\\d+/[^/]+/${sid}/(tool-results|tasks)/`).test(abs)
+    || new RegExp(`/\\.claude[^/]*/projects/[^/]+/${sid}/tool-results/`).test(abs);
 }
 
 const isArtifactHtml = (abs) => /\.html?$/i.test(abs) || abs.includes("/.lavish/");
@@ -317,7 +330,7 @@ function classifyNode(tokens, state, depth) {
     for (const operand of operands) {
       const abs = resolvePath(operand, cwd, ctx, state.vars);
       if (abs && isArtifactHtml(abs)) return deny("artifact-read", display);
-      if (!abs || !(isFleetRecord(abs, ctx) || isHarnessOutput(abs))) return deny(abs ? groupOfPath(abs, ctx) : "other", abs ? display : `${display} <dynamic path>`);
+      if (!abs || !(isFleetRecord(abs, ctx) || isHarnessOutput(abs, ctx))) return deny(abs ? groupOfPath(abs, ctx) : "other", abs ? display : `${display} <dynamic path>`);
     }
     return result;
   }
@@ -391,7 +404,10 @@ function toolPath(input) {
   return input.file_path || input.path || input.notebook_path || "";
 }
 
-export function classifyCall(payload, ctx) {
+export function classifyCall(payload, baseCtx) {
+  const sessionId = String(payload.session_id || payload.sessionId
+    || path.basename(String(payload.transcript_path || payload.transcriptPath || ""), ".jsonl"));
+  const ctx = { ...baseCtx, sessionId };
   const tool = String(payload.tool_name || payload.toolName || "");
   const input = payload.tool_input || payload.toolInput || {};
   const cwd = typeof payload.cwd === "string" && payload.cwd ? payload.cwd : ctx.home;
@@ -406,7 +422,7 @@ export function classifyCall(payload, ctx) {
   if (tool === "Read") {
     const p = abs(toolPath(input));
     if (p && MEDIA.test(p)) return allow();
-    if (p && !isArtifactHtml(p) && (isFleetRecord(p, ctx) || isHarnessOutput(p))) return allow();
+    if (p && !isArtifactHtml(p) && (isFleetRecord(p, ctx) || isHarnessOutput(p, ctx))) return allow();
     return deny(groupOfPath(p, ctx), `Read ${p ? path.basename(p) : ""}`);
   }
   if (tool === "Grep" || tool === "Glob") {

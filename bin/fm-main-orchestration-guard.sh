@@ -15,23 +15,52 @@
 #
 # ALLOWED
 #   - Bash where every part is allowed (a compound command, subshell, loop body, or
-#     command substitution is allowed only if each part is): these exact scripts,
-#     run by bare name or from a bin/ path, bin/fm-wake-drain.sh, fm-send.sh,
-#     fm-spawn.sh, fm-control.sh, fm-decide.sh, fm-captain-hold.sh, fm-pr-merge.sh,
-#     fm-tasks-axi.sh, fm-crew-state.sh, fm-peek.sh, fm-update.sh, fm-fleet-sync.sh,
-#     fm-dispatch-resolve.sh, fm-project-mode.sh, fm-brief.sh, fm-home-seed.sh,
-#     fm-branch-report.sh, fm-branch-outcome.sh, fm-teardown.sh, fm-pr-check.sh,
-#     fm-shortcut-ticket.sh, fm-fleet-view.sh, fm-lease.sh, fm-watch-arm.sh,
-#     fm-session-start.sh, fm-afk-return.sh, fm-secondmate-restart.sh,
-#     fm-backlog-handoff.sh, fm-task-ledger.sh, fm-check-register.sh, fm-inbox.sh
-#     (the list is ALLOWED_SCRIPTS in bin/fm-main-orchestration-policy.mjs); tasks-axi
-#     and quota-axi; shell builtins and echo, printf, date, test; readers (cat, head,
-#     tail, grep, sed, ls, jq, find, ...) and writers (mkdir, cp, mv, rm, touch, tee,
-#     > redirects) whose every path is a fleet record: data/, state/, or config/ of
-#     the main home, or the memory dir; filters that read only a pipe.
-#   - Read, Grep, Glob, Edit, Write on those same records; Read of any png, jpg, gif,
-#     webp, mp4, mov, or webm file (frames a worker hands over); the Skill,
-#     ToolSearch, ReadNotifications, SendUserFile, and AskUserQuestion tools.
+#     command substitution is allowed only if each part is). Scripts: exact names,
+#     run by bare name or from a bin/ path. One rule: a script is listed only when
+#     AGENTS.md, an agent skill, or the emitted supervision protocol directs the main
+#     firstmate to run it. The reason for each (the list is ALLOWED_SCRIPTS in
+#     bin/fm-main-orchestration-policy.mjs, and a test keeps the two equal):
+#       fm-wake-drain.sh - AGENTS.md section 8: drain the wake queue first
+#       fm-send.sh - AGENTS.md section 7: steer a worker
+#       fm-spawn.sh - AGENTS.md section 7: dispatch a worker
+#       fm-control.sh - AGENTS.md section 7: interrupt, exit, relaunch a worker
+#       fm-decide.sh - the only writer of data/decided.md (decisions)
+#       fm-captain-hold.sh - AGENTS.md section 10: hold a task for the captain
+#       fm-pr-merge.sh - AGENTS.md section 7: every task PR merge
+#       fm-tasks-axi.sh - AGENTS.md section 10: the backlog
+#       fm-crew-state.sh - AGENTS.md section 2: current crew state
+#       fm-peek.sh - stuck-crewmate-recovery: read a worker's endpoint
+#       fm-update.sh - updatefirstmate skill: self-update
+#       fm-fleet-sync.sh - AGENTS.md section 8: refresh a clone after a merged PR
+#       fm-dispatch-resolve.sh - AGENTS.md section 4: resolve the dispatch profile
+#       fm-project-mode.sh - AGENTS.md section 7: delivery mode at intake
+#       fm-brief.sh - AGENTS.md section 11: write a worker's instructions
+#       fm-home-seed.sh - secondmate-provisioning: create a secondmate home
+#       fm-branch-outcome.sh - supervision protocol: list branch outcomes for the captain
+#       fm-teardown.sh - ship-landing: cleanup after landing
+#       fm-pr-check.sh - ship-landing: arm merge monitoring on a PR
+#       fm-shortcut-ticket.sh - backlog intake creates the Shortcut story
+#       fm-fleet-view.sh - AGENTS.md section 8: the fleet view on a heartbeat
+#       fm-lease.sh - supervision protocol: claim a task lease before steering
+#       fm-watch-arm.sh - supervision protocol: arm the live supervision cycle
+#       fm-session-start.sh - AGENTS.md section 3: session start
+#       fm-afk-return.sh - afk skill: the return brief
+#       fm-secondmate-restart.sh - secondmate lifecycle: restart a secondmate
+#       fm-backlog-handoff.sh - AGENTS.md section 10: hand backlog to a secondmate
+#       fm-check-register.sh - ship-landing: bind a custom check
+#       fm-inbox.sh - AGENTS.md section 8: the captain inbox
+#       fm-merge-local.sh - AGENTS.md section 7: approved local-only landing
+#       fm-capacity.sh - AGENTS.md section 10: lane capacity report
+#   - tasks-axi and quota-axi (backlog; AGENTS.md section 4 dispatch intake); shell
+#     builtins and echo, printf, date, test; readers (cat, head, tail, grep, sed, ls,
+#     jq, find, ...) and writers (mkdir, cp, mv, rm, touch, tee, > redirects) whose
+#     every path is a fleet record: data/, state/, or config/ of the main home, or
+#     the main home's own project memory dir (<config>/projects/<home path with
+#     non-alphanumerics as "-">/memory); filters that read only a pipe.
+#   - Read, Grep, Glob, Edit, Write on those same records; Read of a .png or .mp4 file
+#     (frames a worker hands over); Read of this session's own tool-results and tasks
+#     output files (the harness directories named by the payload's session id); the
+#     Skill, ToolSearch, ReadNotifications, SendUserFile, and AskUserQuestion tools.
 #   - Artifact publish only for a file a mate produced: its path is under a
 #     registered second mate's home data/ (data/secondmates.md) or is a worker
 #     report path, data/<id>/report*.

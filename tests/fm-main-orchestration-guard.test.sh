@@ -32,7 +32,7 @@ make_home() {
 
 # gcall <tool> <input json>: one PreToolUse; exit code in RC, stderr in ERR.
 gcall() {
-  ERR=$(jq -cn --arg n "$1" --argjson i "$2" --arg t "$TRANSCRIPT" --arg c "$H" '{tool_name:$n,tool_input:$i,transcript_path:$t,cwd:$c}' \
+  ERR=$(jq -cn --arg n "$1" --argjson i "$2" --arg t "$TRANSCRIPT" --arg c "$H" --arg s "${SESSION:-sess-1}" '{tool_name:$n,tool_input:$i,transcript_path:$t,cwd:$c,session_id:$s}' \
     | FM_HOME="$H" "$G" --claude 2>&1 >/dev/null)
   RC=$?
 }
@@ -45,6 +45,7 @@ prompt() {  # <text>: a message the captain typed (the main prompt hook opens th
 midturn() {  # <text>: a message the captain sent inside a running turn
   jq -cn --arg p "$1" '{type:"attachment",attachment:{type:"queued_command",prompt:$p,origin:{kind:"human"},humanTurn:true,commandMode:"prompt"}}' >> "$TRANSCRIPT"
 }
+enc_home() { printf '%s' "$H" | sed 's/[^A-Za-z0-9]/-/g'; }
 log_text() { cat "$H/state/main-orchestration-refusals.log" 2>/dev/null || true; }
 
 test_9_nov_labelling_page_grep_is_refused() {
@@ -105,9 +106,40 @@ EOF2
   gcall Read '{"file_path":"/tmp/worker/frame-3.png"}'; expect_code 0 "$RC" "Read of a PNG frame"
   gcall Read '{"file_path":"/tmp/worker/check.mp4"}'; expect_code 0 "$RC" "Read of an MP4"
   gcall Write '{"file_path":"'"$H"'/data/notes.md","content":"x"}'; expect_code 0 "$RC" "Write to a fleet record"
-  gcall Edit '{"file_path":"/Users/x/.claude-work/projects/-p/memory/a.md","old_string":"a","new_string":"b"}'; expect_code 0 "$RC" "Edit of the memory dir"
+  gcall Edit '{"file_path":"/Users/x/.claude-work/projects/'"$(enc_home)"'/memory/a.md","old_string":"a","new_string":"b"}'; expect_code 0 "$RC" "Edit of the main home's memory dir"
   [ ! -s "$H/state/main-orchestration-refusals.log" ] || fail "an allowed call was logged"
   pass "orchestration scripts, fleet records, the memory dir, and worker frames are never refused"
+}
+
+test_allowlist_is_narrow_and_documented() {
+  make_home narrow main
+  local c
+  for c in 'bin/fm-branch-report.sh x' 'bin/fm-task-ledger.sh list' 'bin/fm-lint.sh' 'bin/fm-fork-footprint.sh' 'bin/fm-doc-audience-check.sh'; do
+    bash_call "$c"; expect_code 2 "$RC" "refused: $c"
+  done
+  gcall Read '{"file_path":"/tmp/worker/frame.jpg"}'; expect_code 2 "$RC" "only .png and .mp4 media are read"
+  gcall Read '{"file_path":"/tmp/worker/frame.webp"}'; expect_code 2 "$RC" "webp is not allowed"
+  gcall Read '{"file_path":"/Users/x/.claude-work/projects/-some-other-project/memory/a.md"}'; expect_code 2 "$RC" "another project's memory dir is refused"
+  gcall Edit '{"file_path":"/Users/x/.claude-work/projects/-some-other-project/memory/a.md","old_string":"a","new_string":"b"}'; expect_code 2 "$RC" "editing another project's memory dir is refused"
+  gcall Read '{"file_path":"/Users/x/.claude-work/projects/'"$(enc_home)"'/memory/MEMORY.md"}'; expect_code 0 "$RC" "the main home's memory dir is read"
+  SESSION=abc-123
+  gcall Read '{"file_path":"/private/tmp/claude-501/-proj/abc-123/tasks/b1.output"}'; expect_code 0 "$RC" "this session's task output is read"
+  gcall Read '{"file_path":"/Users/x/.claude-work/projects/-proj/abc-123/tool-results/t.txt"}'; expect_code 0 "$RC" "this session's tool result is read"
+  gcall Read '{"file_path":"/private/tmp/claude-501/-proj/zzz-999/tasks/b1.output"}'; expect_code 2 "$RC" "another session's task output is refused"
+  gcall Read '{"file_path":"/Users/x/.claude-work/projects/-proj/zzz-999/tool-results/t.txt"}'; expect_code 2 "$RC" "another session's tool result is refused"
+  bash_call 'cat /private/tmp/claude-501/-proj/abc-123/tasks/b1.output'; expect_code 0 "$RC" "cat of this session's output"
+  bash_call 'cat /private/tmp/claude-501/-proj/zzz-999/tasks/b1.output'; expect_code 2 "$RC" "cat of another session's output is refused"
+  SESSION=
+  # The header names a reason for every allowlisted script, and only those.
+  local listed header
+  listed=$(P="$ROOT/bin/fm-main-orchestration-policy.mjs" node --input-type=module -e 'const m = await import(process.env.P); console.log([...m.ALLOWED_SCRIPTS].sort().join("\n"))' < /dev/null)
+  header=$(grep -E '^#       fm-[a-z-]+\.sh - ' "$G" | sed -E 's/^#       (fm-[a-z-]+\.sh) - .*/\1/' | sort -u)
+  local n
+  for n in $header; do
+    printf '%s\n' "$listed" | grep -qx "$n" || fail "header names $n but the policy does not allow it"
+  done
+  [ "$(printf '%s\n' "$header" | wc -l | tr -d ' ')" = "$(printf '%s\n' "$listed" | wc -l | tr -d ' ')" ] || fail "the header and the policy list different numbers of scripts"
+  pass "the allowlist is narrow, every script has a header reason, and media, memory, and harness output are scoped"
 }
 
 test_default_deny_refuses_and_logs_unknown_work() {
@@ -318,6 +350,7 @@ test_scripts_are_lint_clean() {
 test_9_nov_labelling_page_grep_is_refused
 test_9_nov_quota_script_read_is_refused
 test_orchestration_is_never_refused
+test_allowlist_is_narrow_and_documented
 test_default_deny_refuses_and_logs_unknown_work
 test_quick_lookups_are_limited_per_captain_message
 test_captain_messages_reset_the_lookup_count
