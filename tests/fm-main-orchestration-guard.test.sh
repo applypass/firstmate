@@ -97,6 +97,8 @@ tail -n 5 state/a.status
 jq -r .x data/a.json
 echo hi >> data/notes.md
 tasks-axi list
+bin/fm-merge-local.sh task-a
+bin/fm-capacity.sh
 EOF2
   gcall Skill '{"skill":"stow"}'; expect_code 0 "$RC" "Skill"
   gcall Read '{"file_path":"'"$H"'/data/backlog.md"}'; expect_code 0 "$RC" "Read of a fleet record"
