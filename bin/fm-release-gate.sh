@@ -4,6 +4,7 @@
 # Usage: fm-release-gate.sh table   <release-pr-url>
 #        fm-release-gate.sh refresh <release-pr-url>
 #        fm-release-gate.sh check   <release-pr-url>
+#        fm-release-gate.sh row     <dev-pr-url>
 #
 # Before a main merge, every PR the release carries needs a row proving the
 # decision it implements is recorded and still current, and a stored-data or
@@ -42,7 +43,11 @@
 #
 # table    print the rows as a markdown table.
 # refresh  rewrite only the block between the fm-release-gate markers in the release
-#          PR body (appended when absent); the rest of the body is untouched.
+#          PR body (appended when absent); the rest of the body is untouched. When a row
+#          fails it also appends one needs-decision line (key release-gate-<repo>-<pr>)
+#          to state/release-main-<repo>-<pr>.status naming each failing PR and its fix
+#          command, once per distinct failure set, so firstmate raises it at release
+#          open (fm-release.sh open calls refresh). A clean release adds nothing.
 # check    exit 0 when every row passes; exit 1 listing every failing row and its
 #          waiver command. A PR whose base is not main, or in a repo not listed
 #          in config/release-gate, passes with a note. A forge read that fails
@@ -54,6 +59,16 @@
 # are applypass/apply_pass_backend and applypass/apply_pass_frontend. Default globs:
 #   schema.sql scripts/*.sql migrations/** swagger.yml
 # (a "*" matches across directories).
+#
+# row      the dev-merge guard (bin/fm-main-merge-guard.sh): evaluate the one PR at <dev-pr-url>
+#          with the same per-PR code as check, and exit 1 with the failing fields, a
+#          fix: line (the fm-decide.sh record command, or the audit to add) and the
+#          waiver command when the row fails. Only a PR whose base is dev is checked;
+#          any other base passes untouched. The waiver key is
+#            dev-waiver-<repo>-<pr>   with text starting "waived:" naming that PR
+#          recorded the same way as a release waiver. Covered repos are those in
+#          config/release-gate; without the file the default for row is
+#          apply_pass_backend, apply_pass_frontend and ai_backend (applypass).
 #
 # Overrides (tests): FM_RELEASE_GATE_GH (the gh command), FM_DATA_OVERRIDE,
 # FM_BACKLOG_OVERRIDE, FM_RELEASE_GATE_CONFIG.
@@ -69,12 +84,13 @@ ARCHIVE="${FM_BACKLOG_ARCHIVE_OVERRIDE:-$DATA/done-archive.md}"
 CONFIG="${FM_RELEASE_GATE_CONFIG:-$FM_HOME/config/release-gate}"
 GH="${FM_RELEASE_GATE_GH:-gh}"
 DEFAULT_REPOS="applypass/apply_pass_backend applypass/apply_pass_frontend"
+DEFAULT_ROW_REPOS="applypass/apply_pass_backend applypass/apply_pass_frontend applypass/ai_backend"
 DEFAULT_GLOBS="schema.sql scripts/*.sql migrations/** swagger.yml"
 MARK_START='<!-- fm-release-gate:start -->'
 MARK_END='<!-- fm-release-gate:end -->'
 
 usage() {
-  echo "usage: fm-release-gate.sh table|refresh|check <release-pr-url>" >&2
+  echo "usage: fm-release-gate.sh table|refresh|check <release-pr-url> | row <dev-pr-url>" >&2
   exit 2
 }
 
@@ -87,7 +103,7 @@ command -v jq >/dev/null 2>&1 || die "jq is required"
 [ "$#" -eq 2 ] || usage
 SUB=$1
 URL=$2
-case "$SUB" in table | refresh | check) ;; *) usage ;; esac
+case "$SUB" in table | refresh | check | row) ;; *) usage ;; esac
 
 re='^https://github\.com/([^/]+)/([^/]+)/pull/([0-9]+)/?$'
 [[ "$URL" =~ $re ]] || die "not a GitHub PR url: $URL"
@@ -99,7 +115,7 @@ lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
 # covered_globs: prints the globs for SLUG and returns 0, or returns 1 when not covered.
 covered_globs() {
-  local want line repo rest
+  local want line repo rest repos
   want=$(lower "$SLUG")
   if [ -f "$CONFIG" ]; then
     while IFS= read -r line; do
@@ -114,7 +130,9 @@ covered_globs() {
     done < "$CONFIG"
     return 1
   fi
-  for repo in $DEFAULT_REPOS; do
+  repos=$DEFAULT_REPOS
+  [ "$SUB" != row ] || repos=$DEFAULT_ROW_REPOS
+  for repo in $repos; do
     [ "$(lower "$repo")" = "$want" ] && { printf '%s\n' "$DEFAULT_GLOBS"; return 0; }
   done
   return 1
@@ -184,8 +202,10 @@ FAILS=''     # failing row lines (with waiver command)
 build_rows() {
   local n json title body branch stories hit item decs k text line later sup ref id d f why
   local current cur_note data audit status rc_open rc_total rc_done wkey waived row url dn
-  local superseded sc prs files after short
-  if [ "$HEAD_REF" = dev ]; then
+  local superseded sc prs files after short fixkey fixsc
+  if [ "$SUB" = row ]; then
+    prs=$NUM
+  elif [ "$HEAD_REF" = dev ]; then
     prs=$(carried_prs) || die "could not read the PRs $URL carries"
   else
     prs=$NUM
@@ -345,6 +365,7 @@ build_rows() {
     [ "$current" = yes ] || { status=FAIL; why="${why:+$why; }NOT CURRENT: $cur_note"; }
     if [ -n "$hit" ] && [ "$audit" = no ]; then status=FAIL; why="${why:+$why; }data/API change ($hit) without a reader and writer audit"; fi
     wkey="release-waiver-$REPO-$NUM-$n"
+    [ "$SUB" != row ] || wkey="dev-waiver-$REPO-$n"
     waived=0
     while IFS=$'\t' read -r line k text; do
       [ "$(lower "$k")" = "$(lower "$wkey")" ] && [[ "$text" == waived:* ]] || continue
@@ -356,6 +377,16 @@ build_rows() {
     ROWS="$ROWS$row"$'\n'
     if [ "$status" = FAIL ]; then
       FAILS="$FAILS#$n ${stories//$'\n'/ } ${decs:-none} - $why"$'\n'
+      fixkey="plan-${item:-$REPO-$n}"
+      fixsc=${stories%%$'\n'*}
+      if [ -z "$decs" ]; then
+        FAILS="$FAILS  fix: bin/fm-decide.sh record $fixkey \"<the decision this PR implements>\" --story ${fixsc:-sc-NNNN}"$'\n'
+      elif [ "$current" != yes ]; then
+        FAILS="$FAILS  fix: record the decision this PR now implements: bin/fm-decide.sh record $fixkey \"<current decision>\" --story ${fixsc:-sc-NNNN}, or close the re-check item"$'\n'
+      fi
+      if [ -n "$hit" ] && [ "$audit" = no ]; then
+        FAILS="$FAILS  fix: add a '## Reader and writer audit' section to the PR body, or create data/${item:-<item>}/reader-writer-audit.md"$'\n'
+      fi
       FAILS="$FAILS  waive: bin/fm-decide.sh record $wkey \"waived: Captain <date>: <words naming $REPO#$n>\""$'\n'
     fi
   done
@@ -386,7 +417,12 @@ pr=$("$GH" pr view "$URL" --json baseRefName,headRefName) || die "could not read
 BASE_REF=$(jq -r '.baseRefName // ""' <<<"$pr")
 HEAD_REF=$(jq -r '.headRefName // ""' <<<"$pr")
 [ -n "$BASE_REF" ] && [ -n "$HEAD_REF" ] || die "could not read the base and head of $URL"
-if [ "$BASE_REF" != main ]; then
+if [ "$SUB" = row ]; then
+  if [ "$BASE_REF" != dev ]; then
+    echo "fm-release-gate: $URL targets $BASE_REF, not dev; no dev row to check" >&2
+    exit 0
+  fi
+elif [ "$BASE_REF" != main ]; then
   echo "fm-release-gate: $URL targets $BASE_REF, not main; nothing to check" >&2
   exit 0
 fi
@@ -394,6 +430,15 @@ fi
 build_rows
 
 case "$SUB" in
+  row)
+    if [ -n "$FAILS" ]; then
+      echo "dev merge guard: $URL has no passing release row, so it cannot merge to dev:" >&2
+      printf '%s' "$FAILS" >&2
+      echo "Fix the row, then merge again. Only the captain waives it, by recording the dev-waiver key naming this PR." >&2
+      exit 1
+    fi
+    echo "dev merge guard: the row for $URL passes"
+    ;;
   table) render_table ;;
   check)
     if [ -n "$FAILS" ]; then
@@ -418,5 +463,16 @@ case "$SUB" in
     fi
     "$GH" pr edit "$URL" --body-file "$tmp" >/dev/null || die "could not update the body of $URL"
     echo "release gate table refreshed: $URL"
+    # Fork-only: raise failing rows to the supervisor as soon as the release PR is opened or
+    # refreshed (fm-release.sh open calls refresh), not at the merge word.
+    if [ -n "$FAILS" ]; then
+      sf="${FM_STATE_OVERRIDE:-$FM_HOME/state}/release-main-$REPO-$NUM.status"
+      msg="release $URL carries PRs failing the release gate: $(printf '%s' "$FAILS" | sed -e 's/^[[:space:]]*//' | paste -sd ';' - | sed 's/;/; /g')"
+      if [ "$(tail -n 1 "$sf" 2>/dev/null | sed -E 's/^[^:]*: //')" != "$msg" ]; then
+        mkdir -p "$(dirname "$sf")" &&
+          printf 'needs-decision [at=%s] [key=release-gate-%s-%s]: %s\n' "$(date +%s)" "$REPO" "$NUM" "$msg" >> "$sf" ||
+          echo "warning: could not record the failing rows in $sf" >&2
+      fi
+    fi
     ;;
 esac

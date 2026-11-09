@@ -62,7 +62,7 @@ decide() {  # <dir> <key> <text>
 run_gate() {  # <dir> <sub> [url]; sets OUT RC
   local d=$1 sub=$2 url=${3:-$REL}
   OUT=$(CASE_DIR="$d" PATH="$d/fakebin:$PATH" FM_HOME="$d" FM_DATA_OVERRIDE="$d/data" \
-    FM_RELEASE_GATE_CONFIG="$d/config/release-gate" "$GATE" "$sub" "$url" 2>&1)
+    FM_STATE_OVERRIDE="$d/state" FM_RELEASE_GATE_CONFIG="$d/config/release-gate" "$GATE" "$sub" "$url" 2>&1)
   RC=$?
 }
 
@@ -355,6 +355,25 @@ printf '#!/usr/bin/env bash\necho develop\n' > "$d/fakebin/gh"
 run_guard 51 true
 [ "$RC" -eq 0 ] || fail "guard: non-main base must pass: $OUT"
 [ ! -s "$d/check.log" ] || fail "guard: check must not run for a non-main base"
+
+# release open/refresh: a failing carried PR appends a needs-decision status line naming it and
+# its fix command; a clean release appends nothing; an unchanged failure is not repeated.
+d=$(make_case status-fail)
+SF="$d/state/release-main-app-50.status"
+run_gate "$d" refresh
+[ "$RC" -eq 0 ] || fail "status-fail: refresh must still succeed: $OUT"
+[ -f "$SF" ] || fail "status-fail: no status file"
+[ "$(wc -l < "$SF" | tr -d ' ')" -eq 1 ] || fail "status-fail: want one line: $(cat "$SF")"
+grep -Eq '^needs-decision \[at=[0-9]+\] \[key=release-gate-app-50\]: ' "$SF" || fail "status-fail: wrong shape: $(cat "$SF")"
+grep -q "$REL" "$SF" || fail "status-fail: release url missing: $(cat "$SF")"
+grep -q '#7' "$SF" || fail "status-fail: failing PR not named: $(cat "$SF")"
+grep -q 'fix: bin/fm-decide.sh record' "$SF" || fail "status-fail: fix command missing: $(cat "$SF")"
+run_gate "$d" refresh
+[ "$(wc -l < "$SF" | tr -d ' ')" -eq 1 ] || fail "status-fail: an unchanged failure repeated the line: $(cat "$SF")"
+d=$(make_case status-clean)
+decide "$d" plan-x "approved: the plan (shortcut: sc-100 u)"
+run_gate "$d" refresh
+[ ! -e "$d/state/release-main-app-50.status" ] || fail "status-clean: a clean release must emit nothing"
 
 # ship brief carries the audit heading rule; the scout brief does not.
 bh="$TMP_ROOT/brief-home"
