@@ -68,6 +68,7 @@ FM_HOME=${FM_HOME:-${CLAUDE_PROJECT_DIR:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}}
 STATE=${FM_STATE_OVERRIDE:-$FM_HOME/state}
 CONFIG=${FM_CONFIG_OVERRIDE:-$FM_HOME/config}
 WINDOW="$STATE/.reply-first"
+SEEN="$STATE/.reply-first-seen"
 LOCK="$STATE/.reply-first.lock"
 LIMIT=${FM_REPLY_FIRST_LIMIT:-3}
 MIN_CHARS=${FM_REPLY_FIRST_MIN_CHARS:-200}
@@ -157,8 +158,8 @@ win_get() {  # <key>
 win_write() {
   local tmp
   tmp=$(mktemp "$WINDOW.XXXXXX") || return 1
-  if printf 'epoch=%s\ncount=%s\nreplied=%s\nfired=%s\ntranscript=%s\nbase=%s\n' \
-    "$w_epoch" "$w_count" "$w_replied" "$w_fired" "$w_transcript" "$w_base" > "$tmp"; then
+  if printf 'epoch=%s\ncount=%s\nreplied=%s\nfired=%s\ntranscript=%s\nbase=%s\nlookups=%s\noverride=%s\n' \
+    "$w_epoch" "$w_count" "$w_replied" "$w_fired" "$w_transcript" "$w_base" "${w_lookups:-0}" "${w_override:-0}" > "$tmp"; then
     mv -f "$tmp" "$WINDOW"
   else
     rm -f "$tmp"
@@ -167,10 +168,11 @@ win_write() {
 }
 
 cmd_arm() {
-  local transcript=
+  local transcript='' text=''
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --transcript) transcript=${2:-}; shift 2 || break ;;
+      --text) text=${2:-}; shift 2 || break ;;
       *) usage >&2; exit 2 ;;
     esac
   done
@@ -181,8 +183,81 @@ cmd_arm() {
     case "$w_base" in ''|*[!0-9]*) w_base=0 ;; esac
   fi
   w_epoch=$(date +%s) w_count=0 w_replied=0 w_fired=0 w_transcript=$transcript
+  w_lookups=0 w_override=0
+  text_overrides "$text" && w_override=1
   lock_take || exit 0
   win_write
+  [ -z "$transcript" ] || seen_write "$transcript" "$w_base"
+  lock_drop
+}
+
+# 0 when a captain message asks main to dig itself (the fixed phrase set in the
+# header). bin/fm-main-orchestration-guard.sh reads the flag this sets.
+text_overrides() {  # <text>
+  local lower
+  lower=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')
+  case "$lower" in
+    *"look yourself"*|*"look it up yourself"*|*"look at it yourself"*|*"check yourself"*|*"check it yourself"*|*"dig yourself"*|*"dig in yourself"*) return 0 ;;
+  esac
+  return 1
+}
+
+seen_write() {  # <transcript> <line>
+  if printf 'transcript=%s\nline=%s\n' "$1" "$2" > "$SEEN.tmp.$$"; then
+    mv -f "$SEEN.tmp.$$" "$SEEN"
+  else
+    rm -f "$SEEN.tmp.$$"
+  fi
+}
+
+# Text of one queued_command attachment line the captain sent mid-turn, empty
+# for any other line. The prompt is a string, or a list of blocks whose text
+# blocks are joined.
+midturn_text() {  # <json line>
+  printf '%s' "$1" | jq -r '
+    select(type == "object" and .type == "attachment" and .attachment.type == "queued_command" and (.attachment.origin.kind // "") == "human")
+    | .attachment.prompt
+    | if type == "array" then [.[] | select(type == "object" and .type == "text") | .text] | join("\n") else tostring end' 2>/dev/null
+}
+
+# Scan the transcript lines written since the last scan. The newest queued_command
+# the captain sent opens a fresh window exactly as arm does, based at that line.
+# The first sight of a transcript only records its end. A message is scanned once,
+# so it never re-arms. Callers: pretool (every call) and bin/fm-main-orchestration-guard.sh.
+cmd_midturn() {
+  local transcript=${1:-} total seen_path seen_line cand n json text last_n=0 last_text=
+  enabled || return 0
+  [ -n "$transcript" ] && [ -f "$transcript" ] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  lock_take || return 0
+  total=$(wc -l < "$transcript" 2>/dev/null | tr -d ' ')
+  case "$total" in ''|*[!0-9]*) lock_drop; return 0 ;; esac
+  seen_path=$(sed -n 's/^transcript=//p' "$SEEN" 2>/dev/null | head -n 1)
+  seen_line=$(sed -n 's/^line=//p' "$SEEN" 2>/dev/null | head -n 1)
+  case "$seen_line" in ''|*[!0-9]*) seen_path= ;; esac
+  if [ "$seen_path" != "$transcript" ] || [ "$total" -lt "$seen_line" ]; then
+    seen_write "$transcript" "$total"
+    lock_drop
+    return 0
+  fi
+  if [ "$total" -eq "$seen_line" ]; then lock_drop; return 0; fi
+  cand=$(sed -n "$((seen_line + 1)),${total}p" "$transcript" | grep -n -F '"queued_command"' | grep -F '"human"')
+  while IFS= read -r cand_line; do
+    [ -n "$cand_line" ] || continue
+    n=${cand_line%%:*}
+    json=${cand_line#*:}
+    text=$(midturn_text "$json")
+    text=${text#"${text%%[![:space:]]*}"}
+    text=${text%"${text##*[![:space:]]}"}
+    if text_is_captain "$text"; then last_n=$n last_text=$text; fi
+  done <<< "$cand"
+  seen_write "$transcript" "$total"
+  if [ "$last_n" -gt 0 ]; then
+    w_epoch=$(date +%s) w_count=0 w_replied=0 w_fired=0 w_transcript=$transcript w_base=$((seen_line + last_n))
+    w_lookups=0 w_override=0
+    text_overrides "$last_text" && w_override=1
+    win_write
+  fi
   lock_drop
 }
 
@@ -217,7 +292,7 @@ cmd_prompt() {
   text=${text%"${text##*[![:space:]]}"}
   case "$text" in '<task-notification>'*) exit 0 ;; esac
   if text_is_captain "$text"; then
-    if [ -n "$transcript" ]; then cmd_arm --transcript "$transcript"; else cmd_arm; fi
+    if [ -n "$transcript" ]; then cmd_arm --transcript "$transcript" --text "$text"; else cmd_arm --text "$text"; fi
   else
     cmd_clear
   fi
@@ -229,13 +304,15 @@ cmd_pretool() {
   payload=$(cat 2>/dev/null || true)
   [ -n "$payload" ] || exit 0
   command -v jq >/dev/null 2>&1 || exit 0
-  [ -f "$WINDOW" ] || exit 0
   enabled || exit 0
   command=$(printf '%s' "$payload" | jq -r '(.tool_input.command // .toolInput.command // empty)' 2>/dev/null) || exit 0
   transcript=$(printf '%s' "$payload" | jq -r '(.transcript_path // empty)' 2>/dev/null) || transcript=
+  cmd_midturn "$transcript"
+  [ -f "$WINDOW" ] || exit 0
   lock_take || exit 0
   w_epoch=$(win_get epoch) w_count=$(win_get count)
   w_replied=$(win_get replied) w_fired=$(win_get fired) w_transcript=$(win_get transcript) w_base=$(win_get base)
+  w_lookups=$(win_get lookups) w_override=$(win_get override)
   case "$w_count" in ''|*[!0-9]*) lock_drop; exit 0 ;; esac
   case "$w_base" in ''|*[!0-9]*) w_base=0 ;; esac
   if [ "$w_replied" = 1 ] || [ "$w_fired" = 1 ]; then
@@ -301,6 +378,7 @@ cmd_pretool() {
 
 case "${1:-}" in
   pretool) shift; cmd_pretool "$@" ;;
+  midturn) shift; cmd_midturn "$@"; exit 0 ;;
   prompt) shift; cmd_prompt "$@" ;;
   arm) shift; cmd_arm "$@" ;;
   clear) cmd_clear ;;

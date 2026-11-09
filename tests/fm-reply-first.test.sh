@@ -353,6 +353,110 @@ test_limit_is_tunable_and_broken_input_fails_open() {
   pass "the limit is tunable and broken input never blocks work"
 }
 
+# midturn <text> [kind]: the harness surfaces a message inside a running turn as a
+# queued_command attachment line in the transcript.
+midturn() {
+  jq -cn --arg p "$1" --arg k "${2:-human}" '{type:"attachment",attachment:{type:"queued_command",prompt:$p,origin:{kind:$k},humanTurn:true,commandMode:"prompt",source_uuid:"s\(now)",delivery_id:"d\(now)"},uuid:"u\(now)"}' >> "$TRANSCRIPT"
+}
+
+test_midturn_captain_message_arms_the_window() {
+  make_home mid main
+  call 'ls'; call 'ls'; call 'ls'; call 'ls'; call 'ls'
+  expect_code 0 "$RC" "no window, no refusal before the message"
+  midturn 'merge it please, captain approves'
+  call 'ls'; expect_code 0 "$RC" "call 1 after the mid-turn message"
+  call 'ls'; expect_code 0 "$RC" "call 2"
+  call 'ls'; expect_code 0 "$RC" "call 3"
+  call 'ls'; expect_code 2 "$RC" "call 4 is refused"
+  assert_contains "$ERR" "Answer now" "answer-now reason"
+  call 'ls'; expect_code 0 "$RC" "the refusal fires once"
+  pass "a mid-turn captain message opens a window and the fourth call after it is refused"
+}
+
+test_midturn_array_prompt_arms() {
+  make_home midarr main
+  call 'ls'
+  jq -cn '{type:"attachment",attachment:{type:"queued_command",prompt:[{type:"text",text:"what is the status?"},{type:"image",source:{type:"base64",data:"x"}}],origin:{kind:"human"},humanTurn:true,commandMode:"prompt"}}' >> "$TRANSCRIPT"
+  call 'ls'; call 'ls'; call 'ls'
+  call 'ls'; expect_code 2 "$RC" "a message with an image block still arms"
+  pass "a mid-turn message whose prompt is a list of blocks arms the window"
+}
+
+test_midturn_machine_messages_never_arm() {
+  local text
+  while IFS= read -r text; do
+    make_home midbell main
+    call 'ls'
+    midturn "$text"
+    call 'ls'; call 'ls'; call 'ls'; call 'ls'; call 'ls'
+    expect_code 0 "$RC" "no refusal after mid-turn: $text"
+    [ ! -e "$H/state/.reply-first" ] || fail "armed by mid-turn: $text"
+  done <<'EOF2'
+: Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'ir-reupload-dup-bug.inbox' steering inbox, read and act on each in numeric order, then mv each into its handled/.
+[fm-from-firstmate] steer text
+/afk
+EOF2
+  make_home midnote main
+  call 'ls'
+  midturn '<task-notification><task-id>x</task-id></task-notification>' task-notification
+  midturn 'a coordinator line' coordinator
+  midturn 'a peer line' peer
+  call 'ls'; call 'ls'; call 'ls'; call 'ls'; call 'ls'
+  expect_code 0 "$RC" "no refusal after non-human origins"
+  [ ! -e "$H/state/.reply-first" ] || fail "armed by a non-human origin"
+  pass "a mid-turn doorbell, slash command, task notification, or non-human origin never arms"
+}
+
+test_midturn_message_does_not_rearm() {
+  make_home midonce main
+  call 'ls'
+  midturn 'status of PR 77?'
+  call 'ls'; call 'ls'; call 'ls'
+  call 'ls'; expect_code 2 "$RC" "refused once"
+  call 'ls'; call 'ls'; call 'ls'; call 'ls'; call 'ls'
+  expect_code 0 "$RC" "the same message never re-arms on later calls"
+  midturn 'and the other one?'
+  call 'ls'; call 'ls'; call 'ls'
+  call 'ls'; expect_code 2 "$RC" "a second mid-turn message opens a fresh window"
+  pass "a mid-turn message arms once and a later one arms again"
+}
+
+test_midturn_replace_resets_the_count() {
+  make_home midreset main
+  prompt 'first question?'
+  call 'ls'; call 'ls'
+  midturn 'second question?'
+  call 'ls'; call 'ls'; call 'ls'
+  expect_code 0 "$RC" "three calls after the second message"
+  call 'ls'; expect_code 2 "$RC" "fourth refused"
+  pass "a mid-turn message replaces an open window"
+}
+
+test_midturn_reply_closes_the_window() {
+  make_home midreply main
+  call 'ls'
+  midturn 'what is the status?'
+  call 'ls'
+  say 'Captain, two workers are running and nothing needs you.'
+  call 'ls'; call 'ls'; call 'ls'; call 'ls'
+  expect_code 0 "$RC" "a reply after the mid-turn message closes the window"
+  make_home midlate main
+  call 'ls'
+  say "$(printf 'An older answer to an earlier message, long enough to count as a reply on its own right here. %.0s' 1 2 3)"
+  midturn 'what is the status?'
+  call 'ls'; call 'ls'; call 'ls'
+  call 'ls'; expect_code 2 "$RC" "text written before the message does not close it"
+  pass "a reply after a mid-turn message closes the window; older text does not"
+}
+
+test_midturn_first_sight_ignores_history() {
+  make_home midhist main
+  midturn 'an old question from before this session'
+  call 'ls'; call 'ls'; call 'ls'; call 'ls'; call 'ls'
+  expect_code 0 "$RC" "a message already in the transcript at first sight is history"
+  pass "the first call on a transcript records its end and arms nothing"
+}
+
 test_scripts_are_shellcheck_clean() {
   command -v shellcheck >/dev/null 2>&1 || { pass "shellcheck not installed, skipping"; return; }
   "$ROOT/bin/fm-lint.sh" "$ROOT/bin/fm-reply-first.sh" >/dev/null 2>&1 || fail "bin/fm-reply-first.sh is not lint-clean"
@@ -379,4 +483,11 @@ test_main_reply_closes_and_handoffs_are_free
 test_installer_registers_main_hooks_once
 test_text_flushed_a_moment_late_still_counts
 test_limit_is_tunable_and_broken_input_fails_open
+test_midturn_captain_message_arms_the_window
+test_midturn_array_prompt_arms
+test_midturn_machine_messages_never_arm
+test_midturn_message_does_not_rearm
+test_midturn_replace_resets_the_count
+test_midturn_reply_closes_the_window
+test_midturn_first_sight_ignores_history
 test_scripts_are_shellcheck_clean
