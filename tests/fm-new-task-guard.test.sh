@@ -101,6 +101,13 @@ test_unreadable_other_mate_counts_as_active() {
   run_guard check mate-a
   expect_code 0 "$RC" "an unreadable other mate below the cap must not refuse: $OUT"
   case "$OUT" in *"mate-gone"*"unreadable - counted as active"*) : ;; *) fail "the note must name the unreadable mate: $OUT" ;; esac
+  new_world unreadcap; local i
+  for i in 1 2 3 4 5 6; do add_mate "mate-$i" 1; done
+  add_mate mate-gone 0; rm -rf "$W/mates/mate-gone"
+  add_mate mate-idle 0; main_inflight 1
+  run_guard check mate-idle
+  expect_code 1 "$RC" "an unreadable mate must count toward the cap: $OUT"
+  case "$OUT" in *"refused"*"mate-gone"*"unreadable - counted as active"*) : ;; *) fail "the cap refusal must list the unreadable mate as active: $OUT" ;; esac
   pass "guard: another mate's unreadable backlog counts as active and is named, not refused"
 }
 
