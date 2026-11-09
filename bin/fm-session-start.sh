@@ -741,7 +741,7 @@ if [ "$READ_ONLY" -eq 0 ]; then
     rm -f "$COMPLETION_FILE" 2>/dev/null || true
   fi
   fm_trace_context_session_start "$CONFIG" "$STATE/.trace-context-effective"
-  # Fork-only: reply-first hooks for the primary home (bin/fm-reply-first.sh); idempotent and untracked.
+  # Fork-only: reply-first and orchestration guard hooks for the primary home; idempotent and untracked.
   "$SCRIPT_DIR/fm-mate-hooks-install.sh" --main "$FM_HOME" >/dev/null 2>&1 || true
   # Fork-only: meeting-to-ticket PostToolUse hook for the primary home (bin/fm-meeting-ticket-gate.sh); idempotent and untracked.
   "$SCRIPT_DIR/fm-meeting-ticket-gate.sh" install "$FM_HOME" >/dev/null 2>&1 || true

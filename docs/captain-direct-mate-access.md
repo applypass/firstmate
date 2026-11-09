@@ -84,7 +84,7 @@ In short, the allowlist is:
 
 Blocked and logged: subagents, MCP tools for outside systems, browser tools, WebSearch and WebFetch, sleep and poll loops, edits to hooks, settings, and sys-config, running tests or scripts, any project clone or worktree read or edit, git, prod psql, deploys, and any command the list does not name.
 The quick-lookup count lives in the reply-first window, so a typed message and a mid-turn message both reset it, and each command in a compound command counts once.
-A turn with no captain message (a wake, a notification, a doorbell) gets the same two quick lookups, counted per turn from the latest prompt or queued message in the transcript; the reply-first 3-call window stays captain-only.
+A turn with no captain message (a wake, a notification, a doorbell) gets the same two quick lookups, counted per turn from the latest prompt or human queued message in the transcript (a task notification mid-turn does not start a turn); the reply-first 3-call window stays captain-only.
 The refusal log names the real message id from the transcript (the queued message's `source_uuid`, else its `uuid`, or the prompt entry's `uuid`), and `-` when there is none.
 `config/reply-first` set to `off` turns off the 3-call refusal only; the window, count, and override keep working while the guard is on.
 A reader that can run or write (find `-exec`, an awk or sed program with a command or write, `sort -o` outside the records) or a path built from an unknown variable is refused.
