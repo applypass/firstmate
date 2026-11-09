@@ -76,14 +76,18 @@ Only the allowlist runs; every other call is refused with "hand this to the owni
 The script header owns the allowlist and the list of exact `bin/fm-*` names.
 In short, the allowlist is:
 
-- the routing, spawn, send, control, decide, captain-hold, pr-merge, tasks-axi, wake-drain, crew-state, peek, and update scripts, in a command where every part is allowed;
-- reading and writing fleet records (`data/`, `state/`, `config/` of the main home) and the memory dir, except artifact HTML, which counts as a dig even under `data/`;
-- Read of a png or mp4 frame a worker hands over;
+- the `bin/fm-*` scripts that AGENTS.md, an agent skill, or the supervision protocol directs the main firstmate to run (routing, spawn, send, control, decide, captain-hold, pr-merge, local landing, tasks-axi, backlog, capacity, wake-drain, crew-state, peek, update, session start, secondmate lifecycle), each with its one-line reason in the script header, in a command where every part is allowed;
+- reading and writing fleet records (`data/`, `state/`, `config/` of the main home) and the main home's own project memory dir, except artifact HTML, which counts as a dig on every path (Read, Grep, Glob, Edit, Write, and recursive shell readers) even under `data/`, and the guard's own switches, window state, and refusal log, which can be read and never written;
+- Read of a `.png` or `.mp4` frame a worker hands over, and of this session's own tool-result and task-output files;
 - two quick lookups per captain message: `gh pr view`, `gh pr status` (also `gh-axi`), and Artifact list;
 - Artifact publish only for a page a mate produced, meaning a path under a registered second mate's `data/` or a worker report path.
 
 Blocked and logged: subagents, MCP tools for outside systems, browser tools, WebSearch and WebFetch, sleep and poll loops, edits to hooks, settings, and sys-config, running tests or scripts, any project clone or worktree read or edit, git, prod psql, deploys, and any command the list does not name.
-The quick-lookup count lives in the reply-first window, so a typed message and a mid-turn message both reset it.
+The quick-lookup count lives in the reply-first window, so a typed message and a mid-turn message both reset it, and each command in a compound command counts once.
+A turn with no captain message (a wake, a notification, a doorbell) gets the same two quick lookups, counted per turn from the latest prompt or queued message in the transcript; the reply-first 3-call window stays captain-only.
+The refusal log names the real message id from the transcript (the queued message's `source_uuid`, else its `uuid`, or the prompt entry's `uuid`), and `-` when there is none.
+`config/reply-first` set to `off` turns off the 3-call refusal only; the window, count, and override keep working while the guard is on.
+A reader that can run or write (find `-exec`, an awk or sed program with a command or write, `sort -o` outside the records) or a path built from an unknown variable is refused.
 A captain message that says "look yourself" (or "look it up yourself", "look at it yourself", "check yourself", "check it yourself", "dig yourself", "dig in yourself") lifts the check until the next captain message.
 The guard is inert in a second mate home and in a task worktree, the word `off` in `config/main-orchestration-guard` turns it off, and a payload it cannot read allows the call silently.
 `node bin/fm-main-orchestration-replay.mjs <transcript.jsonl>...` replays recorded main-session calls through the same classifier and prints counts per class, the blocked calls by group, and allowed calls that look like work.
