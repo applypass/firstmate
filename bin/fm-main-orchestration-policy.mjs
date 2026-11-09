@@ -38,7 +38,7 @@ export const ALLOWED_SCRIPTS = new Set([
   "fm-shortcut-ticket.sh", "fm-fleet-view.sh", "fm-lease.sh", "fm-watch-arm.sh",
   "fm-session-start.sh", "fm-afk-return.sh", "fm-secondmate-restart.sh",
   "fm-backlog-handoff.sh", "fm-check-register.sh", "fm-inbox.sh",
-  "fm-merge-local.sh", "fm-capacity.sh",
+  "fm-merge-local.sh", "fm-capacity.sh", "fm-task-ledger.sh",
 ]);
 
 // Commands with no side effect beyond the shell, and the fleet-record readers.
