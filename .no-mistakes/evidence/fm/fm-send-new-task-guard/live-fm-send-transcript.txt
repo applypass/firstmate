@@ -1,0 +1,88 @@
+=== S1: core-backend has 1 in-flight item (real tasks-axi list) ===
+count: 1
+tasks[1]{id,state,kind,repo,title}:
+  core-backend-w1,in_flight,task,lab,task 1 of core-backend
+help[1]:
+  - Run `tasks-axi show <id>` for full notes on a task
+$ fm-send.sh core-backend --new-task From firstmate (captain asked): build feature B
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.VoXue2
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the requested message WILL still be sent.
+●  watcher supervision needs Stop-owned automatic recovery; inspect the hook registration and startup status before ending the turn.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+fm-new-task-guard: refused - mate 'core-backend' already has in-flight work:
+  - core-backend-w1
+Each task gets its own second mate. Create one for this task instead:
+  bin/fm-brief.sh <new-id> --secondmate ...        (write the charter brief)
+  bin/fm-home-seed.sh <new-id> - ...               (seed the isolated home)
+  bin/fm-spawn.sh <new-id> --secondmate            (launch it)
+If this message continues the work already under way, resend it with --same-task.
+[exit 1]
+inbox messages for core-backend: 0
+
+=== S2: --same-task to busy core-backend ===
+$ fm-send.sh core-backend --same-task From firstmate (captain asked): also handle edge case
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.VoXue2
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+fm-send: doorbell not typed because the agent in firstmate:fm-core-backend has exited; the steer is durably recorded at /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.VoXue2/state/core-backend.inbox/001.msg for recovery (stuck-crewmate-recovery), and the watcher will not re-ring a dead pane
+[exit 0]
+inbox messages for core-backend: 2
+
+=== S3: --new-task to idle mate fresh-mate ===
+$ fm-send.sh fresh-mate --new-task From firstmate (captain asked): build feature C
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.VoXue2
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+fm-send: doorbell not typed because the agent in firstmate:fm-fresh-mate has exited; the steer is durably recorded at /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.VoXue2/state/fresh-mate.inbox/001.msg for recovery (stuck-crewmate-recovery), and the watcher will not re-ring a dead pane
+[exit 0]
+inbox messages for fresh-mate: 2
+
+=== S4: fleet at cap: 6 busy mates + core-backend busy + main 1 in flight, idle target idle-a ===
+count: 1
+tasks[1]{id,state,kind,repo,title}:
+  main-w1,in_flight,task,lab,task 1 of main
+help[1]:
+  - Run `tasks-axi show <id>` for full notes on a task
+$ fm-send.sh idle-a --new-task From firstmate (captain asked): build feature D
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.VoXue2
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+fm-new-task-guard: refused - 8 active entries, cap is 8 (config/fleet-wip-cap). Retire finished or idle mates before opening new work.
+  - mate core-backend: in flight (1 item(s): core-backend-w1)
+  - mate busy-1: in flight (1 item(s): busy-1-w1)
+  - mate busy-2: in flight (1 item(s): busy-2-w1)
+  - mate busy-3: in flight (1 item(s): busy-3-w1)
+  - mate busy-4: in flight (1 item(s): busy-4-w1)
+  - mate busy-5: in flight (1 item(s): busy-5-w1)
+  - mate busy-6: in flight (1 item(s): busy-6-w1)
+  - main: in flight (main-w1)
+  - mate fresh-mate: idle - retire first
+  - mate idle-a: idle - retire first
+[exit 1]
+inbox messages for idle-a: before=0 after=0
+
+=== S5: stale registry entry (home deleted) below cap does not block idle target ===
+$ fm-send.sh idle-a --new-task From firstmate (captain asked): build feature E
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.VoXue2
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+fm-new-task-guard: note - 4 of cap 8 active, including:
+  - mate gone-mate: unreadable - counted as active: home /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.VoXue2/mates/gone-mate is not a directory
+fm-send: doorbell not typed because the agent in firstmate:fm-idle-a has exited; the steer is durably recorded at /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.VoXue2/state/idle-a.inbox/001.msg for recovery (stuck-crewmate-recovery), and the watcher will not re-ring a dead pane
+[exit 0]
+inbox messages for idle-a: 2
+
+=== S6: target mate's own home missing -> refuse ===
+$ fm-send.sh gone-mate --new-task From firstmate (captain asked): x
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.VoXue2
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+fm-new-task-guard: refused - could not read the home backlog of mate 'gone-mate': home /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.VoXue2/mates/gone-mate is not a directory
+[exit 1]
+
+=== S7: legacy send without flags still works to busy mate (fm-send itself does not refuse) ===
+$ fm-send.sh core-backend plain steer
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.VoXue2
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+fm-send: doorbell not typed because the agent in firstmate:fm-core-backend has exited; the steer is durably recorded at /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.VoXue2/state/core-backend.inbox/002.msg for recovery (stuck-crewmate-recovery), and the watcher will not re-ring a dead pane
+[exit 0]
+lab removed: yes

@@ -1,0 +1,13 @@
+1..11
+ok - guard: --new-task to a mate with an In flight item refuses and prints the remedy
+ok - guard: --new-task to a mate with no In flight item passes
+ok - guard: an ordinary worker target is never refused
+ok - guard: an unreadable mate backlog refuses and names it
+ok - guard: another mate's unreadable backlog counts as active and is named, not refused
+ok - guard: at the fleet cap --new-task refuses and names busy and idle entries
+ok - guard: below the cap passes and the cap is read from config/fleet-wip-cap
+ok - hook: refuses a captain-prefixed send to a busy mate unless --same-task
+ok - hook: inert in a secondmate home
+ok - installer: registers the new-task hook once, idempotently
+ok - fm-send: --new-task refuses a busy mate with nothing enqueued, sends to an idle one
+FM_TEST_COMPLETE
