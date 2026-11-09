@@ -1380,6 +1380,16 @@ while :; do
     exit_to_main "the captain returned while the away session was handling this wake, but the recorded outcomes could not be verified; main must review them" \
       "$(turn_outcome_lookup_warning)"
   fi
+  # Fork-only: the branch may not merge a covered own PR to dev (exit 6), but the
+  # visible session may; wake it for that merge instead of parking on the wake.
+  HANDBACKS=$(fm_secondmate_host_merge_handbacks "$STATE")
+  if [ -n "$HANDBACKS" ]; then
+    fm_secondmate_host_merge_handbacks_clear "$STATE"
+    ARM_TEXT=
+    exit_to_main "merge-handback: the supervision session may not merge these own PRs to dev, this session may; merge each with bin/fm-pr-merge.sh under the standing dev-merge authority: $(printf '%s' "$HANDBACKS" | tr '\n' ';')" \
+      "$HEALTH_NOTE"
+  fi
+  # Fork-only end
   # Attended captain outcomes are main's to process; away they wait for the
   # return, including when the captain left while this turn ran. The close
   # itself was handled, so only the host's lines reach main.
