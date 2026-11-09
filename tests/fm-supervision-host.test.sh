@@ -35,6 +35,10 @@ FAKE_CLAUDE="$FAKEBIN/claude"
 #   handle      drain, claim the task's lease, report, acknowledge, release
 #   captain     the same as handle, but report verdict captain naming the rows
 #               the drain presented
+#   merge-handback the same as captain, plus the state/<task>.merge-handback marker
+#               bin/fm-auto-dev-merge.sh leaves when fm-pr-merge.sh refuses the
+#               branch actor on a covered own PR to dev (PR 841's sequence)
+#   merge-handback-fail leave that marker, then exit nonzero without a result
 #   hold-lease  the same, but leave the lease held (the host must release it),
 #               logging its check line while held
 #   return      handle, but the captain returns (the record is archived) before
@@ -99,13 +103,15 @@ verdict=routine
 [ "$mode" != go-away ] || verdict=captain
 case "$mode" in
   fail) exit 3 ;;
-  handle|captain|captain-close-before-return|held|captain-held|hold-lease|hold-marker|return|return-silent|return-fail|return-fail-silent|return-many|return-lookup-fail|return-first|noack|emptyresult|go-away)
+  merge-handback-fail) printf '%s\n' "https://github.com/acme/app/pull/841" > "$STATE/$task.merge-handback"; exit 3 ;;
+  handle|captain|merge-handback|captain-close-before-return|held|captain-held|hold-lease|hold-marker|return|return-silent|return-fail|return-fail-silent|return-many|return-lookup-fail|return-first|noack|emptyresult|go-away)
     case "$mode" in held|captain-held) read -r _ < "$FM_HOME/stub-release" ;; esac
     [ "$mode" != return-first ] || "$FM_REPO/bin/fm-afk-contract.sh" archive >> "$FM_HOME/engine-return.log" 2>&1
     [ "$mode" != go-away ] || "$FM_REPO/bin/fm-afk-contract.sh" enter --words 'gone mid-turn' >> "$FM_HOME/engine-return.log" 2>&1
     "$FM_REPO/bin/fm-lease.sh" claim "$task" >> "$FM_HOME/engine-lease.log" 2>&1
     [ "$mode" != hold-lease ] || "$FM_REPO/bin/fm-lease.sh" check "$task" >> "$FM_HOME/engine-lease.log" 2>&1
-    if [ "$mode" = captain ] || [ "$mode" = captain-held ] \
+    [ "$mode" != merge-handback ] || printf '%s\n' "https://github.com/acme/app/pull/841" > "$STATE/$task.merge-handback"
+    if [ "$mode" = captain ] || [ "$mode" = captain-held ] || [ "$mode" = merge-handback ] \
       || [ "$mode" = captain-close-before-return ]; then
       "$FM_REPO/bin/fm-branch-report.sh" --task "$task" --verdict captain --kind decision \
         --summary "stub escalated: $(printf '%s\n' "$drain" | grep -v '^WAKE_' | tr '\n' ' ' | cut -c1-400)" \
@@ -2628,6 +2634,60 @@ test_secondmate_captain_outcome_is_published_without_waking_the_mate() {
   pass "host: a captain outcome the script published to the parent channel waits for the mate's drain without waking the mate, and an unpublished one wakes it"
 }
 
+test_secondmate_dev_merge_the_branch_may_not_do_wakes_the_visible_session() {
+  local home channel
+  home=$(make_mate_home mate-handback)
+  channel=$(mate_channel mate-handback)
+  echo merge-handback > "$home/stub-mode"
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "mate handback: the host never started a watcher cycle"
+  append_status "$home" 'PR https://github.com/acme/app/pull/841 checks green' 'done'
+  wait_until 250 host_exited "$home" || fail "mate handback: the visible session was not woken for the merge the branch may not do: $(cat "$home/state/.supervision-host.log")"
+  assert_grep 'key=branch-outcome-' "$channel" "the outcome must still reach the parent channel"
+  assert_re '^supervision-host: merge-handback: .*demo https://github.com/acme/app/pull/841' "$home/host.out" \
+    "the visible session must be woken with the PR to merge"
+  [ ! -e "$home/state/demo.merge-handback" ] || fail "mate handback: the host must consume the marker once it wakes the session"
+  pass "host: an own dev PR the branch may not merge wakes the secondmate's visible session, not only the parent channel"
+}
+
+test_merge_handback_rides_with_every_hand_back_of_its_turn() {
+  local home
+  home=$(make_home handback-captain attended)
+  echo merge-handback > "$home/stub-mode"
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "handback captain: the host never started a watcher cycle"
+  append_status "$home" 'PR https://github.com/acme/app/pull/841 checks green' 'done'
+  wait_until 250 host_exited "$home" || fail "handback captain: the turn did not wake main: $(cat "$home/state/.supervision-host.log")"
+  assert_re '^supervision-host: branch-outcome: .*\(store rows 1\); run bin/fm-wake-drain.sh' "$home/host.out" \
+    "a merge handback must not hide the unpublished captain outcome of the same turn"
+  assert_re '^supervision-host: merge-handback: .*demo https://github.com/acme/app/pull/841' "$home/host.out" \
+    "the branch-outcome wake must also name the merge to do"
+  [ ! -e "$home/state/demo.merge-handback" ] || fail "handback captain: the marker outlived the wake that named it"
+  stop_home_processes "$home"
+
+  home=$(make_mate_home handback-fail)
+  echo merge-handback-fail > "$home/stub-mode"
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "handback fail: the host never started a watcher cycle"
+  append_status "$home" 'PR https://github.com/acme/app/pull/841 checks green' 'done'
+  wait_until 250 host_exited "$home" || fail "handback fail: the failed turn did not wake the mate: $(cat "$home/state/.supervision-host.log")"
+  assert_re '^supervision-host: .*could not take this wake' "$home/host.out" "a failed turn must hand the wake back"
+  assert_re '^supervision-host: merge-handback: .*demo https://github.com/acme/app/pull/841' "$home/host.out" \
+    "a failed turn's hand-back must still name the merge its turn handed back"
+  [ ! -e "$home/state/demo.merge-handback" ] || fail "handback fail: a failed turn left the marker for a later unrelated wake"
+  stop_home_processes "$home"
+
+  home=$(make_mate_home handback-stale)
+  printf '%s\n' "https://github.com/acme/app/pull/841" > "$home/state/demo.merge-handback"
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "handback stale: the host never started a watcher cycle"
+  append_status "$home" 'ready for review'
+  wait_until 250 handled_at_least "$home" 1 || fail "handback stale: the wake was not handled: $(cat "$home/state/.supervision-host.log")"
+  [ ! -s "$home/host.rc" ] || fail "handback stale: an earlier turn's marker woke the mate: $(cat "$home/host.out")"
+  [ ! -e "$home/state/demo.merge-handback" ] || fail "handback stale: an earlier turn's marker survived the next turn"
+  pass "host: a merge handback rides with the branch-outcome and failed-turn hand-backs of its turn and never outlives it"
+}
+
 test_secondmate_decision_close_and_non_routine_check_still_wake_the_mate() {
   local home
   home=$(make_mate_home mate-decision)
@@ -3686,6 +3746,8 @@ test_branch_outcomes_keep_a_drain_presented_outcome_across_an_index_repair
 test_attended_routine_wake_is_handled_on_the_engine_and_stays_off_main
 test_secondmate_routine_wake_never_wakes_the_mate_session
 test_secondmate_captain_outcome_is_published_without_waking_the_mate
+test_secondmate_dev_merge_the_branch_may_not_do_wakes_the_visible_session
+test_merge_handback_rides_with_every_hand_back_of_its_turn
 test_secondmate_decision_close_and_non_routine_check_still_wake_the_mate
 test_secondmate_resurface_over_an_empty_queue_is_absorbed_by_the_host
 test_host_stopped_right_after_a_handled_wake_exits_and_frees_the_queue

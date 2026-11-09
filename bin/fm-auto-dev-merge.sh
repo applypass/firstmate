@@ -23,7 +23,10 @@
 # unaffected. A PR the authority does not cover (not a ship, no ready report,
 # foreign author, flagged label, disabled, or a supervision-branch actor that
 # fm-pr-merge.sh refuses by role, exit 6) is a quiet skip: one
-# "auto-dev-merge: skipped" line on stderr. A covered PR that cannot merge now
+# "auto-dev-merge: skipped" line on stderr. The role refusal of a covered PR also
+# leaves state/<task-id>.merge-handback naming the PR: the supervision host
+# (bin/fm-secondmate-host-lib.sh) hands that wake back to the visible session,
+# which is allowed to merge, instead of parking on it. A covered PR that cannot merge now
 # (base not dev, or fm-pr-merge.sh refused) is a loud skip: the same line, plus
 # a paused line appended to state/<task-id>.status that names the PR and every
 # refusal reason. On success fm-pr-merge.sh's own lines pass through, and
@@ -101,7 +104,11 @@ FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$LEDGER_DATA "$SCRIPT_DIR/fm-task-ledger.sh" r
   --note "standing dev-merge authority" >/dev/null 2>&1 || true
 MERGE_RC=0
 OUT=$("$MERGE_CMD" "$ID" "$URL" 2>&1) || MERGE_RC=$?
-[ "$MERGE_RC" -ne "$FM_LEASE_REFUSE_EXIT" ] || skip "this actor is not the merge authority; main merges it"
+if [ "$MERGE_RC" -eq "$FM_LEASE_REFUSE_EXIT" ]; then
+  # Fork-only: the visible session can merge what this actor may not; tell the host to wake it.
+  printf '%s\n' "$URL" > "$STATE/$ID.merge-handback" 2>/dev/null || true
+  skip "this actor is not the merge authority; the visible session merges it"
+fi
 if [ "$MERGE_RC" -ne 0 ]; then
   REASON=$(printf '%s\n' "$OUT" | awk 'NF { sub(/^[[:space:]]+/, ""); printf "%s%s", (n++ ? "; " : ""), $0 }')
   case "$OUT" in

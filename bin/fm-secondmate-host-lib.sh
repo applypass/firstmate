@@ -16,6 +16,9 @@
 #     the mate session is not woken for it; the row waits unacknowledged for
 #     the mate's next drain.
 #
+#   - fm_secondmate_host_merge_handbacks: an own green dev PR the branch actor
+#     may not merge; the host wakes the visible session instead of parking.
+#
 # Everything else the host passes to the session stays as it is: decision and
 # blocker closes, a close the engine cannot take, a failed engine turn, and a
 # close the home's latch holds.
@@ -55,4 +58,23 @@ fm_secondmate_host_outcomes_published() {
     case "$seq" in ''|*[!0-9]*) return 1 ;; esac
     grep -F -q -- "[key=branch-outcome-$seq]" "$destination" 2>/dev/null || return 1
   done
+}
+
+# fm_secondmate_host_merge_handbacks <state>: one "<task> <pr-url>" line per
+# own-PR-to-dev merge the supervision branch could not do. bin/fm-auto-dev-merge.sh
+# writes state/<task>.merge-handback when bin/fm-pr-merge.sh refuses the branch
+# actor by role; the visible session is allowed to merge, so the host wakes it.
+fm_secondmate_host_merge_handbacks() {
+  local marker id
+  for marker in "$1"/*.merge-handback; do
+    [ -f "$marker" ] || continue
+    id=${marker##*/}
+    printf '%s %s\n' "${id%.merge-handback}" "$(head -n 1 "$marker")"
+  done
+}
+
+# fm_secondmate_host_merge_handbacks_clear <state>: consume the markers once the
+# wake line that names them is on its way to the visible session.
+fm_secondmate_host_merge_handbacks_clear() {
+  rm -f "$1"/*.merge-handback 2>/dev/null || true
 }

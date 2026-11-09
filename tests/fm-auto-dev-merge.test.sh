@@ -136,6 +136,14 @@ test_role_refusal_is_a_quiet_skip() {
   [ "$RC" -eq 0 ] || fail "branch: skip must exit 0, got $RC"
   case "$OUT" in *"skipped"*"not the merge authority"*) ;; *) fail "branch: expected a role skip, got: $OUT" ;; esac
   [ "$(last_status "$dir")" = "$READY" ] || fail "branch: a role refusal must not append a status line"
+  [ "$(cat "$dir/state/t1.merge-handback" 2>/dev/null)" = "$URL" ] \
+    || fail "branch: a role refusal of a covered PR must leave a merge-handback naming it for the visible session"
+}
+
+test_other_skips_leave_no_merge_handback() {
+  local dir; dir=$(make_case nohandback main)
+  run_auto "$dir"
+  [ ! -e "$dir/state/t1.merge-handback" ] || fail "nohandback: an uncovered PR must not hand a merge back"
 }
 
 test_quiet_skip_foreign_pr() {
