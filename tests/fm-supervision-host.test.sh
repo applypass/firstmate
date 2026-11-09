@@ -38,6 +38,7 @@ FAKE_CLAUDE="$FAKEBIN/claude"
 #   merge-handback the same as captain, plus the state/<task>.merge-handback marker
 #               bin/fm-auto-dev-merge.sh leaves when fm-pr-merge.sh refuses the
 #               branch actor on a covered own PR to dev (PR 841's sequence)
+#   merge-handback-fail leave that marker, then exit nonzero without a result
 #   hold-lease  the same, but leave the lease held (the host must release it),
 #               logging its check line while held
 #   return      handle, but the captain returns (the record is archived) before
@@ -102,6 +103,7 @@ verdict=routine
 [ "$mode" != go-away ] || verdict=captain
 case "$mode" in
   fail) exit 3 ;;
+  merge-handback-fail) printf '%s\n' "https://github.com/acme/app/pull/841" > "$STATE/$task.merge-handback"; exit 3 ;;
   handle|captain|merge-handback|captain-close-before-return|held|captain-held|hold-lease|hold-marker|return|return-silent|return-fail|return-fail-silent|return-many|return-lookup-fail|return-first|noack|emptyresult|go-away)
     case "$mode" in held|captain-held) read -r _ < "$FM_HOME/stub-release" ;; esac
     [ "$mode" != return-first ] || "$FM_REPO/bin/fm-afk-contract.sh" archive >> "$FM_HOME/engine-return.log" 2>&1
@@ -2648,6 +2650,34 @@ test_secondmate_dev_merge_the_branch_may_not_do_wakes_the_visible_session() {
   pass "host: an own dev PR the branch may not merge wakes the secondmate's visible session, not only the parent channel"
 }
 
+test_merge_handback_rides_with_every_hand_back_of_its_turn() {
+  local home
+  home=$(make_home handback-captain attended)
+  echo merge-handback > "$home/stub-mode"
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "handback captain: the host never started a watcher cycle"
+  append_status "$home" 'PR https://github.com/acme/app/pull/841 checks green' 'done'
+  wait_until 250 host_exited "$home" || fail "handback captain: the turn did not wake main: $(cat "$home/state/.supervision-host.log")"
+  assert_re '^supervision-host: branch-outcome: .*\(store rows 1\); run bin/fm-wake-drain.sh' "$home/host.out" \
+    "a merge handback must not hide the unpublished captain outcome of the same turn"
+  assert_re '^supervision-host: merge-handback: .*demo https://github.com/acme/app/pull/841' "$home/host.out" \
+    "the branch-outcome wake must also name the merge to do"
+  [ ! -e "$home/state/demo.merge-handback" ] || fail "handback captain: the marker outlived the wake that named it"
+  stop_home_processes "$home"
+
+  home=$(make_mate_home handback-fail)
+  echo merge-handback-fail > "$home/stub-mode"
+  start_host "$home"
+  wait_until 150 watcher_live "$home" || fail "handback fail: the host never started a watcher cycle"
+  append_status "$home" 'PR https://github.com/acme/app/pull/841 checks green' 'done'
+  wait_until 250 host_exited "$home" || fail "handback fail: the failed turn did not wake the mate: $(cat "$home/state/.supervision-host.log")"
+  assert_re '^supervision-host: .*could not take this wake' "$home/host.out" "a failed turn must hand the wake back"
+  assert_re '^supervision-host: merge-handback: .*demo https://github.com/acme/app/pull/841' "$home/host.out" \
+    "a failed turn's hand-back must still name the merge its turn handed back"
+  [ ! -e "$home/state/demo.merge-handback" ] || fail "handback fail: a failed turn left the marker for a later unrelated wake"
+  pass "host: a merge handback rides with the branch-outcome and failed-turn hand-backs of its turn and never outlives it"
+}
+
 test_secondmate_decision_close_and_non_routine_check_still_wake_the_mate() {
   local home
   home=$(make_mate_home mate-decision)
@@ -3707,6 +3737,7 @@ test_attended_routine_wake_is_handled_on_the_engine_and_stays_off_main
 test_secondmate_routine_wake_never_wakes_the_mate_session
 test_secondmate_captain_outcome_is_published_without_waking_the_mate
 test_secondmate_dev_merge_the_branch_may_not_do_wakes_the_visible_session
+test_merge_handback_rides_with_every_hand_back_of_its_turn
 test_secondmate_decision_close_and_non_routine_check_still_wake_the_mate
 test_secondmate_resurface_over_an_empty_queue_is_absorbed_by_the_host
 test_host_stopped_right_after_a_handled_wake_exits_and_frees_the_queue

@@ -275,6 +275,7 @@ LAST_TURN=
 TURN_POSTURE=
 ENGINE_ERROR=0
 HEALTH_NOTE=
+HANDBACK_NOTE=
 GRANT_ACTIVE=0
 ARM_PID=
 ARM_OUT=
@@ -701,8 +702,9 @@ retire_successor() {
 # Hand the close to main: stop the successor cycle, print the close, why, and
 # any further "supervision-host:" lines, and exit.
 exit_to_main() {  # <why> [further lines]
-  acknowledged_handback "supervision-host: $1" "${2:-}"
   local lines=${2:-} rc=0
+  lines=${lines:+$lines${HANDBACK_NOTE:+$'\n'}}$HANDBACK_NOTE
+  acknowledged_handback "supervision-host: $1" "$lines"
   retire_successor
   if [ -n "$SUCCESSOR_GENERATION" ] \
     && ! fm_recovery_marker_publish "$STATE/.watcher-down" downtime >/dev/null 2>&1; then
@@ -1341,9 +1343,17 @@ while :; do
   # before its visible outcomes existed, so main relays them now, handled or not.
   handle_wake "$REASON"
   HANDLE_RC=$?
+  # Fork-only: the branch may not merge a covered own PR to dev (exit 6), but the
+  # visible session may; every hand-back from here on names that merge.
+  HANDBACKS=$(fm_secondmate_host_merge_handbacks "$STATE")
+  if [ -n "$HANDBACKS" ]; then
+    fm_secondmate_host_merge_handbacks_clear "$STATE"
+    HANDBACK_NOTE="supervision-host: merge-handback: the supervision session may not merge these own PRs to dev, this session may; merge each with bin/fm-pr-merge.sh under the standing dev-merge authority: $(printf '%s' "$HANDBACKS" | tr '\n' ';')"
+  fi
+  # Fork-only end
   if [ "$HANDLE_RC" -eq 2 ]; then
     log_line "pass-through	attended	$ATTENDED_WHY	$(printf '%s\n' "$REASON" | head -n 1)"
-    acknowledged_handback
+    acknowledged_handback "$HANDBACK_NOTE"
     # The successor this turn already started and confirmed stays up. Retiring
     # it is what left no watcher after a close that became main-only.
     detach_successor
@@ -1357,7 +1367,7 @@ while :; do
       log_line "pass-through	downtime-unrestored	$(printf '%s\n' "$REASON" | head -n 1)"
       exit 1
     fi
-    emit
+    emit "$HANDBACK_NOTE"
     exit 0
   fi
   if [ "$HANDLE_RC" -ne 0 ]; then
@@ -1380,16 +1390,6 @@ while :; do
     exit_to_main "the captain returned while the away session was handling this wake, but the recorded outcomes could not be verified; main must review them" \
       "$(turn_outcome_lookup_warning)"
   fi
-  # Fork-only: the branch may not merge a covered own PR to dev (exit 6), but the
-  # visible session may; wake it for that merge instead of parking on the wake.
-  HANDBACKS=$(fm_secondmate_host_merge_handbacks "$STATE")
-  if [ -n "$HANDBACKS" ]; then
-    fm_secondmate_host_merge_handbacks_clear "$STATE"
-    ARM_TEXT=
-    exit_to_main "merge-handback: the supervision session may not merge these own PRs to dev, this session may; merge each with bin/fm-pr-merge.sh under the standing dev-merge authority: $(printf '%s' "$HANDBACKS" | tr '\n' ';')" \
-      "$HEALTH_NOTE"
-  fi
-  # Fork-only end
   # Attended captain outcomes are main's to process; away they wait for the
   # return, including when the captain left while this turn ran. The close
   # itself was handled, so only the host's lines reach main.
@@ -1409,6 +1409,13 @@ while :; do
         "$HEALTH_NOTE"
     fi
   fi
+  # Fork-only: wake the visible session for the merge instead of parking.
+  if [ -n "$HANDBACK_NOTE" ]; then
+    ARM_TEXT=
+    exit_to_main "the supervision session handled this wake and handed back own PRs to dev that only this session may merge" \
+      "$HEALTH_NOTE"
+  fi
+  # Fork-only end
 
   # Handled: park on the successor.
   if ! fm_recovery_marker_handling_settled "$STATE/.watcher-down"; then
