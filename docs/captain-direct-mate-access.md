@@ -76,7 +76,7 @@ Only the allowlist runs; every other call is refused with "hand this to the owni
 The script header owns the allowlist and the list of exact `bin/fm-*` names.
 In short, the allowlist is:
 
-- the `bin/fm-*` scripts that AGENTS.md, an agent skill, or the supervision protocol directs the main firstmate to run (routing, spawn, send, control, decide, captain-hold, pr-merge, local landing, tasks-axi, backlog, capacity, wake-drain, crew-state, peek, update, session start, secondmate lifecycle), each with its one-line reason in the script header, in a command where every part is allowed;
+- the `bin/fm-*` scripts that AGENTS.md, an agent skill, or the supervision protocol directs the main firstmate to run (routing, spawn, send, control, decide, captain-hold, task ledger and pr-merge (the merge path), local landing, tasks-axi, backlog, capacity, wake-drain, crew-state, peek, update, session start, secondmate lifecycle), each with its one-line reason in the script header, in a command where every part is allowed;
 - reading and writing fleet records (`data/`, `state/`, `config/` of the main home) and the main home's own project memory dir, except artifact HTML, which counts as a dig on every path (Read, Grep, Glob, Edit, Write, and recursive shell readers) even under `data/`, and the guard's own switches, window state, and refusal log, which can be read and never written;
 - Read of a `.png` or `.mp4` frame a worker hands over, and of this session's own tool-result and task-output files;
 - two quick lookups per captain message: `gh pr view`, `gh pr status` (also `gh-axi`), and Artifact list;

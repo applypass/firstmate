@@ -51,6 +51,7 @@
 #       fm-inbox.sh - AGENTS.md section 8: the captain inbox
 #       fm-merge-local.sh - AGENTS.md section 7: approved local-only landing
 #       fm-capacity.sh - AGENTS.md section 10: lane capacity report
+#       fm-task-ledger.sh - merge path: record pr-ready and captain-approval, which fm-pr-merge.sh requires
 #   - tasks-axi and quota-axi (backlog; AGENTS.md section 4 dispatch intake); shell
 #     builtins and echo, printf, date, test; readers (cat, head, tail, grep, sed, ls,
 #     jq, find, ...) and writers (mkdir, cp, mv, rm, touch, tee, > redirects) whose

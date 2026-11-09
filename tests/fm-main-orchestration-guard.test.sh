@@ -100,6 +100,10 @@ echo hi >> data/notes.md
 tasks-axi list
 bin/fm-merge-local.sh task-a
 bin/fm-capacity.sh
+bin/fm-task-ledger.sh record task-a pr-ready --note "https://github.com/o/r/pull/91"
+bin/fm-task-ledger.sh record task-a captain-approval --note "merge"
+bin/fm-pr-merge.sh task-a https://github.com/o/r/pull/91 --release-main -- --merge
+bin/fm-branch-outcome.sh mark-processed --through 7
 EOF2
   gcall Skill '{"skill":"stow"}'; expect_code 0 "$RC" "Skill"
   gcall Read '{"file_path":"'"$H"'/data/backlog.md"}'; expect_code 0 "$RC" "Read of a fleet record"
@@ -114,7 +118,7 @@ EOF2
 test_allowlist_is_narrow_and_documented() {
   make_home narrow main
   local c
-  for c in 'bin/fm-branch-report.sh x' 'bin/fm-task-ledger.sh list' 'bin/fm-lint.sh' 'bin/fm-fork-footprint.sh' 'bin/fm-doc-audience-check.sh'; do
+  for c in 'bin/fm-branch-report.sh x' 'bin/fm-lint.sh' 'bin/fm-fork-footprint.sh' 'bin/fm-doc-audience-check.sh'; do
     bash_call "$c"; expect_code 2 "$RC" "refused: $c"
   done
   gcall Read '{"file_path":"/tmp/worker/frame.jpg"}'; expect_code 2 "$RC" "only .png and .mp4 media are read"
