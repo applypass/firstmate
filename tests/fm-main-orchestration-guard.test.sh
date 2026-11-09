@@ -421,6 +421,29 @@ test_replay_closes_the_window_at_a_non_captain_prompt() {
   pass "the replay closes the captain window at a wake prompt, counts the wake turn on its own, and reads FM_MAIN_LOOKUP_LIMIT"
 }
 
+test_replay_keeps_the_turn_count_across_a_notification() {
+  make_home replay3 main
+  local t="$TMP_ROOT/recorded3.jsonl" out
+  {
+    jq -cn '{type:"user",origin:{kind:"task-notification"},message:{content:"<task-notification>x</task-notification>"},cwd:"'"$H"'"}'
+    jq -cn '{type:"assistant",message:{content:[{type:"tool_use",name:"Bash",input:{command:"gh-axi pr view 1"}},{type:"tool_use",name:"Bash",input:{command:"gh-axi pr view 2"}}]}}'
+    jq -cn '{type:"attachment",attachment:{type:"queued_command",prompt:"<task-notification>y</task-notification>",origin:{kind:"task-notification"}}}'
+    jq -cn '{type:"assistant",message:{content:[{type:"tool_use",name:"Bash",input:{command:"gh-axi pr view 3"}}]}}'
+  } > "$t"
+  out=$(node "$ROOT/bin/fm-main-orchestration-replay.mjs" --home "$H" --json "$t") || fail "the replay failed"
+  [ "$(printf '%s' "$out" | jq -r .counts.quick)" = 2 ] || fail "the turn gets 2 lookups: $out"
+  [ "$(printf '%s' "$out" | jq -r '.blockedByGroup["quick-lookup-limit"].total')" = 1 ] || fail "a mid-turn task notification reset the count: $out"
+  pass "the replay, like the live hook, does not start a turn at a mid-turn task notification"
+}
+
+test_classify_reports_captain_and_override() {
+  make_home classify main
+  local out
+  out=$(printf '%s\n' '"look yourself at the labelling page"' '"what is the status of PR 90?"' '"Stop hook feedback: firstmate watcher wake"' | FM_HOME="$H" "$RF" classify)
+  [ "$out" = "$(printf '1 1\n1 0\n0 0')" ] || fail "classify output: $out"
+  pass "classify reports whether the captain wrote a text and whether it asks main to dig itself"
+}
+
 test_override_lifts_the_check_for_one_message() {
   make_home over main
   prompt 'look yourself at the labelling page and tell me what it shows'
@@ -576,6 +599,8 @@ test_readers_that_run_or_write_are_refused
 test_a_compound_command_counts_each_lookup
 test_the_override_and_count_work_with_reply_first_off
 test_replay_closes_the_window_at_a_non_captain_prompt
+test_replay_keeps_the_turn_count_across_a_notification
+test_classify_reports_captain_and_override
 test_override_lifts_the_check_for_one_message
 test_publishing_is_for_mate_produced_pages
 test_the_log_never_holds_secrets_or_contents

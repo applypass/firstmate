@@ -6,7 +6,7 @@
 // captain message windows rebuilt from the transcript: a typed prompt or a mid-turn
 // queued_command from a human opens a window when bin/fm-reply-first.sh classify says
 // the captain wrote it (the same classifier the hooks use), and resets the quick-lookup
-// count; the override phrases lift the check for that window. Prints counts per class,
+// count; when classify flags the override, the check is lifted for that window. Prints counts per class,
 // the blocked calls grouped (command name and path shape only), and the allowed calls
 // that look like work. It reads transcripts and writes nothing; nothing it prints holds
 // transcript text beyond a command name, flags, and path basenames.
@@ -32,7 +32,6 @@ for (let i = 0; i < args.length; i += 1) {
 if (files.length === 0) { console.error("usage: fm-main-orchestration-replay.mjs [--home DIR] [--json] <transcript.jsonl>..."); process.exit(2); }
 
 const LIMIT = Number(process.env.FM_MAIN_LOOKUP_LIMIT) > 0 ? Number(process.env.FM_MAIN_LOOKUP_LIMIT) : 2;
-const OVERRIDE = /look yourself|look it up yourself|look at it yourself|check yourself|check it yourself|dig yourself|dig in yourself/i;
 const ctx = makeContext(home);
 
 function messageText(entry) {
@@ -47,10 +46,11 @@ function messageText(entry) {
   return null;
 }
 
-// A user prompt (string or text block, not a tool result or meta line) or a queued_command
-// attachment starts a turn, the same entries bin/fm-reply-first.sh's turn marker reads.
+// A user prompt (string or text block, not a tool result or meta line) or a human
+// queued_command attachment starts a turn, the same entries bin/fm-reply-first.sh's turn
+// marker reads; a task notification or other queued_command arriving mid-turn does not.
 function startsTurn(entry) {
-  if (entry.type === "attachment") return entry.attachment?.type === "queued_command";
+  if (entry.type === "attachment") return entry.attachment?.type === "queued_command" && entry.attachment?.origin?.kind === "human";
   if (entry.type !== "user" || entry.isMeta) return false;
   const c = entry.message?.content;
   return typeof c === "string" || (Array.isArray(c) && c.some((b) => b.type === "text"));
@@ -79,7 +79,10 @@ const out = spawnSync("bash", [path.join(here, "fm-reply-first.sh"), "classify"]
   env: { ...process.env, FM_HOME: home }, encoding: "utf8", maxBuffer: 1 << 28,
 });
 const verdicts = (out.stdout || "").split("\n").filter(Boolean);
-keys.forEach((k, i) => texts.set(k, verdicts[i] === "1"));
+keys.forEach((k, i) => {
+  const [captain, overrides] = (verdicts[i] || "").split(" ");
+  texts.set(k, captain === "1" ? { override: overrides === "1" } : null);
+});
 
 const counts = { allow: 0, quick: 0, "quick-over-limit": 0, deny: 0, overridden: 0 };
 const groups = new Map(); // group -> Map(summary -> n)
@@ -100,8 +103,9 @@ for (const file of files) {
   await eachLine(file, (entry) => {
     if (entry.cwd) cwd = entry.cwd;
     const text = messageText(entry);
-    if (text !== null && texts.get(text.trim())) {
-      lookups = 0; override = OVERRIDE.test(text); windowOpen = true; messages += 1;
+    const verdict = text !== null ? texts.get(text.trim()) : null;
+    if (verdict) {
+      lookups = 0; override = verdict.override; windowOpen = true; messages += 1;
     } else if (startsTurn(entry) && (entry.type === "user" || !windowOpen)) {
       // A user prompt that is not the captain's (wake, notification, doorbell) closes the
       // captain window as the live prompt hook does; a queued_command with no window open

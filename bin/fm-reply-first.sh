@@ -336,7 +336,8 @@ cmd_prompt() {
 }
 
 # classify: one JSON-encoded prompt text per line on stdin, one line out per input:
-# 1 when the text came from the captain, else 0. bin/fm-main-orchestration-replay.mjs
+# "<captain> <override>", each 1 or 0: captain is 1 when the captain wrote the text,
+# override is 1 when it also asks main to dig itself. bin/fm-main-orchestration-replay.mjs
 # uses it to rebuild captain message windows from a recorded transcript.
 cmd_classify() {
   local line text
@@ -345,7 +346,9 @@ cmd_classify() {
     text=$(printf '%s' "$line" | jq -r 'if type == "string" then . else "" end' 2>/dev/null)
     text=${text#"${text%%[![:space:]]*}"}
     text=${text%"${text##*[![:space:]]}"}
-    if text_is_captain "$text"; then echo 1; else echo 0; fi
+    if text_is_captain "$text"; then
+      if text_overrides "$text"; then echo "1 1"; else echo "1 0"; fi
+    else echo "0 0"; fi
   done
 }
 
