@@ -47,7 +47,8 @@
 #          fails it also appends one needs-decision line (key release-gate-<repo>-<pr>)
 #          to state/release-main-<repo>-<pr>.status naming each failing PR and its fix
 #          command, once per distinct failure set, so firstmate raises it at release
-#          open (fm-release.sh open calls refresh). A clean release adds nothing.
+#          open (fm-release.sh open calls refresh). A clean refresh closes an open raise
+#          with a resolved line on the same key, and otherwise adds nothing.
 # check    exit 0 when every row passes; exit 1 listing every failing row and its
 #          waiver command. A PR whose base is not main, or in a repo not listed
 #          in config/release-gate, passes with a note. A forge read that fails
@@ -460,12 +461,19 @@ case "$SUB" in
     echo "release gate table refreshed: $URL"
     # Fork-only: raise failing rows to the supervisor as soon as the release PR is opened or
     # refreshed (fm-release.sh open calls refresh), not at the merge word.
-    if [ -n "$FAILS" ]; then
-      sf="${FM_STATE_OVERRIDE:-$FM_HOME/state}/release-main-$REPO-$NUM.status"
+    sf="${FM_STATE_OVERRIDE:-$FM_HOME/state}/release-main-$REPO-$NUM.status"
+    gkey="release-gate-$REPO-$NUM"
+    if [ -z "$FAILS" ]; then
+      case "$(grep -F "[key=$gkey]" "$sf" 2>/dev/null | tail -n 1)" in
+        needs-decision*)
+          printf 'resolved [at=%s] [key=%s]: every row in %s passes the release gate\n' "$(date +%s)" "$gkey" "$URL" >> "$sf" ||
+            echo "warning: could not record the cleared release gate in $sf" >&2 ;;
+      esac
+    else
       msg="release $URL carries PRs failing the release gate: $(printf '%s' "$FAILS" | sed -e 's/^[[:space:]]*//' | paste -sd ';' - | sed 's/;/; /g')"
       if [ "$(tail -n 1 "$sf" 2>/dev/null | sed -E 's/^[^:]*: //')" != "$msg" ]; then
         mkdir -p "$(dirname "$sf")" &&
-          printf 'needs-decision [at=%s] [key=release-gate-%s-%s]: %s\n' "$(date +%s)" "$REPO" "$NUM" "$msg" >> "$sf" ||
+          printf 'needs-decision [at=%s] [key=%s]: %s\n' "$(date +%s)" "$gkey" "$msg" >> "$sf" ||
           echo "warning: could not record the failing rows in $sf" >&2
       fi
     fi

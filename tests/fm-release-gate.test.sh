@@ -370,6 +370,14 @@ grep -q '#7' "$SF" || fail "status-fail: failing PR not named: $(cat "$SF")"
 grep -q 'fix: bin/fm-decide.sh record' "$SF" || fail "status-fail: fix command missing: $(cat "$SF")"
 run_gate "$d" refresh
 [ "$(wc -l < "$SF" | tr -d ' ')" -eq 1 ] || fail "status-fail: an unchanged failure repeated the line: $(cat "$SF")"
+decide "$d" plan-x "approved: the plan (shortcut: sc-100 u)"
+run_gate "$d" refresh
+[ "$RC" -eq 0 ] || fail "status-fail: clean refresh must succeed: $OUT"
+open=$(bash -c '. "$1/bin/fm-classify-lib.sh" && status_open_decisions "$2" release' _ "$ROOT" "$SF")
+case "$open" in *release-gate-app-50*) fail "status-fail: a clean refresh must close the raise: $open" ;; esac
+grep -Eq '^resolved \[at=[0-9]+\] \[key=release-gate-app-50\]: ' "$SF" || fail "status-fail: no resolved line: $(cat "$SF")"
+run_gate "$d" refresh
+[ "$(grep -c '^resolved' "$SF")" -eq 1 ] || fail "status-fail: a second clean refresh must not repeat resolved: $(cat "$SF")"
 d=$(make_case status-clean)
 decide "$d" plan-x "approved: the plan (shortcut: sc-100 u)"
 run_gate "$d" refresh
