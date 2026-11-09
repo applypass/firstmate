@@ -1,0 +1,77 @@
+# Scenario 1: live Claude primary (lab home, guard off), mid-turn captain message then 4 calls
+## transcript flow (line, type, attachment, origin, time, content, queued prompt, source_uuid)
+10	user		human	2026-11-09T14:51:13.908Z	Test harness task. Use the Bash tool 14 separate times, sequentially, one call each, each 		
+39	assistant			2026-11-09T14:51:18.494Z	tool_use:/bin/sleep 4; date +%s		
+44	user			2026-11-09T14:51:25.049Z	tool_result:1794235884		
+58	assistant			2026-11-09T14:51:28.292Z	tool_use:/bin/sleep 4; date +%s		
+62	user			2026-11-09T14:51:34.395Z	tool_result:1794235894		
+66	assistant			2026-11-09T14:51:37.299Z	tool_use:/bin/sleep 4; date +%s		
+67	user			2026-11-09T14:51:42.257Z	tool_result:1794235902		
+73	assistant			2026-11-09T14:51:45.505Z	tool_use:/bin/sleep 4; date +%s		
+77	user			2026-11-09T14:51:51.373Z	tool_result:PreToolUse:Bash hook error: [command hook 3]: {"hookSpecificOutput":{"		
+81	assistant			2026-11-09T14:51:54.553Z	tool_use:/bin/sleep 4; date +%s		
+85	user			2026-11-09T14:51:59.602Z	tool_result:1794235919		
+90	assistant			2026-11-09T14:52:02.753Z	tool_use:/bin/sleep 4; date +%s		
+103	user			2026-11-09T14:52:10.919Z	tool_result:1794235930		
+104	attachment	queued_command	human	2026-11-09T14:52:03.301Z		Quick question while you work: keep going with the remaining calls as instructed, no text.	fa9001f2-884a-4e12-9e56-63e8577bffdb
+107	assistant			2026-11-09T14:52:14.401Z	tool_use:/bin/sleep 4; date +%s		
+108	user			2026-11-09T14:52:19.261Z	tool_result:1794235939		
+114	assistant			2026-11-09T14:52:22.908Z	tool_use:/bin/sleep 4; date +%s		
+118	user			2026-11-09T14:52:27.860Z	tool_result:1794235947		
+122	assistant			2026-11-09T14:52:30.782Z	tool_use:/bin/sleep 4; date +%s		
+126	user			2026-11-09T14:52:35.716Z	tool_result:1794235955		
+130	assistant			2026-11-09T14:52:39.114Z	tool_use:/bin/sleep 4; date +%s		
+134	user			2026-11-09T14:52:45.093Z	tool_result:PreToolUse:Bash hook error: [command hook 3]: {"hookSpecificOutput":{"		
+146	assistant			2026-11-09T14:52:48.192Z	tool_use:/bin/sleep 4; date +%s		
+147	user			2026-11-09T14:52:53.736Z	tool_result:1794235973		
+153	assistant			2026-11-09T14:52:57.194Z	tool_use:/bin/sleep 4; date +%s		
+157	user			2026-11-09T14:53:11.974Z	tool_result:1794235991		
+161	assistant			2026-11-09T14:53:15.255Z	tool_use:/bin/sleep 4; date +%s		
+165	user			2026-11-09T14:53:21.976Z	tool_result:1794236001		
+169	assistant			2026-11-09T14:53:25.353Z	tool_use:/bin/sleep 4; date +%s		
+170	user			2026-11-09T14:53:32.918Z	tool_result:1794236012		
+176	assistant			2026-11-09T14:53:36.016Z	tool_use:/bin/sleep 4; date +%s		
+180	user			2026-11-09T14:53:40.868Z	tool_result:1794236020		
+192	assistant			2026-11-09T14:53:43.577Z	text:done		
+
+## pane
+ ▐▛███▛█   Claude Code v2.1.319
+▝▜██████▀  Fable 5.1 with medium effort · Claude Team
+ ▝▝   ▝▝   /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.9Nd8ji · /rc            
+❯ Test harness task. Use the Bash tool 14 separate times, sequentially, one call each, each running exactly: /bin/sleep 4; date +%s  . Write no text at all between calls. If a hook refuses a call,    
+  ignore it and simply make the next call. After the 14th call, reply with just the word done.                                                                                                          
+  Ran 6 shell commands                     
+  ⎿  1 action not run · permission denied
+     │ Reason: PreToolUse:Bash hook error: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[reply-first] You have run 3 commands since the captain's 
+     │ message and hav…
+⏺ Bash(/bin/sleep 4; date +%s)                   
+  ⎿  1794235930
+  ⎿  Updated state/.reply-first (+5 -5)                                                                                                                                                                 
+       1 -epoch=1794235874                                                                                                                                                                       
+       2 -count=3                                                                                                                                                                                
+       1 +epoch=1794235926                                                                                                                                                                       
+       2 +count=0                                                                                                                                                                                
+       3  replied=0
+       4 -fired=1                                                                                                                                                                                
+       4 +fired=0                                                                                                                                                                                
+       5  transcript=/Users/uayyagari/.claude-work/projects/-private-var-folders-vr--90lw3-s0bs-nw2f7b6t9yrm0000gn-T-fm-lab-9Nd8ji/6ed67817-8fbd-4c67-b18c-78049484dc7e.jsonl
+       6 -base=0                                                                                                                                                                                 
+       6 +base=97                                                                                                                                                                                
+       7  lookups=0
+       8  override=0
+       9  msgid=
+      10 -msgsum=856741066                                                                                                                                                                       
+      10 +msgsum=612754042                                                                                                                                                                       
+  ⎿  (files that changed while this command ran, by the command or by another process; a convenience view, not a review or audit of the command)
+❯ Quick question while you work: keep going with the remaining calls as instructed, no text.                                                                                                            
+  Ran 9 shell commands                                    
+  ⎿  1 action not run · permission denied
+     │ Reason: PreToolUse:Bash hook error: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[reply-first] You have run 3 commands since the captain's 
+     │ message and hav…
+⏺ done                                           
+✻ Baked for 2m 30s · done 8:23 PM                                                                                                                                                                     
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯                                                                                             
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Fable 5.1 | ctx 7% | HEAD | Test harness task. Use the Bash tool 14 separate t...
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents  

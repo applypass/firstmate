@@ -1,0 +1,13 @@
+# Scenario 5: same lab home with a .fm-secondmate-home marker - guard inert
+fm-main-orchestration-guard.sh enabled -> rc=1
+✻ Cogitated for 1m 13s · done 8:28 PM
+❯ Test task 5. One Bash call: cat /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M70B5PSXG59JRDP128T0YHFW/README.md | head -3 . Then reply allowed or refused.                                  
+  Read 1 file 
+⏺ allowed                                 
+✻ Brewed for 6s · done 8:29 PM                                                                                                                                                          
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯                                                                                                                                                                     
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Fable 5.1 | ctx 8% | HEAD | Test task 5. One Bash call: cat /Users/uayyagari/....
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents  
+refusal log lines unchanged:        8

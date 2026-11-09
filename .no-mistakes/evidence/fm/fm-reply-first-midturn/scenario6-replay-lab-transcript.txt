@@ -1,0 +1,20 @@
+transcripts 1, calls 47, captain message windows 7
+allowed 13, quick lookups 8, blocked 24, blocked but lifted by the override 2
+
+poll-loop: 16
+  16x Bash: sleep
+
+outside-records: 4
+  3x Bash: cat ~/.no-mistakes/worktrees/ID/01M7...
+  1x Read: Read hosts
+
+quick-lookup-limit: 2
+  2x Bash: gh pr view
+
+run-script: 1
+  1x Bash: npm
+
+web: 1
+  1x WebFetch: WebFetch
+
+allowed calls that look like work:

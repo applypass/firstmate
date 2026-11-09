@@ -1,0 +1,48 @@
+# Scenario 2: guard on, typed captain message, 10 calls
+⏺ done
+✻ Baked for 2m 30s · done 8:23 PM
+❯ Test harness task 2. Make these tool calls one at a time, in order, one call each, no text between them; if a hook refuses one, just move on to the next: (1) Bash: ls state  (2) Bash: cat           
+  /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M70B5PSXG59JRDP128T0YHFW/README.md | head -3  (3) Bash: npm test  (4) Bash: gh pr view 1  (5) Bash: gh pr view 2  (6) Bash: gh pr view 3  (7)  
+  WebFetch https://example.com  (8) Read tool on /etc/hosts  (9) Write tool: create state/lab-note.txt containing hello  (10) Bash: /bin/sleep 1. Then reply with one line per call: number and allowed 
+  or refused.                                                                                                                                                                                           
+  Read 1 file, listed 1 directory, ran 4 shell commands                                                                                                                                                
+  ⎿  3 actions not run · permission denied                                                                                                                                                              
+⏺ Fetch(https://example.com)                                                                                                                                                                           
+  ⎿  Error: PreToolUse:WebFetch hook error: [command hook 2]: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[main-orchestration] This call was not  
+     run: the main session routes work and answers the captain, and does not do this itself (web). Hand this to the owning mate via fm-send (or start one with fm-spawn) and tell the captain who has   
+     it. For a quick answer the captain can say \"look yourself\" for one message."}
+  Read 1 file                   
+  ⎿  Not run · permission denied                                                                                                                                                                        
+     │ Reason: PreToolUse:Read hook error: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[main-orchestration] This call was not run: the main       
+     │ session routes work …
+⏺ Write(state/lab-note.txt)                                                                                                                                                                             
+  ⎿  Wrote 1 line to state/lab-note.txt                                                                                                                                                               
+      1 hello                                                                                                                                                                                           
+  Ran 1 shell command                                                                                                                                                                                  
+  ⎿  Not run · permission denied                                                                                                                                                                        
+     │ Reason: PreToolUse:Bash hook error: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[main-orchestration] This call was not run: the main      
+     │ session routes work …                                                                                                                                                                          
+⏺ 1. allowed                                                                                                                                                                                            
+  2. refused                                                                                                                                                                                          
+  3. refused                                                                                                                                                                                            
+  4. allowed (ran, failed: no git remotes)
+  5. allowed (ran, failed: no git remotes)                                                                                                                                                             
+  6. refused                                                                                                                                                                                          
+  7. refused                                                                                                                                                                                           
+  8. refused                
+  9. allowed                                                                                                                                                                                            
+  10. refused
+✻ Worked for 50s · done 8:25 PM                                                                                                                                                                       
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯                                                                                             
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Fable 5.1 | ctx 7% | HEAD | Test harness task 2. Make these tool calls one at ...
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents  
+
+## state/main-orchestration-refusals.log
+2026-11-09T14:54:46Z tool=Bash group=outside-records msg=cf2273f0-2ec9-4fb2-a3fa-1952d9da84cf args=cat /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M7...
+2026-11-09T14:54:50Z tool=Bash group=run-script msg=cf2273f0-2ec9-4fb2-a3fa-1952d9da84cf args=npm
+2026-11-09T14:55:05Z tool=Bash group=quick-lookup-limit msg=cf2273f0-2ec9-4fb2-a3fa-1952d9da84cf args=gh pr view
+2026-11-09T14:55:12Z tool=WebFetch group=web msg=cf2273f0-2ec9-4fb2-a3fa-1952d9da84cf args=WebFetch
+2026-11-09T14:55:15Z tool=Read group=outside-records msg=cf2273f0-2ec9-4fb2-a3fa-1952d9da84cf args=Read hosts
+2026-11-09T14:55:24Z tool=Bash group=poll-loop msg=cf2273f0-2ec9-4fb2-a3fa-1952d9da84cf args=sleep

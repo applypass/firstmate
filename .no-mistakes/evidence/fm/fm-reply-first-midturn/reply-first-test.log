@@ -1,0 +1,28 @@
+ok - the call after the third command is refused once, then work resumes
+ok - a status append to the parent counts as the reply
+ok - an answer of a paragraph closes the window, a line of narration does not
+ok - a short reply addressing the captain closes the window, short narration does not
+ok - text addressed to the captain closes the window, narration naming the captain or a captain script does not
+ok - only text after the message opens the window counts
+ok - a new message opens a fresh window
+ok - clear closes the window, so routed work is never refused
+ok - calls with no open window are never refused
+ok - it runs in a mate home and the primary home, honours config/reply-first off, and skips task worktrees
+ok - a captain prompt in the main home gets the fourth call refused once
+ok - a slash command never opens a window and a plain question still does
+ok - wakes, task notifications, and firstmate doorbells never open a window
+ok - a machine prompt or the Stop hook closes a captain window
+ok - a task notification in the main home neither closes nor resets the window
+ok - the latency measure skips blank and half-written lines and writes nothing to stderr
+ok - a reply closes the window and hand-off commands are never counted or refused
+ok - the main installer registers prompt, pretool, and Stop once and skips a mate home
+ok - an answer the harness flushes a moment late is not refused
+ok - the limit is tunable and broken input never blocks work
+ok - a mid-turn captain message opens a window and the fourth call after it is refused
+ok - a mid-turn message whose prompt is a list of blocks arms the window
+ok - a mid-turn doorbell, slash command, task notification, or non-human origin never arms
+ok - a mid-turn message arms once and a later one arms again
+ok - a mid-turn message replaces an open window
+ok - a reply after a mid-turn message closes the window; older text does not
+ok - the first call on a transcript records its end and arms nothing
+ok - reply-first is clean under bin/fm-lint.sh

@@ -1,0 +1,59 @@
+# Scenarios 3-4: 'look yourself' override for one message, restored on next message; mid-turn message resets quick-lookup count
+## captain messages in transcript (line, type, origin, message id, text)
+10	user	human	2a11e45f-a441-46e5-89ae-4c35ddcb4f54	Test harness task. Use the Bash tool 14 separate times, sequ
+104	attachment	human	fa9001f2-884a-4e12-9e56-63e8577bffdb	Quick question while you work: keep going with the remaining
+199	user	human	cf2273f0-2ec9-4fb2-a3fa-1952d9da84cf	Test harness task 2. Make these tool calls one at a time, in
+332	user	human	f4e5c5e4-2daa-4565-b9e4-1a0e591beb9e	Please look yourself this time. One call each, no text betwe
+382	user	human	f324cb89-1180-4818-a796-ba89bca894b1	Test task 4. One call each, in order, no text between, move 
+446	attachment	human	10fa632d-50c1-44ae-b4aa-8fbd4416dfdb	After those, also make three more separate Bash calls: gh pr
+
+## pane
+  Read 1 file, ran 3 shell commands                                                                                                                                                               
+⏺ 1. allowed                                                                                                                                                                                      
+  2. allowed (ran, failed: no git remotes)                                                                                                                                                              
+  3. allowed (ran, failed: no git remotes)
+  4. allowed (ran, failed: no git remotes)
+✻ Sautéed for 19s · done 8:26 PM                                                                                                                                                                      
+❯ Test task 4. One call each, in order, no text between, move on if refused: (1) Bash: cat /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M70B5PSXG59JRDP128T0YHFW/README.md | head -3  (2)     
+  Bash: gh pr view 7  (3) Bash: gh pr view 8  then (4) to (13): ten separate Bash calls each running: ls state . Then reply one line per call: allowed or refused.                                      
+  Read 1 file, listed 3 directories, ran 3 shell commands                                                                                                                                               
+  ⎿  1 action not run · permission denied                                                                                                                                                               
+     │ Reason: PreToolUse:Bash hook error: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[main-orchestration] This call was not run: the main 
+     │ session routes work …                                                                                                                                                                            
+❯ After those, also make three more separate Bash calls: gh pr view 9, then gh pr view 10, then gh pr view 11, and include them in your list.                                                           
+  Listed 7 directories, ran 3 shell commands                                                                                                                                                            
+  ⎿  1 action not run · permission denied                                                                                                                                                               
+     │ Reason: PreToolUse:Bash hook error: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[main-orchestration] This call was not run: 2 quick lookups
+     │ are used for …
+⏺ 1. refused                                                                                                                                                                                            
+  2. allowed (ran, failed: no git remotes)                                                                                                                                                              
+  3. allowed (ran, failed: no git remotes)
+  4. allowed                                                                                                                                                                                            
+  5. allowed                                                                                                                                                                                            
+  6. allowed                                                                                                                                                                                      
+  7. allowed                                              
+  8. allowed
+  9. allowed                                                                                                                                                                                            
+  10. allowed                                                                                                                                                                                     
+  11. allowed                                                                                                                                                                                           
+  12. allowed                                                                                                                                                                                           
+  13. allowed                                                                                                                                                                                           
+  14. gh pr view 9: allowed (ran, failed: no git remotes) 
+  15. gh pr view 10: allowed (ran, failed: no git remotes)                                                                                                                                              
+  16. gh pr view 11: refused              
+✻ Cogitated for 1m 13s · done 8:28 PM                                                                                                                                                   
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯                                                                                                                                                                 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Fable 5.1 | ctx 8% | HEAD | Test task 4. One call each, in order, no text betw...
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents  
+
+## refusal log
+2026-11-09T14:54:46Z tool=Bash group=outside-records msg=cf2273f0-2ec9-4fb2-a3fa-1952d9da84cf args=cat /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M7...
+2026-11-09T14:54:50Z tool=Bash group=run-script msg=cf2273f0-2ec9-4fb2-a3fa-1952d9da84cf args=npm
+2026-11-09T14:55:05Z tool=Bash group=quick-lookup-limit msg=cf2273f0-2ec9-4fb2-a3fa-1952d9da84cf args=gh pr view
+2026-11-09T14:55:12Z tool=WebFetch group=web msg=cf2273f0-2ec9-4fb2-a3fa-1952d9da84cf args=WebFetch
+2026-11-09T14:55:15Z tool=Read group=outside-records msg=cf2273f0-2ec9-4fb2-a3fa-1952d9da84cf args=Read hosts
+2026-11-09T14:55:24Z tool=Bash group=poll-loop msg=cf2273f0-2ec9-4fb2-a3fa-1952d9da84cf args=sleep
+2026-11-09T14:57:19Z tool=Bash group=outside-records msg=f324cb89-1180-4818-a796-ba89bca894b1 args=cat /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M7...
+2026-11-09T14:58:22Z tool=Bash group=quick-lookup-limit msg=10fa632d-50c1-44ae-b4aa-8fbd4416dfdb args=gh pr view

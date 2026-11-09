@@ -1,0 +1,25 @@
+ok - 9 Nov: the labelling-page HTML grep is refused (4th call) and logged
+ok - 9 Nov: a read of the quota script under bin/ is refused
+ok - orchestration scripts, fleet records, the memory dir, and worker frames are never refused
+ok - the allowlist is narrow, every script has a header reason, and media, memory, and harness output are scoped
+ok - artifact HTML under data/ is refused through Read, Bash readers, Grep, Glob, Edit, and Write
+ok - every call off the allowlist is refused and logged with its group
+ok - two quick lookups per captain message, the third is refused, other PR reads are refused
+ok - a typed or mid-turn captain message resets the quick-lookup count; a doorbell does not
+ok - a turn without a captain message gets 2 quick lookups per turn; a new turn or a captain message resets it
+ok - the refusal log holds the real message id from the transcript, and - only when none exists
+ok - the guard's own switches, window state, and refusal log are readable but never writable
+ok - find actions, awk and sed programs that run or write, rg and sort programs, file flags outside the records, pushd, tail -f, and unknown variables in paths are refused
+ok - a compound command counts each quick lookup it holds
+ok - reply-first off turns off its 3-call cap only; the guard's window, count, and override keep working
+ok - the replay closes the captain window at a wake prompt, counts the wake turn on its own, and reads FM_MAIN_LOOKUP_LIMIT
+ok - the replay, like the live hook, does not start a turn at a mid-turn task notification
+ok - classify reports whether the captain wrote a text and whether it asks main to dig itself
+ok - the override phrases lift the check for one message's window only
+ok - Artifact publish is allowed only for a mate-produced page or a worker report
+ok - a refusal line holds the tool, group, message id, and a short summary, never quoted text or secrets
+ok - inert in a second mate home and a task worktree; off with config/main-orchestration-guard
+ok - an unreadable payload allows silently; an unparseable command is default deny
+ok - the main installer registers the guard once; a mate home does not get it
+ok - the replay rebuilds windows from a transcript and counts allowed, quick, blocked, and overridden calls
+ok - the guard scripts are clean under bin/fm-lint.sh
