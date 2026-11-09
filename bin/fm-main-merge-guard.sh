@@ -13,7 +13,10 @@
 # never lets a main merge through. The fourth argument is true only when the
 # caller passed --release-main, which is passed only after the captain's
 # explicit word for that specific merge. A GitHub merge then runs
-# bin/fm-release-gate.sh check on the PR and exits 1 when that check fails.
+# bin/fm-release-gate.sh check on the PR and exits 1 when that check fails. A GitHub
+# merge into dev runs bin/fm-release-gate.sh row on the PR first and exits 1 when
+# the PR's release row fails, so the auto-dev-merge path and a direct fm-pr-merge.sh
+# both stop a PR with no decision row or audit.
 set -u
 
 usage() {
@@ -40,6 +43,13 @@ esac
 if [ -z "$base" ]; then
   echo "error: could not read the base branch of $NAME from the forge, so the main-merge guard refuses the merge" >&2
   exit 1
+fi
+# Fork-only: a dev-base merge needs the PR's release row (bin/fm-release-gate.sh row),
+# so a PR cannot reach dev without its decision and audit. GitHub only; uncovered repos pass.
+if [ "$base" = dev ]; then
+  [ "$PROVIDER" != github ] ||
+    "${FM_RELEASE_GATE_CMD:-$(dirname "${BASH_SOURCE[0]}")/fm-release-gate.sh}" row "https://github.com/$REPO/pull/$NUMBER" || exit 1
+  exit 0
 fi
 [ "$base" = main ] || exit 0
 if [ "$RELEASE_MAIN" = true ]; then

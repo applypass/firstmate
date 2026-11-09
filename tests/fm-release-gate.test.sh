@@ -30,10 +30,10 @@ make_case() {
 #!/usr/bin/env bash
 echo "$*" >> "$CASE_DIR/gh.log"
 case "$1 $2" in
-  "api repos/acme/app/compare/main...dev") [ ! -e "$CASE_DIR/compare-fails" ] || exit 1; cat "$CASE_DIR/shas" ;;
-  "api repos/acme/app/commits/"*/pulls) cat "$CASE_DIR/pulls-$(basename "$(dirname "$2")")" ;;
-  "api repos/acme/app/commits/"*) cat "$CASE_DIR/files-$(basename "$2")" ;;
-  "api repos/acme/app/pulls/"*) jq -r '.files[].path' "$CASE_DIR/pr-$(basename "$(dirname "$2")").json" ;;
+  "api repos/"*/compare/main...dev) [ ! -e "$CASE_DIR/compare-fails" ] || exit 1; cat "$CASE_DIR/shas" ;;
+  "api repos/"*/commits/*/pulls) cat "$CASE_DIR/pulls-$(basename "$(dirname "$2")")" ;;
+  "api repos/"*/commits/*) cat "$CASE_DIR/files-$(basename "$2")" ;;
+  "api repos/"*/pulls/*) jq -r '.files[].path' "$CASE_DIR/pr-$(basename "$(dirname "$2")").json" ;;
   "pr view")
     case "$3" in
       http*)
@@ -62,7 +62,7 @@ decide() {  # <dir> <key> <text>
 run_gate() {  # <dir> <sub> [url]; sets OUT RC
   local d=$1 sub=$2 url=${3:-$REL}
   OUT=$(CASE_DIR="$d" PATH="$d/fakebin:$PATH" FM_HOME="$d" FM_DATA_OVERRIDE="$d/data" \
-    FM_RELEASE_GATE_CONFIG="$d/config/release-gate" "$GATE" "$sub" "$url" 2>&1)
+    FM_STATE_OVERRIDE="$d/state" FM_RELEASE_GATE_CONFIG="$d/config/release-gate" "$GATE" "$sub" "$url" 2>&1)
   RC=$?
 }
 
@@ -355,6 +355,41 @@ printf '#!/usr/bin/env bash\necho develop\n' > "$d/fakebin/gh"
 run_guard 51 true
 [ "$RC" -eq 0 ] || fail "guard: non-main base must pass: $OUT"
 [ ! -s "$d/check.log" ] || fail "guard: check must not run for a non-main base"
+
+# release open/refresh: a failing carried PR appends a needs-decision status line naming it and
+# its fix command; a clean release appends nothing; an unchanged failure is not repeated.
+d=$(make_case status-fail)
+SF="$d/state/release-main-app-50.status"
+run_gate "$d" refresh
+[ "$RC" -eq 0 ] || fail "status-fail: refresh must still succeed: $OUT"
+[ -f "$SF" ] || fail "status-fail: no status file"
+[ "$(wc -l < "$SF" | tr -d ' ')" -eq 1 ] || fail "status-fail: want one line: $(cat "$SF")"
+grep -Eq '^needs-decision \[at=[0-9]+\] \[key=release-gate-app-50\]: ' "$SF" || fail "status-fail: wrong shape: $(cat "$SF")"
+grep -q "$REL" "$SF" || fail "status-fail: release url missing: $(cat "$SF")"
+grep -q '#7' "$SF" || fail "status-fail: failing PR not named: $(cat "$SF")"
+grep -q 'fix: bin/fm-decide.sh record' "$SF" || fail "status-fail: fix command missing: $(cat "$SF")"
+run_gate "$d" refresh
+[ "$(wc -l < "$SF" | tr -d ' ')" -eq 1 ] || fail "status-fail: an unchanged failure repeated the line: $(cat "$SF")"
+decide "$d" plan-x "approved: the plan (shortcut: sc-100 u)"
+run_gate "$d" refresh
+[ "$RC" -eq 0 ] || fail "status-fail: clean refresh must succeed: $OUT"
+open=$(bash -c '. "$1/bin/fm-classify-lib.sh" && status_open_decisions "$2" release' _ "$ROOT" "$SF")
+case "$open" in *release-gate-app-50*) fail "status-fail: a clean refresh must close the raise: $open" ;; esac
+grep -Eq '^resolved \[at=[0-9]+\] \[key=release-gate-app-50\]: ' "$SF" || fail "status-fail: no resolved line: $(cat "$SF")"
+run_gate "$d" refresh
+[ "$(grep -c '^resolved' "$SF")" -eq 1 ] || fail "status-fail: a second clean refresh must not repeat resolved: $(cat "$SF")"
+d=$(make_case status-clean)
+decide "$d" plan-x "approved: the plan (shortcut: sc-100 u)"
+run_gate "$d" refresh
+[ ! -e "$d/state/release-main-app-50.status" ] || fail "status-clean: a clean release must emit nothing"
+
+# with no config file, an ai_backend release with a failing row raises at open.
+d=$(make_case status-ai-default)
+rm "$d/config/release-gate"
+run_gate "$d" refresh https://github.com/applypass/ai_backend/pull/50
+[ "$RC" -eq 0 ] || fail "status-ai-default: refresh must succeed: $OUT"
+grep -q '#7' "$d/state/release-main-ai_backend-50.status" 2>/dev/null \
+  || fail "status-ai-default: failing row not raised: $OUT"
 
 # ship brief carries the audit heading rule; the scout brief does not.
 bh="$TMP_ROOT/brief-home"

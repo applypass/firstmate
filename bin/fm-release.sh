@@ -25,8 +25,8 @@
 # prints that command as the next step, to run once production is confirmed.
 #
 # Release gate (bin/fm-release-gate.sh): open writes the gate table into the new
-# PR body, and merge rewrites that table for the PRs dev carries now, then runs the
-# gate's check and stops when it fails, before any record or merge. Repos outside config/release-gate pass.
+# or already-open PR body and raises any failing row, and merge rewrites that table for the PRs dev carries now, then runs the
+# gate's check and stops when it fails, before any record or merge. Repos the gate does not cover pass.
 #
 # FM_RELEASE_MERGE, FM_RELEASE_SHORTCUT and FM_RELEASE_GATE override the merge,
 # Shortcut and release gate commands (tests).
@@ -86,6 +86,8 @@ release_open() {
   if [ -n "$existing" ]; then
     echo "release PR already open: $existing" >&2
     echo "$existing"
+    "$GATE_CMD" refresh "$existing" >&2 \
+      || echo "warning: could not rewrite the release gate table in $existing; run: $GATE_CMD refresh $existing" >&2
     return 0
   fi
   commits=$(gh api "repos/$slug/compare/$MAIN_BRANCH...$DEV_BRANCH" \
