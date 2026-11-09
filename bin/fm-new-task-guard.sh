@@ -7,8 +7,8 @@
 # The rule: each task gets its own second mate. Main sending a second piece of
 # new work to a mate that is already busy breaks it, so this script is the one
 # owner of the refusal. bin/fm-send.sh --new-task calls `check`; the main
-# session's PreToolUse hook (.claude/settings.json) calls `hook`, which calls
-# the same `check`.
+# session's PreToolUse hook (merged into .claude/settings.local.json by
+# bin/fm-op-guard-install.sh) calls `hook`, which calls the same `check`.
 #
 # check <target>   the --new-task rule; exit 1 with the remedy on stderr when:
 #   - the target is a registered secondmate (data/secondmates.md) and its home
