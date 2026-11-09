@@ -258,6 +258,8 @@ test_a_turn_without_a_captain_message_gets_two_lookups() {
   assert_contains "$(log_text)" "group=quick-lookup-limit" "logged as the limit"
   assert_contains "$(log_text)" "msg=u-wake-1" "the log names the turn's own message id"
   bash_call 'gh-axi pr status'; expect_code 2 "$RC" "still refused later in the same turn"
+  jq -cn '{type:"attachment",uuid:"u-note-1",attachment:{type:"queued_command",prompt:"<task-notification>done</task-notification>",origin:{kind:"task-notification"},source_uuid:"u-note-1"}}' >> "$TRANSCRIPT"
+  bash_call 'gh-axi pr view 3'; expect_code 2 "$RC" "a task notification arriving mid-turn does not start a new turn"
   turn_start wake u-wake-2
   bash_call 'gh-axi pr view 4'; expect_code 0 "$RC" "a new wake turn starts a fresh count"
   bash_call 'gh-axi pr view 5'; expect_code 0 "$RC" "(2)"
@@ -341,6 +343,22 @@ sed -i s/a/b/ state/x
 sort -o /tmp/out state/x
 f=$(echo ../../x); cat state/$f
 cat state/$UNKNOWN_VAR
+rg --pre=bash x state/run.sh
+rg --pre bash x state/run.sh
+rg --pre-glob '*.sh' x state
+sort --compress-program=sh state/x
+jq --rawfile x /tmp/secret.env '$x' state/a.json
+jq --slurpfile x /tmp/secret.json . state/a.json
+grep -f /tmp/patterns state/x
+rg -f /tmp/patterns state/x
+grep --file=/tmp/patterns state/x
+grep -rf /tmp/patterns state
+awk --file=state/prog state/x
+sed -fstate/prog.sed state/x
+pushd /tmp && cat data/x.json
+tail -f state/x.status
+tail -F state/x.status
+tail --follow=name state/x.status
 EOF2
   while IFS= read -r c; do
     bash_call "$c"; expect_code 0 "$RC" "allowed: $c"
@@ -352,8 +370,12 @@ sed 's/a/b/g' state/x
 sort -o state/sorted state/x
 for t in a b; do cat state/$t.status; done
 m=task-a; tail -n 2 state/$m.status
+grep -f state/patterns state/x
+jq -n --rawfile x state/a.json '$x'
 EOF2
-  pass "find actions, awk and sed programs that run or write, sort -o outside the records, and unknown variables in paths are refused"
+  bash_call 'tail -f state/x.status'
+  assert_contains "$(log_text)" "group=poll-loop" "tail -f is logged as a poll loop"
+  pass "find actions, awk and sed programs that run or write, rg and sort programs, file flags outside the records, pushd, tail -f, and unknown variables in paths are refused"
 }
 
 test_a_compound_command_counts_each_lookup() {
@@ -434,6 +456,19 @@ test_publishing_is_for_mate_produced_pages() {
   gcall Artifact '{"action":"publish","file_path":"'"$H"'/data/notes.html"}'; expect_code 2 "$RC" "main's own page does not"
   assert_contains "$(log_text)" "group=artifact-publish" "publish group"
   gcall Artifact '{"action":"publish","file_path":"/tmp/random.html"}'; expect_code 2 "$RC" "a random file does not"
+  gcall Artifact '{"action":"publish","file_path":"'"$TMP_ROOT"'/projects/apply_pass_backend/data/foo/report.html"}'; expect_code 2 "$RC" "a report path outside the main home's data/ does not"
+  gcall Artifact '{"action":"publish","file_path":"'"$H"'/data/job-a/sub/report.html"}'; expect_code 2 "$RC" "a report nested below data/<id>/ does not"
+  local c
+  while IFS= read -r c; do
+    bash_call "$c"; expect_code 2 "$RC" "main cannot write a page to publish: $c"
+  done <<'EOF2'
+printf '<html></html>' > data/job-b/report.html
+cp data/backlog.md data/job-b/report.html
+mv data/backlog.md data/job-b/report.html
+echo x | tee data/job-b/report.html
+sort -o data/job-b/report.html data/backlog.md
+EOF2
+  bash_call 'printf x > data/job-b/report.md'; expect_code 0 "$RC" "a markdown fleet record is still written"
   pass "Artifact publish is allowed only for a mate-produced page or a worker report"
 }
 

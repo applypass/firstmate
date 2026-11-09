@@ -43,7 +43,7 @@ export const ALLOWED_SCRIPTS = new Set([
 
 // Commands with no side effect beyond the shell, and the fleet-record readers.
 const BUILTINS = new Set([
-  "export", "set", "unset", "cd", "pushd", "popd", "true", "false", ":", "echo", "printf", "date",
+  "export", "set", "unset", "cd", "true", "false", ":", "echo", "printf", "date",
   "test", "[", "[[", "read", "wait", "pwd", "exit", "return", "local", "declare", "basename", "dirname",
 ]);
 // A reader takes file operands; a filter reads only its pipe.
@@ -120,8 +120,8 @@ function isGuardControl(abs, ctx) {
   }
   return false;
 }
-// A path a command may write: a fleet record that is not a guard control file.
-const isWritable = (abs, ctx) => isFleetRecord(abs, ctx) && !isGuardControl(abs, ctx);
+// A path a command may write: a fleet record that is not a guard control file or an artifact page.
+const isWritable = (abs, ctx) => isFleetRecord(abs, ctx) && !isGuardControl(abs, ctx) && !isArtifactHtml(abs);
 
 // 0 when abs is a fleet record of the main home or the memory dir (or a null sink).
 function isFleetRecord(abs, ctx) {
@@ -230,7 +230,9 @@ const VALUE_FLAGS = {
   jq: ["--arg", "--argjson", "--slurpfile", "--rawfile", "--indent"],
 };
 const TWO_VALUE_FLAGS = new Set(["--arg", "--argjson", "--slurpfile", "--rawfile"]);
-const PATTERN_FLAGS = new Set(["-e", "-f", "--expression", "--file", "--regexp"]);
+const PATTERN_FLAGS = new Set(["-e", "-f", "--expression", "--file", "--regexp", "--from-file"]);
+// Flags whose value names a file the reader reads; the value is checked like an operand.
+const FILE_FLAGS = { grep: ["-f"], egrep: ["-f"], fgrep: ["-f"], rg: ["-f"], jq: ["--rawfile", "--slurpfile"] };
 
 // The operands of a reader that name files: skip flags and their values, the
 // pattern or program, and bare numbers.
@@ -242,7 +244,14 @@ function readerOperands(name, words) {
     const v = words[i].value;
     if (v === "--") { for (let j = i + 1; j < words.length; j += 1) ops.push(words[j]); break; }
     if (v.startsWith("-") && v.length > 1) {
-      if (PATTERN_FLAGS.has(v) && PATTERN_FIRST.has(name)) patternTaken = true;
+      const eq = v.match(/^(--[A-Za-z-]+)=(.*)$/s);
+      const flag = eq ? eq[1] : v;
+      if (PATTERN_FLAGS.has(flag) && PATTERN_FIRST.has(name)) patternTaken = true;
+      if (eq && /^--(file|from-file)$/.test(flag)) ops.push({ ...words[i], value: eq[2] });
+      if ((FILE_FLAGS[name] || []).includes(v)) {
+        const file = words[i + (TWO_VALUE_FLAGS.has(v) ? 2 : 1)];
+        if (file) ops.push(file);
+      }
       if (valueFlags.has(v)) i += TWO_VALUE_FLAGS.has(v) ? 2 : 1;
       continue;
     }
@@ -373,6 +382,7 @@ function classifyNode(tokens, state, depth) {
   if (FILTERS.has(name)) return result;
 
   if (READERS.has(name)) {
+    if (name === "tail" && cmdWords.slice(1).some((w) => /^-[A-Za-z0-9]*[fF]/.test(w.value) || /^--(follow|retry)/.test(w.value))) return deny("poll-loop", display);
     const risky = readerRunsOrWrites(name, cmdWords, ctx, state);
     if (risky) return deny("run-script", `${display} (${risky})`);
     const operands = name === "find" ? findRoots(cmdWords) : readerOperands(name, cmdWords);
@@ -408,21 +418,25 @@ function classifyNode(tokens, state, depth) {
 
 // A reader that can run a command or write a file is not a reader: find actions, an
 // awk program that runs a command or redirects, a sed program with a w, W, e, r, or R
-// command or an s///w|e flag (or -i), and sort -o to a path that is not writable.
+// command or an s///w|e flag (or -i), sort -o to a path that is not writable, a program
+// rg or sort runs on its input, and a file flag folded into a short-flag cluster.
 function readerRunsOrWrites(name, words, ctx, state) {
   const vals = words.slice(1).map((w) => w.value);
+  if (name === "rg" && vals.some((v) => /^--pre(-glob)?(=|$)/.test(v))) return "rg runs a preprocessor";
+  if (name === "sort" && vals.some((v) => /^--compress-program(=|$)/.test(v))) return "sort runs a compress program";
+  if (FILE_FLAGS[name] && vals.some((v) => /^-[A-Za-z0-9]*f/.test(v) && v !== "-f")) return "file flag in a flag cluster";
   if (name === "find" && vals.some((v) => /^-(exec|execdir|ok|okdir|delete|fprint0?|fprintf|fls)$/.test(v))) return "find action";
   if (name === "awk") {
     const programs = [];
     for (let i = 0; i < vals.length; i += 1) {
-      if (vals[i] === "-f" || vals[i] === "--file") return "awk program file";
+      if (/^-f|^--file(=|$)/.test(vals[i])) return "awk program file";
       if (vals[i] === "-v" || vals[i] === "-F") { i += 1; continue; }
       if (!vals[i].startsWith("-")) { programs.push(vals[i]); break; }
     }
     if (programs.some((pg) => /system\s*\(|getline|\||>|\bclose\s*\(/.test(pg))) return "awk program runs a command or redirects";
   }
   if (name === "sed") {
-    if (vals.some((v) => v === "--in-place" || v.startsWith("--in-place=") || v === "--file" || /^-[A-Za-z]*[if][A-Za-z]*$/.test(v))) return "sed edits in place or reads a program file";
+    if (vals.some((v) => v === "--in-place" || v.startsWith("--in-place=") || /^--file(=|$)/.test(v) || /^-[A-Za-z]*[if]/.test(v))) return "sed edits in place or reads a program file";
     const programs = [];
     for (let i = 0; i < vals.length; i += 1) {
       if (vals[i] === "-e" || vals[i] === "--expression") { if (vals[i + 1]) programs.push(vals[i + 1]); i += 1; continue; }
@@ -547,7 +561,7 @@ export function classifyCall(payload, baseCtx) {
     if (action === "publish") {
       const p = abs(input.file_path || "");
       const underMate = ctx.mateHomes.some((h) => p.startsWith(`${h}/data/`));
-      const workerReport = /\/data\/[^/]+\/report[^/]*$/.test(p);
+      const workerReport = [...new Set([ctx.home, path.normalize(ctx.homeRaw)])].some((b) => p.startsWith(`${path.join(b, "data")}/`) && /^[^/]+\/report[^/]*$/.test(p.slice(path.join(b, "data").length + 1)));
       if (p && (underMate || workerReport)) return allow();
       return deny("artifact-publish", `Artifact publish ${p ? path.basename(p) : ""}`);
     }

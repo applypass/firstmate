@@ -350,11 +350,12 @@ cmd_classify() {
 }
 
 # The id of the latest entry that starts a turn: a user prompt (a string or a text
-# block, not a tool result or a meta line) or a queued_command attachment. A message
+# block, not a tool result or a meta line) or a human queued_command attachment; a
+# task notification or other queued_command arriving mid-turn does not start one. A message
 # id is the attachment's source_uuid, else the entry's uuid. Empty when none is found.
 TURN_START_JQ='fromjson? | select(type == "object")
   | select((.type == "user" and (.isMeta | not) and (.message.content | if type == "string" then true elif type == "array" then any(.[]; .type == "text") else false end))
-           or (.type == "attachment" and .attachment.type == "queued_command"))
+           or (.type == "attachment" and .attachment.type == "queued_command" and (.attachment.origin.kind // "") == "human"))
   | (.attachment.source_uuid // .uuid // empty)'
 turn_marker() {  # <transcript>
   local path=$1 span id
@@ -391,7 +392,7 @@ resolve_msgid() {  # <transcript> <checksum>
 # With a captain window open it counts within that window; the id is the captain
 # message's. With no window (a wake, a notification, a doorbell turn) the allowance is
 # the same, counted per turn: the turn starts at the latest user prompt or
-# queued_command in the transcript, and a new turn resets the count (state/.reply-first-wake).
+# human queued_command in the transcript, and a new turn resets the count (state/.reply-first-wake).
 # Without --peek it counts one more lookup first. bin/fm-main-orchestration-guard.sh calls it.
 cmd_lookup() {
   local peek=0 transcript='' marker turn_seen n inc=1
