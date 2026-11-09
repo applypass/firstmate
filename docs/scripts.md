@@ -11,6 +11,7 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-sessionstart-nudge.sh` | Print the native session-start hook nudge when the primary has not already run the digest |
 | `fm-sessionstart-run.sh` | Route a native session-open hook to the full digest, a context re-emit, or the nudge |
 | `fm-reemit-lib.sh`       | Fork-only: shrink the `fm-session-start.sh --reemit` digest to a short summary with file pointers |
+| `fm-new-task-guard.sh`   | Fork-only: refuse a new task to a busy second mate or an over-cap fleet; `fm-send.sh --new-task` and the main-session hook both call it |
 | `fm-operational-input.sh` | Construct and parse the canonical cross-language operational-input protocol |
 | `fm-bootstrap.sh`        | Detect toolchain and fleet problems, run the locked session-start sweeps, and install approved tools |
 | `fm-startup-network.sh`  | Run session start's network checks and inactive-outcome scan off its blocking path, retaining reports and durable findings |

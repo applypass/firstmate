@@ -3,6 +3,12 @@
 # inbox and ring a constant doorbell through its backend endpoint, best-effort.
 # Usage: fm-send.sh <target> [--resolve-key <key>]... [--fire-and-forget <delivery-id>] <text...>
 # Fork-only (applypass): fm-send.sh <task> --resolve-key <key>... --close-ack <text...>
+# Fork-only (applypass): --new-task | --same-task <target> ... marks whether a message to a
+#   second mate opens new work or continues work under way. --new-task refuses (exit 1,
+#   nothing recorded) when the mate has any In flight item or the fleet is at its cap, and
+#   prints how to create a per-task mate; --same-task never refuses. Main's PreToolUse hook
+#   denies a captain-prefixed send carrying neither. Contract: bin/fm-new-task-guard.sh.
+# Fork-only end
 #   <target> may be an exact task id, a legacy fm-<id> task label resolved
 #   through this home's state/<id>.meta, or an explicit well-formed backend
 #   target. fm-send refuses unresolved guesses rather than falling back to a
@@ -485,6 +491,7 @@ RESOLVE_KEYS=
 FIRE_AND_FORGET_ID=
 # Fork-only (applypass): set by --close-ack.
 FORK_CLOSE_ACK=0
+FORK_TASK_MODE=
 fm_send_add_resolve_key() { # <key>
   local k=$1
   case "$k" in
@@ -540,6 +547,12 @@ while :; do
     FORK_CLOSE_ACK=1
     shift
     ;;
+  # Fork-only (applypass): --new-task / --same-task, see the Fork-only header block.
+  --new-task | --same-task)
+    FORK_TASK_MODE=$1
+    shift
+    ;;
+  # Fork-only end
   *) break ;;
   esac
 done
@@ -569,6 +582,12 @@ if [ -n "$TARGET_SELECTOR" ] && [ -n "$TARGET_META" ] && [ "$(fm_meta_get "$TARG
   MARK_FROM_FIRSTMATE=1
   TARGET_TASK_ID=$(fm_send_id_from_meta "$TARGET_META")
 fi
+# Fork-only (applypass): --new-task refuses a busy or over-cap fleet before anything is
+# recorded (bin/fm-new-task-guard.sh owns the rule). --same-task never refuses.
+if [ "$FORK_TASK_MODE" = --new-task ] && [ "$MARK_FROM_FIRSTMATE" = 1 ]; then
+  "$SCRIPT_DIR/fm-new-task-guard.sh" check "$TARGET_TASK_ID" || exit 1
+fi
+# Fork-only end
 
 # Validate the answerer-closes request before any durable mutation or send: the
 # target must have a task ledger in THIS home, the send must carry an answer
