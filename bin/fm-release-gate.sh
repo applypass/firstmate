@@ -55,20 +55,19 @@
 #
 # config/release-gate (optional), one repo per line, "#" comments:
 #   <owner>/<repo> [glob ...]
-# A repo with no globs uses the default globs. Without the file the covered repos
-# are applypass/apply_pass_backend and applypass/apply_pass_frontend. Default globs:
+# A repo with no globs uses the default globs. The file is the single authority for
+# table, refresh, check and row alike: when it exists only the repos it lists are
+# covered. Without the file the covered repos are applypass/apply_pass_backend,
+# applypass/apply_pass_frontend and applypass/ai_backend. Default globs:
 #   schema.sql scripts/*.sql migrations/** swagger.yml
 # (a "*" matches across directories).
 #
 # row      the dev-merge guard (bin/fm-main-merge-guard.sh): evaluate the one PR at <dev-pr-url>
-#          with the same per-PR code as check, and exit 1 with the failing fields, a
-#          fix: line (the fm-decide.sh record command, or the audit to add) and the
-#          waiver command when the row fails. Only a PR whose base is dev is checked;
-#          any other base passes untouched. The waiver key is
-#            dev-waiver-<repo>-<pr>   with text starting "waived:" naming that PR
-#          recorded the same way as a release waiver. Covered repos are those in
-#          config/release-gate; without the file the default for row is
-#          apply_pass_backend, apply_pass_frontend and ai_backend (applypass).
+#          with the same per-PR code as check, and exit 1 with the failing fields and a
+#          fix: line (the fm-decide.sh record command, or the audit to add) when the row
+#          fails. There is no dev waiver: the row must be recorded before the merge. Only
+#          a PR whose base is dev is checked; any other base passes untouched. Covered
+#          repos are the same as for check.
 #
 # Overrides (tests): FM_RELEASE_GATE_GH (the gh command), FM_DATA_OVERRIDE,
 # FM_BACKLOG_OVERRIDE, FM_RELEASE_GATE_CONFIG.
@@ -83,8 +82,7 @@ BACKLOG="${FM_BACKLOG_OVERRIDE:-$DATA/backlog.md}"
 ARCHIVE="${FM_BACKLOG_ARCHIVE_OVERRIDE:-$DATA/done-archive.md}"
 CONFIG="${FM_RELEASE_GATE_CONFIG:-$FM_HOME/config/release-gate}"
 GH="${FM_RELEASE_GATE_GH:-gh}"
-DEFAULT_REPOS="applypass/apply_pass_backend applypass/apply_pass_frontend"
-DEFAULT_ROW_REPOS="applypass/apply_pass_backend applypass/apply_pass_frontend applypass/ai_backend"
+DEFAULT_REPOS="applypass/apply_pass_backend applypass/apply_pass_frontend applypass/ai_backend"
 DEFAULT_GLOBS="schema.sql scripts/*.sql migrations/** swagger.yml"
 MARK_START='<!-- fm-release-gate:start -->'
 MARK_END='<!-- fm-release-gate:end -->'
@@ -115,7 +113,7 @@ lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
 
 # covered_globs: prints the globs for SLUG and returns 0, or returns 1 when not covered.
 covered_globs() {
-  local want line repo rest repos
+  local want line repo rest
   want=$(lower "$SLUG")
   if [ -f "$CONFIG" ]; then
     while IFS= read -r line; do
@@ -130,9 +128,7 @@ covered_globs() {
     done < "$CONFIG"
     return 1
   fi
-  repos=$DEFAULT_REPOS
-  [ "$SUB" != row ] || repos=$DEFAULT_ROW_REPOS
-  for repo in $repos; do
+  for repo in $DEFAULT_REPOS; do
     [ "$(lower "$repo")" = "$want" ] && { printf '%s\n' "$DEFAULT_GLOBS"; return 0; }
   done
   return 1
@@ -365,9 +361,8 @@ build_rows() {
     [ "$current" = yes ] || { status=FAIL; why="${why:+$why; }NOT CURRENT: $cur_note"; }
     if [ -n "$hit" ] && [ "$audit" = no ]; then status=FAIL; why="${why:+$why; }data/API change ($hit) without a reader and writer audit"; fi
     wkey="release-waiver-$REPO-$NUM-$n"
-    [ "$SUB" != row ] || wkey="dev-waiver-$REPO-$n"
     waived=0
-    while IFS=$'\t' read -r line k text; do
+    [ "$SUB" = row ] || while IFS=$'\t' read -r line k text; do
       [ "$(lower "$k")" = "$(lower "$wkey")" ] && [[ "$text" == waived:* ]] || continue
       after=$(lower "${text#waived:}")
       if [[ "$after" =~ (\#|(^|[^a-z0-9_])pr\ )$n([^0-9]|$) ]] || names_url "$after" "$url"; then waived=1; fi
@@ -387,7 +382,7 @@ build_rows() {
       if [ -n "$hit" ] && [ "$audit" = no ]; then
         FAILS="$FAILS  fix: add a '## Reader and writer audit' section to the PR body, or create data/${item:-<item>}/reader-writer-audit.md"$'\n'
       fi
-      FAILS="$FAILS  waive: bin/fm-decide.sh record $wkey \"waived: Captain <date>: <words naming $REPO#$n>\""$'\n'
+      [ "$SUB" = row ] || FAILS="$FAILS  waive: bin/fm-decide.sh record $wkey \"waived: Captain <date>: <words naming $REPO#$n>\""$'\n'
     fi
   done
 }
@@ -434,7 +429,7 @@ case "$SUB" in
     if [ -n "$FAILS" ]; then
       echo "dev merge guard: $URL has no passing release row, so it cannot merge to dev:" >&2
       printf '%s' "$FAILS" >&2
-      echo "Fix the row, then merge again. Only the captain waives it, by recording the dev-waiver key naming this PR." >&2
+      echo "Record the row, then merge again." >&2
       exit 1
     fi
     echo "dev merge guard: the row for $URL passes"

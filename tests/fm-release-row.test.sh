@@ -63,7 +63,7 @@ run_guard "$d"
 [ "$RC" -eq 1 ] || fail "nodec: must refuse, got $RC: $OUT"
 case "$OUT" in *"#7"*"no decision recorded"*) ;; *) fail "nodec: reason missing: $OUT" ;; esac
 case "$OUT" in *"fix: bin/fm-decide.sh record "*"sc-100"*) ;; *) fail "nodec: fix command missing: $OUT" ;; esac
-case "$OUT" in *"dev-waiver-app-7"*) ;; *) fail "nodec: waiver key missing: $OUT" ;; esac
+case "$OUT" in *waive*) fail "nodec: the dev guard must offer no waiver: $OUT" ;; esac
 
 # a recorded current decision lets the dev merge through.
 d=$(make_case withdec)
@@ -92,15 +92,12 @@ jq '.body="x\n\n## Reader and writer audit\n- reader: a"' "$d/pr-7.json" > "$d/p
 run_guard "$d"
 [ "$RC" -eq 0 ] || fail "noaudit: audit heading must pass: $OUT"
 
-# the dev waiver passes a failing row; a waiver naming another PR does not.
+# no waiver key lets a PR with no row reach dev.
 d=$(make_case waiver)
 decide "$d" dev-waiver-app-7 "waived: Captain 2026-11-05: ship app#7 as is"
+decide "$d" release-waiver-app-7-7 "waived: Captain 2026-11-05: ship app#7 as is"
 run_guard "$d"
-[ "$RC" -eq 0 ] || fail "waiver: must pass: $OUT"
-d=$(make_case waiver-other)
-decide "$d" dev-waiver-app-7 "waived: Captain 2026-11-05: ship app#8 as is"
-run_guard "$d"
-[ "$RC" -eq 1 ] || fail "waiver-other: must refuse: $OUT"
+[ "$RC" -eq 1 ] || fail "waiver: a waiver must not pass the dev guard: $OUT"
 
 # an uncovered repo and a main-based PR are untouched by the dev row guard.
 d=$(make_case uncovered dev "acme/other")

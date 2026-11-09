@@ -97,6 +97,7 @@ echo "$URL" > "$d/existing"
 run_rel "$d" open acme/app
 [ "$RC" -eq 0 ] || fail "open-existing: exit $RC: $OUT"
 grep -q 'pr create' "$d/gh.log" && fail "open-existing: must not create a second PR"
+grep -qx "refresh $URL" "$d/gate.log" || fail "open-existing: gate refresh not called: $(cat "$d/gate.log")"
 
 # merge with authorization: writes the meta itself and merges with --merge.
 d=$(make_case merge-ok)

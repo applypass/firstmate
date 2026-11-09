@@ -30,10 +30,10 @@ make_case() {
 #!/usr/bin/env bash
 echo "$*" >> "$CASE_DIR/gh.log"
 case "$1 $2" in
-  "api repos/acme/app/compare/main...dev") [ ! -e "$CASE_DIR/compare-fails" ] || exit 1; cat "$CASE_DIR/shas" ;;
-  "api repos/acme/app/commits/"*/pulls) cat "$CASE_DIR/pulls-$(basename "$(dirname "$2")")" ;;
-  "api repos/acme/app/commits/"*) cat "$CASE_DIR/files-$(basename "$2")" ;;
-  "api repos/acme/app/pulls/"*) jq -r '.files[].path' "$CASE_DIR/pr-$(basename "$(dirname "$2")").json" ;;
+  "api repos/"*/compare/main...dev) [ ! -e "$CASE_DIR/compare-fails" ] || exit 1; cat "$CASE_DIR/shas" ;;
+  "api repos/"*/commits/*/pulls) cat "$CASE_DIR/pulls-$(basename "$(dirname "$2")")" ;;
+  "api repos/"*/commits/*) cat "$CASE_DIR/files-$(basename "$2")" ;;
+  "api repos/"*/pulls/*) jq -r '.files[].path' "$CASE_DIR/pr-$(basename "$(dirname "$2")").json" ;;
   "pr view")
     case "$3" in
       http*)
@@ -374,6 +374,14 @@ d=$(make_case status-clean)
 decide "$d" plan-x "approved: the plan (shortcut: sc-100 u)"
 run_gate "$d" refresh
 [ ! -e "$d/state/release-main-app-50.status" ] || fail "status-clean: a clean release must emit nothing"
+
+# with no config file, an ai_backend release with a failing row raises at open.
+d=$(make_case status-ai-default)
+rm "$d/config/release-gate"
+run_gate "$d" refresh https://github.com/applypass/ai_backend/pull/50
+[ "$RC" -eq 0 ] || fail "status-ai-default: refresh must succeed: $OUT"
+grep -q '#7' "$d/state/release-main-ai_backend-50.status" 2>/dev/null \
+  || fail "status-ai-default: failing row not raised: $OUT"
 
 # ship brief carries the audit heading rule; the scout brief does not.
 bh="$TMP_ROOT/brief-home"
