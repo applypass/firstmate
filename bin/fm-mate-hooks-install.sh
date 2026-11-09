@@ -12,6 +12,7 @@
 # secondmate home is skipped):
 #   UserPromptSubmit  bin/fm-reply-first.sh prompt --claude   opens a window for the captain's words only
 #   PreToolUse (.*)   bin/fm-reply-first.sh pretool --claude
+#   PreToolUse (.*)   bin/fm-main-orchestration-guard.sh --claude   default-deny: main routes, a mate digs
 #   Stop              bin/fm-reply-first.sh clear             a wake turn is never counted against a finished one
 # Idempotent: a hook already pointing at a script is left alone. bin/fm-spawn.sh runs
 # it for every Claude secondmate launch and relaunch. docs/captain-direct-mate-access.md
@@ -29,6 +30,7 @@ PROMPT_CMD="$(printf %q "$SCRIPT_DIR/fm-captain-direct.sh") --claude"
 [ "$MAIN" -eq 0 ] || PROMPT_CMD="$(printf %q "$SCRIPT_DIR/fm-reply-first.sh") prompt --claude"
 STOP_CMD="$(printf %q "$SCRIPT_DIR/fm-reply-first.sh") clear"
 TOOL_CMD="$(printf %q "$SCRIPT_DIR/fm-reply-first.sh") pretool --claude"
+ORCH_CMD="$(printf %q "$SCRIPT_DIR/fm-main-orchestration-guard.sh") --claude"
 FILE="$DIR/.claude/settings.local.json"
 # A second mate home gets its set from fm-spawn.sh, never the primary one.
 [ "$MAIN" -eq 0 ] || [ ! -e "$DIR/.fm-secondmate-home" ] || exit 0
@@ -36,7 +38,7 @@ FILE="$DIR/.claude/settings.local.json"
 mkdir -p "$DIR/.claude" || exit 1
 [ -f "$FILE" ] || printf '{}\n' >"$FILE"
 TMP=$(mktemp "$FILE.XXXXXX") || exit 1
-if ! jq --arg prompt "$PROMPT_CMD" --arg tool "$TOOL_CMD" --arg stop "$STOP_CMD" --argjson main "$MAIN" '
+if ! jq --arg prompt "$PROMPT_CMD" --arg tool "$TOOL_CMD" --arg stop "$STOP_CMD" --arg orch "$ORCH_CMD" --argjson main "$MAIN" '
   def has($event; $script): any(.hooks[$event][]?.hooks[]?; (.command // "") | contains($script));
   .hooks //= {}
   | .hooks.UserPromptSubmit //= []
@@ -45,6 +47,8 @@ if ! jq --arg prompt "$PROMPT_CMD" --arg tool "$TOOL_CMD" --arg stop "$STOP_CMD"
       (.hooks.Stop //= [])
       | if has("Stop"; "fm-reply-first.sh") then .
         else .hooks.Stop += [{"hooks":[{"type":"command","command":$stop,"timeout":10}]}] end
+      | if has("PreToolUse"; "fm-main-orchestration-guard.sh") then .
+        else .hooks.PreToolUse += [{"matcher":".*","hooks":[{"type":"command","command":$orch,"timeout":15}]}] end
     else . end)
   | if has("UserPromptSubmit"; (if $main == 1 then "fm-reply-first.sh" else "fm-captain-direct.sh" end)) then .
     else .hooks.UserPromptSubmit += [{"hooks":[{"type":"command","command":$prompt,"timeout":10}]}] end

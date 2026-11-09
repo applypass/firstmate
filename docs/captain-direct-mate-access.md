@@ -44,6 +44,9 @@ Routing order for a question about a second mate's work: the owning mate, then a
 `bin/fm-reply-first.sh` counts tool calls after a message that expects an answer.
 After 3 calls without a reply, the next call is refused once with "answer now with what you have, hand the rest off".
 The window opens only for a message the captain typed into the pane, and not for a slash command such as `/afk`, which runs a skill rather than asks a question.
+A message the captain sends while a turn is running (the harness shows it next to a tool result as "The user sent a new message while you were working") opens a window too.
+The PreToolUse check finds it in the transcript as a `queued_command` attachment from a human, keeps a marker of the last line it read in `state/.reply-first-seen` so a message never opens a second window, and sends its text through the same captain-or-not decision as a typed prompt.
+The call that finds the message is call 1 of the new window, so the fourth call after it is refused.
 Every other prompt (the steering doorbell, a `[fm-from-firstmate]` message, operational input, a Stop hook wake, a harness notification) closes any open window, so work routed to the agent is never refused its fourth command.
 In the primary home a task notification leaves the window alone: a background launch that finishes mid-answer does not switch the count off.
 A reply is a `bin/fm-secondmate-report.sh` call, assistant text of 200 characters or more, or shorter text that addresses the captain.
@@ -66,8 +69,31 @@ python3 bin/fm-reply-latency.py <transcript.jsonl> [--since <ISO time|epoch>]
 
 It prints the share of captain messages with more than 3 commands before the reply, and the median and p90 wait.
 
+## Main orchestration guard
+
+`bin/fm-main-orchestration-guard.sh` is a PreToolUse hook for the primary home only, and it is default deny: the main firstmate routes work and answers the captain, and a second mate or worker does the digging.
+Only the allowlist runs; every other call is refused with "hand this to the owning mate via fm-send and tell the captain who has it" and one line is appended to `state/main-orchestration-refusals.log` (time, tool, group, captain message id, a short summary with no quoted text or secrets), so a new kind of work shows up in the log.
+The script header owns the allowlist and the list of exact `bin/fm-*` names.
+In short, the allowlist is:
+
+- the `bin/fm-*` scripts that AGENTS.md, an agent skill, or the supervision protocol directs the main firstmate to run (routing, spawn, send, control, decide, captain-hold, pr-merge, local landing, tasks-axi, backlog, capacity, wake-drain, crew-state, peek, update, session start, secondmate lifecycle), each with its one-line reason in the script header, in a command where every part is allowed;
+- reading and writing fleet records (`data/`, `state/`, `config/` of the main home) and the main home's own project memory dir, except artifact HTML, which counts as a dig on every path (Read, Grep, Glob, Edit, Write, and recursive shell readers) even under `data/`, and the guard's own switches, window state, and refusal log, which can be read and never written;
+- Read of a `.png` or `.mp4` frame a worker hands over, and of this session's own tool-result and task-output files;
+- two quick lookups per captain message: `gh pr view`, `gh pr status` (also `gh-axi`), and Artifact list;
+- Artifact publish only for a page a mate produced, meaning a path under a registered second mate's `data/` or a worker report path.
+
+Blocked and logged: subagents, MCP tools for outside systems, browser tools, WebSearch and WebFetch, sleep and poll loops, edits to hooks, settings, and sys-config, running tests or scripts, any project clone or worktree read or edit, git, prod psql, deploys, and any command the list does not name.
+The quick-lookup count lives in the reply-first window, so a typed message and a mid-turn message both reset it, and each command in a compound command counts once.
+A turn with no captain message (a wake, a notification, a doorbell) gets the same two quick lookups, counted per turn from the latest prompt or human queued message in the transcript (a task notification mid-turn does not start a turn); the reply-first 3-call window stays captain-only.
+The refusal log names the real message id from the transcript (the queued message's `source_uuid`, else its `uuid`, or the prompt entry's `uuid`), and `-` when there is none.
+`config/reply-first` set to `off` turns off the 3-call refusal only; the window, count, and override keep working while the guard is on.
+A reader that can run or write (find `-exec`, an awk or sed program with a command or write, `sort -o` outside the records) or a path built from an unknown variable is refused.
+A captain message that says "look yourself" (or "look it up yourself", "look at it yourself", "check yourself", "check it yourself", "dig yourself", "dig in yourself") lifts the check until the next captain message.
+The guard is inert in a second mate home and in a task worktree, the word `off` in `config/main-orchestration-guard` turns it off, and a payload it cannot read allows the call silently.
+`node bin/fm-main-orchestration-replay.mjs <transcript.jsonl>...` replays recorded main-session calls through the same classifier and prints counts per class, the blocked calls by group, and allowed calls that look like work.
+
 ## Registration
 
 `bin/fm-spawn.sh` runs `bin/fm-mate-hooks-install.sh` for every second mate it launches.
 The installer merges the two hooks into the home's untracked `.claude/settings.local.json`, once, and keeps other settings.
-`bin/fm-session-start.sh` runs `bin/fm-mate-hooks-install.sh --main` for the primary home on each full locked start; it registers reply-first's prompt, PreToolUse, and Stop hooks and skips a second mate home.
+`bin/fm-session-start.sh` runs `bin/fm-mate-hooks-install.sh --main` for the primary home on each full locked start; it registers reply-first's prompt, PreToolUse, and Stop hooks and the orchestration guard's PreToolUse hook, and skips a second mate home.

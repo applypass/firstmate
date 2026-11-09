@@ -13,6 +13,9 @@
 #   fm-reply-first.sh arm [--transcript <path>]
 #   fm-reply-first.sh clear
 #   fm-reply-first.sh enabled
+#   fm-reply-first.sh midturn <transcript>   (used by pretool and the orchestration guard)
+#   fm-reply-first.sh lookup [--peek]        (used by the orchestration guard)
+#   fm-reply-first.sh classify               (used by the orchestration replay)
 #
 # prompt   the main home's prompt hook: opens a window for a message the
 #          captain typed and closes any window for every other prompt (a Stop
@@ -26,8 +29,13 @@
 #          other prompt (Firstmate traffic, operational input, a harness
 #          notification): each new prompt ends the turn that answered the
 #          captain, and routed work is not a question to answer first.
-# pretool  runs on every tool call. While a window is open and unanswered it
-#          counts the call. The call after the limit (default 3,
+# pretool  runs on every tool call. First it reads the transcript lines written
+#          since its last call (state/.reply-first-seen holds the marker): a
+#          message the captain sent mid-turn, a human queued_command attachment
+#          that passes the same captain test as the prompt hook, opens a fresh
+#          window as arm does, and the call that finds it is call 1. A doorbell,
+#          operational input, or notification there opens nothing. Then, while
+#          a window is open and unanswered, it counts the call. The call after the limit (default 3,
 #          FM_REPLY_FIRST_LIMIT) is refused once (exit 2, the reason on
 #          stderr) and the window closes, so later calls run normally.
 # A reply closes the window early. Either of these counts:
@@ -48,7 +56,9 @@
 # SCOPE. A secondmate home (a .fm-secondmate-home marker) and the primary
 # firstmate home. A main home closes its window on the Stop hook too, so a wake
 # turn that follows a captain turn is never counted against it. A home turns it
-# off with the word "off" in config/reply-first.
+# off with the word "off" in config/reply-first. That switch turns off the 3-call
+# refusal only: the window, lookup count, and override bookkeeping the main orchestration
+# guard reads keep running while that guard is on (config/main-orchestration-guard).
 #
 # FILES. state/.reply-first holds the window as key=value lines (epoch, count,
 # replied, fired, transcript, base); state/.reply-first.lock is a mkdir
@@ -68,6 +78,8 @@ FM_HOME=${FM_HOME:-${CLAUDE_PROJECT_DIR:-${FM_ROOT_OVERRIDE:-$FM_ROOT}}}
 STATE=${FM_STATE_OVERRIDE:-$FM_HOME/state}
 CONFIG=${FM_CONFIG_OVERRIDE:-$FM_HOME/config}
 WINDOW="$STATE/.reply-first"
+SEEN="$STATE/.reply-first-seen"
+WAKE="$STATE/.reply-first-wake"
 LOCK="$STATE/.reply-first.lock"
 LIMIT=${FM_REPLY_FIRST_LIMIT:-3}
 MIN_CHARS=${FM_REPLY_FIRST_MIN_CHARS:-200}
@@ -86,6 +98,17 @@ enabled() {
   [ -d "$STATE" ] || return 1
   [ -f "$CONFIG/reply-first" ] && [ "$(tr -d '[:space:]' < "$CONFIG/reply-first")" = off ] && return 1
   fm_root_is_secondmate_home "$FM_HOME" || fm_primary_root_matches "$FM_HOME"
+}
+
+# 0 when the window bookkeeping (arm, clear, midturn) must run for this home: the hook
+# itself is on, or the main orchestration guard is on and reads the window's lookup
+# count and override. Only the 3-call refusal in pretool follows config/reply-first.
+bookkeeping_enabled() {
+  enabled && return 0
+  [ -d "$STATE" ] || return 1
+  [ -f "$CONFIG/main-orchestration-guard" ] && [ "$(tr -d '[:space:]' < "$CONFIG/main-orchestration-guard")" = off ] && return 1
+  fm_root_is_secondmate_home "$FM_HOME" && return 1
+  fm_primary_root_matches "$FM_HOME"
 }
 
 # 0 when the prompt text came from a person at the keyboard.
@@ -142,7 +165,7 @@ lock_take() {
 lock_drop() { rmdir "$LOCK" 2>/dev/null || true; }
 
 cmd_clear() {
-  enabled || exit 0
+  bookkeeping_enabled || exit 0
   lock_take || exit 0
   rm -f "$WINDOW"
   lock_drop
@@ -153,12 +176,19 @@ win_get() {  # <key>
   sed -n "s/^$1=//p" "$WINDOW" | head -n 1
 }
 
+# Read every window key into the w_* variables.
+win_load() {
+  w_epoch=$(win_get epoch) w_count=$(win_get count)
+  w_replied=$(win_get replied) w_fired=$(win_get fired) w_transcript=$(win_get transcript) w_base=$(win_get base)
+  w_lookups=$(win_get lookups) w_override=$(win_get override) w_msgid=$(win_get msgid) w_msgsum=$(win_get msgsum)
+}
+
 # Write the window from the current shell variables, atomically.
 win_write() {
   local tmp
   tmp=$(mktemp "$WINDOW.XXXXXX") || return 1
-  if printf 'epoch=%s\ncount=%s\nreplied=%s\nfired=%s\ntranscript=%s\nbase=%s\n' \
-    "$w_epoch" "$w_count" "$w_replied" "$w_fired" "$w_transcript" "$w_base" > "$tmp"; then
+  if printf 'epoch=%s\ncount=%s\nreplied=%s\nfired=%s\ntranscript=%s\nbase=%s\nlookups=%s\noverride=%s\nmsgid=%s\nmsgsum=%s\n' \
+    "$w_epoch" "$w_count" "$w_replied" "$w_fired" "$w_transcript" "$w_base" "${w_lookups:-0}" "${w_override:-0}" "${w_msgid:-}" "${w_msgsum:-}" > "$tmp"; then
     mv -f "$tmp" "$WINDOW"
   else
     rm -f "$tmp"
@@ -167,22 +197,103 @@ win_write() {
 }
 
 cmd_arm() {
-  local transcript=
+  local transcript='' text=''
   while [ "$#" -gt 0 ]; do
     case "$1" in
       --transcript) transcript=${2:-}; shift 2 || break ;;
+      --text) text=${2:-}; shift 2 || break ;;
       *) usage >&2; exit 2 ;;
     esac
   done
-  enabled || exit 0
+  bookkeeping_enabled || exit 0
   w_base=0
   if [ -n "$transcript" ] && [ -f "$transcript" ]; then
     w_base=$(wc -l < "$transcript" 2>/dev/null | tr -d ' ')
     case "$w_base" in ''|*[!0-9]*) w_base=0 ;; esac
   fi
   w_epoch=$(date +%s) w_count=0 w_replied=0 w_fired=0 w_transcript=$transcript
+  w_lookups=0 w_override=0 w_msgid='' w_msgsum=$(text_sum "$text")
+  text_overrides "$text" && w_override=1
   lock_take || exit 0
   win_write
+  [ -z "$transcript" ] || seen_write "$transcript" "$w_base"
+  lock_drop
+}
+
+# 0 when a captain message asks main to dig itself (the fixed phrase set in the
+# header). bin/fm-main-orchestration-guard.sh reads the flag this sets.
+text_overrides() {  # <text>
+  local lower
+  lower=$(printf '%s' "${1:-}" | tr '[:upper:]' '[:lower:]')
+  case "$lower" in
+    *"look yourself"*|*"look it up yourself"*|*"look at it yourself"*|*"check yourself"*|*"check it yourself"*|*"dig yourself"*|*"dig in yourself"*) return 0 ;;
+  esac
+  return 1
+}
+
+# A short checksum of a message text, so the window can find its message in the
+# transcript later without keeping the text.
+text_sum() {  # <trimmed text>
+  [ -n "${1:-}" ] || return 0
+  printf '%s' "$1" | cksum | cut -d' ' -f1
+}
+
+seen_write() {  # <transcript> <line>
+  if printf 'transcript=%s\nline=%s\n' "$1" "$2" > "$SEEN.tmp.$$"; then
+    mv -f "$SEEN.tmp.$$" "$SEEN"
+  else
+    rm -f "$SEEN.tmp.$$"
+  fi
+}
+
+# Text of one queued_command attachment line the captain sent mid-turn, empty
+# for any other line. The prompt is a string, or a list of blocks whose text
+# blocks are joined.
+midturn_text() {  # <json line>
+  printf '%s' "$1" | jq -r '
+    select(type == "object" and .type == "attachment" and .attachment.type == "queued_command" and (.attachment.origin.kind // "") == "human")
+    | .attachment.prompt
+    | if type == "array" then [.[] | select(type == "object" and .type == "text") | .text] | join("\n") else tostring end' 2>/dev/null
+}
+
+# Scan the transcript lines written since the last scan. The newest queued_command
+# the captain sent opens a fresh window exactly as arm does, based at that line.
+# The first sight of a transcript only records its end. A message is scanned once,
+# so it never re-arms. Callers: pretool (every call) and bin/fm-main-orchestration-guard.sh.
+cmd_midturn() {
+  local transcript=${1:-} total seen_path seen_line cand n json text last_n=0 last_text='' last_id=''
+  bookkeeping_enabled || return 0
+  [ -n "$transcript" ] && [ -f "$transcript" ] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  lock_take || return 0
+  total=$(wc -l < "$transcript" 2>/dev/null | tr -d ' ')
+  case "$total" in ''|*[!0-9]*) lock_drop; return 0 ;; esac
+  seen_path=$(sed -n 's/^transcript=//p' "$SEEN" 2>/dev/null | head -n 1)
+  seen_line=$(sed -n 's/^line=//p' "$SEEN" 2>/dev/null | head -n 1)
+  case "$seen_line" in ''|*[!0-9]*) seen_path= ;; esac
+  if [ "$seen_path" != "$transcript" ] || [ "$total" -lt "$seen_line" ]; then
+    seen_write "$transcript" "$total"
+    lock_drop
+    return 0
+  fi
+  if [ "$total" -eq "$seen_line" ]; then lock_drop; return 0; fi
+  cand=$(sed -n "$((seen_line + 1)),${total}p" "$transcript" | grep -n -F '"queued_command"' | grep -F '"human"')
+  while IFS= read -r cand_line; do
+    [ -n "$cand_line" ] || continue
+    n=${cand_line%%:*}
+    json=${cand_line#*:}
+    text=$(midturn_text "$json")
+    text=${text#"${text%%[![:space:]]*}"}
+    text=${text%"${text##*[![:space:]]}"}
+    if text_is_captain "$text"; then last_n=$n last_text=$text last_id=$(printf '%s' "$json" | jq -r '(.attachment.source_uuid // .uuid // empty)' 2>/dev/null); fi
+  done <<< "$cand"
+  seen_write "$transcript" "$total"
+  if [ "$last_n" -gt 0 ]; then
+    w_epoch=$(date +%s) w_count=0 w_replied=0 w_fired=0 w_transcript=$transcript w_base=$((seen_line + last_n))
+    w_lookups=0 w_override=0 w_msgid=$last_id w_msgsum=$(text_sum "$last_text")
+    text_overrides "$last_text" && w_override=1
+    win_write
+  fi
   lock_drop
 }
 
@@ -206,7 +317,7 @@ cmd_prompt() {
   [ -n "$payload" ] || exit 0
   command -v jq >/dev/null 2>&1 || exit 0
   fm_hook_payload_is_foreign_host "$payload" && exit 0
-  enabled || exit 0
+  bookkeeping_enabled || exit 0
   parsed=$(printf '%s' "$payload" | jq -r '
     if type != "object" or ((.hook_event_name // "UserPromptSubmit") != "UserPromptSubmit") then empty
     else [((.transcript_path // "") | tostring), ((.prompt // "") | tostring)] | "\(.[0])\n\(.[1])" end' 2>/dev/null) || exit 0
@@ -217,11 +328,114 @@ cmd_prompt() {
   text=${text%"${text##*[![:space:]]}"}
   case "$text" in '<task-notification>'*) exit 0 ;; esac
   if text_is_captain "$text"; then
-    if [ -n "$transcript" ]; then cmd_arm --transcript "$transcript"; else cmd_arm; fi
+    if [ -n "$transcript" ]; then cmd_arm --transcript "$transcript" --text "$text"; else cmd_arm --text "$text"; fi
   else
     cmd_clear
   fi
   exit 0
+}
+
+# classify: one JSON-encoded prompt text per line on stdin, one line out per input:
+# "<captain> <override>", each 1 or 0: captain is 1 when the captain wrote the text,
+# override is 1 when it also asks main to dig itself. bin/fm-main-orchestration-replay.mjs
+# uses it to rebuild captain message windows from a recorded transcript.
+cmd_classify() {
+  local line text
+  command -v jq >/dev/null 2>&1 || return 0
+  while IFS= read -r line; do
+    text=$(printf '%s' "$line" | jq -r 'if type == "string" then . else "" end' 2>/dev/null)
+    text=${text#"${text%%[![:space:]]*}"}
+    text=${text%"${text##*[![:space:]]}"}
+    if text_is_captain "$text"; then
+      if text_overrides "$text"; then echo "1 1"; else echo "1 0"; fi
+    else echo "0 0"; fi
+  done
+}
+
+# The id of the latest entry that starts a turn: a user prompt (a string or a text
+# block, not a tool result or a meta line) or a human queued_command attachment; a
+# task notification or other queued_command arriving mid-turn does not start one. A message
+# id is the attachment's source_uuid, else the entry's uuid. Empty when none is found.
+TURN_START_JQ='fromjson? | select(type == "object")
+  | select((.type == "user" and (.isMeta | not) and (.message.content | if type == "string" then true elif type == "array" then any(.[]; .type == "text") else false end))
+           or (.type == "attachment" and .attachment.type == "queued_command" and (.attachment.origin.kind // "") == "human"))
+  | (.attachment.source_uuid // .uuid // empty)'
+turn_marker() {  # <transcript>
+  local path=$1 span id
+  [ -n "$path" ] && [ -f "$path" ] || return 0
+  for span in 400 4000 0; do
+    if [ "$span" = 0 ]; then id=$(jq -R -r "$TURN_START_JQ" "$path" 2>/dev/null | tail -n 1)
+    else id=$(tail -n "$span" "$path" 2>/dev/null | jq -R -r "$TURN_START_JQ" 2>/dev/null | tail -n 1); fi
+    [ -z "$id" ] || { printf '%s' "$id"; return 0; }
+  done
+}
+
+# The id of the latest human message whose text has the checksum the window kept
+# (a typed prompt: the hook cannot see the transcript entry yet when it arms).
+resolve_msgid() {  # <transcript> <checksum>
+  local path=$1 sum=$2 id text found=
+  [ -n "$sum" ] && [ -n "$path" ] && [ -f "$path" ] || return 0
+  while IFS=$'\t' read -r id text; do
+    [ -n "$id" ] || continue
+    text=$(printf '%s' "$text" | base64 -d 2>/dev/null) || continue
+    text=${text#"${text%%[![:space:]]*}"}
+    text=${text%"${text##*[![:space:]]}"}
+    [ "$(text_sum "$text")" = "$sum" ] && found=$id
+  done < <(tail -n 2000 "$path" 2>/dev/null | jq -R -r '
+    fromjson? | select(type == "object")
+    | if (.type == "user" and .origin.kind == "human" and (.isMeta | not)) then [.uuid, (.message.content | if type == "string" then . elif type == "array" then ([.[] | select(.type == "text") | .text] | join("\n")) else "" end)]
+      elif (.type == "attachment" and .attachment.type == "queued_command" and .attachment.origin.kind == "human") then [(.attachment.source_uuid // .uuid), (.attachment.prompt | if type == "array" then ([.[] | select(type == "object" and .type == "text") | .text] | join("\n")) else tostring end)]
+      else empty end
+    | select(.[0] != null) | "\(.[0])\t\(.[1] | @base64)"' 2>/dev/null)
+  printf '%s' "$found"
+}
+
+# lookup [--peek] [--transcript <path>]: the quick-lookup count, the override flag,
+# and the message id, printed as "<count> <override> <id>" ("-" when unknown).
+# With a captain window open it counts within that window; the id is the captain
+# message's. With no window (a wake, a notification, a doorbell turn) the allowance is
+# the same, counted per turn: the turn starts at the latest user prompt or
+# human queued_command in the transcript, and a new turn resets the count (state/.reply-first-wake).
+# Without --peek it counts one more lookup first. bin/fm-main-orchestration-guard.sh calls it.
+cmd_lookup() {
+  local peek=0 transcript='' marker turn_seen n inc=1
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --peek) peek=1; shift ;;
+      --count) inc=${2:-1}; shift 2 || break ;;
+      --transcript) transcript=${2:-}; shift 2 || break ;;
+      *) shift ;;
+    esac
+  done
+  [ -d "$STATE" ] || { echo "0 0 -"; return 0; }
+  lock_take || { echo "0 0 -"; return 0; }
+  if [ -f "$WINDOW" ]; then
+    win_load
+    case "$w_lookups" in ''|*[!0-9]*) w_lookups=0 ;; esac
+    case "$w_override" in 1) ;; *) w_override=0 ;; esac
+    if [ -z "$w_msgid" ] && [ -n "$w_msgsum" ]; then
+      w_msgid=$(resolve_msgid "${transcript:-$w_transcript}" "$w_msgsum")
+    fi
+    case "$inc" in ''|*[!0-9]*) inc=1 ;; esac
+    if [ "$peek" = 0 ]; then w_lookups=$((w_lookups + inc)); fi
+    if [ "$peek" = 0 ] || [ -n "$w_msgid" ]; then win_write; fi
+    lock_drop
+    echo "$w_lookups $w_override ${w_msgid:--}"
+    return 0
+  fi
+  marker=$(turn_marker "$transcript")
+  if [ -z "$marker" ]; then lock_drop; echo "0 0 -"; return 0; fi
+  turn_seen=$(sed -n 's/^turn=//p' "$WAKE" 2>/dev/null | head -n 1)
+  n=$(sed -n 's/^lookups=//p' "$WAKE" 2>/dev/null | head -n 1)
+  case "$n" in ''|*[!0-9]*) n=0 ;; esac
+  [ "$turn_seen" = "$marker" ] || n=0
+  if [ "$peek" = 0 ]; then
+    case "$inc" in ''|*[!0-9]*) inc=1 ;; esac
+    n=$((n + inc))
+    if printf 'turn=%s\nlookups=%s\n' "$marker" "$n" > "$WAKE.tmp.$$"; then mv -f "$WAKE.tmp.$$" "$WAKE"; else rm -f "$WAKE.tmp.$$"; fi
+  fi
+  lock_drop
+  echo "$n 0 $marker"
 }
 
 cmd_pretool() {
@@ -229,13 +443,14 @@ cmd_pretool() {
   payload=$(cat 2>/dev/null || true)
   [ -n "$payload" ] || exit 0
   command -v jq >/dev/null 2>&1 || exit 0
-  [ -f "$WINDOW" ] || exit 0
-  enabled || exit 0
+  bookkeeping_enabled || exit 0
   command=$(printf '%s' "$payload" | jq -r '(.tool_input.command // .toolInput.command // empty)' 2>/dev/null) || exit 0
   transcript=$(printf '%s' "$payload" | jq -r '(.transcript_path // empty)' 2>/dev/null) || transcript=
+  cmd_midturn "$transcript"
+  enabled || exit 0
+  [ -f "$WINDOW" ] || exit 0
   lock_take || exit 0
-  w_epoch=$(win_get epoch) w_count=$(win_get count)
-  w_replied=$(win_get replied) w_fired=$(win_get fired) w_transcript=$(win_get transcript) w_base=$(win_get base)
+  win_load
   case "$w_count" in ''|*[!0-9]*) lock_drop; exit 0 ;; esac
   case "$w_base" in ''|*[!0-9]*) w_base=0 ;; esac
   if [ "$w_replied" = 1 ] || [ "$w_fired" = 1 ]; then
@@ -301,6 +516,9 @@ cmd_pretool() {
 
 case "${1:-}" in
   pretool) shift; cmd_pretool "$@" ;;
+  midturn) shift; cmd_midturn "$@"; exit 0 ;;
+  lookup) shift; cmd_lookup "$@"; exit 0 ;;
+  classify) cmd_classify; exit 0 ;;
   prompt) shift; cmd_prompt "$@" ;;
   arm) shift; cmd_arm "$@" ;;
   clear) cmd_clear ;;
