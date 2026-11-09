@@ -13,6 +13,9 @@
 #   fm-reply-first.sh arm [--transcript <path>]
 #   fm-reply-first.sh clear
 #   fm-reply-first.sh enabled
+#   fm-reply-first.sh midturn <transcript>   (used by pretool and the orchestration guard)
+#   fm-reply-first.sh lookup [--peek]        (used by the orchestration guard)
+#   fm-reply-first.sh classify               (used by the orchestration replay)
 #
 # prompt   the main home's prompt hook: opens a window for a message the
 #          captain typed and closes any window for every other prompt (a Stop
@@ -26,8 +29,13 @@
 #          other prompt (Firstmate traffic, operational input, a harness
 #          notification): each new prompt ends the turn that answered the
 #          captain, and routed work is not a question to answer first.
-# pretool  runs on every tool call. While a window is open and unanswered it
-#          counts the call. The call after the limit (default 3,
+# pretool  runs on every tool call. First it reads the transcript lines written
+#          since its last call (state/.reply-first-seen holds the marker): a
+#          message the captain sent mid-turn, a human queued_command attachment
+#          that passes the same captain test as the prompt hook, opens a fresh
+#          window as arm does, and the call that finds it is call 1. A doorbell,
+#          operational input, or notification there opens nothing. Then, while
+#          a window is open and unanswered, it counts the call. The call after the limit (default 3,
 #          FM_REPLY_FIRST_LIMIT) is refused once (exit 2, the reason on
 #          stderr) and the window closes, so later calls run normally.
 # A reply closes the window early. Either of these counts:
@@ -299,6 +307,20 @@ cmd_prompt() {
   exit 0
 }
 
+# classify: one JSON-encoded prompt text per line on stdin, one line out per input:
+# 1 when the text came from the captain, else 0. bin/fm-main-orchestration-replay.mjs
+# uses it to rebuild captain message windows from a recorded transcript.
+cmd_classify() {
+  local line text
+  command -v jq >/dev/null 2>&1 || return 0
+  while IFS= read -r line; do
+    text=$(printf '%s' "$line" | jq -r 'if type == "string" then . else "" end' 2>/dev/null)
+    text=${text#"${text%%[![:space:]]*}"}
+    text=${text%"${text##*[![:space:]]}"}
+    if text_is_captain "$text"; then echo 1; else echo 0; fi
+  done
+}
+
 # lookup [--peek]: the quick-lookup count and the override flag of the open
 # window, printed as "<count> <override> <epoch>"; "0 0 -" with no window. Without
 # --peek it counts one more lookup first. bin/fm-main-orchestration-guard.sh calls it.
@@ -402,6 +424,7 @@ case "${1:-}" in
   pretool) shift; cmd_pretool "$@" ;;
   midturn) shift; cmd_midturn "$@"; exit 0 ;;
   lookup) shift; cmd_lookup "$@"; exit 0 ;;
+  classify) cmd_classify; exit 0 ;;
   prompt) shift; cmd_prompt "$@" ;;
   arm) shift; cmd_arm "$@" ;;
   clear) cmd_clear ;;

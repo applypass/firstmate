@@ -285,6 +285,28 @@ test_installer_registers_the_guard_once_in_the_main_home() {
   pass "the main installer registers the guard once; a mate home does not get it"
 }
 
+test_replay_counts_a_recorded_session() {
+  make_home replay main
+  local t="$TMP_ROOT/recorded.jsonl" out
+  {
+    jq -cn '{type:"user",origin:{kind:"human"},message:{content:"what is going on with the PRs?"},cwd:"'"$H"'"}'
+    jq -cn '{type:"assistant",message:{content:[{type:"tool_use",name:"Bash",input:{command:"bin/fm-wake-drain.sh"}},{type:"tool_use",name:"Bash",input:{command:"gh-axi pr view 1"}},{type:"tool_use",name:"Bash",input:{command:"gh-axi pr view 2"}},{type:"tool_use",name:"Bash",input:{command:"gh-axi pr view 3"}},{type:"tool_use",name:"Bash",input:{command:"python3 x.py"}},{type:"tool_use",name:"mcp__krisp__search_meetings",input:{}}]}}'
+    jq -cn '{type:"attachment",attachment:{type:"queued_command",prompt:": Firstmate instruction waiting: read the inbox",origin:{kind:"human"}}}'
+    jq -cn '{type:"assistant",message:{content:[{type:"tool_use",name:"Bash",input:{command:"gh-axi pr view 4"}}]}}'
+    jq -cn '{type:"attachment",attachment:{type:"queued_command",prompt:"look yourself at it",origin:{kind:"human"}}}'
+    jq -cn '{type:"assistant",message:{content:[{type:"tool_use",name:"Bash",input:{command:"cat bin/fm-send.sh"}}]}}'
+  } > "$t"
+  out=$(node "$ROOT/bin/fm-main-orchestration-replay.mjs" --home "$H" --json "$t") || fail "the replay failed"
+  [ "$(printf '%s' "$out" | jq -r .calls)" = 8 ] || fail "wrong call count: $out"
+  [ "$(printf '%s' "$out" | jq -r .captainMessages)" = 2 ] || fail "the doorbell opened a window or a message was missed: $out"
+  [ "$(printf '%s' "$out" | jq -r .counts.allow)" = 1 ] || fail "allowed count: $out"
+  [ "$(printf '%s' "$out" | jq -r .counts.quick)" = 2 ] || fail "quick count: $out"
+  [ "$(printf '%s' "$out" | jq -r .counts.deny)" = 4 ] || fail "blocked count: $out"
+  [ "$(printf '%s' "$out" | jq -r .counts.overridden)" = 1 ] || fail "overridden count: $out"
+  [ "$(printf '%s' "$out" | jq -r '.blockedByGroup["quick-lookup-limit"].total')" = 1 ] || fail "the third lookup is not in the limit group: $out"
+  pass "the replay rebuilds windows from a transcript and counts allowed, quick, blocked, and overridden calls"
+}
+
 test_scripts_are_lint_clean() {
   command -v shellcheck >/dev/null 2>&1 || { pass "shellcheck not installed, skipping"; return; }
   "$ROOT/bin/fm-lint.sh" "$ROOT/bin/fm-main-orchestration-guard.sh" "$ROOT/bin/fm-reply-first.sh" "$ROOT/bin/fm-mate-hooks-install.sh" >/dev/null 2>&1 || fail "a guard script is not lint-clean"
@@ -303,4 +325,5 @@ test_the_log_never_holds_secrets_or_contents
 test_inert_outside_the_primary_home
 test_broken_input_allows_silently
 test_installer_registers_the_guard_once_in_the_main_home
+test_replay_counts_a_recorded_session
 test_scripts_are_lint_clean
