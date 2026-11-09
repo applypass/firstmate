@@ -585,7 +585,7 @@ fi
 # Fork-only (applypass): --new-task refuses a busy or over-cap fleet before anything is
 # recorded (bin/fm-new-task-guard.sh owns the rule). --same-task never refuses.
 if [ "$FORK_TASK_MODE" = --new-task ] && [ "$MARK_FROM_FIRSTMATE" = 1 ]; then
-  "$SCRIPT_DIR/fm-new-task-guard.sh" check "$TARGET_TASK_ID" --new-task || exit 1
+  "$SCRIPT_DIR/fm-new-task-guard.sh" check "$TARGET_TASK_ID" || exit 1
 fi
 # Fork-only end
 

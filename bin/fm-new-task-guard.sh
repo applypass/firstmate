@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # fm-new-task-guard.sh - one task, one second mate (applypass fork).
 #
-# Usage: fm-new-task-guard.sh check <target-id> --new-task|--same-task
+# Usage: fm-new-task-guard.sh check <target-id>
 #        <PreToolUse JSON on stdin> | fm-new-task-guard.sh hook [--claude]
 #
 # The rule: each task gets its own second mate. Main sending a second piece of
@@ -10,8 +10,7 @@
 # session's PreToolUse hook (.claude/settings.json) calls `hook`, which calls
 # the same `check`.
 #
-# check <target> --same-task   exit 0, always (the message continues work).
-# check <target> --new-task    exit 1 with the remedy on stderr when:
+# check <target>   the --new-task rule; exit 1 with the remedy on stderr when:
 #   - the target is a registered secondmate (data/secondmates.md) and its home
 #     backlog has any In flight item; or its backlog cannot be read (the
 #     message names what could not be read; a remote mate counts as unreadable);
@@ -19,7 +18,9 @@
 #     flight item + main's own In flight items. The cap is the number in
 #     config/fleet-wip-cap (default 8). This refusal applies even when the
 #     target mate is idle. The message lists each counted entry and flags every
-#     registered mate with no In flight item as "idle - retire first".
+#     registered mate with no In flight item as "idle - retire first". Another
+#     mate whose backlog cannot be read (remote, or a stale home) counts as
+#     active and is listed as "unreadable - counted as active: <reason>".
 #   A target that is not a registered secondmate (an ordinary worker) passes.
 # The mate backlog is read through bin/fm-tasks-axi.sh with FM_HOME set to the
 # mate's home: a read-only `list --state in_flight`.
@@ -71,7 +72,7 @@ EOF
 }
 
 check_busy() { # <target>: 0 passes, 1 refuses
-  local target=$1 home remote ids err
+  local target=$1 home remote ids
   secondmate_registry_line_for_id "$REGISTRY" "$target" || return 0
   remote=$(mate_field "$target" remote)
   home=$(mate_field "$target" home)
@@ -100,21 +101,24 @@ fleet_cap() {
 }
 
 check_fleet_cap() { # 0 passes, 1 refuses
-  local cap id home ids n active=0 lines='' idle='' main_ids bad=''
+  local cap id home ids n active=0 lines='' idle='' unread='' main_ids
   cap=$(fleet_cap)
   for id in $(registered_ids); do
     home=$(mate_field "$id" home)
-    if [ "$(mate_field "$id" remote)" = 1 ] || ! ids=$(inflight_ids "$home" 2>&1); then
-      bad="$bad  - $id: backlog could not be read"$'\n'
+    if [ "$(mate_field "$id" remote)" = 1 ]; then
+      ids="remote mate, no local home"
+    elif ids=$(inflight_ids "$home" 2>&1); then
+      if [ -n "$ids" ]; then
+        n=$(printf '%s\n' "$ids" | wc -l | tr -d ' ')
+        active=$((active + 1))
+        lines="$lines  - mate $id: in flight ($n item(s): $(printf '%s' "$ids" | tr '\n' ' '))"$'\n'
+      else
+        idle="$idle  - mate $id: idle - retire first"$'\n'
+      fi
       continue
     fi
-    if [ -n "$ids" ]; then
-      n=$(printf '%s\n' "$ids" | wc -l | tr -d ' ')
-      active=$((active + 1))
-      lines="$lines  - mate $id: in flight ($n item(s): $(printf '%s' "$ids" | tr '\n' ' '))"$'\n'
-    else
-      idle="$idle  - mate $id: idle - retire first"$'\n'
-    fi
+    active=$((active + 1))
+    unread="$unread  - mate $id: unreadable - counted as active: $ids"$'\n'
   done
   if main_ids=$(inflight_ids "$FM_HOME" 2>&1); then
     for id in $main_ids; do
@@ -122,29 +126,25 @@ check_fleet_cap() { # 0 passes, 1 refuses
       lines="$lines  - main: in flight ($id)"$'\n'
     done
   else
-    bad="$bad  - main: backlog could not be read"$'\n'
-  fi
-  if [ -n "$bad" ]; then
-    printf 'fm-new-task-guard: refused - the fleet count is unknown:\n%s' "$bad" >&2
+    printf 'fm-new-task-guard: refused - the fleet count is unknown: main backlog could not be read: %s\n' "$main_ids" >&2
     return 1
   fi
-  [ "$active" -ge "$cap" ] || return 0
+  if [ "$active" -lt "$cap" ]; then
+    [ -z "$unread" ] || printf 'fm-new-task-guard: note - %s of cap %s active, including:\n%s' "$active" "$cap" "$unread" >&2
+    return 0
+  fi
   {
     echo "fm-new-task-guard: refused - $active active entries, cap is $cap (config/fleet-wip-cap). Retire finished or idle mates before opening new work."
     printf '%s' "$lines"
+    printf '%s' "$unread"
     printf '%s' "$idle"
   } >&2
   return 1
 }
 
 cmd_check() {
-  local target=${1:-} mode=${2:-}
-  [ -n "$target" ] || { echo "usage: fm-new-task-guard.sh check <target-id> --new-task|--same-task" >&2; return 2; }
-  case "$mode" in
-    --same-task) return 0 ;;
-    --new-task) ;;
-    *) echo "usage: fm-new-task-guard.sh check <target-id> --new-task|--same-task" >&2; return 2 ;;
-  esac
+  local target=${1:-}
+  [ -n "$target" ] && [ "$#" -eq 1 ] || { echo "usage: fm-new-task-guard.sh check <target-id>" >&2; return 2; }
   secondmate_registry_line_for_id "$REGISTRY" "$target" || return 0
   check_busy "$target" || return 1
   check_fleet_cap
@@ -210,5 +210,5 @@ case "${1:-}" in
   check) shift; cmd_check "$@"; exit $? ;;
   hook) shift; cmd_hook "$@"; exit $? ;;
   -h|--help) sed -n '2,/^set -u/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
-  *) echo "usage: fm-new-task-guard.sh check <target-id> --new-task|--same-task | hook [--claude]" >&2; exit 2 ;;
+  *) echo "usage: fm-new-task-guard.sh check <target-id> | hook [--claude]" >&2; exit 2 ;;
 esac

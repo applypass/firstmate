@@ -67,7 +67,7 @@ run_guard() { # <args...> -> OUT, RC
 
 test_new_task_refuses_busy_mate() {
   new_world busy; add_mate mate-a 1
-  run_guard check mate-a --new-task
+  run_guard check mate-a
   expect_code 1 "$RC" "busy mate must refuse --new-task"
   case "$OUT" in *"mate-a"*"fm-brief.sh"*"fm-home-seed.sh"*"fm-spawn.sh"*"--secondmate"*) : ;; *) fail "refusal must print the per-task-mate commands: $OUT" ;; esac
   pass "guard: --new-task to a mate with an In flight item refuses and prints the remedy"
@@ -75,31 +75,33 @@ test_new_task_refuses_busy_mate() {
 
 test_new_task_sends_to_idle_mate() {
   new_world idle; add_mate mate-a 0
-  run_guard check mate-a --new-task
+  run_guard check mate-a
   expect_code 0 "$RC" "idle mate must accept --new-task: $OUT"
   pass "guard: --new-task to a mate with no In flight item passes"
 }
 
-test_same_task_always_passes() {
-  new_world same; add_mate mate-a 3
-  run_guard check mate-a --same-task
-  expect_code 0 "$RC" "--same-task must never refuse: $OUT"
-  pass "guard: --same-task passes even for a busy mate"
-}
-
 test_worker_target_out_of_scope() {
   new_world worker; add_mate mate-a 1
-  run_guard check ordinary-worker --new-task
+  run_guard check ordinary-worker
   expect_code 0 "$RC" "a non-secondmate target is out of scope: $OUT"
   pass "guard: an ordinary worker target is never refused"
 }
 
 test_unreadable_backlog_refuses() {
   new_world unread; add_mate mate-a 0; rm -f "$W/mates/mate-a/data/backlog.md"
-  run_guard check mate-a --new-task
+  run_guard check mate-a
   expect_code 1 "$RC" "unreadable mate backlog must refuse"
   case "$OUT" in *"mate-a"*"backlog"*) : ;; *) fail "refusal must name what could not be read: $OUT" ;; esac
   pass "guard: an unreadable mate backlog refuses and names it"
+}
+
+test_unreadable_other_mate_counts_as_active() {
+  new_world unreadother; add_mate mate-a 0; add_mate mate-gone 0
+  rm -rf "$W/mates/mate-gone"
+  run_guard check mate-a
+  expect_code 0 "$RC" "an unreadable other mate below the cap must not refuse: $OUT"
+  case "$OUT" in *"mate-gone"*"unreadable - counted as active"*) : ;; *) fail "the note must name the unreadable mate: $OUT" ;; esac
+  pass "guard: another mate's unreadable backlog counts as active and is named, not refused"
 }
 
 test_fleet_cap_refuses_and_names_entries() {
@@ -107,7 +109,7 @@ test_fleet_cap_refuses_and_names_entries() {
   for i in 1 2 3 4 5 6 7; do add_mate "mate-$i" 1; done
   add_mate mate-idle 0
   main_inflight 1
-  run_guard check mate-idle --new-task
+  run_guard check mate-idle
   expect_code 1 "$RC" "8 active entries must refuse even for an idle target"
   case "$OUT" in *"mate-1"*"in flight"*) : ;; *) fail "cap refusal must list counted entries with state: $OUT" ;; esac
   case "$OUT" in *"main-item1"*) : ;; *) fail "cap refusal must list main's own in-flight work: $OUT" ;; esac
@@ -119,10 +121,10 @@ test_below_cap_passes_and_cap_is_configurable() {
   new_world below; local i
   for i in 1 2 3 4 5 6; do add_mate "mate-$i" 1; done
   add_mate mate-idle 0; main_inflight 1
-  run_guard check mate-idle --new-task
+  run_guard check mate-idle
   expect_code 0 "$RC" "7 active entries is below the default cap: $OUT"
   printf '7\n' > "$W/config/fleet-wip-cap"
-  run_guard check mate-idle --new-task
+  run_guard check mate-idle
   expect_code 1 "$RC" "a configured cap of 7 must refuse at 7 active: $OUT"
   pass "guard: below the cap passes and the cap is read from config/fleet-wip-cap"
 }
@@ -202,9 +204,9 @@ test_send_new_task_refusal_enqueues_nothing() {
 fm_test_run \
   test_new_task_refuses_busy_mate \
   test_new_task_sends_to_idle_mate \
-  test_same_task_always_passes \
   test_worker_target_out_of_scope \
   test_unreadable_backlog_refuses \
+  test_unreadable_other_mate_counts_as_active \
   test_fleet_cap_refuses_and_names_entries \
   test_below_cap_passes_and_cap_is_configurable \
   test_hook_refuses_captain_text_to_busy_mate \
