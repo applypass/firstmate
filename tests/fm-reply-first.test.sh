@@ -165,6 +165,11 @@ test_scope_is_mates_and_the_primary_home() {
   arm
   call 'ls'; call 'ls'; call 'ls'; call 'ls'
   expect_code 0 "$RC" "a home that is off never refuses"
+  # With the orchestration guard still on, the window is kept for its count and override.
+  [ -e "$H/state/.reply-first" ] || fail "the guard's window bookkeeping stopped with reply-first off"
+  rm -f "$H/state/.reply-first"
+  printf 'off\n' > "$H/config/main-orchestration-guard"
+  arm
   [ ! -e "$H/state/.reply-first" ] || fail "a home that is off wrote a window"
   make_home wt main
   git -C "$H" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
