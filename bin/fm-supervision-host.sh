@@ -1341,6 +1341,8 @@ while :; do
 
   # The captain returned during that turn: the return brief was rendered
   # before its visible outcomes existed, so main relays them now, handled or not.
+  # Fork-only: a marker on disk now came from an earlier turn whose PR main
+  # may already have merged; drop it so only this turn's handbacks wake anyone.
   fm_secondmate_host_merge_handbacks_clear "$STATE"
   handle_wake "$REASON"
   HANDLE_RC=$?
