@@ -275,7 +275,9 @@ LAST_TURN=
 TURN_POSTURE=
 ENGINE_ERROR=0
 HEALTH_NOTE=
+# Fork-only: merge handbacks from this turn (fm-secondmate-host-lib.sh).
 HANDBACK_NOTE=
+# Fork-only end
 GRANT_ACTIVE=0
 ARM_PID=
 ARM_OUT=
@@ -702,9 +704,11 @@ retire_successor() {
 # Hand the close to main: stop the successor cycle, print the close, why, and
 # any further "supervision-host:" lines, and exit.
 exit_to_main() {  # <why> [further lines]
+  # Fork-only: every hand-back of this turn also names its merge handbacks.
+  set -- "$1" "${2:-}${2:+${HANDBACK_NOTE:+$'\n'}}$HANDBACK_NOTE"
+  # Fork-only end
+  acknowledged_handback "supervision-host: $1" "${2:-}"
   local lines=${2:-} rc=0
-  lines=${lines:+$lines${HANDBACK_NOTE:+$'\n'}}$HANDBACK_NOTE
-  acknowledged_handback "supervision-host: $1" "$lines"
   retire_successor
   if [ -n "$SUCCESSOR_GENERATION" ] \
     && ! fm_recovery_marker_publish "$STATE/.watcher-down" downtime >/dev/null 2>&1; then
@@ -1356,7 +1360,7 @@ while :; do
   # Fork-only end
   if [ "$HANDLE_RC" -eq 2 ]; then
     log_line "pass-through	attended	$ATTENDED_WHY	$(printf '%s\n' "$REASON" | head -n 1)"
-    acknowledged_handback "$HANDBACK_NOTE"
+    acknowledged_handback
     # The successor this turn already started and confirmed stays up. Retiring
     # it is what left no watcher after a close that became main-only.
     detach_successor
@@ -1370,7 +1374,7 @@ while :; do
       log_line "pass-through	downtime-unrestored	$(printf '%s\n' "$REASON" | head -n 1)"
       exit 1
     fi
-    emit "$HANDBACK_NOTE"
+    emit
     exit 0
   fi
   if [ "$HANDLE_RC" -ne 0 ]; then
