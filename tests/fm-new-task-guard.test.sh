@@ -173,6 +173,15 @@ SH
   chmod +x "$1/tmux" "$1/sleep"
 }
 
+test_installer_registers_hook_once() {
+  new_world install
+  "$ROOT/bin/fm-op-guard-install.sh" "$W" >/dev/null 2>&1 || fail "installer failed"
+  "$ROOT/bin/fm-op-guard-install.sh" "$W" >/dev/null 2>&1 || fail "installer rerun failed"
+  [ "$(jq -r '[.hooks.PreToolUse[].hooks[].command | select(contains("fm-new-task-guard.sh"))] | length' "$W/.claude/settings.local.json")" = 1 ] \
+    || fail "the hook must be registered exactly once"
+  pass "installer: registers the new-task hook once, idempotently"
+}
+
 test_send_new_task_refusal_enqueues_nothing() {
   new_world send; add_mate mate-a 1; make_send_stubs "$FB"
   fm_write_secondmate_meta "$W/state/mate-a.meta" "$W/mates/mate-a" "sess:fm-mate-a"
@@ -200,4 +209,5 @@ fm_test_run \
   test_below_cap_passes_and_cap_is_configurable \
   test_hook_refuses_captain_text_to_busy_mate \
   test_hook_inert_in_secondmate_home \
+  test_installer_registers_hook_once \
   test_send_new_task_refusal_enqueues_nothing
