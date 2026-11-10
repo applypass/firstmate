@@ -64,9 +64,10 @@
 #     non-alphanumerics as "-">/memory); filters that read only a pipe.
 #   - READ ONLY (Read, and the readers cat, head, tail, grep, sed, wc, ...): any file
 #     under the data/ dir of a registered second mate home (the home: field of each
-#     data/secondmates.md line), and any background-task output file of this machine's
-#     Claude tmp root (<tmp>/claude-<uid>/<project>/<session>/tasks/*.output). Never a
-#     write or edit, never HTML, never a mate's projects/ or worktrees.
+#     data/secondmates.md line), and main's own background-task output files, from any
+#     session (<tmp>/claude-<uid>/<home path with non-alphanumerics as "-">/<session>/
+#     tasks/*.output), never another project's. Never a write or edit, never HTML,
+#     never a mate's projects/ or worktrees.
 #   - Read, Grep, Glob, Edit, Write on those same records; Read of a .png or .mp4 file
 #     (frames a worker hands over); Read of this session's own tool-results files
 #     (the harness directory named by the payload's session id); the
