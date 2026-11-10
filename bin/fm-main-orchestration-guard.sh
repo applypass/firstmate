@@ -52,15 +52,24 @@
 #       fm-merge-local.sh - AGENTS.md section 7: approved local-only landing
 #       fm-capacity.sh - AGENTS.md section 10: lane capacity report
 #       fm-task-ledger.sh - merge path: record pr-ready and captain-approval, which fm-pr-merge.sh requires
+#       fm-afk-launch.sh - afk and quiet skills: enter, stop, and check the away or quiet posture
+#       fm-afk-contract.sh - afk and quiet skills: read or record the posture record
+#       fm-afk-start.sh - afk skill: the away daemon entry, run through the native background tool
+#       fm-operational-input.sh - afk skill: open an operational input doorbell
 #   - tasks-axi and quota-axi (backlog; AGENTS.md section 4 dispatch intake); shell
 #     builtins and echo, printf, date, test; readers (cat, head, tail, grep, sed, ls,
 #     jq, find, ...) and writers (mkdir, cp, mv, rm, touch, tee, > redirects) whose
 #     every path is a fleet record: data/, state/, or config/ of the main home, or
 #     the main home's own project memory dir (<config>/projects/<home path with
 #     non-alphanumerics as "-">/memory); filters that read only a pipe.
+#   - READ ONLY (Read, and the readers cat, head, tail, grep, sed, wc, ...): any file
+#     under the data/ dir of a registered second mate home (the home: field of each
+#     data/secondmates.md line), and any background-task output file of this machine's
+#     Claude tmp root (<tmp>/claude-<uid>/<project>/<session>/tasks/*.output). Never a
+#     write or edit, never HTML, never a mate's projects/ or worktrees.
 #   - Read, Grep, Glob, Edit, Write on those same records; Read of a .png or .mp4 file
-#     (frames a worker hands over); Read of this session's own tool-results and tasks
-#     output files (the harness directories named by the payload's session id); the
+#     (frames a worker hands over); Read of this session's own tool-results files
+#     (the harness directory named by the payload's session id); the
 #     Skill, ToolSearch, ReadNotifications, SendUserFile, and AskUserQuestion tools.
 #   - Artifact publish only for a file a mate produced: its path is under a
 #     registered second mate's home data/ (data/secondmates.md) or is a worker

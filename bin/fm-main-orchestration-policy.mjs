@@ -39,6 +39,7 @@ export const ALLOWED_SCRIPTS = new Set([
   "fm-session-start.sh", "fm-afk-return.sh", "fm-secondmate-restart.sh",
   "fm-backlog-handoff.sh", "fm-check-register.sh", "fm-inbox.sh",
   "fm-merge-local.sh", "fm-capacity.sh", "fm-task-ledger.sh",
+  "fm-afk-launch.sh", "fm-afk-contract.sh", "fm-afk-start.sh", "fm-operational-input.sh",
 ]);
 
 // Commands with no side effect beyond the shell, and the fleet-record readers.
@@ -167,13 +168,26 @@ function resolvePath(word, cwd, ctx, vars = {}) {
 }
 
 // Output files the harness wrote for a command THIS session ran: readable, never
-// writable. Only the current session's own directories count (ctx.sessionId).
+// writable. Tool results stay scoped to the current session's directory (ctx.sessionId).
+// A background-task output file (tasks/*.output) is readable from any session of this
+// machine's Claude tmp root: a restart or /updatefirstmate hands main a task id whose
+// session directory is no longer the current one, and the file is still main's own.
 function isHarnessOutput(abs, ctx) {
+  if (/^\/(private\/)?tmp\/claude-\d+\/[^/]+\/[A-Za-z0-9-]+\/tasks\/[^/]+\.output$/.test(abs)) return true;
   const sid = ctx.sessionId;
   if (!sid || !/^[A-Za-z0-9-]+$/.test(sid)) return false;
-  return new RegExp(`^/(private/)?tmp/claude-\\d+/[^/]+/${sid}/(tool-results|tasks)/`).test(abs)
+  return new RegExp(`^/(private/)?tmp/claude-\\d+/[^/]+/${sid}/tool-results/`).test(abs)
     || new RegExp(`/\\.claude[^/]*/projects/[^/]+/${sid}/tool-results/`).test(abs);
 }
+
+// A path under the data/ dir of a registered second mate home (data/secondmates.md):
+// its report and record files, readable by main, never writable. Its projects/ and
+// worktrees are not under data/ and stay denied. The registry is parsed once, in makeContext.
+function isMateData(abs, ctx) {
+  return ctx.mateHomes.some((h) => abs === `${h}/data` || abs.startsWith(`${h}/data/`));
+}
+// What main may read: its own fleet records, harness output, and a mate's data/.
+const isReadable = (abs, ctx) => isFleetRecord(abs, ctx) || isHarnessOutput(abs, ctx) || isMateData(abs, ctx);
 
 const isArtifactHtml = (abs) => /\.html?$/i.test(abs) || abs.includes("/.lavish/");
 
@@ -189,7 +203,7 @@ function globsExcludeHtml(globs, types = []) {
   return positive.length > 0 && positive.every((g) => !isHtmlGlob(g) && /\.(\w+|\{\w+(,\w+)*\})$/.test(g));
 }
 function isDirUnderData(abs, ctx) {
-  const inData = [...new Set([ctx.home, path.normalize(ctx.homeRaw)])].some((b) => abs === path.join(b, "data") || abs.startsWith(`${path.join(b, "data")}/`));
+  const inData = [...new Set([ctx.home, path.normalize(ctx.homeRaw)])].some((b) => abs === path.join(b, "data") || abs.startsWith(`${path.join(b, "data")}/`)) || isMateData(abs, ctx);
   if (!inData) return false;
   try { return statSync(abs).isDirectory(); } catch { return false; }
 }
@@ -399,7 +413,7 @@ function classifyNode(tokens, state, depth) {
         const { globs, types } = wordGlobs(cmdWords);
         if (!globsExcludeHtml(globs, types)) return deny("artifact-read", `${display} (recursive over data/ reaches html)`);
       }
-      if (!abs || !(isFleetRecord(abs, ctx) || isHarnessOutput(abs, ctx))) return deny(abs ? groupOfPath(abs, ctx) : "other", abs ? display : `${display} <dynamic path>`);
+      if (!abs || !isReadable(abs, ctx)) return deny(abs ? groupOfPath(abs, ctx) : "other", abs ? display : `${display} <dynamic path>`);
     }
     return result;
   }
@@ -534,7 +548,7 @@ export function classifyCall(payload, baseCtx) {
   if (tool === "Read") {
     const p = abs(toolPath(input));
     if (p && MEDIA.test(p)) return allow();
-    if (p && !isArtifactHtml(p) && (isFleetRecord(p, ctx) || isHarnessOutput(p, ctx))) return allow();
+    if (p && !isArtifactHtml(p) && isReadable(p, ctx)) return allow();
     return deny(groupOfPath(p, ctx), `Read ${p ? path.basename(p) : ""}`);
   }
   if (tool === "Grep" || tool === "Glob") {
