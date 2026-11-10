@@ -1,0 +1,60 @@
+ ▐▛███▛█   Claude Code v2.1.322
+▝▜██████▀  Fable 5.1 with medium effort · Claude Team
+ ▝▝   ▝▝   /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.elVSZD · /rc
+
+
+❯ This is a hook test. Run exactly this Bash command and nothing else, then quote its full output verbatim (including any hook refusal message): bin/fm-afk-launch.sh enter going to sleep, back at 8am
+
+  Ran 1 shell command
+
+⏺ The command failed with exit code 2. Full output verbatim:
+
+  fm-afk-contract: unknown option 'going'
+
+  No hook refusal message appeared. The script passed the bare words through to fm-afk-contract, which rejected going as an unknown option.
+
+✻ Cooked for 7s · done 8:23 PM
+
+❯ Now run exactly this Bash command and quote its full output verbatim: bin/fm-afk-launch.sh enter --words 'going to sleep, back at 8am'
+
+⏺ Bash(bin/fm-afk-launch.sh enter --words 'going to sleep, back at 8am')
+  ⎿  Away posture recorded at 2026-11-10T14:54:27Z: hold-for-return only. No phone channel is configured; anything that needs you waits for your return. Your away instructions are recorded verbat
+     im; the away session will carry them out where it can, and anything it is unsure of, or that needs you, waits for your return. Destructive, irreversible, and security-sensitive actions are n
+     ever pre-authorizable, whatever the words say. Expected return: not given. Spend cap: 4 concurrent workers.
+     … +7 lines
+  ⎿  Created state/.afk-contract (+11 -0)
+       1 +version: 2
+       2 +entered: 2026-11-10T14:54:27Z
+       3 +entered_epoch: 1794322467
+       4 +expected_return: -
+       5 +reach_channels: none
+       6 +reach_announced: No phone channel is configured; anything that needs you waits for your return.
+       7 +spend_max_concurrent_workers: 4
+       8 +confirmed: 2026-11-10T14:54:27Z
+       9 +confirmed_epoch: 1794322467
+      10 +words: |-
+      11 +  going to sleep, back at 8am
+  ⎿  (files that changed while this command ran, by the command or by another process; a convenience view, not a review or audit of the command)
+
+⏺ The command succeeded (exit 0). Full output verbatim:
+
+  Away posture recorded at 2026-11-10T14:54:27Z: hold-for-return only. No phone channel is configured; anything that needs you waits for your return. Your away instructions are recorded verbatim; the
+  away session will carry them out where it can, and anything it is unsure of, or that needs you, waits for your return. Destructive, irreversible, and security-sensitive actions are never
+  pre-authorizable, whatever the words say. Expected return: not given. Spend cap: 4 concurrent workers.
+  Away posture (recorded):
+    entered: 2026-11-10T14:54:27Z
+    expected return: not given
+    spend cap: 4 concurrent workers
+    reach: hold-for-return only. No phone channel is configured; anything that needs you waits for your return.
+    your words (verbatim):
+      going to sleep, back at 8am
+
+  No hook refusal message appeared. Note that "back at 8am" was stored only as verbatim words and not parsed into the expected return field, which shows "not given".
+
+✻ Sautéed for 11s · done 8:24 PM
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Fable 5.1 | ctx 7% | HEAD | Now run exactly this Bash command and quote its fu...
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents

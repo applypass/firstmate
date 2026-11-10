@@ -1,0 +1,60 @@
+
+
+✻ Sautéed for 11s · done 8:24 PM
+
+❯ Next hook test. Run exactly this Bash command and quote its full output verbatim, including any hook refusal message: bin/fm-daily-quota-stop.sh --help
+
+  Ran 1 shell command
+  ⎿  Not run · permission denied
+     │ Reason: PreToolUse:Bash hook error: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[main-orchestration] This call was not run: the main
+     │ session routes work …
+
+⏺ The hook refused the command. It did not run. Full output verbatim:
+
+  PreToolUse:Bash hook error: [command hook 2]: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny"},"systemMessage":"[main-orchestration] This call was not run: the main
+  session routes work and answers the captain, and does not do this itself (other-script). Hand this to the owning mate via fm-send (or start one with fm-spawn) and tell the captain who has it. For a
+  quick answer the captain can say \"look yourself\" for one message."}
+
+  The main-orchestration hook classified the script as "other-script" and denied it. Say "look yourself" if you want me to retry it for one message.
+
+✻ Worked for 6s · done 8:25 PM
+
+❯ Next hook test. Start this Bash command with run_in_background=true: echo restart-result-ok-42. When it finishes, read its tasks/*.output file twice: first with the Read tool on the full output
+  path, then with Bash cat on the same path. Quote the full path and each result verbatim, including any hook refusal.
+
+  Ran 1 shell command
+
+⏺ The background echo is running. I will read its output file once the completion notification arrives.
+
+✻ Sautéed for 7s · done 8:25 PM
+
+⏺ Background command "Echo a test marker string in the background" completed (exit code 0)
+
+  Read 1 file, ran 1 shell command
+
+⏺ Both reads succeeded with no hook refusal.
+
+  Output file path:
+
+  /private/tmp/claude-501/-private-var-folders-vr--90lw3-s0bs-nw2f7b6t9yrm0000gn-T-fm-lab-elVSZD/c26b945f-3e78-4e62-94fa-eb7c6a6051b7/tasks/bl6bk9za3.output
+
+  Read tool result (verbatim, with line numbers as shown):
+
+  1       restart-result-ok-42
+  2
+  3       [exited with code 0]
+  4
+
+  Bash cat result (verbatim):
+
+  restart-result-ok-42
+
+  [exited with code 0]
+
+✻ Sautéed for 13s · done 8:26 PM
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Fable 5.1 | ctx 7% | HEAD | <task-notification>
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents

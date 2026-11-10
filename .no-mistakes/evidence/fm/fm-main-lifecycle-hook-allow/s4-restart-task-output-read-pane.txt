@@ -1,0 +1,60 @@
+
+ ▐▛███▛█   Claude Code v2.1.322
+▝▜██████▀  Fable 5.1 with medium effort · Claude Team
+ ▝▝   ▝▝   /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.elVSZD · /rc
+
+
+❯ Hook test after a restart. Two separate tool calls, quote each result verbatim including any hook refusal: (1) Read tool on
+  /private/tmp/claude-501/-private-var-folders-vr--90lw3-s0bs-nw2f7b6t9yrm0000gn-T-fm-lab-elVSZD/c26b945f-3e78-4e62-94fa-eb7c6a6051b7/tasks/bl6bk9za3.output (2) Bash: tail -n 5
+  /private/tmp/claude-501/-private-var-folders-vr--90lw3-s0bs-nw2f7b6t9yrm0000gn-T-fm-lab-elVSZD/c26b945f-3e78-4e62-94fa-eb7c6a6051b7/tasks/bl6bk9za3.output
+
+⏺ Running the two calls now.
+
+  Read 1 file, ran 1 shell command
+
+⏺ Both calls succeeded with no hook refusal.
+
+  (1) Read tool, verbatim:
+       1  restart-result-ok-42
+       2
+       3  [exited with code 0]
+       4
+
+  (2) Bash tail -n 5, verbatim:
+  restart-result-ok-42
+
+  [exited with code 0]
+
+✻ Worked for 15s · done 8:28 PM
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Fable 5.1 | ctx 7% | HEAD | Hook test after a restart. Two separate tool calls...
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents
