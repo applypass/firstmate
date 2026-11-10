@@ -169,11 +169,15 @@ function resolvePath(word, cwd, ctx, vars = {}) {
 
 // Output files the harness wrote for a command THIS session ran: readable, never
 // writable. Tool results stay scoped to the current session's directory (ctx.sessionId).
-// A background-task output file (tasks/*.output) is readable from any session of this
-// machine's Claude tmp root: a restart or /updatefirstmate hands main a task id whose
-// session directory is no longer the current one, and the file is still main's own.
+// A background-task output file (tasks/*.output) is readable from any session of the
+// main home's own project dir (the home path with every non-alphanumeric character as
+// "-"): a restart or /updatefirstmate hands main a task id whose session directory is no
+// longer the current one, and the file is still main's own. Other projects' stay denied.
 function isHarnessOutput(abs, ctx) {
-  if (/^\/(private\/)?tmp\/claude-\d+\/[^/]+\/[A-Za-z0-9-]+\/tasks\/[^/]+\.output$/.test(abs)) return true;
+  for (const base of new Set([ctx.home, path.normalize(ctx.homeRaw)])) {
+    const enc = base.replace(/[^A-Za-z0-9]/g, "-");
+    if (new RegExp(`^/(private/)?tmp/claude-\\d+/${enc}/[A-Za-z0-9-]+/tasks/[^/]+\\.output$`).test(abs)) return true;
+  }
   const sid = ctx.sessionId;
   if (!sid || !/^[A-Za-z0-9-]+$/.test(sid)) return false;
   return new RegExp(`^/(private/)?tmp/claude-\\d+/[^/]+/${sid}/tool-results/`).test(abs)

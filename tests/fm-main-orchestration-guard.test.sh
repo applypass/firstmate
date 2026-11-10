@@ -127,18 +127,22 @@ test_allowlist_is_narrow_and_documented() {
   gcall Edit '{"file_path":"/Users/x/.claude-work/projects/-some-other-project/memory/a.md","old_string":"a","new_string":"b"}'; expect_code 2 "$RC" "editing another project's memory dir is refused"
   gcall Read '{"file_path":"/Users/x/.claude-work/projects/'"$(enc_home)"'/memory/MEMORY.md"}'; expect_code 0 "$RC" "the main home's memory dir is read"
   SESSION=abc-123
-  gcall Read '{"file_path":"/private/tmp/claude-501/-proj/abc-123/tasks/b1.output"}'; expect_code 0 "$RC" "this session's task output is read"
+  gcall Read '{"file_path":"/private/tmp/claude-501/'"$(enc_home)"'/abc-123/tasks/b1.output"}'; expect_code 0 "$RC" "this session's task output is read"
   gcall Read '{"file_path":"/Users/x/.claude-work/projects/-proj/abc-123/tool-results/t.txt"}'; expect_code 0 "$RC" "this session's tool result is read"
-  gcall Read '{"file_path":"/private/tmp/claude-501/-proj/zzz-999/tasks/b1.output"}'; expect_code 0 "$RC" "an earlier session's task output is read"
-  gcall Read '{"file_path":"/private/tmp/claude-501/-proj/zzz-999/tasks/b1.txt"}'; expect_code 2 "$RC" "only tasks/*.output is read"
-  gcall Read '{"file_path":"/private/tmp/claude-501/-proj/zzz-999/other/b1.output"}'; expect_code 2 "$RC" "an output file outside tasks/ is refused"
+  gcall Read '{"file_path":"/private/tmp/claude-501/'"$(enc_home)"'/zzz-999/tasks/b1.output"}'; expect_code 0 "$RC" "an earlier session's task output is read"
+  gcall Read '{"file_path":"/private/tmp/claude-501/'"$(enc_home)"'/zzz-999/tasks/b1.txt"}'; expect_code 2 "$RC" "only tasks/*.output is read"
+  gcall Read '{"file_path":"/private/tmp/claude-501/'"$(enc_home)"'/zzz-999/other/b1.output"}'; expect_code 2 "$RC" "an output file outside tasks/ is refused"
   gcall Read '{"file_path":"/private/tmp/other/b1.output"}'; expect_code 2 "$RC" "another /private/tmp file is refused"
-  gcall Write '{"file_path":"/private/tmp/claude-501/-proj/abc-123/tasks/b1.output","content":"x"}'; expect_code 2 "$RC" "a task output file is never written"
+  gcall Write '{"file_path":"/private/tmp/claude-501/'"$(enc_home)"'/abc-123/tasks/b1.output","content":"x"}'; expect_code 2 "$RC" "a task output file is never written"
   gcall Read '{"file_path":"/Users/x/.claude-work/projects/-proj/zzz-999/tool-results/t.txt"}'; expect_code 2 "$RC" "another session's tool result is refused"
-  bash_call 'cat /private/tmp/claude-501/-proj/abc-123/tasks/b1.output'; expect_code 0 "$RC" "cat of this session's output"
-  bash_call 'cat /private/tmp/claude-501/-proj/zzz-999/tasks/b1.output'; expect_code 0 "$RC" "cat of an earlier session's task output"
+  bash_call 'cat /private/tmp/claude-501/'"$(enc_home)"'/abc-123/tasks/b1.output'; expect_code 0 "$RC" "cat of this session's output"
+  bash_call 'cat /private/tmp/claude-501/'"$(enc_home)"'/zzz-999/tasks/b1.output'; expect_code 0 "$RC" "cat of an earlier session's task output"
   bash_call 'cat /private/tmp/other/b1.output'; expect_code 2 "$RC" "cat of another /private/tmp file is refused"
-  bash_call 'cp data/backlog.md /private/tmp/claude-501/-proj/abc-123/tasks/b1.output'; expect_code 2 "$RC" "writing a task output file is refused"
+  local other=/private/tmp/claude-501/-Users-uayyagari-.treehouse-apply_pass_backend-863c33-2-apply_pass_backend/zzz-999/tasks/b9.output
+  gcall Read "$(jq -cn --arg p "$other" '{file_path:$p}')"; expect_code 2 "$RC" "another project's task output is refused"
+  bash_call "cat $other"; expect_code 2 "$RC" "cat of another project's task output is refused"
+  gcall Read '{"file_path":"/private/tmp/claude-501/-proj/abc-123/tasks/b1.output"}'; expect_code 2 "$RC" "this session's id under another project's dir is refused"
+  bash_call 'cp data/backlog.md /private/tmp/claude-501/'"$(enc_home)"'/abc-123/tasks/b1.output'; expect_code 2 "$RC" "writing a task output file is refused"
   SESSION=
   # The header names a reason for every allowlisted script, and only those.
   local listed header
