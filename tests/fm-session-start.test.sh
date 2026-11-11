@@ -839,6 +839,25 @@ EOF
   pass "a locked session start registers the meeting-to-ticket hook once"
 }
 
+# Fork-only: a locked start writes the 1Password desktop block into the home's Claude settings and reports a session without it.
+test_session_start_op_desktop_block() {
+  local rec root home fakebin out
+  rec=$(new_world op-desktop-block)
+  IFS='|' read -r root home fakebin <<EOF
+$rec
+EOF
+  make_fake_toolchain "$fakebin"
+  make_fake_ps_claude "$fakebin"
+  ln -sf "$(command -v jq)" "$fakebin/jq"
+  out=$(unset OP_BIOMETRIC_UNLOCK_ENABLED; run_session_start "$home" "$root" "$fakebin:$BASE_PATH" 2>&1)
+  assert_contains "$out" "1PASSWORD DESKTOP SESSION REACHABLE" "a session without the block is reported"
+  jq -e '.env.OP_BIOMETRIC_UNLOCK_ENABLED == "false"' "$home/.claude/settings.local.json" >/dev/null \
+    || fail "session start did not write the block into the home Claude settings"
+  out=$(export OP_BIOMETRIC_UNLOCK_ENABLED=false; run_session_start "$home" "$root" "$fakebin:$BASE_PATH" 2>&1)
+  assert_not_contains "$out" "1PASSWORD DESKTOP SESSION REACHABLE" "a session with the block is not reported"
+  pass "session start writes the 1Password desktop block for the home and reports a session without it"
+}
+
 # --- lock refusal: read-only path --------------------------------------------
 
 test_lock_refusal_read_only_path() {
@@ -3117,6 +3136,7 @@ EOF
 
 test_context_digest_absent_empty_present
 test_session_start_registers_meeting_ticket_hook # Fork-only: meeting-to-ticket hook registration
+test_session_start_op_desktop_block # Fork-only: 1Password desktop session block
 test_lock_refusal_read_only_path
 test_lock_write_failure_read_only_path
 test_trace_context_effective_state_is_frozen_after_lock

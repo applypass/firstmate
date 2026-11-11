@@ -7167,6 +7167,9 @@ fi
 # launch and the launch-env-allowlist `env -i` wrapper.
 LAUNCH="export FM_TASK_INBOX=$(shell_quote "$STATE_REAL/$ID.inbox"); $LAUNCH"
 LAUNCH="export COMPACT_ADVISER_DISABLE=1; $LAUNCH"
+# Fork-only: keep every agent off the 1Password desktop session (bin/fm-op-desktop-block.sh).
+LAUNCH="export OP_BIOMETRIC_UNLOCK_ENABLED=false; $LAUNCH"
+# Fork-only end
 # When the live-harness gate has exported DISABLE_AUTOUPDATER into this spawn's
 # own environment, carry it into the launch command text so Claude Code's
 # auto-updater cannot rewrite the shared binary during a live run. Embedding the
@@ -7214,6 +7217,9 @@ if [ "$BACKEND" = t3code ]; then
   # record exists, the same delivered-implies-recorded invariant the pane path
   # keeps by unsetting it when the record fails.
   T3CODE_ENV=("GOTMPDIR=$TASK_TMP/gotmp" COMPACT_ADVISER_DISABLE=1 "FM_TASK_INBOX=$STATE_REAL/$ID.inbox")
+  # Fork-only: keep every agent off the 1Password desktop session (bin/fm-op-desktop-block.sh).
+  T3CODE_ENV+=(OP_BIOMETRIC_UNLOCK_ENABLED=false)
+  # Fork-only end
   if [ "$GIT_HOOKS_INSTALLED" = 1 ]; then
     T3CODE_ENV+=(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.hooksPath "GIT_CONFIG_VALUE_0=$GIT_HOOKS_DIR")
   fi

@@ -735,6 +735,10 @@ stage role
 subsection "HOME ROLE"
 FM_HOME="$FM_HOME" FM_CONFIG_OVERRIDE="$CONFIG" "$SCRIPT_DIR/fm-role.sh" report 2>/dev/null \
   || printf 'fm-role: unknown (bin/fm-role.sh report failed)\n'
+# Fork-only: keep agents off the 1Password desktop session; report a session that still reaches it (bin/fm-op-desktop-block.sh).
+[ "$READ_ONLY" -eq 1 ] || "$SCRIPT_DIR/fm-op-desktop-block.sh" install "$FM_HOME" >/dev/null 2>&1 || true
+"$SCRIPT_DIR/fm-op-desktop-block.sh" check || true
+# Fork-only end
 
 if [ "$READ_ONLY" -eq 0 ]; then
   if [ "$REEMIT" -eq 0 ]; then

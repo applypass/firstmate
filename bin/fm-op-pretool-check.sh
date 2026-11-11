@@ -14,6 +14,9 @@
 # firstmate's home (bin/fm-op-guard-install.sh) and every Claude worker and
 # secondmate worktree bin/fm-spawn.sh launches. Codex workers run with hooks
 # disabled and other harnesses have no registration, so they are not covered.
+# It also never sees op run inside a script; the launch-environment block in
+# bin/fm-op-desktop-block.sh covers every process, and this hook stays to name
+# the service-account remedy before the call fails.
 #
 # Usage:
 #   <PreToolUse JSON on stdin> | bin/fm-op-pretool-check.sh [--claude]
