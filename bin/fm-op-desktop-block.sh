@@ -21,6 +21,10 @@
 #   - `check` reports when the calling session lacks it; bin/fm-session-start.sh
 #     prints that report in the digest, which is how a primary on another
 #     harness, or a Claude primary started before install, learns of the gap.
+# Known gap: the no-mistakes pipeline agents (review, fix, test, document) are
+# not covered. The shared no-mistakes daemon starts them from its own launchd
+# environment, not through fm-spawn, so they run without the block and an `op`
+# call inside them can still reach the desktop app.
 # Captain-run commands in the captain's own terminal are untouched and keep the
 # desktop session.
 #
