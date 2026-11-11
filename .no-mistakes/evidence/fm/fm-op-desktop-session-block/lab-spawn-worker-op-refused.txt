@@ -1,0 +1,10 @@
+Lab: disposable FM_HOME + private tmux socket fm-lab. Spawner env and lab tmux server have NO OP_BIOMETRIC_UNLOCK_ENABLED.
+Command: bin/fm-spawn.sh sm-a1 <lab-secondmate-home> --harness 'bash retag.sh check; echo op-exit=$?; echo OP_BIOMETRIC_UNLOCK_ENABLED=$OP_BIOMETRIC_UNLOCK_ENABLED; sleep 600' --secondmate
+retag.sh: #!/bin/sh / op vault list   (real op 2.40.0)
+--- worker pane capture ---
+❯ export COMPACT_ADVISER_DISABLE=1
+fm-lab-sm.Jmib0F on  main [?] on ☁️  (us-east-1)
+❯ . '/tmp/fm-sm-a1+06e64df3b18cef9d25bdbbf24b0ea7b7c7b7fea40168b00f64e2ccb7fd022acc/launch.s1794414474.5733.701.sh'
+[ERROR] 2026/11/11 21:57:56 You are not currently signed in. Please run `op signin --help` for instructions
+op-exit=1
+OP_BIOMETRIC_UNLOCK_ENABLED=false

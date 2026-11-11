@@ -1,0 +1,7 @@
+$ OP_BIOMETRIC_UNLOCK_ENABLED=false bash retag.sh  (script calls `op vault list`, no service-account token)
+[ERROR] 2026/11/11 21:56:52 You are not currently signed in. Please run `op signin --help` for instructions
+exit=1
+
+$ OP_BIOMETRIC_UNLOCK_ENABLED=false OP_SERVICE_ACCOUNT_TOKEN=<bogus> bash retag.sh
+[ERROR] 2026/11/11 21:56:52 failed to DecodeSACredentials: illegal base64 data at input byte 4
+exit=9

@@ -1,0 +1,23 @@
+$ bin/fm-op-desktop-block.sh install <lab-home>   (the call fm-session-start.sh makes for the home)
+$ cat <lab-home>/.claude/settings.local.json
+{
+  "env": {
+    "OP_BIOMETRIC_UNLOCK_ENABLED": "false"
+  }
+}
+
+$ cd <lab-home> && env -u OP_BIOMETRIC_UNLOCK_ENABLED claude -p "Run: printenv OP_BIOMETRIC_UNLOCK_ENABLED; bash proj/retag.sh; echo op-exit=$?" --allowedTools Bash
+(real Claude Code, normal login; retag.sh calls real `op vault list`)
+false
+[ERROR] 2026/11/11 21:58:48 You are not currently signed in. Please run `op signin --help` for instructions
+op-exit=1
+
+$ env -u OP_BIOMETRIC_UNLOCK_ENABLED bin/fm-op-desktop-block.sh check
+!! 1PASSWORD DESKTOP SESSION REACHABLE: this session started without OP_BIOMETRIC_UNLOCK_ENABLED=false,
+!! so an op call it makes without OP_SERVICE_ACCOUNT_TOKEN - typed, inside a script, or by
+!! absolute path - can reach the captain's 1Password desktop app, which agents must never use.
+!! Claude: a locked session start writes it to the home .claude/settings.local.json; restart to load it.
+!! Other harnesses: restart this session with OP_BIOMETRIC_UNLOCK_ENABLED=false exported in its launch environment.
+exit=1
+$ OP_BIOMETRIC_UNLOCK_ENABLED=false bin/fm-op-desktop-block.sh check
+exit=0 (silent)
