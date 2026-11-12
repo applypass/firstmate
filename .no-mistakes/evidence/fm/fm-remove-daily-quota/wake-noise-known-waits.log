@@ -1,0 +1,6 @@
+# fm_noise_span_quiet decisions from bin/fm-wake-noise-lib.sh (HEAD); one shared state dir
+mate1 first sight of external-wait until=2026-11-12T15:49:01Z -> WAKE
+mate1 same wait again                    -> quiet (no wake)
+mate2 its own wait, same clear time       -> WAKE
+mate2 same wait again                    -> quiet (no wake)
+mate3 old-style daily quota hold line     -> WAKE

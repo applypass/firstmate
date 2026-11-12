@@ -1,0 +1,14 @@
+== BASE hook, worker env names a refusing quota check (old behavior)
+   remote: daily quota stop: refusing (fake 50% used today)        
+   To ../gate.git
+    ! [remote rejected] HEAD -> fm/x (pre-receive hook declined)
+   error: failed to push some refs to '../gate.git'
+== HEAD hook, same env (env is now ignored)
+   To ../gate.git
+    * [new branch]      HEAD -> fm/x
+== BASE hook still installed in a gate, env names the deleted fm-daily-quota-stop.sh
+   To ../gate.git
+    * [new branch]      HEAD -> fm/x
+== HEAD hook, no quota env (what fm-spawn now exports)
+   To ../gate.git
+    * [new branch]      HEAD -> fm/x

@@ -1,0 +1,25 @@
+# disposable mate2 home .claude/settings.local.json, written by the BASE fm-daily-quota-guard-install.sh, hook path pointed at this change's stub
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M77X0Z5S7CB6B05G540G86XM/bin/fm-daily-quota-pretool-check.sh --claude --home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-dq-ab.BLRsGA/mate2-home --status-file /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-dq-ab.BLRsGA/mate2-home/state/mate2.status"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# claude -p (Claude Code 2.1.322 (Claude Code)) asked to run: echo no-mistakes rerun
+{"type":"tool_use","input":"echo no-mistakes rerun","content":null,"is_error":null,"text":null}
+{"type":"tool_result","input":null,"content":"no-mistakes rerun","is_error":false,"text":null}
+{"type":"text","input":null,"content":null,"is_error":null,"text":"no-mistakes rerun"}
+
+# Claude Code debug log, PreToolUse hook lines
+2026-11-12T13:46:53.444Z [DEBUG] Hooks: PreToolUse:Bash [/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M77X0Z5S7CB6B05G540G86XM/bin/fm-daily-quota-pretool-check.sh --claude --home /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-dq-ab.BLRsGA/mate2-home --status-file /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-dq-ab.BLRsGA/mate2-home/state/mate2.status] finished with status 0 (65ms)
+2026-11-12T13:46:53.463Z [DEBUG] Hooks: PreToolUse:Bash [rtk hook claude] finished with status 0 (89ms)

@@ -1,0 +1,54 @@
+FM_TEST_BEGIN 2026-11-12T13:47:28Z tests/fm-wake-noise.test.sh family=unclassified expected_gate_skip=none
+ok - a known wait wakes once, then stays quiet until it ends
+ok - the watcher holds a routine notice and wakes on the next real event
+ok - routine notices wait for the next real wake, up to the hold limit
+ok - an open problem wakes once; repeats are counted until it is resolved
+ok - an open problem closes on every event the shared decision fold closes it on
+ok - a same-key line with a changed verb or note wakes
+ok - recent activity since the request holds back only an acknowledged reply's escalation
+ok - a held routine notice arrives on its own once its hold ends
+ok - a captain-held transfer is never absorbed by the routine hold
+ok - a span holding a captain-held transfer is never absorbed
+ok - recent mate activity is told apart from system lines and old lines
+ok - a wait whose time has passed is not quiet
+ok - only a span made of announced known waits is quiet
+ok - the watcher absorbs the same known wait the second time
+FM_TEST_END 2026-11-12T13:54:48Z tests/fm-wake-noise.test.sh exit=0 duration_ms=438194 gate_skip=false
+FM_TEST_BEGIN 2026-11-12T13:54:49Z tests/fm-wake-noise-replay.test.sh family=unclassified expected_gate_skip=none
+# replay wake count: total=83 (signal=83 never-wait=0) never-wait findings=0 absorbed=1 held=42
+ok - replayed wake count is 83 after step 6 (baseline 86)
+FM_TEST_END 2026-11-12T14:41:45Z tests/fm-wake-noise-replay.test.sh exit=0 duration_ms=2812864 gate_skip=false
+FM_TEST_BEGIN 2026-11-12T14:41:45Z tests/fm-main-orchestration-guard.test.sh family=unclassified expected_gate_skip=none
+ok - 9 Nov: the labelling-page HTML grep is refused (4th call) and logged
+ok - 9 Nov: a bin/ script read is refused
+ok - orchestration scripts, fleet records, the memory dir, and worker frames are never refused
+ok - the allowlist is narrow, every script has a header reason, and media, memory, and harness output are scoped
+ok - artifact HTML under data/ is refused through Read, Bash readers, Grep, Glob, Edit, and Write
+ok - afk, quiet, ledger, and merge lifecycle scripts run from main
+ok - main reads a registered mate's data/ and nothing else of its home, and never writes there
+ok - every call off the allowlist is refused and logged with its group
+ok - two quick lookups per captain message, the third is refused, other PR reads are refused
+ok - a typed or mid-turn captain message resets the quick-lookup count; a doorbell does not
+ok - a turn without a captain message gets 2 quick lookups per turn; a new turn or a captain message resets it
+ok - the refusal log holds the real message id from the transcript, and - only when none exists
+ok - the guard's own switches, window state, and refusal log are readable but never writable
+ok - find actions, awk and sed programs that run or write, rg and sort programs, file flags outside the records, pushd, tail -f, and unknown variables in paths are refused
+ok - a compound command counts each quick lookup it holds
+ok - reply-first off turns off its 3-call cap only; the guard's window, count, and override keep working
+ok - the replay closes the captain window at a wake prompt, counts the wake turn on its own, and reads FM_MAIN_LOOKUP_LIMIT
+ok - the replay, like the live hook, does not start a turn at a mid-turn task notification
+ok - classify reports whether the captain wrote a text and whether it asks main to dig itself
+ok - the override phrases lift the check for one message's window only
+ok - Artifact publish is allowed only for a mate-produced page or a worker report
+ok - a refusal line holds the tool, group, message id, and a short summary, never quoted text or secrets
+ok - inert in a second mate home and a task worktree; off with config/main-orchestration-guard
+ok - an unreadable payload allows silently; an unparseable command is default deny
+ok - the main installer registers the guard once; a mate home does not get it
+ok - the replay rebuilds windows from a transcript and counts allowed, quick, blocked, and overridden calls
+ok - the guard scripts are clean under bin/fm-lint.sh
+FM_TEST_END 2026-11-12T15:06:04Z tests/fm-main-orchestration-guard.test.sh exit=0 duration_ms=1458366 gate_skip=false
+FM_TEST_SUMMARY total=3 failed=0 skipped_gate=0 duration_ms=4717597
+FM_TEST_SUMMARY_FAMILY family=unclassified count=3 duration_ms=4709424 failed=0
+FM_TEST_SLOWEST rank=1 script=tests/fm-wake-noise-replay.test.sh duration_ms=2812864
+FM_TEST_SLOWEST rank=2 script=tests/fm-main-orchestration-guard.test.sh duration_ms=1458366
+FM_TEST_SLOWEST rank=3 script=tests/fm-wake-noise.test.sh duration_ms=438194

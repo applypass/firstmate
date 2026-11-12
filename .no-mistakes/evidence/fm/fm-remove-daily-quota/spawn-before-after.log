@@ -1,0 +1,22 @@
+# Same scenario on both trees: real bin/fm-spawn.sh launches ship ab-a1 (claude, fake tmux/harness).
+# Fleet home state: day-start baseline 30% weekly used at local midnight; fake quota-axi reports 50% used now = 20% used today.
+
+##### BASE e7e7fddf (before this change)
+fm-spawn.sh exit status: 1
+fm-spawn.sh output (quota lines / last lines):
+daily quota stop: refusing a new worker launch. The fleet has used 20% of the weekly Claude quota today, at or over the 20% daily line. Running work finishes; new work waits for the captain or the next local day.
+quota-axi reads:        1
+worker launched: no
+daily-quota vars exported to worker: 0
+daily-quota hook in worker settings: no settings file
+
+##### HEAD 2196bc25 (this change)
+fm-spawn.sh exit status: 0
+fm-spawn.sh output (quota lines / last lines):
+warning: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-dq-ab.Pi9qkR/case/home/data/ab-a1/launch-brief.md records no ship branch; defaulting to legacy branch fm/ab-a1
+warning: /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-dq-ab.Pi9qkR/case/home/data/ab-a1/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode no-mistakes - confirm its definition of done matches
+spawned ab-a1 harness=claude kind=ship mode=no-mistakes yolo=off window=firstmate:fm-ab-a1 worktree=/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-dq-ab.Pi9qkR/case/wt
+quota-axi reads: 0
+worker launched: yes
+daily-quota vars exported to worker: 0
+daily-quota hook entries in worker .claude/settings.local.json: 0

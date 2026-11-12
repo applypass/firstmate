@@ -1,0 +1,10 @@
+$ # old secondmate settings hook invocation, payload = git push no-mistakes
+exit=0 (stdout/stderr above, empty = allowed)
+$ # rerun payload
+exit=0
+$ # --command form
+exit=0
+$ ls removed scripts
+ls: bin/fm-daily-quota-guard-install.sh: No such file or directory
+ls: bin/fm-daily-quota-lib.sh: No such file or directory
+ls: bin/fm-daily-quota-stop.sh: No such file or directory

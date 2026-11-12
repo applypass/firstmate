@@ -1,0 +1,9 @@
+$ fm-quota-choose.sh --snapshot <claude weekly 50% remaining> --candidate claude:default
+claude default
+exit=0
+$ fm-quota-choose.sh --snapshot <claude weekly 1% remaining> --candidate claude:default
+claude default
+exit=0
+$ fm-quota-choose.sh --snapshot <claude weekly 0% remaining> --candidate claude:default
+none
+exit=1
