@@ -5,10 +5,10 @@
 # that adds nothing to what the supervisor already knows should not cost one.
 #
 # Known waits (step 3). A blocked or paused line that names when it ends, either
-# "external-wait until=<UTC>" or a note carrying "until <UTC>" (the daily quota stop),
-# is a known wait. The first sight of one wakes the supervisor with its clear time.
-# The same wait seen again before that time stays quiet: no wake. The daily quota cap
-# is one wait for the whole fleet; any other wait belongs to its task.
+# "external-wait until=<UTC>" or a note carrying "until <UTC>", is a known wait.
+# The first sight of one wakes the supervisor with its clear time.
+# The same wait seen again before that time stays quiet: no wake.
+# A wait belongs to its task.
 #
 #   fm_noise_span_quiet <state-dir> <task> <events> <span-start-offset>
 #       0 when every event in the span is a known wait already announced and not yet
@@ -45,14 +45,11 @@ fm_noise_known_wait() {
     return 1
   fi
   case "$note" in
-    external-wait* | resource-exhausted* | *'daily quota stop'*) ;;
+    external-wait* | resource-exhausted*) ;;
     *) return 1 ;;
   esac
   epoch=$(fm_noise_iso_epoch "$stamp") || return 1
-  case "$note" in
-    *'(daily quota cap)'* | *'daily quota stop'*) scope=daily-quota-cap ;;
-    *) scope="$task" ;;
-  esac
+  scope=$task
   printf '%s|%s' "$scope" "$epoch"
 }
 

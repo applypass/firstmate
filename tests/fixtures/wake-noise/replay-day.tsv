@@ -2,7 +2,7 @@
 # Neutral task names, ids and text; only line shapes, states and timing are kept.
 # offset_seconds<TAB>kind<TAB>mate<TAB>argument
 # kinds: line (status line), request (marked request sent), operator-resolve (supervisor closes a pending-reply decision),
-#        quota (daily quota stop hit: refuse|hold), turn (mate ledger turn event)
+#        turn (mate ledger turn event)
 9285	turn	mate2	
 9300	turn	mate2	
 9958	turn	mate4	
@@ -534,7 +534,7 @@
 52885	line	mate2	blocked [corr=00000000000000d1]: neutral worker blocker text
 52892	turn	mate2	
 52958	line	mate2	needs-decision [key=branch-outcome-1302]: captain outcome for mate2: neutral outcome
-52960	line	mate2	blocked [corr=00000000000000df]: resource-exhausted (daily quota cap) external-wait until=@86400: neutral wait text
+52960	line	mate2	blocked [corr=00000000000000df]: resource-exhausted external-wait until=@86400: neutral wait text
 52964	turn	mate2	
 53005	line	mate2	done [corr=00000000000000d1]: corr=00000000000000d1 neutral result text
 53081	line	mate1	done [key=child-outcome-6586-done]: neutral note
@@ -542,7 +542,6 @@
 53274	turn	mate2	
 53476	line	mate2	done [corr=00000000000000e0]: corr=00000000000000e0 neutral reply text
 53480	turn	mate2	
-53484	quota	mate1	refuse
 53496	turn	mate1	
 53780	turn	mate2	
 53893	line	mate2	done [key=child-outcome-552c-done]: neutral note
@@ -567,7 +566,6 @@
 54682	line	mate2	needs-decision [key=branch-outcome-1312]: captain outcome for mate2: neutral outcome
 54687	line	mate2	working [corr=00000000000000e2]: corr=00000000000000e2 neutral reply text
 54691	turn	mate2	
-54713	quota	mate2	hold
 54719	turn	mate2	
 54743	line	mate2	working [corr=00000000000000e2]: corr=00000000000000e2 neutral ack text
 54836	line	mate2	done [key=branch-outcome-1315]: captain outcome for mate2: neutral outcome

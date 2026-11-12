@@ -31,9 +31,6 @@ FM_TEST_LIB_SOURCED=1
 # test the gate set FM_SHORTCUT_TICKETS themselves.
 export FM_SHORTCUT_TICKETS=off
 
-# Fork-only: the daily Claude quota stop reads quota-axi on every launch, which
-# fixtures must never call. The cases that test the gate unset this themselves.
-export FM_DAILY_QUOTA_STOP=off
 # Fork-only: the hourly /stow reminder prints on primary prompts; fixtures expect silence.
 export FM_CLEAR_REMINDER=off
 # Fork-only: the task ledger gates (spawn, merge) refuse tasks with no recorded events; fixtures do not model them.

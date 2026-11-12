@@ -39,18 +39,6 @@ test_wait_wakes_again_after_it_ends() {
   pass "a wait whose time has passed is not quiet"
 }
 
-test_daily_cap_is_one_wait_for_the_fleet() {
-  local state="$TMP_ROOT/kw3"
-  mkdir -p "$state"
-  fm_noise_span_quiet "$state" mate1 "blocked [at=$NOW]: system: resource-exhausted (daily quota cap) external-wait until=$LATER: daily quota stop: refusing" \
-    && fail "the first cap line wakes"
-  fm_noise_span_quiet "$state" mate2 "blocked [at=$NOW]: resource-exhausted (daily quota cap) external-wait until=$LATER: out of daily quota" \
-    || fail "a second task's cap line is the same fleet wait"
-  fm_noise_span_quiet "$state" mate3 "paused [at=$NOW]: system: daily quota stop: holding every new worker launch until $LATER" \
-    || fail "the hold line for the same clear time is the same wait"
-  pass "the daily quota cap is one wait for the whole fleet"
-}
-
 test_other_events_are_never_quiet() {
   local state="$TMP_ROOT/kw4"
   mkdir -p "$state"
@@ -115,7 +103,7 @@ test_recent_activity_is_not_a_missed_reply() {
   # The system's own lines are not the mate's activity.
   : > "$state/m2.status"
   printf 'blocked [key=pending-reply-0123456789abcdef] [at=%s]: pending-reply-missed: x\n' "$NOW" >> "$state/m2.status"
-  printf 'blocked [at=%s]: system: daily quota stop: x\n' "$NOW" >> "$state/m2.status"
+  printf 'blocked [at=%s]: system: a machine-written note\n' "$NOW" >> "$state/m2.status"
   fm_noise_task_recently_active "$state" m2 "$NOW" && fail "system lines are not activity"
   pass "recent mate activity is told apart from system lines and old lines"
 }
@@ -347,6 +335,5 @@ test_watcher_wakes_on_a_captain_held_transfer_beside_a_held_notice
 test_captain_held_span_is_never_quiet
 test_recent_activity_is_not_a_missed_reply
 test_wait_wakes_again_after_it_ends
-test_daily_cap_is_one_wait_for_the_fleet
 test_other_events_are_never_quiet
 test_watcher_absorbs_a_repeated_known_wait

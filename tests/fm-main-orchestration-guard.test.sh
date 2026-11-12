@@ -66,10 +66,10 @@ test_9_nov_labelling_page_grep_is_refused() {
 test_9_nov_quota_script_read_is_refused() {
   make_home nov9b main
   prompt 'why did the quota stop fire?'
-  bash_call 'sed -n 1,120p bin/fm-daily-quota-stop.sh'; expect_code 2 "$RC" "the first call, a read of a quota script, is refused"
+  bash_call 'sed -n 1,120p bin/fm-watch.sh'; expect_code 2 "$RC" "the first call, a bin/ script read, is refused"
   assert_contains "$(log_text)" "group=script-read" "logged as a script read"
-  gcall Read '{"file_path":"'"$H"'/bin/fm-daily-quota-stop.sh"}'; expect_code 2 "$RC" "the Read tool on the same script is refused"
-  pass "9 Nov: a read of the quota script under bin/ is refused"
+  gcall Read '{"file_path":"'"$H"'/bin/fm-watch.sh"}'; expect_code 2 "$RC" "the Read tool on the same script is refused"
+  pass "9 Nov: a bin/ script read is refused"
 }
 
 test_orchestration_is_never_refused() {
