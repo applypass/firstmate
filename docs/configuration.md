@@ -494,7 +494,7 @@ The sweep judges the latest blocked line of an open block, so a worker that re-b
 Each wake costs the supervisor one turn, so `bin/fm-wake-noise-lib.sh` holds back wakes that add no new fact.
 `tests/fm-wake-noise-replay.test.sh` replays one real supervision day (`tests/fixtures/wake-noise/replay-day.tsv`) through the real producers and counts the wakes; each cut must lower that count.
 
-- A known wait is a blocked or paused line that names its end, as `external-wait until=<UTC>`.
+- A known wait is a blocked or paused line that names its end, as `external-wait until=<UTC>` or a note carrying `until <UTC>`.
   The watcher wakes the supervisor the first time it sees one, then stays quiet about the same wait until its end time.
   A wait belongs to its task.
   Records are plain files in `state/wake-noise/`.
