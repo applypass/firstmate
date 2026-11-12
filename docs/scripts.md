@@ -87,7 +87,7 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-ask-command-policy.mjs` | Fork-only: allowlist policy for the read-only session's Read, Grep, Glob, and Bash calls |
 | `fm-ask-order.sh` | Fork-only: the read-only session's one allowed write, queuing an order to the owning mate's steering inbox through `fm-send.sh` |
 | `fm-clear-reminder.sh` | Fork-only: hourly one-line `/stow` then `/clear` reminder shown to the captain on a typed prompt in the primary session; wired from `fm-host-mirror.sh`, limit kept in `state/.clear-reminder-epoch` |
-| `fm-daily-quota-pretool-check.sh` | Fork-only: no-op kept for old worker worktrees whose `.claude/settings.local.json` still names it; delete after 2026-12-31 |
+| `fm-daily-quota-pretool-check.sh` | No-op kept because crewmate worktrees and persistent secondmate homes may still name it in `.claude/settings.local.json`; it may go only once no home settings name it |
 | `fm-claude-lean-mcp.sh` | Fork-only: print the `--strict-mcp-config --mcp-config` flags that give a Claude task worker an empty MCP tool set by default and, for a ship, drop the Artifact, Workflow, AskUserQuestion and ScheduleWakeup tools; `fm-spawn.sh` splices them into every ship and scout launch (docs/configuration.md) |
 | `fm-arm-command-policy.mjs` | Semantic owner of the watcher-arm PreToolUse policy (docs/arm-pretool-check.md)   |
 | `fm-subagent-pretool-check.sh` | Primary-home delegation-shape PreToolUse guard (docs/subagent-guard.md) |

@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-# No-op kept so old worker worktrees whose .claude/settings.local.json still names this hook keep working; delete after 2026-12-31.
+# No-op kept because crewmate worktrees and persistent secondmate homes may still name this hook in .claude/settings.local.json; it may go only once no home settings name it.
 exit 0
