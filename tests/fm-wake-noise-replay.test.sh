@@ -8,7 +8,6 @@
 # clock and counts every wake that the producers raise:
 #   - the never-wait sweep (bin/fm-never-wait.sh sweep)
 #   - the reply timer (fm_pending_reply_tick in bin/fm-pending-reply-lib.sh)
-#   - the daily quota stop (bin/fm-daily-quota-stop.sh), which writes a status line
 #   - the watcher's status classification (status_span_first_actionable_record,
 #     the span classifier behind signal_files_actionable in bin/fm-watch.sh)
 #     over each status file, committed through the wake library as the watcher does
@@ -19,7 +18,7 @@
 #
 # Event kinds in the fixture: line (a status line), request (a marked request is
 # delivered), operator-resolve (the supervisor closes a pending-reply decision),
-# quota (a launch hits the daily quota stop), turn (a ledger turn event in the
+# turn (a ledger turn event in the
 # mate's home).
 set -u
 
@@ -28,7 +27,7 @@ set -u
 
 # The replay drives the real producers, so the fixture-wide switches that turn
 # them off stay off here.
-unset FM_NEVER_WAIT FM_DAILY_QUOTA_STOP
+unset FM_NEVER_WAIT
 
 FIXTURE="$ROOT/tests/fixtures/wake-noise/replay-day.tsv"
 TMP_ROOT=$(fm_test_tmproot fm-wake-noise-replay)
@@ -62,15 +61,6 @@ if [ "\$#" -eq 1 ] && [ "\$1" = "+%s" ] && [ -n "\${FM_VCLOCK:-}" ]; then printf
 exec "$REAL_DATE" "\$@"
 SH
 chmod +x "$FAKEBIN/date"
-
-cat > "$FAKEBIN/quota-axi" <<'SH'
-#!/usr/bin/env bash
-jq -n --argjson rem "$((100 - ${FAKE_QUOTA_USED:-0}))" '{
-  schemaVersion: 5,
-  providers: [{provider: "claude", state: {status: "fresh", stale: false},
-    windows: [{id: "seven_day", kind: "weekly", resetsAt: "2026-11-09T00:00:00.000000+00:00", percentRemaining: $rem}]}]}'
-SH
-chmod +x "$FAKEBIN/quota-axi"
 
 cat > "$FAKEBIN/send-hook" <<'SH'
 #!/usr/bin/env bash
@@ -111,7 +101,7 @@ declare -A CLASSIFIED_SIZE=()    # status size at the last classification, per f
 declare -A REPLY_SIZE=()         # status size at the last visit, per pending record
 declare -A MATE_SEEN=()          # mates with a status file, for the classifier pass
 
-vclock() { export FM_VCLOCK=$((DAY0 + $1)); export FM_PENDING_REPLY_NOW=$FM_VCLOCK FM_DAILY_QUOTA_NOW=$FM_VCLOCK; }
+vclock() { export FM_VCLOCK=$((DAY0 + $1)); export FM_PENDING_REPLY_NOW=$FM_VCLOCK; }
 
 mate_home() { printf '%s/mates/%s' "$H" "$1"; }
 
@@ -155,21 +145,6 @@ apply_operator_resolve() {  # <mate> <corr>
     # This run has not escalated it (yet); the answer still ends the request.
     printf '%s\n' "$(status_stamp_line "done [corr=$corr]: corr=$corr neutral answer")" >> "$STATE/$m.status"
   fi
-}
-
-apply_quota() {  # <mate> <refuse|hold>
-  local m=$1 level=$2
-  ensure_mate "$m"
-  # Day start at 10% used; the refuse line is 20% a day, the hold line 25%.
-  # The first call of a day records the baseline, so a call just before it reads 10%.
-  if [ -z "${QUOTA_BASELINE:-}" ]; then
-    QUOTA_BASELINE=1
-    FAKE_QUOTA_USED=10 FM_DAILY_QUOTA_NOW=$((FM_VCLOCK - 1)) \
-      "$ROOT/bin/fm-daily-quota-stop.sh" check spawn --home "$H" --status-file "$STATE/$m.status" >/dev/null 2>&1 || true
-  fi
-  if [ "$level" = hold ]; then FAKE_QUOTA_USED=37; else FAKE_QUOTA_USED=31; fi
-  export FAKE_QUOTA_USED
-  "$ROOT/bin/fm-daily-quota-stop.sh" check spawn --home "$H" --status-file "$STATE/$m.status" >/dev/null 2>&1 || true
 }
 
 apply_turn() {  # <mate>
@@ -343,7 +318,6 @@ replay() {
         line) apply_line "${E_MATE[$i]}" "${E_ARG[$i]}"; changed=1 ;;
         request) apply_request "${E_MATE[$i]}" "${E_ARG[$i]}" ;;
         operator-resolve) apply_operator_resolve "${E_MATE[$i]}" "${E_ARG[$i]}"; changed=1 ;;
-        quota) apply_quota "${E_MATE[$i]}" "${E_ARG[$i]}"; changed=1 ;;
         turn) apply_turn "${E_MATE[$i]}" ;;
       esac
       i=$((i + 1))

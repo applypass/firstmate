@@ -427,47 +427,6 @@ A no-mistakes worker's `fix` answers at a review gate are capped per run and ste
 The cap is the `FM_REVIEW_FIX_CAP` environment variable, else the first line of a local, gitignored `config/review-fix-cap` (a non-negative integer), else 2.
 [`bin/fm-review-round-cap.sh`](../bin/fm-review-round-cap.sh)'s header owns the round log, the needs-decision keys, and the snapshot file; firstmate answers a capped gate with approve, skip, or a steer.
 
-<!-- Fork-only: daily Claude quota stop config; bin/fm-daily-quota-stop.sh owns the contract. -->
-
-### Daily quota stop (applypass fork)
-
-The whole fleet shares one daily budget of the weekly Claude quota.
-"Used today" is the weekly percentage now minus the percentage at local midnight, read from `quota-axi --provider claude --json --max-age 60s`, so checks that start together share one vendor read instead of rate-limiting the quota endpoint.
-Every check records the last weekly percentage it saw.
-On a new day, the previous day's last reading is the baseline when it was taken yesterday; otherwise the current reading is the baseline.
-A weekly reset today makes the baseline zero, and so does a reading below the baseline when `resetsAt` is missing or puts the reset after the last recorded reading; any other lower reading keeps the baseline and counts as 0% used today.
-At 20% used today, a fresh worker launch (`bin/fm-spawn.sh`, ship, scout, or secondmate) and a new no-mistakes run are refused with the number and the threshold.
-At 25% they are held until the next local day, and the hold persists for the rest of the day even if usage later reads lower.
-The 20 and 25 lines are fixed constants in `bin/fm-daily-quota-lib.sh`.
-The captain may lift one day's refuse line to the 25% hold: firstmate writes that local date (`date +%F`) into `state/daily-quota-raised` in the fleet home.
-The captain may also lift both lines for one day: firstmate writes that local date into `state/daily-quota-off` in the fleet home.
-Running work always finishes: `fm-spawn.sh --relaunch`, reattaching to a run, and answering a gate are never blocked.
-The stop applies in every home and in away and quiet mode.
-
-Where each gate sits:
-
-- A launch is checked at the top of `bin/fm-spawn.sh`, so every harness is covered.
-- A new no-mistakes run starts with a push to the validation gate, so `bin/fm-validation-gate-pre-receive.sh` runs the check for every harness and home.
-  `fm-spawn.sh` exports the check's location, the home, and the worker's status file into the worker, and the companion rejects the push when the stop is in force.
-  A push that deletes a ref is checked too.
-  The companion is installed only for the ship tasks and projects that use the validation gate.
-- `bin/fm-daily-quota-pretool-check.sh` is a second layer in every Claude worker and secondmate: it refuses `no-mistakes axi run` with `--intent`, `no-mistakes rerun`, and `git push no-mistakes`.
-  It covers a push where the companion is not installed and a run that asks the daemon directly without a push.
-  `fm-spawn.sh` registers it through `bin/fm-daily-quota-guard-install.sh`.
-  `no-mistakes axi run` without `--intent` (reattach), `axi respond`, and `axi status` stay allowed.
-- One gap remains: a non-Claude worker in a project without the validation gate starts a run unchecked.
-
-The fleet home is found by walking each home's `.fm-secondmate-parent` binding up to the main home, so a secondmate spends the main home's budget even after a restart.
-Its files are `state/daily-quota-day-start` and `state/daily-quota-reported/`.
-
-A refusal is reported once per home, day, and level.
-A secondmate home appends one line to its parent channel, a worker appends one line to its own status file, and the main home's caller reads the refusal on stderr.
-
-When quota-axi cannot read Claude quota (for example a Keychain approval is pending, quota-axi is missing, or the snapshot has no weekly Claude window), the gate refuses and says why; it never guesses and has no override.
-A budget record that cannot be written refuses too, with its own message.
-`FM_DAILY_QUOTA_STOP=off` disables the gate; `tests/lib.sh` sets it so fixtures never read quota-axi.
-<!-- Fork-only end -->
-
 <!-- Fork-only: task ledger and never-wait config; bin/fm-task-ledger.sh and bin/fm-never-wait.sh own the contracts. -->
 
 ### Task ledger (applypass fork)
@@ -527,18 +486,17 @@ Work never sits waiting unless the captain asked or a resource ran out.
 `FM_NEVER_WAIT=off` turns all five checks off, and `tests/lib.sh` sets it for fixtures.
 
 Check 3 and 5 judge a worker's own lines only.
-A line the system wrote does not count: one whose note starts `system:` (the daily quota stop) or whose key is machine-written (`pending-reply-`, `remote-reply-continuity-`, `branch-outcome-`, `child-outcome-`, `captain-hold-`).
+A line the system wrote does not count: one whose note starts `system:` or whose key is machine-written (`pending-reply-`, `remote-reply-continuity-`, `branch-outcome-`, `child-outcome-`, `captain-hold-`).
 The sweep judges the latest blocked line of an open block, so a worker that re-blocks with a legal reason is not rejected for its first line.
-The daily quota stop writes `system: resource-exhausted (daily quota cap) external-wait until=<UTC>: daily quota stop: ...` when it refuses.
 
 ### Wake noise (applypass fork)
 
 Each wake costs the supervisor one turn, so `bin/fm-wake-noise-lib.sh` holds back wakes that add no new fact.
 `tests/fm-wake-noise-replay.test.sh` replays one real supervision day (`tests/fixtures/wake-noise/replay-day.tsv`) through the real producers and counts the wakes; each cut must lower that count.
 
-- A known wait is a blocked or paused line that names its end, as `external-wait until=<UTC>` or the daily quota stop's `until <UTC>`.
+- A known wait is a blocked or paused line that names its end, as `external-wait until=<UTC>`.
   The watcher wakes the supervisor the first time it sees one, then stays quiet about the same wait until its end time.
-  The daily quota cap is one wait for the whole fleet; any other wait belongs to its task.
+  A wait belongs to its task.
   Records are plain files in `state/wake-noise/`.
 - A reply that is late is not missed while the mate is active.
   Once a mate has acknowledged a request with a correlated `working` or `paused` line, the reply timer holds back the unreported escalation while the mate has a status line of its own, or a turn in its ledger, after the request arrived and within `FM_NOISE_ACTIVE_SECS` (default 1200).
