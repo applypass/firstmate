@@ -4707,6 +4707,172 @@ test_gitlab_main_target_merge_needs_release_main() {
   pass "fm-pr-merge refuses a GitLab main-target merge without --release-main"
 }
 
+# Fork-only: the merge proof gate (bin/fm-merge-proof-lib.sh).
+# Put a PR body (a file) and the checks into the case's live PR view.
+set_proof_case() {  # <case_dir> <body file> <head> <check name>...
+  local case_dir=$1 body_file=$2 head=$3 name rollup='' sep=''
+  shift 3
+  for name in "$@"; do
+    rollup="$rollup$sep$(check_run "$name" COMPLETED SUCCESS)"
+    sep=,
+  done
+  add_gh_mocks "$case_dir" "$head"
+  write_github_rollup_json "$case_dir" "$head" "$rollup"
+  jq -c --rawfile body "$body_file" '.body = $body' "$case_dir/github-view.json" \
+    > "$case_dir/github-view.tmp" && mv "$case_dir/github-view.tmp" "$case_dir/github-view.json"
+}
+
+PROOF_HEAD=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+PROOF_411_LINE='- Not checked here: an end-to-end resume against the staging service (real restart mid-transfer).'
+PROOF_SKIP_LINE='**Test** - skipped'
+
+test_proof_gate_refuses_pr_411_body() {
+  local case_dir rc
+  case_dir=$(make_case proof-411)
+  mkdir -p "$case_dir/wt"
+  set_proof_case "$case_dir" "$ROOT/tests/fixtures/pr-merge-proof-body.md" "$PROOF_HEAD" ci
+  set +e
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/90 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "proof-411: an unchecked-path proof line must refuse"
+  assert_grep "$PROOF_411_LINE" "$case_dir/stderr" "proof-411: the matched line was not named"
+  assert_grep "no test check" "$case_dir/stderr" \
+    "proof-411: the skipped test step with no test job was not named"
+  assert_grep "--waive-proof" "$case_dir/stderr" "proof-411: the waiver syntax was not shown"
+  assert_no_grep 'pr merge' "$case_dir/gh.log" "proof-411: gh pr merge ran"
+  pass "fm-pr-merge refuses the real PR 411 body"
+}
+
+test_proof_gate_passes_clean_body() {
+  local case_dir
+  case_dir=$(make_case proof-clean)
+  mkdir -p "$case_dir/wt"
+  printf '%s\n' '## Proof' '- Behaviour tests cover the resume flow.' > "$case_dir/body.md"
+  set_proof_case "$case_dir" "$case_dir/body.md" "$PROOF_HEAD" ci
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/91 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "proof-clean: a clean body should merge"
+  assert_logged_gh_merge "$case_dir" 91 example/repo --squash
+  assert_no_grep 'proof_waiver' "$case_dir/state/task-x1.meta" "proof-clean: a waiver was recorded without one"
+  pass "fm-pr-merge merges a PR whose proof has no unchecked path"
+
+  case_dir=$(make_case proof-scope)
+  mkdir -p "$case_dir/wt"
+  printf '%s\n' '## Problem' '- Before this PR the size was not checked.' '' \
+    '## Proof' '- Behaviour tests cover the size limit.' '' '## Risk' '- Low.' > "$case_dir/body.md"
+  set_proof_case "$case_dir" "$case_dir/body.md" "$PROOF_HEAD" ci
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/96 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "proof-scope: a Problem line outside the Proof section should not block"
+  assert_logged_gh_merge "$case_dir" 96 example/repo --squash
+  pass "fm-pr-merge does not scan Problem prose when the body has a Proof section"
+}
+
+test_proof_gate_scans_proof_sections_and_flagged_headings() {
+  local case_dir rc label pull=97
+  printf '%s\n' '## Proof' '- Behaviour tests cover resume.' '' \
+    '## Not checked here' '- end-to-end resume against api-test on test-app' > "$TMP_ROOT/heading-body.md"
+  printf '%s\n' '## Fix' '- Retry the upload.' '' '## Testing' '- Not verified on test-app.' > "$TMP_ROOT/testing-body.md"
+  printf '%s\n' '## Proof' '- Unit tests pass.' '' '## Risk Assessment' '- Not verified on test-app.' > "$TMP_ROOT/risk-body.md"
+  printf '%s\n' '## Summary' '- Adds the gate.' '' '## Proof' '- Unit tests pass.' '' \
+    '## Test plan' '- [ ] Not verified on test-app' > "$TMP_ROOT/testplan-body.md"
+  printf '%s\n' 'Not checked: the retry path.' '' '## Problem' '- Old bug.' > "$TMP_ROOT/preamble-body.md"
+  for label in heading testing risk testplan preamble; do
+    case_dir=$(make_case "proof-section-$label")
+    mkdir -p "$case_dir/wt"
+    set_proof_case "$case_dir" "$TMP_ROOT/$label-body.md" "$PROOF_HEAD" ci
+    set +e
+    run_pr_merge "$case_dir" task-x1 "https://github.com/example/repo/pull/$pull" \
+      > "$case_dir/stdout" 2> "$case_dir/stderr"
+    rc=$?
+    set -e
+    expect_code 1 "$rc" "proof-section-$label: an unchecked line in a scanned section must refuse"
+    assert_grep "the PR proof says a path was not checked" "$case_dir/stderr" \
+      "proof-section-$label: the unchecked line was not named"
+    assert_no_grep 'pr merge' "$case_dir/gh.log" "proof-section-$label: gh pr merge ran"
+    pull=$((pull + 1))
+  done
+  assert_grep '"- end-to-end resume against api-test on test-app"' "$TMP_ROOT/proof-section-heading/stderr" \
+    "proof-section-heading: the line under the flagged heading was not named"
+  pass "fm-pr-merge refuses an unchecked line under a flagged heading or in a Testing or Risk section"
+}
+
+test_proof_gate_waiver_merges_and_records() {
+  local case_dir rc
+  case_dir=$(make_case proof-waiver)
+  mkdir -p "$case_dir/wt"
+  set_proof_case "$case_dir" "$ROOT/tests/fixtures/pr-merge-proof-body.md" "$PROOF_HEAD" ci
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/92 \
+    --waive-proof "$PROOF_411_LINE" "captain accepted the gap" \
+    --waive-proof "$PROOF_SKIP_LINE" "captain accepted the gap" \
+    > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "proof-waiver: a valid waiver should merge"
+  assert_logged_gh_merge "$case_dir" 92 example/repo --squash
+  assert_grep "proof_waiver=$PROOF_411_LINE" "$case_dir/state/task-x1.meta" "proof-waiver: the waived line was not recorded"
+  assert_grep 'proof_waiver_reason=captain accepted the gap' "$case_dir/state/task-x1.meta" \
+    "proof-waiver: the reason was not recorded"
+  [ "$(grep -c '^proof_waiver=' "$case_dir/state/task-x1.meta")" -eq 2 ] \
+    || fail "proof-waiver: each waived finding must be recorded once"
+
+  case_dir=$(make_case proof-waiver-bad)
+  mkdir -p "$case_dir/wt"
+  set_proof_case "$case_dir" "$ROOT/tests/fixtures/pr-merge-proof-body.md" "$PROOF_HEAD" ci
+  set +e
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/93 \
+    --waive-proof "$PROOF_411_LINE" "   " > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "proof-waiver-bad: an empty reason must refuse"
+  assert_grep "non-empty reason" "$case_dir/stderr" "proof-waiver-bad: the empty reason was not named"
+  set +e
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/93 \
+    --waive-proof "Not checked: a line nobody wrote" "because" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "proof-waiver-bad: a line absent from the body must refuse"
+  assert_grep "is not a whole finding line" "$case_dir/stderr" "proof-waiver-bad: the absent line was not named"
+  set +e
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/93 \
+    --waive-proof Not "ok" --waive-proof "$PROOF_SKIP_LINE" "ok" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "proof-waiver-bad: a short token must not waive a finding"
+  assert_grep '"Not" is not a whole finding line' "$case_dir/stderr" "proof-waiver-bad: the short token was not named"
+  assert_no_grep 'pr merge' "$case_dir/gh.log" "proof-waiver-bad: gh pr merge ran"
+  assert_no_grep 'proof_waiver' "$case_dir/state/task-x1.meta" "proof-waiver-bad: a refused waiver was recorded"
+  pass "fm-pr-merge records a valid --waive-proof and refuses an empty reason, an absent line, or a partial line"
+}
+
+test_proof_gate_skipped_test_needs_green_test_job() {
+  local case_dir rc
+  printf '%s\n' '## Proof' '- Covered by CI.' '' '## Testing' '' '- ⏭️ **Test** - skipped' > "$TMP_ROOT/skipped-body.md"
+  case_dir=$(make_case proof-skip-green)
+  mkdir -p "$case_dir/wt"
+  set_proof_case "$case_dir" "$TMP_ROOT/skipped-body.md" "$PROOF_HEAD" ci "Unit Tests"
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/94 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "proof-skip-green: a skipped test with a green test job should merge"
+  assert_logged_gh_merge "$case_dir" 94 example/repo --squash
+
+  case_dir=$(make_case proof-skip-nojob)
+  mkdir -p "$case_dir/wt"
+  set_proof_case "$case_dir" "$TMP_ROOT/skipped-body.md" "$PROOF_HEAD" ci lint publish-latest "SLSA attestation" contest
+  set +e
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/95 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "proof-skip-nojob: a skipped test whose only green checks merely contain \"test\" must refuse"
+  assert_grep "no test check" "$case_dir/stderr" \
+    "proof-skip-nojob: the missing test job was not named"
+  assert_no_grep 'pr merge' "$case_dir/gh.log" "proof-skip-nojob: gh pr merge ran"
+  pass "fm-pr-merge blocks a skipped test step only when no test job passed at the head"
+}
+
+test_proof_gate_refuses_pr_411_body
+test_proof_gate_passes_clean_body
+test_proof_gate_waiver_merges_and_records
+test_proof_gate_scans_proof_sections_and_flagged_headings
+test_proof_gate_skipped_test_needs_green_test_job
+
 test_main_base_merge_needs_release_main
 test_gitlab_main_target_merge_needs_release_main
 test_allow_red_refused_on_forgejo
