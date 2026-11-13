@@ -2454,7 +2454,7 @@ claude_launch_brief_arg() {  # <launch>
 # control-channel flag (bin/fm-claude-lean-mcp.sh). Trailing space included.
 WORKER_DROPPED_TOOLS=Artifact,Workflow,ScheduleWakeup,AskUserQuestion,ReportFindings,ShareOnboardingGuide
 claude_lean_mcp() {  # <home>
-  printf '%s ' "--disallowedTools=Artifact,Workflow,ScheduleWakeup,AskUserQuestion,ReportFindings,ShareOnboardingGuide --strict-mcp-config --mcp-config '$1/state/claude-worker-mcp-none.json'"
+  printf '%s ' "--disallowedTools=$WORKER_DROPPED_TOOLS --strict-mcp-config --mcp-config '$1/state/claude-worker-mcp-none.json'"
 }
 
 claude_worker_add_dirs() {  # <home> <id>
