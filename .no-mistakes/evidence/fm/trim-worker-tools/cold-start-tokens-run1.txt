@@ -1,0 +1,9 @@
+== full
+input_tokens=2 cache_creation=21255 cache_read=12095 TOTAL_INPUT=33352
+tools: Bash, Edit, Read, Write, Agent, ListAgents, ReportFindings, ScheduleWakeup, ShareOnboardingGuide, Skill, ToolSearch, Workflow, CronCreate, CronDelete, CronList, DesignSync, EnterWorktree, ExitWorktree, Monitor, NotebookEdit, PublishPlugin, PushNotification, RemoteTrigger, SendMessage, TaskStop, WebSearch
+== base4
+input_tokens=2 cache_creation=29680 cache_read=0 TOTAL_INPUT=29682
+tools: Agent, Bash, Edit, ListAgents, Read, ReportFindings, ShareOnboardingGuide, Skill, ToolSearch, Write, CronCreate, CronDelete, CronList, DesignSync, EnterWorktree, ExitWorktree, Monitor, NotebookEdit, PublishPlugin, PushNotification, RemoteTrigger, SendMessage, TaskStop, WebSearch
+== new6
+input_tokens=2 cache_creation=28364 cache_read=0 TOTAL_INPUT=28366
+tools: Bash, Edit, Read, Write, Agent, ListAgents, Skill, ToolSearch, CronCreate, CronDelete, CronList, DesignSync, EnterWorktree, ExitWorktree, Monitor, NotebookEdit, PublishPlugin, PushNotification, RemoteTrigger, SendMessage, TaskStop, WebSearch

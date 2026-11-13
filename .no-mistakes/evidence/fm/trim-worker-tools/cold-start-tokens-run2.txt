@@ -1,0 +1,4 @@
+Sequential cold claude -p starts (claude 2.1.323, sonnet, empty strict MCP config, prompt 'Reply with exactly: OK')
+full   total_input= 33337 (input=2 cache_creation=21240 cache_read=12095) result='OK'
+base4  total_input= 29670 (input=2 cache_creation=21245 cache_read=8423) result='OK'
+new6   total_input= 28358 (input=2 cache_creation=21245 cache_read=7111) result='OK'

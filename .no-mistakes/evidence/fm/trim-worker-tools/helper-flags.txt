@@ -1,0 +1,14 @@
+$ bin/fm-claude-lean-mcp.sh CFG STATE ship
+--disallowedTools=Artifact,Workflow,ScheduleWakeup,AskUserQuestion,ReportFindings,ShareOnboardingGuide --strict-mcp-config --mcp-config '$TMP/state/claude-worker-mcp-none.json' 
+$ bin/fm-claude-lean-mcp.sh CFG STATE scout
+--disallowedTools=Artifact,Workflow,ScheduleWakeup,AskUserQuestion,ReportFindings,ShareOnboardingGuide --strict-mcp-config --mcp-config '$TMP/state/claude-worker-mcp-none.json' 
+$ bin/fm-claude-lean-mcp.sh CFG STATE final-run
+--disallowedTools=Artifact,Workflow,ScheduleWakeup,AskUserQuestion,ReportFindings,ShareOnboardingGuide --strict-mcp-config --mcp-config '$TMP/state/claude-worker-mcp-none.json' 
+$ FM_WORKER_TOOLS=all bin/fm-claude-lean-mcp.sh CFG STATE ship
+--strict-mcp-config --mcp-config '$TMP/state/claude-worker-mcp-none.json' 
+$ FM_WORKER_TOOLS=all bin/fm-claude-lean-mcp.sh CFG STATE scout
+--strict-mcp-config --mcp-config '$TMP/state/claude-worker-mcp-none.json' 
+$ FM_WORKER_TOOLS=all FM_WORKER_MCP=all bin/fm-claude-lean-mcp.sh CFG STATE ship
+[empty output, exit 0]
+$ (base b3d18b60) bin/fm-claude-lean-mcp.sh CFG STATE scout
+--strict-mcp-config --mcp-config '$TMP/state/claude-worker-mcp-none.json' 
