@@ -255,6 +255,7 @@ test_claude_secondmate_launch_brief_publishes_into_its_own_home() {
   [ -z "$(find "$HOME_DIR/state/operational-inbox" -name '*.msg' -print -quit 2>/dev/null)" ] \
     || fail "the secondmate launch record leaked into the primary's operational inbox"
   assert_op_guard_registered "$sm" "claude secondmate"
+  assert_not_contains "$launch" "--disallowedTools" "a secondmate launch must keep every built-in tool"
   pass "a secondmate claude launch publishes its brief record into the secondmate's own home"
 }
 
@@ -2451,8 +2452,9 @@ claude_launch_brief_arg() {  # <launch>
 # drop it straight into an expected command.
 # The lean MCP flags every Claude task worker launch carries after the
 # control-channel flag (bin/fm-claude-lean-mcp.sh). Trailing space included.
+WORKER_DROPPED_TOOLS=Artifact,Workflow,ScheduleWakeup,AskUserQuestion,ReportFindings,ShareOnboardingGuide
 claude_lean_mcp() {  # <home>
-  printf '%s ' "--disallowedTools=Artifact,Workflow,AskUserQuestion,ScheduleWakeup --strict-mcp-config --mcp-config '$1/state/claude-worker-mcp-none.json'"
+  printf '%s ' "--disallowedTools=Artifact,Workflow,ScheduleWakeup,AskUserQuestion,ReportFindings,ShareOnboardingGuide --strict-mcp-config --mcp-config '$1/state/claude-worker-mcp-none.json'"
 }
 
 claude_worker_add_dirs() {  # <home> <id>
@@ -2535,7 +2537,7 @@ test_claude_permission_mode_auto_reaches_scout_launch() {
   launch=$(cat "$LAUNCH_LOG")
   assert_contains "$launch" "claude --permission-mode auto " "scout launch did not carry --permission-mode auto"
   assert_not_contains "$launch" "--dangerously-skip-permissions" "scout launch must not request bypass mode"
-  assert_not_contains "$launch" "--disallowedTools" "scout launch must keep Artifact and the other built-in tools"
+  assert_contains "$launch" "--disallowedTools=$WORKER_DROPPED_TOOLS " "scout launch must drop the same unused tools as a ship"
   pass "config/claude-permission-mode=auto reaches scout launches too"
 }
 

@@ -22,9 +22,11 @@
 #
 # The launch also carries --disallowedTools=<list> (the = form: a space would let
 # claude's variadic flag swallow the next argument) for Artifact, Workflow,
-# AskUserQuestion and ScheduleWakeup, whose fixed tool text rides every turn
-# and which a ship or final-run worker never calls. A scout (<kind> scout)
-# keeps Artifact for its report pages and is otherwise unchanged. Set
+# ScheduleWakeup, AskUserQuestion, ReportFindings and ShareOnboardingGuide,
+# whose fixed tool text rides every turn and which no ship, scout or final-run
+# worker calls (a scout reports in data/<id>/report.md or a Lavish board, not
+# an Artifact page). A cold claude -p start sends about 5k fewer input tokens
+# than with the full set. Set
 # FM_WORKER_TOOLS=all to launch with the full built-in tool set.
 #
 # Prints flags with a trailing space, ready to splice into a launch command.
@@ -36,8 +38,8 @@ kind=${3:-ship}
 
 quote() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
 
-if [ "$kind" != scout ] && [ "${FM_WORKER_TOOLS:-}" != all ]; then
-  printf -- '--disallowedTools=Artifact,Workflow,AskUserQuestion,ScheduleWakeup '
+if [ "${FM_WORKER_TOOLS:-}" != all ]; then
+  printf -- '--disallowedTools=Artifact,Workflow,ScheduleWakeup,AskUserQuestion,ReportFindings,ShareOnboardingGuide '
 fi
 
 pick=${FM_WORKER_MCP:-}

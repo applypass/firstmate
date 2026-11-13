@@ -62,21 +62,22 @@ test_missing_named_file_refuses() {
   pass "a missing MCP config refuses instead of falling back"
 }
 
-test_ship_drops_four_tools_and_scout_keeps_them() {
+test_ship_and_scout_drop_unused_tools() {
+  local list=Artifact,Workflow,ScheduleWakeup,AskUserQuestion,ReportFindings,ShareOnboardingGuide
   run_lean tools
-  assert_contains "$OUT" "--disallowedTools=Artifact,Workflow,AskUserQuestion,ScheduleWakeup " "ship default must disallow the four tools"
+  assert_contains "$OUT" "--disallowedTools=$list " "ship default must disallow exactly the unused tools"
   OUT=$(env -u FM_WORKER_MCP "$LEAN" "$CFG" "$ST" scout 2>&1)
-  assert_not_contains "$OUT" "--disallowedTools" "scout must keep every built-in tool"
+  assert_contains "$OUT" "--disallowedTools=$list " "scout must disallow the same tools"
   assert_contains "$OUT" "--strict-mcp-config" "scout still gets the lean MCP set"
   OUT=$(env -u FM_WORKER_MCP FM_WORKER_TOOLS=all "$LEAN" "$CFG" "$ST" 2>&1)
   assert_not_contains "$OUT" "--disallowedTools" "FM_WORKER_TOOLS=all must keep the full tool set"
   OUT=$(FM_WORKER_MCP=all "$LEAN" "$CFG" "$ST" 2>&1)
-  assert_equals "--disallowedTools=Artifact,Workflow,AskUserQuestion,ScheduleWakeup " "$OUT" "FM_WORKER_MCP=all still drops the four tools"
-  pass "ship and final-run launches drop four tools; a scout keeps them"
+  assert_equals "--disallowedTools=$list " "$OUT" "FM_WORKER_MCP=all still drops the unused tools"
+  pass "ship and scout launches drop the six unused tools"
 }
 
 test_default_is_strict_and_empty
-test_ship_drops_four_tools_and_scout_keeps_them
+test_ship_and_scout_drop_unused_tools
 test_home_allowlist_replaces_the_empty_set
 test_task_override_wins_over_home
 test_all_inherits_everything
