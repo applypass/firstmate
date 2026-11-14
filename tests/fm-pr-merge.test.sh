@@ -252,6 +252,16 @@ case "${1:-} ${2:-}" in
     exit 0
     ;;
   api\ *)
+    # Fork-only: the repository's allowed merge methods (repos/<owner>/<repo>).
+    case "${2:-}" in
+      repos/*/*/*) ;;
+      repos/*/*)
+        [ ! -f "${FM_TEST_GH_REPO_FAIL:-}" ] || exit 1
+        if [ -f "${FM_TEST_GH_REPO_SETTINGS:-}" ]; then cat "$FM_TEST_GH_REPO_SETTINGS"
+        else echo '{"allow_squash_merge":true,"allow_merge_commit":true,"allow_rebase_merge":true}'; fi
+        exit 0
+        ;;
+    esac
     # The main-merge guard's live base read; dev unless a case says otherwise.
     case " $* " in
       *" repos/"*"/pulls/"*)
@@ -686,6 +696,8 @@ run_pr_merge() {
   FM_TEST_GH_RULES_FAIL="$case_dir/github-rules-fail" \
   FM_TEST_GH_RULES_FAIL_BODY="$case_dir/github-rules-fail-body" \
   FM_TEST_GH_BRANCH="$case_dir/github-branch.json" \
+  FM_TEST_GH_REPO_SETTINGS="$case_dir/github-repo-settings.json" \
+  FM_TEST_GH_REPO_FAIL="$case_dir/github-repo-fail" \
   FM_TEST_GH_BRANCH_FAIL="$case_dir/github-branch-fail" \
   FM_TEST_GH_REQUIRED_RULES="$case_dir/github-required-rules.json" \
   FM_TEST_GH_REQUIRED_RULES_FAIL="$case_dir/github-required-rules-fail" \
@@ -4867,6 +4879,63 @@ test_proof_gate_skipped_test_needs_green_test_job() {
   pass "fm-pr-merge blocks a skipped test step only when no test job passed at the head"
 }
 
+# Fork-only: with no caller method, the merge method follows the repository's allowed methods.
+test_default_method_follows_allowed_methods() {
+  local case_dir rc
+  case_dir=$(make_case method-no-squash)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" 1212121212121212121212121212121212121212
+  echo '{"allow_squash_merge":false,"allow_merge_commit":true,"allow_rebase_merge":true}' > "$case_dir/github-repo-settings.json"
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/861 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "method-no-squash: merge should use an allowed method"
+  assert_logged_gh_merge "$case_dir" 861 example/repo --merge
+
+  case_dir=$(make_case method-rebase-only)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" 1313131313131313131313131313131313131313
+  echo '{"allow_squash_merge":false,"allow_merge_commit":false,"allow_rebase_merge":true}' > "$case_dir/github-repo-settings.json"
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/862 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "method-rebase-only: merge should use rebase"
+  assert_logged_gh_merge "$case_dir" 862 example/repo --rebase
+
+  case_dir=$(make_case method-explicit-wins)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" 1414141414141414141414141414141414141414
+  echo '{"allow_squash_merge":false,"allow_merge_commit":true,"allow_rebase_merge":false}' > "$case_dir/github-repo-settings.json"
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/863 -- --rebase \
+    > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "method-explicit-wins: explicit method should pass through"
+  assert_logged_gh_merge "$case_dir" 863 example/repo --rebase
+
+  case_dir=$(make_case method-unreadable)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" 1515151515151515151515151515151515151515
+  : > "$case_dir/github-repo-fail"
+  set +e
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/864 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "method-unreadable: unreadable settings must refuse"
+  assert_grep 'allowed merge methods could not be read' "$case_dir/stderr" "method-unreadable: missing reason"
+  assert_grep '-- --merge' "$case_dir/stderr" "method-unreadable: missing remedy flag"
+  assert_no_grep 'pr merge' "$case_dir/gh.log" "method-unreadable: gh pr merge ran"
+
+  case_dir=$(make_case method-none-allowed)
+  mkdir -p "$case_dir/wt"
+  add_gh_mocks "$case_dir" 1616161616161616161616161616161616161616
+  echo '{"allow_squash_merge":false,"allow_merge_commit":false,"allow_rebase_merge":false}' > "$case_dir/github-repo-settings.json"
+  set +e
+  run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/865 \
+    > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+  expect_code 1 "$rc" "method-none-allowed: no allowed method must refuse"
+  assert_grep 'allows no merge method' "$case_dir/stderr" "method-none-allowed: missing reason"
+  assert_no_grep 'pr merge' "$case_dir/gh.log" "method-none-allowed: gh pr merge ran"
+  pass "fm-pr-merge picks an allowed merge method, keeps an explicit one, and refuses with the remedy otherwise"
+}
+
+test_default_method_follows_allowed_methods
 test_proof_gate_refuses_pr_411_body
 test_proof_gate_passes_clean_body
 test_proof_gate_waiver_merges_and_records
