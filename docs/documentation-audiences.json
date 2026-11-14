@@ -545,6 +545,10 @@
       "audience": "maintainer-verification"
     },
     {
+      "path": "docs/usage-limit-resume.md",
+      "audience": "operator-current"
+    },
+    {
       "path": "docs/usage-warner.md",
       "audience": "operator-current"
     },
