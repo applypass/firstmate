@@ -228,6 +228,13 @@ emit() {  # <state> <source> [detail]
 
 [ -f "$META" ] || emit unknown none "no metadata for $ID"
 
+# Fork-only: a recorded usage-limit stop is never healthy idle (bin/fm-usage-limit-tick.sh).
+if [ -f "$STATE/$ID.usage-limit" ]; then
+  _ul_reset=$(grep '^reset_epoch=' "$STATE/$ID.usage-limit" 2>/dev/null | tail -1 | cut -d= -f2-)
+  emit blocked usage-limit "usage limit stop, resets $(date -u -r "${_ul_reset:-0}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@${_ul_reset:-0}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null), auto-resume pending"
+fi
+# Fork-only end
+
 meta_value() {  # <key>
   grep "^$1=" "$META" 2>/dev/null | tail -1 | cut -d= -f2- || true
 }

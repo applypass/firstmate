@@ -3710,6 +3710,18 @@ while :; do
   fi
   # Fork-only end
 
+  # Fork-only: usage-limit sweep (bin/fm-usage-limit-tick.sh), at most once a minute. It records a
+  # Claude usage-limit stop, resumes the endpoint after the reset, and prints a line only for an
+  # endpoint that stays stopped after the bounded retries.
+  if [ "$(age_of "$STATE/.usage-limit-tick")" -ge "${FM_USAGE_LIMIT_TICK_SECS:-60}" ]; then
+    : >"$STATE/.usage-limit-tick" 2>/dev/null || true
+    usage_limit_out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-usage-limit-tick.sh" 2>/dev/null) || usage_limit_out=
+    if [ -n "$usage_limit_out" ]; then
+      wake "check: $usage_limit_out"
+    fi
+  fi
+  # Fork-only end
+
   # Slow per-task checks (firstmate writes these, e.g. a merged-PR poll).
   # Time-based via .last-check mtime so the cadence survives watcher restarts.
   # Evaluated BEFORE the signal scan: wake() exits the cycle, so a check placed
