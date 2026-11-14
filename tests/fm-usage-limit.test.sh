@@ -12,6 +12,11 @@
 #   3. An option list never picks credits or extra usage.
 #   4. An endpoint still stopped after the retries surfaces exactly once.
 #   5. Detection is idempotent and ignores a screen that only mentions a limit.
+#   6. Sleep/wake (fork-only, docs/usage-limit-resume.md): a wall-clock gap across ticks
+#      plus a connection-error stop at an idle prompt is recorded and resumed after the
+#      settle time; a retrying spinner, a quoted marker and a working agent are not stops;
+#      a connection stop with no gap waits longer; retries are bounded and surface once;
+#      a usage-limit screen stays on the usage-limit path.
 set -u
 
 # shellcheck source=tests/lib.sh
@@ -220,3 +225,146 @@ test_quota_fallback
 test_menu_never_picks_credits
 test_stuck_surfaces_once
 test_plain_mention_is_not_a_stop
+
+# --- sleep/wake: the 14 Nov overnight case ---------------------------------------
+# The laptop hibernated 03:24-08:38 IST. Every request in flight died; on wake the
+# agent shows a connection error at an idle prompt (shape seen on 13 Nov network drops).
+CONN_SCREEN=$'earlier output\n\xe2\x8f\xba Running the retag batch\n  API Error: Can\'t reach the API server \xe2\x80\x94 check your internet or DNS (ENOTFOUND)\n\n\xe2\x9d\xaf \n  Opus 5.5 | ctx 11% | HEAD'
+WORKING_SCREEN=$'\xe2\x8f\xba Running the retag batch\n\xc2\xb7 Burrowing\xe2\x80\xa6 (3m 26s \xe2\x86\x93 2.5k tokens)\n\xe2\x9d\xaf '
+RETRY_SCREEN=$'\xe2\x8f\xba Running the retag batch\n  API Error: Can\'t reach the API server \xe2\x80\x94 check your internet or DNS (ENOTFOUND)\n  Retrying in 8 seconds\xe2\x80\xa6 (attempt 3/10)'
+
+test_wake_gap_resumes_connection_stop() {
+  local dir t0 wake out
+  dir=$(setup_case wake)
+  printf '%s\n' "$WORKING_SCREEN" >"$dir/screens/fm-mate"
+  printf '%s\n' "$WORKING_SCREEN" >"$dir/screens/fm-work"
+  t0=$(ist '2026-11-14 03:23')
+  tick "$dir" "$t0" >/dev/null
+  tick "$dir" $((t0 + 60)) >/dev/null
+  # Hibernate 03:24 -> 08:38. The next tick is the first after the wake.
+  wake=$(ist '2026-11-14 08:38')
+  printf '%s\n' "$CONN_SCREEN" >"$dir/screens/fm-mate"
+  printf '%s\n' "$CONN_SCREEN" >"$dir/screens/fm-work"
+  tick "$dir" "$wake" >/dev/null
+  for id in m1 w1; do
+    [ -f "$dir/home/state/$id.sleep-resume" ] || fail "$id: no sleep-resume record after the wake"
+    assert_contains "$(cat "$dir/home/state/$id.sleep-resume")" "cause=wake" "$id: cause is the wake"
+    assert_contains "$(cat "$dir/home/state/$id.sleep-resume")" "first_seen=$wake" "$id: first seen"
+  done
+  assert_contains "$(cat "$dir/home/state/m1.sleep-resume")" "kind=mate" "mate kind"
+  [ ! -e "$dir/home/state/w1.usage-limit" ] || fail "a connection stop is not a usage-limit stop"
+  [ "$(msg_count "$dir" m1)" = 0 ] && [ "$(msg_count "$dir" w1)" = 0 ] \
+    || fail "nothing is sent before the post-wake settle time"
+  out=$(env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/home" \
+    FM_STATE_OVERRIDE="$dir/home/state" "$ROOT/bin/fm-crew-state.sh" w1 2>&1)
+  assert_contains "$out" "state: blocked" "a stopped endpoint is not healthy idle"
+  assert_contains "$out" "sleep-resume" "crew state names the sleep-resume stop"
+  tick "$dir" $((wake + 60)) >/dev/null
+  [ "$(msg_count "$dir" m1)" = 1 ] || fail "the mate got no resume after the wake"
+  [ "$(msg_count "$dir" w1)" = 1 ] || fail "the worker got no resume after the wake"
+  assert_contains "$(cat "$dir"/home/state/w1.inbox/*.msg)" "connection dropped" "resume text names the cause"
+  printf '%s\n' "$WORKING_SCREEN" >"$dir/screens/fm-mate"
+  printf '%s\n' "$WORKING_SCREEN" >"$dir/screens/fm-work"
+  out=$(tick "$dir" $((wake + 120)))
+  [ -z "$out" ] || fail "a recovered endpoint prints nothing: $out"
+  for id in m1 w1; do
+    [ ! -e "$dir/home/state/$id.sleep-resume" ] || fail "$id: record not cleared after recovery"
+  done
+  pass "sleep-resume: a wake gap plus a connection stop is recorded, resumed after settle, then cleared"
+}
+
+test_retrying_or_working_is_not_a_stop() {
+  local dir t0 wake
+  dir=$(setup_case retrying)
+  t0=$(ist '2026-11-14 03:23')
+  printf '%s\n' "$WORKING_SCREEN" >"$dir/screens/fm-work"
+  tick "$dir" "$t0" >/dev/null
+  wake=$(ist '2026-11-14 08:38')
+  # The agent is still retrying by itself: leave it alone.
+  printf '%s\n' "$RETRY_SCREEN" >"$dir/screens/fm-work"
+  # An old error line far above a working agent is not a stop either.
+  { echo "API Error: Can't reach the API server (ENOTFOUND)"; for i in $(seq 1 25); do echo "line $i"; done; } >"$dir/screens/fm-mate"
+  tick "$dir" "$wake" >/dev/null
+  tick "$dir" $((wake + 600)) >/dev/null
+  [ ! -e "$dir/home/state/w1.sleep-resume" ] || fail "a retrying agent is not a stop"
+  [ ! -e "$dir/home/state/m1.sleep-resume" ] || fail "a scrolled-off error is not a stop"
+  # A quoted marker (a command or code on screen) is not a stop.
+  printf 'grep "ENOTFOUND" bin/x.sh\n\xe2\x9d\xaf \n' >"$dir/screens/fm-work"
+  tick "$dir" $((wake + 700)) >/dev/null
+  [ ! -e "$dir/home/state/w1.sleep-resume" ] || fail "a quoted marker is not a stop"
+  [ "$(msg_count "$dir" w1)" = 0 ] || fail "nothing is sent to a non-stopped endpoint"
+  pass "sleep-resume: a retrying spinner, a scrolled-off error and a quoted marker are ignored"
+}
+
+test_connection_stop_without_wake_waits_longer() {
+  local dir t0
+  dir=$(setup_case nowake)
+  printf '%s\n' "$CONN_SCREEN" >"$dir/screens/fm-work"
+  t0=$(ist '2026-11-14 10:00')
+  tick "$dir" "$t0" >/dev/null
+  tick "$dir" $((t0 + 60)) >/dev/null
+  assert_contains "$(cat "$dir/home/state/w1.sleep-resume")" "cause=network" "no wake gap: a network stop"
+  tick "$dir" $((t0 + 90)) >/dev/null
+  [ "$(msg_count "$dir" w1)" = 0 ] || fail "a network stop waits for the settle time"
+  tick "$dir" $((t0 + 130)) >/dev/null
+  [ "$(msg_count "$dir" w1)" = 1 ] || fail "a network stop resumes after the settle time"
+  pass "sleep-resume: a connection stop with no wake gap resumes only after the longer settle time"
+}
+
+test_sleep_resume_bounded_and_surfaced_once() {
+  local dir t0 wake n out lines
+  dir=$(setup_case swstuck)
+  t0=$(ist '2026-11-14 03:23')
+  printf '%s\n' "$WORKING_SCREEN" >"$dir/screens/fm-work"
+  tick "$dir" "$t0" >/dev/null
+  wake=$(ist '2026-11-14 08:38')
+  printf '%s\ntoken=sk-abcdefghij1234567890\n' "$CONN_SCREEN" >"$dir/screens/fm-work"
+  lines=''
+  for n in 0 1 2 3 4 5 6 7 8 9; do
+    out=$(tick "$dir" $((wake + n * 130)))
+    lines="$lines$out"$'\n'
+  done
+  [ "$(printf '%s' "$lines" | grep -c 'sleep-resume stuck')" = 1 ] \
+    || fail "a stuck endpoint must surface exactly once: $lines"
+  assert_contains "$lines" "endpoint=w1" "evidence names the endpoint"
+  assert_contains "$lines" "ENOTFOUND" "evidence has the last screen lines"
+  assert_not_contains "$lines" "sk-abcdefghij" "secrets are redacted"
+  [ "$(msg_count "$dir" w1)" = 3 ] || fail "retries are bounded to 3, saw $(msg_count "$dir" w1)"
+  pass "sleep-resume: retries are bounded and a stuck endpoint surfaces once with redacted evidence"
+}
+
+test_limit_screen_stays_on_limit_path() {
+  local dir t0 wake
+  dir=$(setup_case swlimit)
+  t0=$(ist '2026-11-14 03:23')
+  printf '%s\n' "$WORKING_SCREEN" >"$dir/screens/fm-work"
+  tick "$dir" "$t0" >/dev/null
+  wake=$(ist '2026-11-14 08:38')
+  printf '%s\n%s\n' "$LIMIT_SCREEN" "  API Error: Can't reach the API server (ENOTFOUND)" >"$dir/screens/fm-work"
+  tick "$dir" "$wake" >/dev/null
+  [ -f "$dir/home/state/w1.usage-limit" ] || fail "a limit screen is a usage-limit stop"
+  [ ! -e "$dir/home/state/w1.sleep-resume" ] || fail "a limit screen never takes the sleep-resume path"
+  pass "sleep-resume: a usage-limit screen stays on the usage-limit path"
+}
+
+test_sleep_message_is_a_stop() {
+  local dir t0 wake
+  dir=$(setup_case slept)
+  printf '%s\n' "$WORKING_SCREEN" >"$dir/screens/fm-work"
+  t0=$(ist '2026-11-14 03:23')
+  tick "$dir" "$t0" >/dev/null
+  wake=$(ist '2026-11-14 08:38')
+  printf '%s\n' $'\xe2\x8f\xba Running the retag batch\n  API Error: Your computer went to sleep mid-response. The response above may be incomplete.\n\n\xe2\x9d\xaf ' >"$dir/screens/fm-work"
+  tick "$dir" "$wake" >/dev/null
+  assert_contains "$(cat "$dir/home/state/w1.sleep-resume")" "shape=Your computer went to sleep" "sleep shape recorded"
+  tick "$dir" $((wake + 60)) >/dev/null
+  [ "$(msg_count "$dir" w1)" = 1 ] || fail "the sleep message gets one resume"
+  pass "sleep-resume: Claude's own 'computer went to sleep' error is a stop"
+}
+
+test_wake_gap_resumes_connection_stop
+test_sleep_message_is_a_stop
+test_retrying_or_working_is_not_a_stop
+test_connection_stop_without_wake_waits_longer
+test_sleep_resume_bounded_and_surfaced_once
+test_limit_screen_stays_on_limit_path
