@@ -234,6 +234,12 @@ if [ -f "$STATE/$ID.usage-limit" ]; then
   emit blocked usage-limit "usage limit stop, resets $(date -u -r "${_ul_reset:-0}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d "@${_ul_reset:-0}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null), auto-resume pending"
 fi
 # Fork-only end
+# Fork-only: a recorded connection stop (laptop sleep or network drop) is never healthy idle.
+if [ -f "$STATE/$ID.sleep-resume" ]; then
+  _sr_cause=$(grep '^cause=' "$STATE/$ID.sleep-resume" 2>/dev/null | tail -1 | cut -d= -f2-)
+  emit blocked sleep-resume "connection stop (${_sr_cause:-network}), auto-resume pending"
+fi
+# Fork-only end
 
 meta_value() {  # <key>
   grep "^$1=" "$META" 2>/dev/null | tail -1 | cut -d= -f2- || true
