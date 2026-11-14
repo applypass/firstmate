@@ -13,7 +13,9 @@
 # parse below owns why.
 #
 # Merge method on GitHub defaults to --squash when the caller passes none of
-# --squash, --merge, --rebase, or --method after the optional -- separator.
+# --squash, --merge, --rebase, or --method after the optional -- separator,
+# or to the first of merge, rebase the repository allows when it disallows squash;
+# the allowed methods are read live, and the merge is refused when they cannot be.
 # On Forgejo the merge style defaults to the repository's own
 # default_merge_style, read live, and a merge is refused when it cannot be read.
 # A GitHub merge is refused unless every pre-merge condition holds, each read
@@ -361,6 +363,36 @@ if [ "${#ALLOW_MISSING[@]}" -gt 0 ]; then
       ;;
   esac
 fi
+
+# Fork-only: with no caller method, ask GitHub which merge methods the repository
+# allows and pick the first allowed of squash, merge, rebase (squash stays the
+# default wherever it is allowed). Sets FM_PR_GITHUB_DEFAULT_METHOD. Refuses,
+# naming the allowed methods and the flag to pass, when the settings cannot be
+# read or no method is allowed.
+FM_PR_GITHUB_DEFAULT_METHOD=
+github_default_merge_method() {
+  local json allowed method
+  if ! json=$(gh api "repos/$PR_OWNER/$PR_REPO" 2>/dev/null) || [ -z "$json" ]; then
+    echo "error: refusing to merge $URL: the repository's allowed merge methods could not be read; name one with -- --squash, -- --merge, or -- --rebase" >&2
+    return 1
+  fi
+  if ! allowed=$(printf '%s' "$json" | jq -r '
+    if type == "object" and (.allow_squash_merge | type) == "boolean"
+      and (.allow_merge_commit | type) == "boolean" and (.allow_rebase_merge | type) == "boolean"
+    then [(if .allow_squash_merge then "squash" else empty end),
+          (if .allow_merge_commit then "merge" else empty end),
+          (if .allow_rebase_merge then "rebase" else empty end)] | join(" ")
+    else error("invalid settings") end' 2>/dev/null); then
+    echo "error: refusing to merge $URL: the repository's allowed merge methods could not be read; name one with -- --squash, -- --merge, or -- --rebase" >&2
+    return 1
+  fi
+  for method in $allowed; do
+    FM_PR_GITHUB_DEFAULT_METHOD=$method
+    return 0
+  done
+  echo "error: refusing to merge $URL: the repository allows no merge method (allowed: none); enable one in the repository settings, then pass -- --squash, -- --merge, or -- --rebase" >&2
+  return 1
+}
 
 caller_has_merge_method() {
   local arg
@@ -1744,7 +1776,9 @@ case "$PROVIDER" in
     merge_output=
     merge_args=()
     if ! caller_has_merge_method "$@"; then
-      merge_args=(--squash)
+      # Fork-only: pick a method the repository allows instead of assuming squash.
+      github_default_merge_method || exit 1
+      merge_args=("--$FM_PR_GITHUB_DEFAULT_METHOD")
     fi
     FM_PR_GITHUB_CALLER_METHOD=$(caller_merge_method "$@")
     # mergeable reads UNKNOWN for a short while after a push or base-branch
