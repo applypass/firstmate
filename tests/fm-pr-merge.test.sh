@@ -244,6 +244,15 @@ case "${1:-} ${2:-}" in
     exit "$merge_rc"
     ;;
   "api graphql")
+    # Fork-only: the repository's allowed merge methods.
+    case " $* " in
+      *squashMergeAllowed*)
+        [ ! -f "${FM_TEST_GH_REPO_FAIL:-}" ] || exit 1
+        if [ -f "${FM_TEST_GH_REPO_SETTINGS:-}" ]; then cat "$FM_TEST_GH_REPO_SETTINGS"
+        else echo '{"data":{"repository":{"squashMergeAllowed":true,"mergeCommitAllowed":true,"rebaseMergeAllowed":true}}}'; fi
+        exit 0
+        ;;
+    esac
     if [ -f "${FM_TEST_GH_GRAPHQL_FAIL:-}" ]; then
       echo 'error: could not reach the GitHub API' >&2
       exit 1
@@ -252,16 +261,6 @@ case "${1:-} ${2:-}" in
     exit 0
     ;;
   api\ *)
-    # Fork-only: the repository's allowed merge methods (repos/<owner>/<repo>).
-    case "${2:-}" in
-      repos/*/*/*) ;;
-      repos/*/*)
-        [ ! -f "${FM_TEST_GH_REPO_FAIL:-}" ] || exit 1
-        if [ -f "${FM_TEST_GH_REPO_SETTINGS:-}" ]; then cat "$FM_TEST_GH_REPO_SETTINGS"
-        else echo '{"allow_squash_merge":true,"allow_merge_commit":true,"allow_rebase_merge":true}'; fi
-        exit 0
-        ;;
-    esac
     # The main-merge guard's live base read; dev unless a case says otherwise.
     case " $* " in
       *" repos/"*"/pulls/"*)
@@ -4885,7 +4884,7 @@ test_default_method_follows_allowed_methods() {
   case_dir=$(make_case method-no-squash)
   mkdir -p "$case_dir/wt"
   add_gh_mocks "$case_dir" 1212121212121212121212121212121212121212
-  echo '{"allow_squash_merge":false,"allow_merge_commit":true,"allow_rebase_merge":true}' > "$case_dir/github-repo-settings.json"
+  echo '{"data":{"repository":{"squashMergeAllowed":false,"mergeCommitAllowed":true,"rebaseMergeAllowed":true}}}' > "$case_dir/github-repo-settings.json"
   run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/861 \
     > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "method-no-squash: merge should use an allowed method"
   assert_logged_gh_merge "$case_dir" 861 example/repo --merge
@@ -4893,7 +4892,7 @@ test_default_method_follows_allowed_methods() {
   case_dir=$(make_case method-rebase-only)
   mkdir -p "$case_dir/wt"
   add_gh_mocks "$case_dir" 1313131313131313131313131313131313131313
-  echo '{"allow_squash_merge":false,"allow_merge_commit":false,"allow_rebase_merge":true}' > "$case_dir/github-repo-settings.json"
+  echo '{"data":{"repository":{"squashMergeAllowed":false,"mergeCommitAllowed":false,"rebaseMergeAllowed":true}}}' > "$case_dir/github-repo-settings.json"
   run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/862 \
     > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "method-rebase-only: merge should use rebase"
   assert_logged_gh_merge "$case_dir" 862 example/repo --rebase
@@ -4901,7 +4900,7 @@ test_default_method_follows_allowed_methods() {
   case_dir=$(make_case method-explicit-wins)
   mkdir -p "$case_dir/wt"
   add_gh_mocks "$case_dir" 1414141414141414141414141414141414141414
-  echo '{"allow_squash_merge":false,"allow_merge_commit":true,"allow_rebase_merge":false}' > "$case_dir/github-repo-settings.json"
+  echo '{"data":{"repository":{"squashMergeAllowed":false,"mergeCommitAllowed":true,"rebaseMergeAllowed":false}}}' > "$case_dir/github-repo-settings.json"
   run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/863 -- --rebase \
     > "$case_dir/stdout" 2> "$case_dir/stderr" || fail "method-explicit-wins: explicit method should pass through"
   assert_logged_gh_merge "$case_dir" 863 example/repo --rebase
@@ -4923,7 +4922,7 @@ test_default_method_follows_allowed_methods() {
   case_dir=$(make_case method-none-allowed)
   mkdir -p "$case_dir/wt"
   add_gh_mocks "$case_dir" 1616161616161616161616161616161616161616
-  echo '{"allow_squash_merge":false,"allow_merge_commit":false,"allow_rebase_merge":false}' > "$case_dir/github-repo-settings.json"
+  echo '{"data":{"repository":{"squashMergeAllowed":false,"mergeCommitAllowed":false,"rebaseMergeAllowed":false}}}' > "$case_dir/github-repo-settings.json"
   set +e
   run_pr_merge "$case_dir" task-x1 https://github.com/example/repo/pull/865 \
     > "$case_dir/stdout" 2> "$case_dir/stderr"

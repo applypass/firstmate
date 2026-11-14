@@ -372,16 +372,20 @@ fi
 FM_PR_GITHUB_DEFAULT_METHOD=
 github_default_merge_method() {
   local json allowed method
-  if ! json=$(gh api "repos/$PR_OWNER/$PR_REPO" 2>/dev/null) || [ -z "$json" ]; then
+  # shellcheck disable=SC2016  # GraphQL variables are literal query syntax.
+  if ! json=$(gh api graphql \
+    -f query='query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed}}' \
+    -F "owner=$PR_OWNER" -F "repo=$PR_REPO" 2>/dev/null) || [ -z "$json" ]; then
     echo "error: refusing to merge $URL: the repository's allowed merge methods could not be read; name one with -- --squash, -- --merge, or -- --rebase" >&2
     return 1
   fi
   if ! allowed=$(printf '%s' "$json" | jq -r '
-    if type == "object" and (.allow_squash_merge | type) == "boolean"
-      and (.allow_merge_commit | type) == "boolean" and (.allow_rebase_merge | type) == "boolean"
-    then [(if .allow_squash_merge then "squash" else empty end),
-          (if .allow_merge_commit then "merge" else empty end),
-          (if .allow_rebase_merge then "rebase" else empty end)] | join(" ")
+    (.data.repository? // null) as $r
+    | if ($r | type) == "object" and ($r.squashMergeAllowed | type) == "boolean"
+      and ($r.mergeCommitAllowed | type) == "boolean" and ($r.rebaseMergeAllowed | type) == "boolean"
+    then [(if $r.squashMergeAllowed then "squash" else empty end),
+          (if $r.mergeCommitAllowed then "merge" else empty end),
+          (if $r.rebaseMergeAllowed then "rebase" else empty end)] | join(" ")
     else error("invalid settings") end' 2>/dev/null); then
     echo "error: refusing to merge $URL: the repository's allowed merge methods could not be read; name one with -- --squash, -- --merge, or -- --rebase" >&2
     return 1
