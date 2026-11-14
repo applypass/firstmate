@@ -255,6 +255,7 @@ test_claude_secondmate_launch_brief_publishes_into_its_own_home() {
   [ -z "$(find "$HOME_DIR/state/operational-inbox" -name '*.msg' -print -quit 2>/dev/null)" ] \
     || fail "the secondmate launch record leaked into the primary's operational inbox"
   assert_op_guard_registered "$sm" "claude secondmate"
+  assert_not_contains "$launch" "--disallowedTools" "a secondmate launch must keep every built-in tool"
   pass "a secondmate claude launch publishes its brief record into the secondmate's own home"
 }
 
@@ -611,7 +612,7 @@ test_active_dispatch_profile_allows_raw_launch_command() {
   # The unverified-adapter escape hatch is still an agent this fleet launched,
   # so it carries the compact-adviser floor and the AI-trailer strip; nothing
   # else may rewrite the captain's own command.
-  [ "$launch" = "export COMPACT_ADVISER_DISABLE=1; export CHROME_DEVTOOLS_AXI_SESSION='$id'; $(task_inbox_export "$HOME_DIR" "$id")$(fm_test_launch_git_prefix "$launch")custom-agent --flag" ] || fail "raw launch command changed"$'\n'"actual: $launch"
+  [ "$launch" = "export OP_BIOMETRIC_UNLOCK_ENABLED=false; export COMPACT_ADVISER_DISABLE=1; $(task_inbox_export "$HOME_DIR" "$id")export CHROME_DEVTOOLS_AXI_SESSION='$id'; $(fm_test_launch_git_prefix "$launch")custom-agent --flag" ] || fail "raw launch command changed"$'\n'"actual: $launch"
   pass "active crew-dispatch profile allows the raw launch-command escape hatch"
 }
 
@@ -2451,8 +2452,9 @@ claude_launch_brief_arg() {  # <launch>
 # drop it straight into an expected command.
 # The lean MCP flags every Claude task worker launch carries after the
 # control-channel flag (bin/fm-claude-lean-mcp.sh). Trailing space included.
+WORKER_DROPPED_TOOLS=Artifact,Workflow,ScheduleWakeup,AskUserQuestion,ReportFindings,ShareOnboardingGuide
 claude_lean_mcp() {  # <home>
-  printf '%s ' "--disallowedTools=Artifact,Workflow,AskUserQuestion,ScheduleWakeup --strict-mcp-config --mcp-config '$1/state/claude-worker-mcp-none.json'"
+  printf '%s ' "--disallowedTools=$WORKER_DROPPED_TOOLS --strict-mcp-config --mcp-config '$1/state/claude-worker-mcp-none.json'"
 }
 
 claude_worker_add_dirs() {  # <home> <id>
@@ -2469,7 +2471,7 @@ claude_expected_launch() {  # <launch> <home> <id> <permission-flag>
   [ "$(printf '%s' "$doorbell" | "$ROOT/bin/fm-operational-input.sh" doorbell-kind)" = launch-brief ] \
     || doorbell="not a launch-brief doorbell"
   quoted="'$(printf '%s' "$doorbell" | sed "s/'/'\\\\''/g")'"
-  printf '%s' "export COMPACT_ADVISER_DISABLE=1; export CHROME_DEVTOOLS_AXI_SESSION='$3'; $(task_inbox_export "$2" "$3")$(fm_test_launch_git_prefix "$1")env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_FEEDBACK=0 claude $4 $(claude_worker_add_dirs "$2" "$3")--settings '{\"feedbackDrafts\":\"off\",\"enabledPlugins\":{\"applypass-coach@synced\":false,\"applypass-coach@inline\":false},\"attribution\":{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}}' $CLAUDE_CONTROL_CHANNEL_FLAG $quoted"
+  printf '%s' "export OP_BIOMETRIC_UNLOCK_ENABLED=false; export COMPACT_ADVISER_DISABLE=1; $(task_inbox_export "$2" "$3")export CHROME_DEVTOOLS_AXI_SESSION='$3'; $(fm_test_launch_git_prefix "$1")env -u CURSOR_AGENT -u CURSOR_INVOKED_AS -u GEMINI_CLI CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_FEEDBACK=0 claude $4 $(claude_worker_add_dirs "$2" "$3")--settings '{\"feedbackDrafts\":\"off\",\"enabledPlugins\":{\"applypass-coach@synced\":false,\"applypass-coach@inline\":false},\"attribution\":{\"commit\":\"\",\"pr\":\"\",\"sessionUrl\":false}}' $CLAUDE_CONTROL_CHANNEL_FLAG $(claude_lean_mcp "$2")$quoted"
 }
 
 test_claude_permission_mode_absent_defaults_to_bypass() {
@@ -2535,7 +2537,7 @@ test_claude_permission_mode_auto_reaches_scout_launch() {
   launch=$(cat "$LAUNCH_LOG")
   assert_contains "$launch" "claude --permission-mode auto " "scout launch did not carry --permission-mode auto"
   assert_not_contains "$launch" "--dangerously-skip-permissions" "scout launch must not request bypass mode"
-  assert_not_contains "$launch" "--disallowedTools" "scout launch must keep Artifact and the other built-in tools"
+  assert_contains "$launch" "--disallowedTools=$WORKER_DROPPED_TOOLS " "scout launch must drop the same unused tools as a ship"
   pass "config/claude-permission-mode=auto reaches scout launches too"
 }
 
