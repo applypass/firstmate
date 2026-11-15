@@ -1,0 +1,139 @@
+gh pr view https://github.com/applypass/apply_pass_backend/pull/859 --json baseRefName,headRefName
+gh api repos/applypass/apply_pass_backend/compare/main...dev --paginate --jq .commits[].sha
+gh api repos/applypass/apply_pass_backend/commits/d11e96de30f131ab7ebcc1f55a015c35e62c3616/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/44fdace21f90a09ea5e10584f8e84eee7244be88/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/81fc47215fb62a0f59ae26316348d177c19d07e5/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/14a93ec06dbd356b12561e5c8b7568f4973766d3/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/8c7cf9835bf0a19185574f11408e38c89b404860/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/05ec75cf56fbced816c6b919b0d0827abb49c4f9/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/f56c31c60c3b76a3f4d8737c43351d7b0e8ee852/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/cf00787d6fad3b59a0141c3d6666a20a071add59/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/ef53f18bb5e528b76a9fa3355664dbf9e007171b/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/d4ea46fd78e5bbea1d01d714e3937461fb3ed40d/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/0ddcebd50623e409ec4228cad6ffad84572c6d1b/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/27aa7b81417d30431209da4dcd121269295e1da4/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/caca6a57d15727b3777fba77ddeec02688b4d0ff/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh pr view 858 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/858/files --paginate --jq .[].filename
+gh pr view 860 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/860/files --paginate --jq .[].filename
+gh pr view 861 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/861/files --paginate --jq .[].filename
+gh pr view https://github.com/applypass/apply_pass_backend/pull/859 --json body --jq .body // ""
+gh api repos/applypass/apply_pass_backend/compare/main...dev --paginate --jq (.files // []) as $f
+      | if ($f | length) >= 300 and all($f[]; .filename != "schema.sql")
+        then error("the compare lists 300 files, so schema.sql may be cut off")
+        else $f[] | select(.filename == "schema.sql") | .patch // error("GitHub omitted the schema.sql patch")
+        end
+gh pr edit https://github.com/applypass/apply_pass_backend/pull/859 --body-file /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/tmp.vYJMGgvmOJ
+gh pr view https://github.com/applypass/apply_pass_backend/pull/859 --json baseRefName,headRefName
+gh api repos/applypass/apply_pass_backend/compare/main...dev --paginate --jq .commits[].sha
+gh api repos/applypass/apply_pass_backend/commits/d11e96de30f131ab7ebcc1f55a015c35e62c3616/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/44fdace21f90a09ea5e10584f8e84eee7244be88/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/81fc47215fb62a0f59ae26316348d177c19d07e5/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/14a93ec06dbd356b12561e5c8b7568f4973766d3/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/8c7cf9835bf0a19185574f11408e38c89b404860/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/05ec75cf56fbced816c6b919b0d0827abb49c4f9/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/f56c31c60c3b76a3f4d8737c43351d7b0e8ee852/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/cf00787d6fad3b59a0141c3d6666a20a071add59/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/ef53f18bb5e528b76a9fa3355664dbf9e007171b/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/d4ea46fd78e5bbea1d01d714e3937461fb3ed40d/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/0ddcebd50623e409ec4228cad6ffad84572c6d1b/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/27aa7b81417d30431209da4dcd121269295e1da4/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/caca6a57d15727b3777fba77ddeec02688b4d0ff/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh pr view 858 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/858/files --paginate --jq .[].filename
+gh pr view 860 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/860/files --paginate --jq .[].filename
+gh pr view 861 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/861/files --paginate --jq .[].filename
+gh pr view https://github.com/applypass/apply_pass_backend/pull/859 --json body --jq .body // ""
+gh pr edit https://github.com/applypass/apply_pass_backend/pull/859 --body-file /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/tmp.8XjQ1k1XfY
+gh pr view https://github.com/applypass/apply_pass_backend/pull/859 --json baseRefName,headRefName
+gh api repos/applypass/apply_pass_backend/compare/main...dev --paginate --jq .commits[].sha
+gh api repos/applypass/apply_pass_backend/commits/d11e96de30f131ab7ebcc1f55a015c35e62c3616/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/44fdace21f90a09ea5e10584f8e84eee7244be88/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/81fc47215fb62a0f59ae26316348d177c19d07e5/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/14a93ec06dbd356b12561e5c8b7568f4973766d3/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/8c7cf9835bf0a19185574f11408e38c89b404860/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/05ec75cf56fbced816c6b919b0d0827abb49c4f9/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/f56c31c60c3b76a3f4d8737c43351d7b0e8ee852/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/cf00787d6fad3b59a0141c3d6666a20a071add59/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/ef53f18bb5e528b76a9fa3355664dbf9e007171b/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/d4ea46fd78e5bbea1d01d714e3937461fb3ed40d/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/0ddcebd50623e409ec4228cad6ffad84572c6d1b/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/27aa7b81417d30431209da4dcd121269295e1da4/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/caca6a57d15727b3777fba77ddeec02688b4d0ff/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh pr view 858 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/858/files --paginate --jq .[].filename
+gh pr view 860 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/860/files --paginate --jq .[].filename
+gh pr view 861 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/861/files --paginate --jq .[].filename
+gh pr view https://github.com/applypass/apply_pass_backend/pull/859 --json body --jq .body // ""
+gh pr edit https://github.com/applypass/apply_pass_backend/pull/859 --body-file /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/tmp.mFMPUJm3zm
+gh pr view https://github.com/applypass/apply_pass_backend/pull/859 --json baseRefName,headRefName
+gh api repos/applypass/apply_pass_backend/compare/main...dev --paginate --jq .commits[].sha
+gh api repos/applypass/apply_pass_backend/commits/d11e96de30f131ab7ebcc1f55a015c35e62c3616/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/44fdace21f90a09ea5e10584f8e84eee7244be88/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/81fc47215fb62a0f59ae26316348d177c19d07e5/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/14a93ec06dbd356b12561e5c8b7568f4973766d3/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/8c7cf9835bf0a19185574f11408e38c89b404860/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/05ec75cf56fbced816c6b919b0d0827abb49c4f9/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/f56c31c60c3b76a3f4d8737c43351d7b0e8ee852/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/cf00787d6fad3b59a0141c3d6666a20a071add59/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/ef53f18bb5e528b76a9fa3355664dbf9e007171b/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/d4ea46fd78e5bbea1d01d714e3937461fb3ed40d/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/0ddcebd50623e409ec4228cad6ffad84572c6d1b/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/27aa7b81417d30431209da4dcd121269295e1da4/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/caca6a57d15727b3777fba77ddeec02688b4d0ff/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh pr view 858 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/858/files --paginate --jq .[].filename
+gh pr view 860 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/860/files --paginate --jq .[].filename
+gh pr view 861 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/861/files --paginate --jq .[].filename
+gh pr view https://github.com/applypass/apply_pass_backend/pull/859 --json body --jq .body // ""
+gh pr edit https://github.com/applypass/apply_pass_backend/pull/859 --body-file /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/tmp.OioclBEXOU
+gh pr view https://github.com/applypass/apply_pass_backend/pull/859 --json baseRefName,headRefName
+gh api repos/applypass/apply_pass_backend/compare/main...dev --paginate --jq .commits[].sha
+gh api repos/applypass/apply_pass_backend/commits/73cbaba708a0a5ddd291419f1998e2ff7b274d0d/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/187eefd578139282d6d69855ab57745512af7bc1/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/f21ee58e685b979469afc97f1260dece348e5f65/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/4c9547e148a7ba169405912cf1b0dc0354b4ed74/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/efe9c2ed0e6d446c417c3df8f474c5a1bfb56dee/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/d1413778e93c11512e1020a96e030cd27057cb85/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh pr view 864 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/864/files --paginate --jq .[].filename
+gh pr view 865 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/865/files --paginate --jq .[].filename
+gh pr view https://github.com/applypass/apply_pass_backend/pull/859 --json body --jq .body // ""
+gh api repos/applypass/apply_pass_backend/compare/main...dev --paginate --jq (.files // []) as $f
+      | if ($f | length) >= 300 and all($f[]; .filename != "schema.sql")
+        then error("the compare lists 300 files, so schema.sql may be cut off")
+        else $f[] | select(.filename == "schema.sql") | .patch // error("GitHub omitted the schema.sql patch")
+        end
+gh pr edit https://github.com/applypass/apply_pass_backend/pull/859 --body-file /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/tmp.FGoani8O3b
+gh pr view https://github.com/applypass/apply_pass_backend/pull/859 --json baseRefName,headRefName
+gh api repos/applypass/apply_pass_backend/compare/main...dev --paginate --jq .commits[].sha
+gh api repos/applypass/apply_pass_backend/commits/d11e96de30f131ab7ebcc1f55a015c35e62c3616/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/44fdace21f90a09ea5e10584f8e84eee7244be88/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/81fc47215fb62a0f59ae26316348d177c19d07e5/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/14a93ec06dbd356b12561e5c8b7568f4973766d3/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/8c7cf9835bf0a19185574f11408e38c89b404860/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/05ec75cf56fbced816c6b919b0d0827abb49c4f9/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/f56c31c60c3b76a3f4d8737c43351d7b0e8ee852/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/cf00787d6fad3b59a0141c3d6666a20a071add59/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/ef53f18bb5e528b76a9fa3355664dbf9e007171b/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/d4ea46fd78e5bbea1d01d714e3937461fb3ed40d/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/0ddcebd50623e409ec4228cad6ffad84572c6d1b/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/27aa7b81417d30431209da4dcd121269295e1da4/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh api repos/applypass/apply_pass_backend/commits/caca6a57d15727b3777fba77ddeec02688b4d0ff/pulls --jq .[] | select(.base.ref == "dev") | .number
+gh pr view 858 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/858/files --paginate --jq .[].filename
+gh pr view 860 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/860/files --paginate --jq .[].filename
+gh pr view 861 --repo applypass/apply_pass_backend --json title,body,headRefName
+gh api repos/applypass/apply_pass_backend/pulls/861/files --paginate --jq .[].filename
+gh pr view https://github.com/applypass/apply_pass_backend/pull/859 --json body --jq .body // ""
+gh pr edit https://github.com/applypass/apply_pass_backend/pull/859 --body-file /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/tmp.cRTmSjszBU

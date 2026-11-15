@@ -1,0 +1,2 @@
+release gate table refreshed: https://github.com/applypass/apply_pass_backend/pull/859
+exit=0

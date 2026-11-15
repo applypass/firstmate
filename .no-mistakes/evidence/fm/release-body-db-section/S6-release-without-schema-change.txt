@@ -1,0 +1,22 @@
+=== S6-release-without-schema-change (exit 0)
+release gate table refreshed: https://github.com/applypass/apply_pass_backend/pull/859
+--- body written by gh pr edit (captured, not sent):
+## Release
+
+Promote dev to main.
+
+## Commits
+
+- Write a subscription history row on every tier change, at any client status (sc-11423)
+- no-mistakes(document): Correct history-trigger firing rule in client-status doc
+- Merge pull request #858 from applypass/fm/subhist-trigger
+
+<!-- fm-release-gate:start -->
+## Release gate
+
+| PR | Story | Decision it implements | Current? | Data or API change | Reader and writer audit | Status |
+|---|---|---|---|---|---|---|
+| [#864](https://github.com/applypass/apply_pass_backend/pull/864) | sc-11631 sc-11671 | none | yes | no | n/a | FAIL |
+| [#865](https://github.com/applypass/apply_pass_backend/pull/865) | sc-11806 sc-5606 | none | yes | yes (swagger.yml) | yes | FAIL |
+<!-- fm-release-gate:end -->
+

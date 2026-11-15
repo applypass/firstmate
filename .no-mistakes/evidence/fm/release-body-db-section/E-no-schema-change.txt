@@ -1,0 +1,4 @@
+=== E: real current compare main...dev (files: .github/pull_request_template.md,.github/workflows/pr-guards.yml,lib/resumeFileUpload.js,metacarbon-api-spec.md,scripts/ci-checks/ci-checks.test.sh,scripts/ci-checks/schema-applied.sh,swagger.yml,test/integration/resumeUploadLimits.integration.test.js,test/lib/resumeFileUpload.test.js)
+release gate table refreshed: https://github.com/applypass/apply_pass_backend/pull/859
+exit=0
+Database headings: 0; DDL lines: 0

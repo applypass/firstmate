@@ -1,0 +1,46 @@
+=== B1: second refresh of the unticked output (no duplicate)
+release gate table refreshed: https://github.com/applypass/apply_pass_backend/pull/859
+exit=0
+Database headings: 1; DDL lines: 1
+
+=== B2: person ticks the line, then the release tool refreshes again (commit list/gate table rebuilt)
+release gate table refreshed: https://github.com/applypass/apply_pass_backend/pull/859
+exit=0
+diff input -> refreshed output:
+16,18c16,18
+< | [#858](https://github.com/applypass/apply_pass_backend/pull/858) | sc-11423 | none | yes | yes (schema.sql) | yes | STALE |
+< | [#860](https://github.com/applypass/apply_pass_backend/pull/860) | sc-11500 sc-11652 | none | yes | no | n/a | STALE |
+< | [#861](https://github.com/applypass/apply_pass_backend/pull/861) | sc-11500 sc-11631 | none | yes | no | n/a | STALE |
+---
+> | [#858](https://github.com/applypass/apply_pass_backend/pull/858) | sc-11423 | none | yes | yes (schema.sql) | yes | FAIL |
+> | [#860](https://github.com/applypass/apply_pass_backend/pull/860) | sc-11500 sc-11652 | none | yes | no | n/a | FAIL |
+> | [#861](https://github.com/applypass/apply_pass_backend/pull/861) | sc-11500 sc-11631 | none | yes | no | n/a | FAIL |
+DDL lines after refresh:
+- [x] schema.sql DDL applied to the prod database (schema.sql dfcb1a7e6084)
+schema.sql: DDL applied to the prod database, ok
+ci exit=0
+
+=== C: real #859 body (Database heading + old hand-ticked line)
+release gate table refreshed: https://github.com/applypass/apply_pass_backend/pull/859
+exit=0
+diff real body -> refreshed (only gate table rows may change):
+16,18c16,18
+< | [#858](https://github.com/applypass/apply_pass_backend/pull/858) | sc-11423 | plan-apply_pass_backend-858 | yes | yes (schema.sql) | yes | ok |
+< | [#860](https://github.com/applypass/apply_pass_backend/pull/860) | sc-11500 sc-11652 | plan-apply_pass_backend-860 | yes | no | n/a | ok |
+< | [#861](https://github.com/applypass/apply_pass_backend/pull/861) | sc-11500 sc-11631 | plan-apply_pass_backend-861 | yes | no | n/a | ok |
+---
+> | [#858](https://github.com/applypass/apply_pass_backend/pull/858) | sc-11423 | none | yes | yes (schema.sql) | yes | FAIL |
+> | [#860](https://github.com/applypass/apply_pass_backend/pull/860) | sc-11500 sc-11652 | none | yes | no | n/a | FAIL |
+> | [#861](https://github.com/applypass/apply_pass_backend/pull/861) | sc-11500 sc-11631 | none | yes | no | n/a | FAIL |
+25d24
+< 
+DDL lines:
+- [x] schema.sql DDL applied to the prod database (the #858 subscription-history trigger and function; verified live read-only on 14 Nov 2026)
+
+=== D: ticked line pasted from the CI message under ## Commits, no Database heading
+release gate table refreshed: https://github.com/applypass/apply_pass_backend/pull/859
+exit=0
+Database headings: 0; DDL lines: 1
+- [x] schema.sql DDL applied to the prod database (schema.sql dfcb1a7e6084)
+schema.sql: DDL applied to the prod database, ok
+ci exit=0

@@ -1,0 +1,25 @@
+=== S5-bare-ticked-line-no-duplicate (exit 0)
+release gate table refreshed: https://github.com/applypass/apply_pass_backend/pull/859
+--- body written by gh pr edit (captured, not sent):
+## Release
+
+Promote dev to main.
+
+## Commits
+
+- Write a subscription history row on every tier change, at any client status (sc-11423)
+- no-mistakes(document): Correct history-trigger firing rule in client-status doc
+- Merge pull request #858 from applypass/fm/subhist-trigger
+
+- [x] schema.sql DDL applied to the prod database (schema.sql dfcb1a7e6084)
+
+<!-- fm-release-gate:start -->
+## Release gate
+
+| PR | Story | Decision it implements | Current? | Data or API change | Reader and writer audit | Status |
+|---|---|---|---|---|---|---|
+| [#858](https://github.com/applypass/apply_pass_backend/pull/858) | sc-11423 | none | yes | yes (schema.sql) | yes | FAIL |
+| [#860](https://github.com/applypass/apply_pass_backend/pull/860) | sc-11500 sc-11652 | none | yes | no | n/a | FAIL |
+| [#861](https://github.com/applypass/apply_pass_backend/pull/861) | sc-11500 sc-11631 | none | yes | no | n/a | FAIL |
+<!-- fm-release-gate:end -->
+

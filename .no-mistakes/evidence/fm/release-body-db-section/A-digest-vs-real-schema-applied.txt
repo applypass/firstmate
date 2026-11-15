@@ -1,0 +1,15 @@
+schema-applied.sh from apply_pass_backend origin/dev (187eefd no-mistakes(document): Brace ticked variable in schema-applied.sh for shellcheck), run in a clone at release 859 head caca6a57, base 23bf34fd5e3645794f184a0b87fe8a4bda47de34
+
+$ schema-applied.sh --digest 23bf34fd5e3645794f184a0b87fe8a4bda47de34
+dfcb1a7e6084
+line fm-release-gate.sh refresh wrote:
+- [ ] schema.sql DDL applied to the prod database (schema.sql dfcb1a7e6084)
+
+--- CI (base main) on the refresh output as written (unticked):
+::error file=schema.sql::This PR changes schema.sql and merges into main, which deploys to the prod database. Apply the DDL to the prod database by hand, then add this line to the PR body: - [x] schema.sql DDL applied to the prod database (schema.sql dfcb1a7e6084)
+Merging schema.sql does not apply it: routes fail with errors like 'column jlm.is_manual does not exist'.
+exit=1
+
+--- CI after a person ticks the added line ([ ] -> [x]):
+schema.sql: DDL applied to the prod database, ok
+exit=0

@@ -1,0 +1,8 @@
+=== S2: apply_pass_backend scripts/ci-checks/schema-applied.sh (dev, post-#864) at #859 head, base 23bf34fd5e3645794f184a0b87fe8a4bda47de34 main
+--- body as refresh wrote it (unticked):
+::error file=schema.sql::This PR changes schema.sql and merges into main, which deploys to the prod database. Apply the DDL to the prod database by hand, then add this line to the PR body: - [x] schema.sql DDL applied to the prod database (schema.sql dfcb1a7e6084)
+Merging schema.sql does not apply it: routes fail with errors like 'column jlm.is_manual does not exist'.
+exit 1
+--- same body after a person ticks the generated line:
+schema.sql: DDL applied to the prod database, ok
+exit 0
