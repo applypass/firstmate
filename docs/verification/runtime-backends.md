@@ -3384,9 +3384,9 @@ Claude has no verified clear key in `bin/fm-control-lib.sh`, so the keys were me
 | Escape twice | Empty, but on an empty composer the second Escape opens the rewind view |
 | Ctrl-C once | Empty, but Ctrl-C on an empty composer can exit the agent |
 
-The helper therefore presses Ctrl-U (one wrapped row per press) up to `FM_CONTROL_DOORBELL_CLEAR_MAX` times (default 8) and stops at the first proven-empty composer.
+The helper therefore presses Ctrl-U (one wrapped row per press) up to 8 times and stops at the first proven-empty composer.
 Escape and Ctrl-C are never used.
-If the composer is not proven empty afterwards, the original refusal stands.
+If the composer is not proven empty afterwards, the original refusal stands, and part of the doorbell may remain for the operator to clear by hand.
 The doorbell is never submitted.
 
 The live guard `tests/fm-control-own-doorbell-live-e2e.test.sh` refreshes this record after a Claude upgrade.

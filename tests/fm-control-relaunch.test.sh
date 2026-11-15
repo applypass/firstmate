@@ -475,11 +475,10 @@ test_relaunch_keeps_the_refusal_when_the_doorbell_clear_does_not_empty_the_compo
   dir=$(new_case sticky-doorbell rl47)
   add_ship_task "$dir" rl47 claude
   own_doorbell_line "$dir" rl47 > "$dir/fake/composer"
-  out=$(FM_FAKE_CLEAR_STICKS=1 FM_CONTROL_DOORBELL_CLEAR_MAX=2 \
-    run_control "$dir" rl47 relaunch --note "a clear that does not take"); rc=$?
+  out=$(FM_FAKE_CLEAR_STICKS=1 run_control "$dir" rl47 relaunch --note "a clear that does not take"); rc=$?
   expect_code 1 "$rc" "a relaunch must refuse when the composer is not proven empty after the clear"
   assert_contains "$out" "composer visibly holds pending text" "the refusal should name the pending text"
-  [ "$(grep -c 'C-u' "$dir/fake/keys")" = 2 ] || fail "the clear should stop at its bound of two presses"
+  [ "$(grep -c 'C-u' "$dir/fake/keys")" = 8 ] || fail "the clear should stop at its bound of eight presses"
   assert_no_grep "/exit" "$dir/fake/literal" "no exit command may be typed when the clear did not empty the composer"
   pass "fm-control relaunch: a clear that does not empty the composer keeps the refusal"
 }

@@ -17,22 +17,23 @@
 # The doorbell is never submitted.
 #
 # fm_control_clear_own_doorbell returns 0 only when the composer is proven empty
-# afterwards, and nonzero (touching nothing) in every other case. It reads the
-# caller's STATE, ID, BACKEND, T, LABEL, HARNESS and POLL.
+# afterwards, and nonzero in every other case. It touches nothing unless the
+# composer holds exactly the doorbell, but once Ctrl-U presses start a failed
+# clear can leave part of the doorbell behind (a pane too narrow for the press
+# bound, or a composer read that fails mid-clear); the operator then clears it by
+# hand. It reads the caller's STATE, ID, BACKEND, T, LABEL, HARNESS and POLL.
 
 _FM_CONTROL_DOORBELL_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/fm-task-inbox-lib.sh
 . "$_FM_CONTROL_DOORBELL_LIB_DIR/fm-task-inbox-lib.sh"
 
-# Enough presses for the doorbell wrapped on a very narrow pane.
-FM_CONTROL_DOORBELL_CLEAR_MAX=${FM_CONTROL_DOORBELL_CLEAR_MAX:-8}
 
 fm_control_clear_own_doorbell() {
   local line n=0 verdict
   [ "${HARNESS-}" = claude ] || return 1
   line=$(fm_task_inbox_doorbell_line "$(fm_task_inbox_dir "$STATE" "$ID")/x.msg") || return 1
   fm_task_inbox_composer_holds "$BACKEND" "$T" "$line" "${LABEL-}" || return 1
-  while [ "$n" -lt "$FM_CONTROL_DOORBELL_CLEAR_MAX" ]; do
+  while [ "$n" -lt 8 ]; do
     fm_backend_send_key "$BACKEND" "$T" C-u "${LABEL-}" || return 1
     n=$((n + 1))
     sleep "${POLL:-0.5}"
