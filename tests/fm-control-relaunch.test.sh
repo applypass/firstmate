@@ -119,6 +119,10 @@ case "${1:-}" in
     printf 'fakepane\n'; exit 0 ;;
   capture-pane)
     [ -z "${FM_FAKE_COMPOSER_READ_FAIL:-}" ] || exit 1
+    # Fork-only: a pane too short for every wrapped row shows the composer's first row with no rule under it.
+    if [ -n "${FM_FAKE_CLIP:-}" ]; then
+      printf '%s\n❯ %s\n' '──────────────────────────────' "$(cat "$D/composer")"; exit 0
+    fi
     # Fork-only: a box as wide as its text, so a long line does not read as ambiguous geometry.
     if [ "$(wc -c < "$D/composer")" -gt 40 ]; then
       text=$(cat "$D/composer"); rule=$(printf '%*s' "$((${#text} + 3))" '' | sed 's/ /─/g')
@@ -483,6 +487,94 @@ test_relaunch_keeps_the_refusal_when_the_doorbell_clear_does_not_empty_the_compo
   pass "fm-control relaunch: a clear that does not empty the composer keeps the refusal"
 }
 
+# Fork-only: a pane too short for the whole doorbell shows a clipped first row.
+# Cut the line after its quoted inbox name, the shortest view the matcher accepts.
+clipped_doorbell() {  # <dir> <id> [keep-chars-after-cut]
+  local line pre
+  line=$(own_doorbell_line "$1" "$2")
+  pre=${line%steering inbox*}
+  printf '%s steering inbox, read and act on each in numeric' "${pre%?}"
+}
+
+test_relaunch_clears_a_clipped_own_doorbell() {
+  local dir out rc
+  dir=$(new_case clipped-doorbell rl48)
+  add_ship_task "$dir" rl48 claude
+  clipped_doorbell "$dir" rl48 > "$dir/fake/composer"
+  out=$(FM_FAKE_CLIP=1 run_control "$dir" rl48 relaunch --note "clipped own doorbell"); rc=$?
+  expect_code 0 "$rc" "a relaunch must clear a clipped view of its own doorbell: $out"
+  assert_grep "C-u" "$dir/fake/keys" "the clipped doorbell should be cleared with Ctrl-U"
+  assert_no_grep "Firstmate instruction waiting" "$dir/fake/literal" "the doorbell must never be submitted"
+  pass "fm-control relaunch: a clipped view of its own doorbell is cleared"
+}
+
+test_relaunch_refuses_a_clipped_doorbell_naming_another_task() {
+  local dir out rc
+  dir=$(new_case clipped-other rl49)
+  add_ship_task "$dir" rl49 claude
+  clipped_doorbell "$dir" rl49 | sed "s/rl49/rl99/" > "$dir/fake/composer"
+  out=$(FM_FAKE_CLIP=1 run_control "$dir" rl49 relaunch --note "another task's doorbell"); rc=$?
+  expect_code 1 "$rc" "a clipped doorbell naming another task's inbox must refuse"
+  assert_no_grep "C-u" "$dir/fake/keys" "another task's line must never be cleared"
+  pass "fm-control relaunch: a clipped doorbell naming another task refuses"
+}
+
+test_relaunch_refuses_arbitrary_clipped_text() {
+  local dir out rc
+  dir=$(new_case clipped-user rl50)
+  add_ship_task "$dir" rl50 claude
+  printf 'please remember to rerun the migration on test before the release goes out' > "$dir/fake/composer"
+  out=$(FM_FAKE_CLIP=1 run_control "$dir" rl50 relaunch --note "user text"); rc=$?
+  expect_code 1 "$rc" "arbitrary composer text must refuse"
+  assert_no_grep "C-u" "$dir/fake/keys" "user text must never be cleared"
+  pass "fm-control relaunch: arbitrary composer text still refuses"
+}
+
+test_relaunch_refuses_a_cut_doorbell_with_content_below() {
+  local dir out rc
+  dir=$(new_case clipped-below rl51)
+  add_ship_task "$dir" rl51 claude
+  clipped_doorbell "$dir" rl51 > "$dir/fake/composer"
+  out=$(run_control "$dir" rl51 relaunch --note "boxed, so nothing is clipped"); rc=$?
+  expect_code 1 "$rc" "a partial line inside a closed box is a user draft and must refuse"
+  assert_no_grep "C-u" "$dir/fake/keys" "a closed-box partial line must never be cleared"
+  pass "fm-control relaunch: a partial line with a closing box under it refuses"
+}
+
+test_clear_doorbell_verb_clears_only_the_own_doorbell() {
+  local dir out rc
+  dir=$(new_case verb-clear cd1)
+  add_ship_task "$dir" cd1 claude
+  own_doorbell_line "$dir" cd1 > "$dir/fake/composer"
+  out=$(run_control "$dir" cd1 clear-doorbell); rc=$?
+  expect_code 0 "$rc" "clear-doorbell must clear the full own doorbell: $out"
+  assert_contains "$out" "doorbell-cleared" "the verb should report the clear"
+  assert_no_grep "/exit" "$dir/fake/literal" "clear-doorbell must not exit the agent"
+  assert_no_grep "Enter" "$dir/fake/keys" "the doorbell must never be submitted"
+  [ "$(cat "$dir/fake/command")" = claude ] || fail "clear-doorbell must leave the agent running"
+
+  dir=$(new_case verb-empty cd2)
+  add_ship_task "$dir" cd2 claude
+  out=$(run_control "$dir" cd2 clear-doorbell); rc=$?
+  expect_code 0 "$rc" "an empty composer is not an error: $out"
+  assert_contains "$out" "no-doorbell" "an empty composer should report no-doorbell"
+
+  dir=$(new_case verb-draft cd3)
+  add_ship_task "$dir" cd3 claude
+  printf 'my own draft' > "$dir/fake/composer"
+  out=$(run_control "$dir" cd3 clear-doorbell); rc=$?
+  expect_code 1 "$rc" "a user draft must refuse"
+  assert_no_grep "C-u" "$dir/fake/keys" "a user draft must never be cleared"
+
+  dir=$(new_case verb-clip cd4)
+  add_ship_task "$dir" cd4 claude
+  clipped_doorbell "$dir" cd4 > "$dir/fake/composer"
+  out=$(FM_FAKE_CLIP=1 run_control "$dir" cd4 clear-doorbell); rc=$?
+  expect_code 0 "$rc" "clear-doorbell must clear a clipped own doorbell: $out"
+  assert_contains "$out" "doorbell-cleared" "the clipped clear should report the clear"
+  pass "fm-control clear-doorbell: clears only its own doorbell, never submits, refuses anything else"
+}
+
 test_relaunch_from_linked_home_preserves_recorded_worktree() {
   local dir out rc head fetch_head
   dir=$(new_case linked-home rl42)
@@ -562,7 +654,7 @@ test_relaunch_serializes_concurrent_durable_metadata_publication() {
     FM_FAKE_TRACE_RELEASE="$launch_release" \
     run_control "$dir" rl28 relaunch --note "continue after publication" > "$dir/control.out" &
   control_pid=$!
-  while [ ! -e "$prepare" ] && [ "$i" -lt 500 ]; do
+  while [ ! -e "$prepare" ] && [ "$i" -lt 3000 ]; do
     /bin/sleep 0.01
     i=$((i + 1))
   done
@@ -1871,7 +1963,7 @@ test_prepublication_failure_keeps_concurrent_durable_metadata() {
     run_control "$dir" rl30 relaunch --harness codex --note "preserve concurrent metadata" \
       > "$dir/control.out" &
   control_pid=$!
-  while [ ! -e "$dir/cwd-race-ready" ] && [ "$i" -lt 200 ]; do
+  while [ ! -e "$dir/cwd-race-ready" ] && [ "$i" -lt 3000 ]; do
     /bin/sleep 0.01
     i=$((i + 1))
   done
@@ -3031,6 +3123,11 @@ test_relaunch_refuses_before_exit_when_the_composer_state_is_unproven
 test_relaunch_clears_its_own_unsent_doorbell_then_proceeds
 test_relaunch_never_clears_text_beyond_its_own_doorbell
 test_relaunch_keeps_the_refusal_when_the_doorbell_clear_does_not_empty_the_composer
+test_relaunch_clears_a_clipped_own_doorbell
+test_relaunch_refuses_a_clipped_doorbell_naming_another_task
+test_relaunch_refuses_arbitrary_clipped_text
+test_relaunch_refuses_a_cut_doorbell_with_content_below
+test_clear_doorbell_verb_clears_only_the_own_doorbell
 test_relaunch_from_linked_home_preserves_recorded_worktree
 test_relaunch_preserves_durable_task_metadata
 test_relaunch_serializes_concurrent_durable_metadata_publication
