@@ -1,0 +1,18 @@
+## mate status tail: working [corr=74a1e9a7ec8c94cb] [at=1794745908]: long-run-started (via-helper)
+## crew state: state: working · source: status-log · long-run-started (via-helper)
+## in-flight items in mate backlog: count: 0
+
+$ fm-send.sh lab583fdb41069c-mate --new-task 'NEWWORK-WHILE-WORKING: ...'
+rc=0
+## held queue: 0 files
+## marker in mate home: No such file or directory
+## inbox now: 014.msg  (new: 0)
+## transcripts before: 3d3e9e64-d4ce-41ec-9556-2abf38048d36.jsonl 4b545c16-3f9f-47fa-8b09-8672301bef11.jsonl b63feb84-d1db-4e0c-887b-9222006b3562.jsonl 
+## 014.msg body: [fm-from-firstmate]⁣corr=e0e04cffa8c5a597 NEWWORK-WHILE-WORKING: after your sleep finishes, report done for this corr id
+## status after:
+working [corr=74a1e9a7ec8c94cb] [at=1794745908]: long-run-started (via-helper)
+blocked [corr=74a1e9a7ec8c94cb] [at=1794745916]: Harness refuses foreground 'sleep 150' (standalone and chained). Sleep did not run; long-run-finished not reached. (via-helper)
+blocked [corr=e0e04cffa8c5a597] [at=1794745933]: Precondition unmet: the sleep never ran (harness refused foreground sleep), so new-work-while-working-seen is not reported as done. (via-helper)
+## transcripts after: 3d3e9e64-d4ce-41ec-9556-2abf38048d36.jsonl 4b545c16-3f9f-47fa-8b09-8672301bef11.jsonl b63feb84-d1db-4e0c-887b-9222006b3562.jsonl 
+## session that read NEWWORK-WHILE-WORKING: b63feb84-d1db-4e0c-887b-9222006b3562.jsonl (same session that ran the sleep: b63feb84-d1db-4e0c-887b-9222006b3562.jsonl)
+## marker: No such file or directory

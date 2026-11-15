@@ -1,0 +1,33 @@
+$ (mate home) tasks-axi add labwork-z 'lab mid-task item' --start   # mate has work In flight
+ok: added labwork-z (ship) -> In flight
+task:
+  id: labwork-z
+count: 1
+tasks[1]{id,state,kind,repo,title}:
+  labwork-z,in_flight,ship,"-",lab mid-task item
+help[1]:
+
+$ fm-send.sh lab583fdb41069c-mate --new-task 'NEWWORK-MIDTASK2: ...'
+fm-new-task-guard: refused - mate 'lab583fdb41069c-mate' already has in-flight work:
+  - labwork-z
+Each task gets its own second mate. Create one for this task instead:
+  bin/fm-brief.sh <new-id> --secondmate ...        (write the charter brief)
+  bin/fm-home-seed.sh <new-id> - ...               (seed the isolated home)
+  bin/fm-spawn.sh <new-id> --secondmate            (launch it)
+If this message continues the work already under way, resend it with --same-task.
+rc=1
+## held queue: 0 files
+## marker in mate home: ls: /private/tmp/fmlab.knCYaY/mate/state/fresh-session.request: No such file or directory
+## new inbox messages: 0
+## mate transcripts before=3 after=3
+
+$ fm-send.sh lab583fdb41069c-mate --same-task 'MIDTASK-NOTE: ...'   # same-task to the mid-task mate
+rc=0
+## held queue: 0 files; marker: No such file or directory
+## inbox now: 012.msg
+
+## after the mate answered MIDTASK-NOTE:
+done [corr=faa3838559fb605f] [at=1794745840]: midtask-note-seen (via-helper)
+transcripts: 3d3e9e64-d4ce-41ec-9556-2abf38048d36.jsonl 4b545c16-3f9f-47fa-8b09-8672301bef11.jsonl b63feb84-d1db-4e0c-887b-9222006b3562.jsonl 
+session that read MIDTASK-NOTE: b63feb84-d1db-4e0c-887b-9222006b3562.jsonl  (same session as before the send - context kept)
+marker after 40s of watcher sweeps: No such file or directory

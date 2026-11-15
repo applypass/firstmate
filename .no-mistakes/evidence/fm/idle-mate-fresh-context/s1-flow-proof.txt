@@ -1,0 +1,46 @@
+## mate inbox, handled messages in number order (first line of body):
+001.msg  at=2026-11-15T12:18:11Z  [fm-from-firstmate]⁣corr=5d3b049403c03857 CONFIG_REREAD: /private/tmp/fmlab.knCYaY/mate/state/.fm-inherited-config-reread.20261115T121809.00000001.nxN
+002.msg  at=2026-11-15T12:20:59Z  [fm-from-firstmate]⁣corr=6492f051b929986b Warm-up check from the lab operator. Do exactly this and nothing else: run the shell command 'echo warmup-ok
+003.msg  at=2026-11-15T12:22:43Z  [fm-from-firstmate]⁣corr=5d3b049403c03857 REPOST REQUIRED: previous marked request had no correlated parent report. Reply on the parent status channel
+004.msg  at=2026-11-15T12:24:01Z  [fm-from-firstmate]⁣corr=efe74b953124bf7c I am about to restart your agent to start a fresh conversation, because new work is arriving for you and you
+005.msg  at=2026-11-15T12:24:53Z  [fm-from-firstmate]⁣delivery=724e73ce40f563a2 You are a fresh session: your conversation was dropped on purpose so you start new work on a fresh conte
+006.msg  at=2026-11-15T12:24:58Z  [fm-from-firstmate]⁣corr=0a0d72ff32aaca0b NEWWORK-Y: create the file /private/tmp/fmlab.knCYaY/mate/data/newwork-y.txt containing the single line Y-or
+007.msg  at=2026-11-15T12:25:04Z  [fm-from-firstmate]⁣corr=f8b93d7e896a75e6 CORRECTION-Y: for NEWWORK-Y, write the line Y-corrected instead of Y-original. Then report done on your pare
+008.msg  at=2026-11-15T12:25:11Z  [fm-from-firstmate]⁣corr=7583c7d170385b84 $DOLLAR-Y note: after NEWWORK-Y and CORRECTION-Y, append a second line dollar-ok to the same file, then repo
+
+## parent status log (lab583fdb41069c-mate.status):
+done [corr=6492f051b929986b] [at=1794745278]: warmup-ok (via-helper)
+done [corr=5d3b049403c03857] [at=1794745372]: config re-read applied: startup-memory-budget=7500 (via-helper)
+done [corr=efe74b953124bf7c] [at=1794745457]: nothing open held only in this conversation; no tasks to file or correct, safe to restart (via-helper)
+done [corr=0a0d72ff32aaca0b] [at=1794745542]: newwork-y-written (via-helper)
+done [corr=f8b93d7e896a75e6] [at=1794745543]: correction-applied (via-helper)
+done [corr=7583c7d170385b84] [at=1794745543]: dollar-appended (via-helper)
+
+## mate Claude transcripts after:
+3d3e9e64-d4ce-41ec-9556-2abf38048d36.jsonl  first=  NEWWORK-Y-mentions=0  persist-request-mentions=1
+4b545c16-3f9f-47fa-8b09-8672301bef11.jsonl  first=  NEWWORK-Y-mentions=2  persist-request-mentions=0
+
+## file written by the fresh session (/private/tmp/fmlab.knCYaY/mate/data/newwork-y.txt):
+Y-corrected
+dollar-ok
+
+## handover note:
+# Fresh session handover
+Written 2026-11-15T12:21:58Z by the previous session of lab583fdb41069c-mate.
+Your conversation was dropped on purpose to save tokens. Every record is on disk.
+
+## Just finished
+Nothing finished. New work arrived, so your conversation was replaced; the work reaches your inbox right after this restart.
+
+## Still open
+Unread steering messages for you: 0 (list /private/tmp/fmlab.knCYaY/home/state/lab583fdb41069c-mate.inbox/*.msg, act in order, mv each into handled/).
+Child tasks still in flight: none.
+
+## First steps
+1. Run bin/fm-session-start.sh and reconcile from its digest.
+2. Open work lives in this home's backlog and state/*.status, not in this note.
+3. Nothing here is a request. Do not reply to it; wait for routed work.
+4. The digest lists open captain decisions and unread status; handle them before anything else.
+
+## marker files left in mate state:
+fresh-session.restarted

@@ -1,0 +1,6 @@
+$ fm-send.sh lab583fdb41069c-mate --same-task '<warm-up request>'
+rc=0 took=6s
+held dir: ls: state/lab583fdb41069c-mate.fresh-held: No such file or directory
+inbox: 002.msg
+handled
+marker in mate home: ls: /private/tmp/fmlab.knCYaY/mate/state/fresh-session.request: No such file or directory

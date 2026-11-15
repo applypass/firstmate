@@ -1,0 +1,28 @@
+## crew state before: state: done · source: status-log · warmup-ok (via-helper)
+## mate Claude transcripts before: 3d3e9e64-d4ce-41ec-9556-2abf38048d36.jsonl
+
+$ fm-send.sh lab583fdb41069c-mate --new-task 'NEWWORK-Y: ...'
+fm-send: lab583fdb41069c-mate is idle, so the new work is held at /private/tmp/fmlab.knCYaY/home/state/lab583fdb41069c-mate.fresh-held/1794745318-000000-94360.msg; the watcher restarts it on a fresh context, then delivers the work to its inbox
+rc=0 took=15s
+
+$ fm-send.sh lab583fdb41069c-mate --same-task 'CORRECTION-Y: ...'
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+fm-send: lab583fdb41069c-mate is waiting for a fresh start, so this message is held at /private/tmp/fmlab.knCYaY/home/state/lab583fdb41069c-mate.fresh-held/1794745320-000001-97140.msg and reaches its inbox after the work held before it
+rc=0 took=2s
+
+$ fm-send.sh lab583fdb41069c-mate --same-task '$DOLLAR-Y: ...'
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+fm-send: lab583fdb41069c-mate is waiting for a fresh start, so this message is held at /private/tmp/fmlab.knCYaY/home/state/lab583fdb41069c-mate.fresh-held/1794745322-000002-99529.msg and reaches its inbox after the work held before it
+rc=0 took=2s
+
+## held queue (parent state/lab583fdb41069c-mate.fresh-held):
+1794745318-000000-94360.msg
+1794745320-000001-97140.msg
+1794745322-000002-99529.msg
+## mate inbox right after sends:
+## marker in mate home:
+source=new-task
+verb=handover
+corr=
+epoch=1794745318
+note=data/fresh-session-handover.md
