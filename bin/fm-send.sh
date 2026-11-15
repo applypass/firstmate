@@ -9,7 +9,10 @@
 #   prints how to create a per-task mate; --same-task never refuses. A passing --new-task
 #   text to an idle local mate is held instead of enqueued (fm-new-task-guard.sh
 #   fresh-context): the send exits 0 at once, and the watcher's fresh-session sweep saves and
-#   restarts the mate, then delivers the held text to its inbox. Main's PreToolUse hook
+#   restarts the mate, then delivers the held text to its inbox. While held text waits, every
+#   later text send to that mate joins it and reaches the inbox in send order; --resolve-key
+#   answers, pending-reply resends, fire-and-forget steers and /- or $-commands still go
+#   straight to the inbox. Main's PreToolUse hook
 #   denies a captain-prefixed send carrying neither. Contract: bin/fm-new-task-guard.sh.
 # Fork-only end
 #   <target> may be an exact task id, a legacy fm-<id> task label resolved
@@ -893,12 +896,20 @@ else
     exit 1
   fi
   # Fork-only (applypass): new work for an idle local mate waits for its fresh start
-  # (bin/fm-new-task-guard.sh fresh-context).
-  if [ "$FORK_TASK_MODE" = --new-task ] && [ "$MARK_FROM_FIRSTMATE" = 1 ] &&
-    [ "$TARGET_BACKEND" != remote ] && [ -z "$RESOLVE_KEYS" ] && [ -z "$FIRE_AND_FORGET_ID" ] &&
-    [ -z "${FM_PENDING_REPLY_EXISTING_CORR+x}" ] && [ "${MESSAGE#[/\$]}" = "$MESSAGE" ] &&
-    "$SCRIPT_DIR/fm-new-task-guard.sh" fresh-context "$TARGET_TASK_ID" "$MESSAGE"; then
-    exit 0
+  # (bin/fm-new-task-guard.sh fresh-context), and later text to that mate joins the wait
+  # (bin/fm-secondmate-fresh-session.sh hold --queued).
+  if [ "$MARK_FROM_FIRSTMATE" = 1 ] && [ "$TARGET_BACKEND" != remote ] && [ -z "$RESOLVE_KEYS" ] &&
+    [ -z "$FIRE_AND_FORGET_ID" ] && [ -z "${FM_PENDING_REPLY_EXISTING_CORR+x}" ] &&
+    [ -z "${FM_SEND_HELD_RELEASE:-}" ] && [ "${MESSAGE#[/\$]}" = "$MESSAGE" ]; then
+    if compgen -G "$STATE/$TARGET_TASK_ID.fresh-held/*.msg" >/dev/null &&
+      FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+        "$SCRIPT_DIR/fm-secondmate-fresh-session.sh" hold --queued "$TARGET_TASK_ID" "$MESSAGE" </dev/null; then
+      exit 0
+    fi
+    if [ "$FORK_TASK_MODE" = --new-task ] &&
+      "$SCRIPT_DIR/fm-new-task-guard.sh" fresh-context "$TARGET_TASK_ID" "$MESSAGE"; then
+      exit 0
+    fi
   fi
   # Fork-only end
   if [ "$TARGET_BACKEND" = remote ]; then

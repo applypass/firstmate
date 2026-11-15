@@ -256,7 +256,7 @@ case "${1:-}" in
     printf '%s\n' "$payload" >> "$D/literal"
     case "$payload" in
       /exit|/quit)
-        printf 'exit new-work-in-inbox=%s\n' "$(grep -rl 'do new thing' "$INBOX" 2>/dev/null | grep -c .)" >> "$D/events"
+        printf 'exit new-work-in-inbox=%s\n' "$(grep -rlE 'do new thing|use branch foo' "$INBOX" 2>/dev/null | grep -c .)" >> "$D/events"
         printf 'zsh' > "$D/command.$target" ;;
       *'encode launch-brief'* | *'Firstmate operational input waiting: read'*) cat "$D/becomes" > "$D/command.$target" ;;
       ': Firstmate instruction waiting: list '*)
@@ -314,11 +314,11 @@ mate_world() {
 
 # The save answer may take FM_SECONDMATE_PERSIST_WAIT; a send that waited for it
 # would take ten minutes here.
-mate_send() { # <flag> -> OUT, RC, TOOK (seconds)
+mate_send() { # <flag> [text] -> OUT, RC, TOOK (seconds)
   local t0=$SECONDS
   OUT=$(env PATH="$FB:$PATH" FM_HOME="$W" FM_ROOT_OVERRIDE="$W" FM_SEND_SETTLE=0 \
     FM_SECONDMATE_PERSIST_WAIT=600 ${CREW:+FM_FRESH_CONTEXT_CREW_STATE="$CREW"} \
-    "$SEND" mate-a "$1" "do new thing" 2>&1 </dev/null); RC=$?
+    "$SEND" mate-a "$1" "${2:-do new thing}" 2>&1 </dev/null); RC=$?
   TOOK=$((SECONDS - t0))
 }
 
@@ -360,6 +360,27 @@ test_send_new_task_idle_mate_is_held_then_restarted_first() {
     || fail "the save request must say the restart is for new work"
   assert_no_update_claim
   pass "fm-send: --new-task to an idle mate is held; the watcher restarts it, then delivers"
+}
+
+test_send_later_text_joins_the_held_work_in_order() {
+  local work fix
+  mate_world fresh-queue 'done'
+  mate_send --new-task
+  expect_code 0 "$RC" "idle --new-task must send: $OUT"
+  mate_send --same-task "for the new thing use branch foo"
+  expect_code 0 "$RC" "a correction must send: $OUT"
+  ! grep -rq 'use branch foo' "$W/state/mate-a.inbox" 2>/dev/null \
+    || fail "a correction to a mate with held work must not reach its inbox before the fresh start"
+  : > "$W/fake/answer"
+  watcher_step
+  case "$OUT" in *"restarted mate-a"*"released mate-a: 2 held"*) : ;; *) fail "the watcher step must restart, then release both: $OUT" ;; esac
+  [ "$(cat "$W/fake/events")" = 'exit new-work-in-inbox=0' ] \
+    || fail "the mate must restart before either message reaches its inbox: $(cat "$W/fake/events")"
+  work=$(grep -l 'do new thing' "$W/state/mate-a.inbox"/*.msg 2>/dev/null)
+  fix=$(grep -l 'use branch foo' "$W/state/mate-a.inbox"/*.msg 2>/dev/null)
+  [ -n "$work" ] && [ -n "$fix" ] || fail "both messages must reach the inbox: $(ls "$W/state/mate-a.inbox")"
+  [[ "${work##*/}" < "${fix##*/}" ]] || fail "the messages must reach the inbox in send order: $work then $fix"
+  pass "fm-send: later text to a mate with held work waits too, then arrives in send order"
 }
 
 test_send_new_task_unreachable_mate_delivers_at_once() {
@@ -434,6 +455,7 @@ fm_test_run \
   test_installer_registers_hook_once \
   test_send_new_task_refusal_enqueues_nothing \
   test_send_new_task_idle_mate_is_held_then_restarted_first \
+  test_send_later_text_joins_the_held_work_in_order \
   test_send_new_task_unreachable_mate_delivers_at_once \
   test_send_save_answer_deadline_releases_without_restart \
   test_send_relaunch_failure_releases_the_held_work \

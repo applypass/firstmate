@@ -9,7 +9,7 @@
 #
 # Usage:
 #   fm-secondmate-fresh-session.sh request --source <report|child|context|new-task> --verb <done|ready|failed|handover> [--corr <id>] [note...]
-#   fm-secondmate-fresh-session.sh hold <secondmate-id> <text>
+#   fm-secondmate-fresh-session.sh hold [--queued] <secondmate-id> <text>
 #   fm-secondmate-fresh-session.sh apply <secondmate-id>
 #   fm-secondmate-fresh-session.sh sweep
 #
@@ -26,9 +26,12 @@
 # hold - run in the parent home by bin/fm-new-task-guard.sh fresh-context, for a
 #   --new-task send to an idle mate. It stores the text under the parent's
 #   state/<id>.fresh-held/, where the mate does not read, and files a request
-#   (--source new-task) unless one is pending. Exit 0 means held; any other exit
-#   means the caller delivers the text itself: the switch is off, or the mate is
-#   not a local mate whose restart the runtime can prove.
+#   (--source new-task) unless one is pending. While held text waits, hold (and
+#   fm-send.sh's hold --queued for any later text to the mate) adds the text to
+#   the same queue, so it reaches the inbox after the held text, in send order.
+#   Exit 0 means held; any other exit means the caller delivers the text itself:
+#   --queued found nothing waiting, the switch is off, or the mate is not a local
+#   mate whose restart the runtime can prove.
 # apply - run in the parent home (FM_HOME is the parent). Restarts one mate with
 #   bin/fm-control.sh <id> relaunch, the same path /updatefirstmate uses, only
 #   when every check below passes; otherwise it prints "deferred" and leaves the
@@ -36,8 +39,9 @@
 #   steer that points the fresh agent at the handover note; the fresh agent then
 #   runs bin/fm-session-start.sh and reconciles from durable records like on any
 #   restart. The model and effort pin are untouched: relaunch re-resolves them.
-#   Held new work then goes to the mate through fm-send.sh --same-task, oldest
-#   first, so it always arrives after the restart. With no restart to come (no
+#   Held text then goes to the mate through fm-send.sh --same-task
+#   (FM_SEND_HELD_RELEASE=1, so it is not held again), oldest first, so it
+#   always arrives after the restart. With no restart to come (no
 #   marker, the switch off, a runtime that cannot prove a restart, a persist
 #   timeout, a failed relaunch, or a deferral older than the persist wait) apply
 #   delivers the held work at once and drops a new-task marker. While held work
@@ -230,31 +234,46 @@ has_held() {  # <held-dir>
 }
 
 do_hold() {
-  local id=${1:-} text=${2:-} meta home held file created=0
+  local queued=0 id text meta home held file created=0 seq=0 n f
+  [ "${1:-}" != --queued ] || { queued=1; shift; }
+  id=${1:-} text=${2:-}
   case "$id" in '' | *[!A-Za-z0-9._-]*) usage >&2; return 2 ;; esac
   [ "$#" -eq 2 ] && [ -n "$text" ] || { usage >&2; return 2; }
-  fresh_session_off && return 1
   [ -n "${FM_HOME:-}" ] || return 1
   STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
-  meta="$STATE/$id.meta"
-  # shellcheck source=bin/fm-secondmate-restart-lib.sh
-  . "$SCRIPT_DIR/fm-secondmate-restart-lib.sh"
-  fm_secondmate_restart_capable "$meta" && [ "$FM_SECONDMATE_RESTART_PLACEMENT" = local ] || return 1
-  home=$(fm_meta_get "$meta" home)
-  [ -n "$home" ] && [ -d "$home/state" ] || return 1
-  if [ ! -f "$home/state/$MARKER_NAME" ]; then
-    FM_HOME="$home" FM_STATE_OVERRIDE='' "$0" request --source new-task --verb handover \
-      "new work is waiting" >/dev/null 2>&1 </dev/null || true
-    [ -f "$home/state/$MARKER_NAME" ] || return 1
-    created=1
-  fi
   held="$STATE/$id.fresh-held"
-  file="$held/$(date +%s)-$$.msg"
+  if ! has_held "$held"; then
+    [ "$queued" = 0 ] || return 1
+    fresh_session_off && return 1
+    meta="$STATE/$id.meta"
+    # shellcheck source=bin/fm-secondmate-restart-lib.sh
+    . "$SCRIPT_DIR/fm-secondmate-restart-lib.sh"
+    fm_secondmate_restart_capable "$meta" && [ "$FM_SECONDMATE_RESTART_PLACEMENT" = local ] || return 1
+    home=$(fm_meta_get "$meta" home)
+    [ -n "$home" ] && [ -d "$home/state" ] || return 1
+    if [ ! -f "$home/state/$MARKER_NAME" ]; then
+      FM_HOME="$home" FM_STATE_OVERRIDE='' "$0" request --source new-task --verb handover \
+        "new work is waiting" >/dev/null 2>&1 </dev/null || true
+      [ -f "$home/state/$MARKER_NAME" ] || return 1
+      created=1
+    fi
+  fi
+  for f in "$held"/*.msg; do
+    [ -f "$f" ] || continue
+    n=${f##*/} n=${n#*-} n=${n%%-*}
+    case "$n" in '' | *[!0-9]*) continue ;; esac
+    [ $((10#$n)) -lt "$seq" ] || seq=$((10#$n + 1))
+  done
+  file="$held/$(date +%s)-$(printf '%06d' "$seq")-$$.msg"
   if ! publish_file "$file" "$text"; then
     [ "$created" = 0 ] || rm -f "$home/state/$MARKER_NAME"
     return 1
   fi
-  printf 'fm-send: %s is idle, so the new work is held at %s; the watcher restarts it on a fresh context, then delivers the work to its inbox\n' "$id" "$file"
+  if [ "$seq" = 0 ]; then
+    printf 'fm-send: %s is idle, so the new work is held at %s; the watcher restarts it on a fresh context, then delivers the work to its inbox\n' "$id" "$file"
+  else
+    printf 'fm-send: %s is waiting for a fresh start, so this message is held at %s and reaches its inbox after the work held before it\n' "$id" "$file"
+  fi
 }
 
 # --- apply -----------------------------------------------------------------
@@ -377,13 +396,13 @@ persist_gate() {  # <id> <meta> <home> <marker> [why]
   done
 }
 
-# Deliver held new work through fm-send, oldest first. A send that fails keeps
+# Deliver held text through fm-send, oldest first. A send that fails keeps
 # its file for the next sweep.
 release_held() {  # <id> <held-dir>
   local f n=0
   for f in "$2"/*.msg; do
     [ -f "$f" ] || continue
-    if ! FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+    if ! FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" FM_SEND_HELD_RELEASE=1 \
       "$SCRIPT_DIR/fm-send.sh" "$1" --same-task "$(cat "$f")" >/dev/null 2>&1 </dev/null; then
       printf 'held %s: %s could not be delivered yet; the next sweep retries\n' "$1" "$f"
       return 0
@@ -391,7 +410,7 @@ release_held() {  # <id> <held-dir>
     rm -f "$f"
     n=$((n + 1))
   done
-  [ "$n" -eq 0 ] || printf 'released %s: %s held new work message(s) delivered to its inbox\n' "$1" "$n"
+  [ "$n" -eq 0 ] || printf 'released %s: %s held message(s) delivered to its inbox\n' "$1" "$n"
 }
 
 skip_fresh_start() {  # <id> <marker> <held-dir>
