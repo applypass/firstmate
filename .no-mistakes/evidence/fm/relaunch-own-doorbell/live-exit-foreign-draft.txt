@@ -1,0 +1,28 @@
+### claude 2.1.325 (Claude Code), lab FM_HOME=/private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.zQGlFx, private tmux socket fm-lab, pane 70 cols, mode=foreign
+### composer before typing: empty
+### composer after typing (unsent): pending
+### pane before 'fm-control.sh dbl exit':
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/…/c5d69c01912a/01M7ETF19Z3TP8AWFC3JNQCKER · /rc
+                                                  ◐ medium · /effort
+──────────────────────────────────────────────────────────────────────
+❯ my own unsent draft, keep it
+──────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx -- | HEAD
+  ⏵⏵ bypass permissions on (shift+tab to cycle)
+### $ bin/fm-control.sh dbl exit
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.zQGlFx
+error: task dbl's composer visibly holds pending text; refusing to type the /exit exit command because it would concatenate onto that text. Clear or submit the pending text, then retry 'exit'
+### exit status: 1
+### pane after:
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/…/c5d69c01912a/01M7ETF19Z3TP8AWFC3JNQCKER · /rc
+                                                  ◐ medium · /effort
+──────────────────────────────────────────────────────────────────────
+❯ my own unsent draft, keep it
+──────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx -- | HEAD
+  ⏵⏵ bypass permissions on (shift+tab to cycle)
+### pane_current_command after: 2.1.325
