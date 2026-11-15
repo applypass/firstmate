@@ -1,0 +1,13 @@
+# Scenario 3: caller names -- --rebase on apply_pass_backend PR 820
+[merge command the script issued]
+INTERCEPTED gh pr merge 820 --repo applypass/apply_pass_backend --match-head-commit efc7df541bdb95d5bab1fc8783bc266a0ab112b4 --rebase
+[settings query count in trace: 0]
+[full gh call trace]
+gh pr view https://github.com/applypass/apply_pass_backend/pull/820 --json headRefOid -q .headRefOid
+gh api repos/applypass/apply_pass_backend/pulls/820 --jq .base.ref
+gh pr view https://github.com/applypass/apply_pass_backend/pull/820 --json state,isDraft,mergeable,mergeStateStatus,headRefOid,baseRefName,statusCheckRollup,body
+gh api repos/applypass/apply_pass_backend/branches/dev
+gh api --paginate repos/applypass/apply_pass_backend/rules/branches/dev
+gh pr merge 820 --repo applypass/apply_pass_backend --match-head-commit efc7df541bdb95d5bab1fc8783bc266a0ab112b4 --rebase
+gh api graphql -f query=query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){state merged isInMergeQueue baseRefName}}} -F owner=applypass -F repo=apply_pass_backend -F number=820 --jq .data.repository.pullRequest | "state=" + (.state // ""), "merged=" + (.merged | tostring), "queued=" + (.isInMergeQueue | tostring), "base=" + (.baseRefName // "")
+gh api --paginate repos/applypass/apply_pass_backend/rules/branches/dev --jq .[] | select(.type == "merge_queue") | "merge_method=" + (.parameters.merge_method // "")

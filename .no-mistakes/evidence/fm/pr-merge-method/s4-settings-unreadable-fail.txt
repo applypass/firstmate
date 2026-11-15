@@ -1,0 +1,10 @@
+# Scenario 4 (fail): settings read injected as 'fail' (all other gh reads real), no method named
+$ bin/fm-pr-merge.sh lab-abe https://github.com/applypass/apply_pass_backend/pull/820
+armed: state/lab-abe.check.sh
+fm-release-gate: applypass/apply_pass_backend is not covered by the release gate (config/release-gate); nothing to check
+error: refusing to merge https://github.com/applypass/apply_pass_backend/pull/820: the repository's allowed merge methods could not be read; name one with -- --squash, -- --merge, or -- --rebase
+[gh pr merge calls issued: 0]
+[gh call trace]
+gh pr view https://github.com/applypass/apply_pass_backend/pull/820 --json headRefOid -q .headRefOid
+gh api repos/applypass/apply_pass_backend/pulls/820 --jq .base.ref
+gh api graphql -f query=query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed}} -F owner=applypass -F repo=apply_pass_backend

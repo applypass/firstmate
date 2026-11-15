@@ -1,0 +1,14 @@
+# Scenario 2: applypass/firstmate (squash allowed), no method named
+$ bin/fm-pr-merge.sh lab-fm https://github.com/applypass/firstmate/pull/99 --release-main   (lab FM_HOME; real gh reads; `gh pr merge` intercepted)
+[merge command the script issued]
+INTERCEPTED gh pr merge 99 --repo applypass/firstmate --match-head-commit 5635efcf80befe610c664611afe9f1e54b3181f2 --squash
+[full gh call trace]
+gh pr view https://github.com/applypass/firstmate/pull/99 --json headRefOid -q .headRefOid
+gh api repos/applypass/firstmate/pulls/99 --jq .base.ref
+gh api graphql -f query=query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed}} -F owner=applypass -F repo=firstmate
+gh pr view https://github.com/applypass/firstmate/pull/99 --json state,isDraft,mergeable,mergeStateStatus,headRefOid,baseRefName,statusCheckRollup,body
+gh api repos/applypass/firstmate/branches/main
+gh api --paginate repos/applypass/firstmate/rules/branches/main
+gh pr merge 99 --repo applypass/firstmate --match-head-commit 5635efcf80befe610c664611afe9f1e54b3181f2 --squash
+gh api graphql -f query=query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){state merged isInMergeQueue baseRefName}}} -F owner=applypass -F repo=firstmate -F number=99 --jq .data.repository.pullRequest | "state=" + (.state // ""), "merged=" + (.merged | tostring), "queued=" + (.isInMergeQueue | tostring), "base=" + (.baseRefName // "")
+gh api --paginate repos/applypass/firstmate/rules/branches/main --jq .[] | select(.type == "merge_queue") | "merge_method=" + (.parameters.merge_method // "")

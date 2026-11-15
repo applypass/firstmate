@@ -1,0 +1,23 @@
+# Recorded decision: GraphQL settings readable with pull-only access (cli/cli), REST omits them
+$ gh api repos/cli/cli --jq "{allow_squash_merge,allow_merge_commit,allow_rebase_merge}"
+{"allow_merge_commit":null,"allow_rebase_merge":null,"allow_squash_merge":null}
+$ gh api graphql ... repository(owner:"cli",name:"cli"){squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed}
+{"data":{"repository":{"squashMergeAllowed":true,"mergeCommitAllowed":true,"rebaseMergeAllowed":true}}}
+# Scenario 5: pull-only token, cli/cli PR 15049, no method named
+$ bin/fm-pr-merge.sh lab-cli https://github.com/cli/cli/pull/15049
+armed: state/lab-cli.check.sh
+verified: https://github.com/cli/cli/pull/15049 is open and mergeable, with every unwaived required check reported and every unwaived check green at head b13e6c6ba770547fd5f799c1e7598ee182e1b4c6
+lab guard: gh pr merge intercepted (no merge performed)
+error: GitHub merge outcome was not successful: state=OPEN, merged=false, isInMergeQueue=false
+[merge command the script issued, if any]
+INTERCEPTED gh pr merge 15049 --repo cli/cli --match-head-commit b13e6c6ba770547fd5f799c1e7598ee182e1b4c6 --squash
+[gh call trace]
+gh pr view https://github.com/cli/cli/pull/15049 --json headRefOid -q .headRefOid
+gh api repos/cli/cli/pulls/15049 --jq .base.ref
+gh api graphql -f query=query($owner:String!,$repo:String!){repository(owner:$owner,name:$repo){squashMergeAllowed mergeCommitAllowed rebaseMergeAllowed}} -F owner=cli -F repo=cli
+gh pr view https://github.com/cli/cli/pull/15049 --json state,isDraft,mergeable,mergeStateStatus,headRefOid,baseRefName,statusCheckRollup,body
+gh api repos/cli/cli/branches/trunk
+gh api --paginate repos/cli/cli/rules/branches/trunk
+gh pr merge 15049 --repo cli/cli --match-head-commit b13e6c6ba770547fd5f799c1e7598ee182e1b4c6 --squash
+gh api graphql -f query=query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){state merged isInMergeQueue baseRefName}}} -F owner=cli -F repo=cli -F number=15049 --jq .data.repository.pullRequest | "state=" + (.state // ""), "merged=" + (.merged | tostring), "queued=" + (.isInMergeQueue | tostring), "base=" + (.baseRefName // "")
+gh api --paginate repos/cli/cli/rules/branches/trunk --jq .[] | select(.type == "merge_queue") | "merge_method=" + (.parameters.merge_method // "")
