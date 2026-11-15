@@ -3413,4 +3413,8 @@ ok - claude (2.1.325 (Claude Code)): text after a clipped doorbell (new-line) re
 ```
 
 Result 2026-11-15, Claude 2.1.325: pass. The clip was reproduced on tmux (a 120 by 40 Herdr pane shows the full line); every backend shares the matcher.
+
+Herdr 0.9.5 has no name for the Delete key: `pane send-keys <pane> delete` (and `Delete`, `del`, `DC`) fails with `invalid_key`, so the trim sends `ctrl+d` there, which deletes one character forward in Claude's composer.
+Result 2026-11-15, Herdr 0.9.5 lab session, Claude 2.1.325, a pane 6 rows high whose first row ends at "in your": the trim cleared the doorbell and the composer read `empty`; with text typed after the doorbell it refused and kept that text.
+`tests/fm-control-doorbell-herdr-keys.test.sh` pins the herdr key names.
 <!-- Fork-only end -->

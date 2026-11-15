@@ -82,11 +82,15 @@ fm_control_composer_holds_truncated_doorbell() {  # <backend> <target> <line> [e
   return 1
 }
 
-# One trim key: tmux names, mapped to herdr's own.
+# One trim key: tmux names, mapped to herdr's own. herdr has no name for the
+# Delete key (delete, Delete, del and DC all fail with invalid_key), so DC is
+# Ctrl-D, which deletes one character forward in Claude's composer (verified on
+# herdr 0.9.5 with Claude 2.1.325). The trim presses it only while text it has
+# read remains, never on an empty composer, where Ctrl-D starts Claude's exit.
 _fm_control_trim_key() {  # <C-a|BSpace|DC>
   local key=$1
   if [ "$BACKEND" = herdr ]; then
-    case "$key" in C-a) key=ctrl+a ;; BSpace) key=backspace ;; DC) key=delete ;; esac
+    case "$key" in C-a) key=ctrl+a ;; BSpace) key=backspace ;; DC) key=ctrl+d ;; esac
   fi
   fm_backend_send_key "$BACKEND" "$T" "$key" "${LABEL-}"
 }
