@@ -11,8 +11,9 @@
 #   fresh-context): the send exits 0 at once, and the watcher's fresh-session sweep saves and
 #   restarts the mate, then delivers the held text to its inbox. While held text waits, every
 #   later text send to that mate joins it and reaches the inbox in send order; --resolve-key
-#   answers, pending-reply resends, fire-and-forget steers and /- or $-commands still go
-#   straight to the inbox. Main's PreToolUse hook
+#   answers, pending-reply resends and fire-and-forget steers still go straight to the
+#   inbox, and /-commands (or $-commands to a codex mate) still go straight to the agent's
+#   input. Main's PreToolUse hook
 #   denies a captain-prefixed send carrying neither. Contract: bin/fm-new-task-guard.sh.
 # Fork-only end
 #   <target> may be an exact task id, a legacy fm-<id> task label resolved
@@ -900,7 +901,8 @@ else
   # (bin/fm-secondmate-fresh-session.sh hold --queued).
   if [ "$MARK_FROM_FIRSTMATE" = 1 ] && [ "$TARGET_BACKEND" != remote ] && [ -z "$RESOLVE_KEYS" ] &&
     [ -z "$FIRE_AND_FORGET_ID" ] && [ -z "${FM_PENDING_REPLY_EXISTING_CORR+x}" ] &&
-    [ -z "${FM_SEND_HELD_RELEASE:-}" ] && [ "${MESSAGE#[/\$]}" = "$MESSAGE" ]; then
+    [ -z "${FM_SEND_HELD_RELEASE:-}" ] && [ "${MESSAGE#/}" = "$MESSAGE" ] &&
+    { [ "${MESSAGE#\$}" = "$MESSAGE" ] || [ "$TARGET_HARNESS" != codex ]; }; then
     if compgen -G "$STATE/$TARGET_TASK_ID.fresh-held/*.msg" >/dev/null &&
       FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
         "$SCRIPT_DIR/fm-secondmate-fresh-session.sh" hold --queued "$TARGET_TASK_ID" "$MESSAGE" </dev/null; then

@@ -383,6 +383,19 @@ test_send_later_text_joins_the_held_work_in_order() {
   pass "fm-send: later text to a mate with held work waits too, then arrives in send order"
 }
 
+test_send_dollar_text_joins_the_held_work() {
+  mate_world fresh-dollar 'done'
+  mate_send --new-task
+  expect_code 0 "$RC" "idle --new-task must send: $OUT"
+  mate_send --same-task '$PATH on CI lacks /usr/local/bin; use the full path'
+  expect_code 0 "$RC" "a \$ text must send: $OUT"
+  ! grep -rqF 'lacks /usr/local/bin' "$W/state/mate-a.inbox" 2>/dev/null \
+    || fail "a \$ text to a claude mate with held work must not reach its inbox"
+  grep -qF 'lacks /usr/local/bin' "$W/state/mate-a.fresh-held"/*.msg 2>/dev/null \
+    || fail "a \$ text to a claude mate with held work must join the held queue: $OUT"
+  pass "fm-send: \$ text to a claude mate with held work joins the held queue"
+}
+
 test_send_new_task_unreachable_mate_delivers_at_once() {
   mate_world fresh-unreachable real
   : > "$W/fake/no-window"
@@ -456,6 +469,7 @@ fm_test_run \
   test_send_new_task_refusal_enqueues_nothing \
   test_send_new_task_idle_mate_is_held_then_restarted_first \
   test_send_later_text_joins_the_held_work_in_order \
+  test_send_dollar_text_joins_the_held_work \
   test_send_new_task_unreachable_mate_delivers_at_once \
   test_send_save_answer_deadline_releases_without_restart \
   test_send_relaunch_failure_releases_the_held_work \
