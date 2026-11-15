@@ -203,6 +203,9 @@ DATA="${FM_DATA_OVERRIDE:-$FM_HOME/data}"
 . "$SCRIPT_DIR/fm-omp-profile-lib.sh"
 # shellcheck source=bin/fm-exclude-tools-lib.sh
 . "$SCRIPT_DIR/fm-exclude-tools-lib.sh"
+# Fork-only: clears the task's own unsent doorbell before the exit step (applypass fork).
+# shellcheck source=bin/fm-control-doorbell-lib.sh
+. "$SCRIPT_DIR/fm-control-doorbell-lib.sh"
 
 POLL=${FM_CONTROL_POLL:-0.5}
 SETTLE_WAIT=${FM_CONTROL_SETTLE_WAIT:-5}
@@ -775,6 +778,10 @@ do_exit() {
   if [ -s "${FM_COMPOSER_DIALOG_SINK:-}" ]; then
     dialog=$(cat "$FM_COMPOSER_DIALOG_SINK")
     refuse_blocking_prompt "$dialog"
+  fi
+  # Fork-only: our own unsent doorbell is not a draft worth keeping; clear it, prove empty, then go on.
+  if [ "$composer_state" = pending ] && fm_control_clear_own_doorbell; then
+    composer_state=empty
   fi
   case "$composer_state" in
     empty) ;;

@@ -3367,3 +3367,36 @@ The full run's native Ahoy cases depend on the model's own choices and failed wi
 
 A real `bin/fm-spawn.sh --scout --harness opencode --model opencode-go/deepseek-v4.1-flash` in a private tmux server recorded `opencode_version=1.18.20` (and `1.18.31` on the second release), launched the worker as `opencode --model opencode-go/deepseek-v4.1-flash --prompt <brief>` with no `--standalone`, and the worker answered its brief.
 `bin/fm-control.sh <task> exit` then resolved the typed `/exit` from that recorded major and returned both panes to the shell.
+<!-- Fork-only: records the Claude own-doorbell clear that bin/fm-control-doorbell-lib.sh depends on (applypass fork). -->
+
+## Claude own-doorbell clear
+
+`bin/fm-control.sh exit` and `relaunch` refuse to type over pending composer text.
+An idle worker whose context is full leaves the steering-inbox doorbell unsent in its composer, so the refusal blocked every relaunch.
+`bin/fm-control-doorbell-lib.sh` clears that one line, and only when the composer holds exactly the task's own doorbell line (the matcher in `bin/fm-task-inbox-lib.sh`).
+Claude has no verified clear key in `bin/fm-control-lib.sh`, so the keys were measured on a real Claude in a private Herdr lab session, with the doorbell wrapped over two rows as in a worker pane.
+
+| Keys sent | Composer afterwards |
+|---|---|
+| Ctrl-U once | The last wrapped row is deleted, the first row stays (still pending) |
+| Ctrl-U three times | Empty |
+| Escape once | Unchanged |
+| Escape twice | Empty, but on an empty composer the second Escape opens the rewind view |
+| Ctrl-C once | Empty, but Ctrl-C on an empty composer can exit the agent |
+
+The helper therefore presses Ctrl-U (one wrapped row per press) up to `FM_CONTROL_DOORBELL_CLEAR_MAX` times (default 8) and stops at the first proven-empty composer.
+Escape and Ctrl-C are never used.
+If the composer is not proven empty afterwards, the original refusal stands.
+The doorbell is never submitted.
+
+The live guard `tests/fm-control-own-doorbell-live-e2e.test.sh` refreshes this record after a Claude upgrade.
+It launches the real claude in a 60-column tmux pane, types the doorbell without submitting it, and asserts the clear empties the composer and leaves a different draft untouched.
+
+```
+$ FM_CONTROL_DOORBELL_LIVE=1 tests/fm-control-own-doorbell-live-e2e.test.sh
+ok - claude (2.1.325 (Claude Code)): an unsent wrapped doorbell is cleared and the composer proves empty
+ok - claude (2.1.325 (Claude Code)): a draft that is not the doorbell is left untouched
+```
+
+Result 2026-11-15, Claude 2.1.325: pass.
+<!-- Fork-only end -->
