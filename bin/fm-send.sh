@@ -7,9 +7,11 @@
 #   second mate opens new work or continues work under way. --new-task refuses (exit 1,
 #   nothing recorded) when the mate has any In flight item or the fleet is at its cap, and
 #   prints how to create a per-task mate; --same-task never refuses. A passing --new-task to
-#   an idle mate first saves and restarts it onto a fresh context (fm-new-task-guard.sh
-#   fresh-context); a restart failure warns and the message still goes to the existing session. Main's PreToolUse hook
-#   denies a captain-prefixed send carrying neither. Contract: bin/fm-new-task-guard.sh.
+#   an idle mate on the local inbox plane records the message first, then saves and restarts
+#   the mate onto a fresh context (fm-new-task-guard.sh fresh-context) before the doorbell
+#   rings; a restart that fails or runs out of time warns and the recorded message waits for
+#   the existing session. Main's PreToolUse hook denies a captain-prefixed send carrying
+#   neither. Contract: bin/fm-new-task-guard.sh.
 # Fork-only end
 #   <target> may be an exact task id, a legacy fm-<id> task label resolved
 #   through this home's state/<id>.meta, or an explicit well-formed backend
@@ -494,6 +496,7 @@ FIRE_AND_FORGET_ID=
 # Fork-only (applypass): set by --close-ack.
 FORK_CLOSE_ACK=0
 FORK_TASK_MODE=
+FORK_FRESH_START=
 fm_send_add_resolve_key() { # <key>
   local k=$1
   case "$k" in
@@ -588,8 +591,7 @@ fi
 # recorded (bin/fm-new-task-guard.sh owns the rule). --same-task never refuses.
 if [ "$FORK_TASK_MODE" = --new-task ] && [ "$MARK_FROM_FIRSTMATE" = 1 ]; then
   "$SCRIPT_DIR/fm-new-task-guard.sh" check "$TARGET_TASK_ID" || exit 1
-  # An idle mate starts fresh before new work arrives; failure never blocks the send.
-  "$SCRIPT_DIR/fm-new-task-guard.sh" fresh-context "$TARGET_TASK_ID" || true
+  FORK_FRESH_START=1
 fi
 # Fork-only end
 
@@ -1176,6 +1178,13 @@ else
       fm_send_close_resolved_keys "$RESOLVE_ANSWER_TEXT" || exit 1
       fm_send_feed_resolved_holds "$RESOLVE_ANSWER_TEXT" || exit 1
     fi
+    # Fork-only (applypass): an idle mate starts on a fresh context before the doorbell
+    # rings for its new work (bin/fm-new-task-guard.sh fresh-context).
+    if [ "$FORK_FRESH_START" = 1 ]; then
+      fm_lease_guard_release
+      "$SCRIPT_DIR/fm-new-task-guard.sh" fresh-context "$TARGET_TASK_ID" || true
+    fi
+    # Fork-only end
     # Ring the doorbell, best-effort: no ring outcome changes the exit status,
     # because the watcher owns loss detection from here, either through its
     # bounded re-ring ladder or direct unavailable-endpoint recovery.
