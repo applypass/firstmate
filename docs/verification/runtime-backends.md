@@ -3399,13 +3399,12 @@ ok - claude (2.1.325 (Claude Code)): a draft that is not the doorbell is left un
 ```
 
 A clipped doorbell is the one extra shape accepted: Claude draws the composer from its top row, so a pane too short for every wrapped row (152 columns by 7 rows on tmux) shows only the first row, ending mid-line at "in numeric".
-The matcher takes that view only as a proper prefix of the task's own doorbell that reaches the task's quoted inbox name, with the composer as the last thing drawn on screen.
-The guard's second pane covers it.
+The matcher takes it only as a proper prefix that reaches the task's quoted inbox name, with the composer last on screen; the guard's second pane covers it.
 
 ```
 ok - claude (2.1.325 (Claude Code)): a doorbell clipped by a short pane is cleared and the composer proves empty
 ```
 
 Result 2026-11-15, Claude 2.1.325: pass.
-The clipped state was reproduced on tmux; the Herdr lab pane at 120 by 40 shows the full wrapped line, and the matching code is shared by every backend.
+The clip was reproduced on tmux; a Herdr pane at 120 by 40 shows the full line, and every backend shares the matcher.
 <!-- Fork-only end -->

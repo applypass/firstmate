@@ -30,7 +30,6 @@
 #              it); any other content refuses. Prints `doorbell-cleared`, or
 #              `no-doorbell` when the composer is already empty. Claude only;
 #              bin/fm-control-doorbell-lib.sh owns the rules.
-# Fork-only end
 #
 #   interrupt  Deliver the harness's verified interrupt sequence. The agent
 #              keeps running. Postcondition: delivery succeeded, the endpoint
@@ -1291,7 +1290,6 @@ if [ "$VERB" = clear-doorbell ]; then
   echo "$result $ID harness=$HARNESS backend=$BACKEND endpoint=$T"
   exit 0
 fi
-# Fork-only end
 
 case "$VERB" in
   interrupt)

@@ -439,6 +439,29 @@ test_relaunch_clears_its_own_unsent_doorbell_then_proceeds() {
   pass "fm-control relaunch: its own unsent doorbell is cleared, then the relaunch proceeds"
 }
 
+# Fork-only: user text and a closed box are never mistaken for a clipped doorbell.
+test_relaunch_refuses_arbitrary_clipped_text() {
+  local dir out rc
+  dir=$(new_case clipped-user rl50)
+  add_ship_task "$dir" rl50 claude
+  printf 'please remember to rerun the migration on test before the release goes out' > "$dir/fake/composer"
+  out=$(FM_FAKE_CLIP=1 run_control "$dir" rl50 relaunch --note "user text"); rc=$?
+  expect_code 1 "$rc" "arbitrary composer text must refuse"
+  assert_no_grep "C-u" "$dir/fake/keys" "user text must never be cleared"
+  pass "fm-control relaunch: arbitrary composer text still refuses"
+}
+
+test_relaunch_refuses_a_cut_doorbell_with_content_below() {
+  local dir out rc
+  dir=$(new_case clipped-below rl51)
+  add_ship_task "$dir" rl51 claude
+  clipped_doorbell "$dir" rl51 > "$dir/fake/composer"
+  out=$(run_control "$dir" rl51 relaunch --note "boxed, so nothing is clipped"); rc=$?
+  expect_code 1 "$rc" "a partial line inside a closed box is a user draft and must refuse"
+  assert_no_grep "C-u" "$dir/fake/keys" "a closed-box partial line must never be cleared"
+  pass "fm-control relaunch: a partial line with a closing box under it refuses"
+}
+
 test_relaunch_refuses_before_exit_when_the_composer_state_is_unproven() {
   local dir out rc
   dir=$(new_case unproven-exit rl44)
@@ -519,62 +542,6 @@ test_relaunch_refuses_a_clipped_doorbell_naming_another_task() {
   pass "fm-control relaunch: a clipped doorbell naming another task refuses"
 }
 
-test_relaunch_refuses_arbitrary_clipped_text() {
-  local dir out rc
-  dir=$(new_case clipped-user rl50)
-  add_ship_task "$dir" rl50 claude
-  printf 'please remember to rerun the migration on test before the release goes out' > "$dir/fake/composer"
-  out=$(FM_FAKE_CLIP=1 run_control "$dir" rl50 relaunch --note "user text"); rc=$?
-  expect_code 1 "$rc" "arbitrary composer text must refuse"
-  assert_no_grep "C-u" "$dir/fake/keys" "user text must never be cleared"
-  pass "fm-control relaunch: arbitrary composer text still refuses"
-}
-
-test_relaunch_refuses_a_cut_doorbell_with_content_below() {
-  local dir out rc
-  dir=$(new_case clipped-below rl51)
-  add_ship_task "$dir" rl51 claude
-  clipped_doorbell "$dir" rl51 > "$dir/fake/composer"
-  out=$(run_control "$dir" rl51 relaunch --note "boxed, so nothing is clipped"); rc=$?
-  expect_code 1 "$rc" "a partial line inside a closed box is a user draft and must refuse"
-  assert_no_grep "C-u" "$dir/fake/keys" "a closed-box partial line must never be cleared"
-  pass "fm-control relaunch: a partial line with a closing box under it refuses"
-}
-
-test_clear_doorbell_verb_clears_only_the_own_doorbell() {
-  local dir out rc
-  dir=$(new_case verb-clear cd1)
-  add_ship_task "$dir" cd1 claude
-  own_doorbell_line "$dir" cd1 > "$dir/fake/composer"
-  out=$(run_control "$dir" cd1 clear-doorbell); rc=$?
-  expect_code 0 "$rc" "clear-doorbell must clear the full own doorbell: $out"
-  assert_contains "$out" "doorbell-cleared" "the verb should report the clear"
-  assert_no_grep "/exit" "$dir/fake/literal" "clear-doorbell must not exit the agent"
-  assert_no_grep "Enter" "$dir/fake/keys" "the doorbell must never be submitted"
-  [ "$(cat "$dir/fake/command")" = claude ] || fail "clear-doorbell must leave the agent running"
-
-  dir=$(new_case verb-empty cd2)
-  add_ship_task "$dir" cd2 claude
-  out=$(run_control "$dir" cd2 clear-doorbell); rc=$?
-  expect_code 0 "$rc" "an empty composer is not an error: $out"
-  assert_contains "$out" "no-doorbell" "an empty composer should report no-doorbell"
-
-  dir=$(new_case verb-draft cd3)
-  add_ship_task "$dir" cd3 claude
-  printf 'my own draft' > "$dir/fake/composer"
-  out=$(run_control "$dir" cd3 clear-doorbell); rc=$?
-  expect_code 1 "$rc" "a user draft must refuse"
-  assert_no_grep "C-u" "$dir/fake/keys" "a user draft must never be cleared"
-
-  dir=$(new_case verb-clip cd4)
-  add_ship_task "$dir" cd4 claude
-  clipped_doorbell "$dir" cd4 > "$dir/fake/composer"
-  out=$(FM_FAKE_CLIP=1 run_control "$dir" cd4 clear-doorbell); rc=$?
-  expect_code 0 "$rc" "clear-doorbell must clear a clipped own doorbell: $out"
-  assert_contains "$out" "doorbell-cleared" "the clipped clear should report the clear"
-  pass "fm-control clear-doorbell: clears only its own doorbell, never submits, refuses anything else"
-}
-
 test_relaunch_from_linked_home_preserves_recorded_worktree() {
   local dir out rc head fetch_head
   dir=$(new_case linked-home rl42)
@@ -611,6 +578,41 @@ test_relaunch_from_linked_home_preserves_recorded_worktree() {
   assert_grep 'unfinished task work' "$dir/wt/task.txt" "relaunch discarded unfinished task work"
   [ ! -e "$fetch_head" ] || fail "relaunch fetched instead of preserving the recorded copy"
   pass "fm-control relaunch: a linked spawning home preserves committed and unfinished work in the recorded copy"
+}
+
+# Fork-only: the standalone clear-doorbell verb.
+test_clear_doorbell_verb_clears_only_the_own_doorbell() {
+  local dir out rc
+  dir=$(new_case verb-clear cd1)
+  add_ship_task "$dir" cd1 claude
+  own_doorbell_line "$dir" cd1 > "$dir/fake/composer"
+  out=$(run_control "$dir" cd1 clear-doorbell); rc=$?
+  expect_code 0 "$rc" "clear-doorbell must clear the full own doorbell: $out"
+  assert_contains "$out" "doorbell-cleared" "the verb should report the clear"
+  assert_no_grep "/exit" "$dir/fake/literal" "clear-doorbell must not exit the agent"
+  assert_no_grep "Enter" "$dir/fake/keys" "the doorbell must never be submitted"
+  [ "$(cat "$dir/fake/command")" = claude ] || fail "clear-doorbell must leave the agent running"
+
+  dir=$(new_case verb-empty cd2)
+  add_ship_task "$dir" cd2 claude
+  out=$(run_control "$dir" cd2 clear-doorbell); rc=$?
+  expect_code 0 "$rc" "an empty composer is not an error: $out"
+  assert_contains "$out" "no-doorbell" "an empty composer should report no-doorbell"
+
+  dir=$(new_case verb-draft cd3)
+  add_ship_task "$dir" cd3 claude
+  printf 'my own draft' > "$dir/fake/composer"
+  out=$(run_control "$dir" cd3 clear-doorbell); rc=$?
+  expect_code 1 "$rc" "a user draft must refuse"
+  assert_no_grep "C-u" "$dir/fake/keys" "a user draft must never be cleared"
+
+  dir=$(new_case verb-clip cd4)
+  add_ship_task "$dir" cd4 claude
+  clipped_doorbell "$dir" cd4 > "$dir/fake/composer"
+  out=$(FM_FAKE_CLIP=1 run_control "$dir" cd4 clear-doorbell); rc=$?
+  expect_code 0 "$rc" "clear-doorbell must clear a clipped own doorbell: $out"
+  assert_contains "$out" "doorbell-cleared" "the clipped clear should report the clear"
+  pass "fm-control clear-doorbell: clears only its own doorbell, never submits, refuses anything else"
 }
 
 test_relaunch_preserves_durable_task_metadata() {
@@ -654,7 +656,7 @@ test_relaunch_serializes_concurrent_durable_metadata_publication() {
     FM_FAKE_TRACE_RELEASE="$launch_release" \
     run_control "$dir" rl28 relaunch --note "continue after publication" > "$dir/control.out" &
   control_pid=$!
-  while [ ! -e "$prepare" ] && [ "$i" -lt 3000 ]; do
+  while [ ! -e "$prepare" ] && [ "$i" -lt 500 ]; do
     /bin/sleep 0.01
     i=$((i + 1))
   done
@@ -1963,7 +1965,7 @@ test_prepublication_failure_keeps_concurrent_durable_metadata() {
     run_control "$dir" rl30 relaunch --harness codex --note "preserve concurrent metadata" \
       > "$dir/control.out" &
   control_pid=$!
-  while [ ! -e "$dir/cwd-race-ready" ] && [ "$i" -lt 3000 ]; do
+  while [ ! -e "$dir/cwd-race-ready" ] && [ "$i" -lt 200 ]; do
     /bin/sleep 0.01
     i=$((i + 1))
   done
