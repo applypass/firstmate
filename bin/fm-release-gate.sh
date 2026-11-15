@@ -43,7 +43,8 @@
 #
 # table    print the rows as a markdown table.
 # refresh  rewrite only the block between the fm-release-gate markers in the release
-#          PR body (appended when absent); the rest of the body is untouched. When a row
+#          PR body (appended when absent); the rest of the body is untouched apart from
+#          the Database section described below. When a row
 #          fails it also appends one needs-decision line (key release-gate-<repo>-<pr>)
 #          to state/release-main-<repo>-<pr>.status naming each failing PR and its fix
 #          command, once per distinct failure set, so firstmate raises it at release
