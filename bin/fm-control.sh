@@ -20,6 +20,19 @@
 # NO generic raw-key entry point here; fm-send remains the only way to send an
 # agent something to read.
 #
+# Fork-only: the clear-doorbell verb (applypass fork).
+#   clear-doorbell  fm-control.sh <task-id> clear-doorbell
+#              Clear the task's own unsent steering-inbox doorbell from a Claude
+#              composer with the bounded Ctrl-U clear (a clipped view is
+#              cleared from the front instead), without exiting or
+#              relaunching the agent. It never submits the line. The composer
+#              must hold exactly the task's doorbell, or a clipped view of it
+#              (a prefix that names the task's inbox, with nothing drawn under
+#              it); any other content, including text after a clipped
+#              doorbell, refuses. Prints `doorbell-cleared`, or
+#              `no-doorbell` when the composer is already empty. Claude only;
+#              bin/fm-control-doorbell-lib.sh owns the rules.
+#
 #   interrupt  Deliver the harness's verified interrupt sequence. The agent
 #              keeps running. Postcondition: delivery succeeded, the endpoint
 #              still exists, and the agent is still alive where the backend can
@@ -1272,6 +1285,13 @@ do_relaunch() {
 }
 
 # --- verbs ------------------------------------------------------------------
+
+# Fork-only: the standalone clear-doorbell verb runs only the proven own-doorbell clear.
+if [ "$VERB" = clear-doorbell ]; then
+  result=$(fm_control_do_clear_doorbell) || exit $?
+  echo "$result $ID harness=$HARNESS backend=$BACKEND endpoint=$T"
+  exit 0
+fi
 
 case "$VERB" in
   interrupt)

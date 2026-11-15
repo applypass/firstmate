@@ -9,6 +9,9 @@
 # launches the real claude in an isolated tmux server on a narrow pane (so the
 # doorbell wraps over several rows, as in a real worker pane), types the doorbell
 # without submitting it, and asserts the helper both clears it and refuses a draft.
+# A second pane, wide but only 7 rows tall, clips the wrapped doorbell to its
+# first row; the guard asserts the clipped view is cleared too, and that text
+# typed after a clipped doorbell makes the clear refuse and survives it.
 # It submits no prompt, so it spends no model tokens.
 #
 # Run explicitly with FM_CONTROL_DOORBELL_LIVE=1 after a Claude upgrade, and
@@ -68,6 +71,15 @@ POLL=0.5
 
 composer() { fm_backend_composer_state "$BACKEND" "$T" "$LABEL" 2>/dev/null || printf unknown; }
 
+# Claude redraws asynchronously, so a typed line can read empty for a moment.
+wait_pending() {
+  local n=0
+  while [ "$n" -lt 20 ] && [ "$(composer)" != pending ]; do
+    sleep 0.5
+    n=$((n + 1))
+  done
+}
+
 i=0
 while [ "$i" -lt 90 ] && [ "$(composer)" != empty ]; do
   sleep 1
@@ -82,7 +94,7 @@ line=$(fm_task_inbox_doorbell_line "$(fm_task_inbox_dir "$STATE" "$ID")/x.msg") 
   || fail "could not build the doorbell line"
 
 tmux -L "$SOCKET" send-keys -t "$T" -l "$line"
-sleep 1
+wait_pending
 [ "$(composer)" = pending ] \
   || fail "claude ($version): the typed doorbell should classify as pending, got $(composer)"
 fm_control_clear_own_doorbell \
@@ -98,3 +110,56 @@ fi
 tmux -L "$SOCKET" capture-pane -p -t "$T" | grep -q "my own draft" \
   || fail "claude ($version): the draft must survive a refused clear"
 pass "claude ($version): a draft that is not the doorbell is left untouched"
+
+# A pane too short for the wrapped doorbell shows only its first rows.
+tmux -L "$SOCKET" kill-session -t "$SESSION"
+tmux -L "$SOCKET" new-session -d -s "$SESSION" -x 152 -y 7 -c "$ROOT" \
+  "CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_FEEDBACK=0 claude --dangerously-skip-permissions"
+i=0
+while [ "$i" -lt 90 ] && [ "$(composer)" != empty ]; do
+  sleep 1
+  i=$((i + 1))
+done
+[ "$(composer)" = empty ] || fail "claude ($version) never showed an empty composer in the short pane"
+tmux -L "$SOCKET" send-keys -t "$T" -l "$line"
+wait_pending
+[ "$(composer)" = pending ] \
+  || fail "claude ($version): the clipped doorbell should classify as pending, got $(composer)"
+fm_control_clear_own_doorbell \
+  || fail "claude ($version): the own-doorbell clear did not empty the clipped composer"
+[ "$(composer)" = empty ] || fail "claude ($version): composer not empty after the clipped clear"
+pass "claude ($version): a doorbell clipped by a short pane is cleared and the composer proves empty"
+
+# Text typed after a clipped doorbell is hidden too, so the clear must refuse and
+# keep it, both on the doorbell's own line and on a line of its own.
+grow_and_read() {  # <rows>
+  tmux -L "$SOCKET" resize-window -t "$T" -y "$1"
+  sleep 1
+  tmux -L "$SOCKET" capture-pane -p -t "$T"
+}
+for tail_kind in same-line new-line; do
+  tmux -L "$SOCKET" resize-window -t "$T" -y 7
+  sleep 1
+  tmux -L "$SOCKET" send-keys -t "$T" -l "$line"
+  if [ "$tail_kind" = new-line ]; then
+    tmux -L "$SOCKET" send-keys -t "$T" C-j
+  else
+    tmux -L "$SOCKET" send-keys -t "$T" -l " "
+  fi
+  tmux -L "$SOCKET" send-keys -t "$T" -l "ALSO MY OWN DRAFT keep me"
+  wait_pending
+  if fm_control_clear_own_doorbell; then
+    fail "claude ($version): a clipped doorbell with text after it ($tail_kind) must refuse"
+  fi
+  grow_and_read 30 | grep -q "ALSO MY OWN DRAFT keep me" \
+    || fail "claude ($version): the text after a clipped doorbell ($tail_kind) must survive a refused clear"
+  pass "claude ($version): text after a clipped doorbell ($tail_kind) refuses and is kept"
+  i=0
+  while [ "$i" -lt 12 ] && [ "$(composer)" != empty ]; do
+    # The trim leaves the cursor at the input's start, so go to the end first.
+    tmux -L "$SOCKET" send-keys -t "$T" C-e C-u
+    sleep 0.5
+    i=$((i + 1))
+  done
+  [ "$(composer)" = empty ] || fail "claude ($version): could not reset the composer after the $tail_kind case"
+done
