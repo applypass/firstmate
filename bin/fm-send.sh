@@ -6,12 +6,11 @@
 # Fork-only (applypass): --new-task | --same-task <target> ... marks whether a message to a
 #   second mate opens new work or continues work under way. --new-task refuses (exit 1,
 #   nothing recorded) when the mate has any In flight item or the fleet is at its cap, and
-#   prints how to create a per-task mate; --same-task never refuses. A passing --new-task to
-#   an idle mate on the local inbox plane records the message first, then saves and restarts
-#   the mate onto a fresh context (fm-new-task-guard.sh fresh-context) before the doorbell
-#   rings; a restart that fails or runs out of time warns and the recorded message waits for
-#   the existing session. Main's PreToolUse hook denies a captain-prefixed send carrying
-#   neither. Contract: bin/fm-new-task-guard.sh.
+#   prints how to create a per-task mate; --same-task never refuses. A passing --new-task
+#   text to an idle local mate is held instead of enqueued (fm-new-task-guard.sh
+#   fresh-context): the send exits 0 at once, and the watcher's fresh-session sweep saves and
+#   restarts the mate, then delivers the held text to its inbox. Main's PreToolUse hook
+#   denies a captain-prefixed send carrying neither. Contract: bin/fm-new-task-guard.sh.
 # Fork-only end
 #   <target> may be an exact task id, a legacy fm-<id> task label resolved
 #   through this home's state/<id>.meta, or an explicit well-formed backend
@@ -496,7 +495,6 @@ FIRE_AND_FORGET_ID=
 # Fork-only (applypass): set by --close-ack.
 FORK_CLOSE_ACK=0
 FORK_TASK_MODE=
-FORK_FRESH_START=
 fm_send_add_resolve_key() { # <key>
   local k=$1
   case "$k" in
@@ -591,7 +589,6 @@ fi
 # recorded (bin/fm-new-task-guard.sh owns the rule). --same-task never refuses.
 if [ "$FORK_TASK_MODE" = --new-task ] && [ "$MARK_FROM_FIRSTMATE" = 1 ]; then
   "$SCRIPT_DIR/fm-new-task-guard.sh" check "$TARGET_TASK_ID" || exit 1
-  FORK_FRESH_START=1
 fi
 # Fork-only end
 
@@ -895,6 +892,15 @@ else
     echo "error: a text steer requires a nonempty message; nothing was sent (an empty marked request would deliver only marker and correlation bytes and leave the parent waiting on a reply to nothing)" >&2
     exit 1
   fi
+  # Fork-only (applypass): new work for an idle local mate waits for its fresh start
+  # (bin/fm-new-task-guard.sh fresh-context).
+  if [ "$FORK_TASK_MODE" = --new-task ] && [ "$MARK_FROM_FIRSTMATE" = 1 ] &&
+    [ "$TARGET_BACKEND" != remote ] && [ -z "$RESOLVE_KEYS" ] && [ -z "$FIRE_AND_FORGET_ID" ] &&
+    [ -z "${FM_PENDING_REPLY_EXISTING_CORR+x}" ] && [ "${MESSAGE#[/\$]}" = "$MESSAGE" ] &&
+    "$SCRIPT_DIR/fm-new-task-guard.sh" fresh-context "$TARGET_TASK_ID" "$MESSAGE"; then
+    exit 0
+  fi
+  # Fork-only end
   if [ "$TARGET_BACKEND" = remote ]; then
     FM_SEND_REMOTE_BUDGET=${FM_SEND_REMOTE_BUDGET:-30}
     case "$FM_SEND_REMOTE_BUDGET" in
@@ -1178,13 +1184,6 @@ else
       fm_send_close_resolved_keys "$RESOLVE_ANSWER_TEXT" || exit 1
       fm_send_feed_resolved_holds "$RESOLVE_ANSWER_TEXT" || exit 1
     fi
-    # Fork-only (applypass): an idle mate starts on a fresh context before the doorbell
-    # rings for its new work (bin/fm-new-task-guard.sh fresh-context).
-    if [ "$FORK_FRESH_START" = 1 ]; then
-      fm_lease_guard_release
-      "$SCRIPT_DIR/fm-new-task-guard.sh" fresh-context "$TARGET_TASK_ID" || true
-    fi
-    # Fork-only end
     # Ring the doorbell, best-effort: no ring outcome changes the exit status,
     # because the watcher owns loss detection from here, either through its
     # bounded re-ring ladder or direct unavailable-endpoint recovery.

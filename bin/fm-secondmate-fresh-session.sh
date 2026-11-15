@@ -8,7 +8,8 @@
 # dropped at each completed piece of work without losing anything.
 #
 # Usage:
-#   fm-secondmate-fresh-session.sh request --source <report|child|context> --verb <done|ready|failed|handover> [--corr <id>] [note...]
+#   fm-secondmate-fresh-session.sh request --source <report|child|context|new-task> --verb <done|ready|failed|handover> [--corr <id>] [note...]
+#   fm-secondmate-fresh-session.sh hold <secondmate-id> <text>
 #   fm-secondmate-fresh-session.sh apply <secondmate-id>
 #   fm-secondmate-fresh-session.sh sweep
 #
@@ -22,6 +23,12 @@
 #   instruction count, where the open work lives), and the request marker,
 #   state/fresh-session.request. It never touches the running agent. A remote
 #   route and a main home are ignored: a remote mate's restart is not covered.
+# hold - run in the parent home by bin/fm-new-task-guard.sh fresh-context, for a
+#   --new-task send to an idle mate. It stores the text under the parent's
+#   state/<id>.fresh-held/, where the mate does not read, and files a request
+#   (--source new-task) unless one is pending. Exit 0 means held; any other exit
+#   means the caller delivers the text itself: the switch is off, or the mate is
+#   not a local mate whose restart the runtime can prove.
 # apply - run in the parent home (FM_HOME is the parent). Restarts one mate with
 #   bin/fm-control.sh <id> relaunch, the same path /updatefirstmate uses, only
 #   when every check below passes; otherwise it prints "deferred" and leaves the
@@ -29,8 +36,15 @@
 #   steer that points the fresh agent at the handover note; the fresh agent then
 #   runs bin/fm-session-start.sh and reconciles from durable records like on any
 #   restart. The model and effort pin are untouched: relaunch re-resolves them.
+#   Held new work then goes to the mate through fm-send.sh --same-task, oldest
+#   first, so it always arrives after the restart. With no restart to come (no
+#   marker, the switch off, a runtime that cannot prove a restart, a persist
+#   timeout, a failed relaunch, or a deferral older than the persist wait) apply
+#   delivers the held work at once and drops a new-task marker. While held work
+#   waits, the persist request and the pointer steer say the restart is for new
+#   work.
 # sweep - run in the parent home on every watcher poll. Applies every mate whose
-#   home holds a marker. It scans for markers before loading any library, so a
+#   home holds a marker or whose held new work waits. It scans for markers before loading any library, so a
 #   poll with nothing pending costs a few stat calls.
 #   Before it applies, it runs the context check below, so a mate whose
 #   conversation grew past the limit is queued like one that finished work.
@@ -85,9 +99,11 @@
 # failure left Claude's "Background work is running" exit dialog open, apply
 # closes it with Esc so the mate keeps taking input.
 #
-# FM_SECONDMATE_FRESH_SESSION=off disables request and sweep.
+# FM_SECONDMATE_FRESH_SESSION=off disables request, hold and restarts; the sweep
+# then only delivers held work.
 #
-# Exit status: 0 restarted, deferred, or nothing to do; 1 a relaunch failed; 2 usage.
+# Exit status: 0 restarted, deferred, held, or nothing to do; 1 a relaunch failed
+# or nothing was held; 2 usage.
 set -u
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -134,7 +150,7 @@ do_request() {
     esac
   done
   note=$*
-  case "$source" in report | child | context) ;; *) usage >&2; return 2 ;; esac
+  case "$source" in report | child | context | new-task) ;; *) usage >&2; return 2 ;; esac
   case "$verb" in done | ready | failed | handover) ;; *) usage >&2; return 2 ;; esac
   fresh_session_off && return 0
   home=${FM_HOME:-}
@@ -165,7 +181,9 @@ do_request() {
     unread=$(find "$inbox_dir" -maxdepth 1 -name '*.msg' 2>/dev/null | wc -l | tr -d ' ')
   fi
 
-  if [ "$source" = context ]; then
+  if [ "$source" = new-task ]; then
+    just="Nothing finished. New work arrived, so your conversation was replaced; the work reaches your inbox right after this restart."
+  elif [ "$source" = context ]; then
     just="Nothing finished. Your conversation grew past the context limit, so it was replaced: $(one_line "${note:-no note}" 300)"
   else
     just="$verb ($source${corr:+, corr=$corr}): $(one_line "${note:-no note}" 300)"
@@ -203,6 +221,40 @@ corr=$corr
 epoch=$(date +%s)
 note=$NOTE_REL" || return 0
   return 0
+}
+
+# --- hold ------------------------------------------------------------------
+
+has_held() {  # <held-dir>
+  compgen -G "$1/*.msg" >/dev/null
+}
+
+do_hold() {
+  local id=${1:-} text=${2:-} meta home held file created=0
+  case "$id" in '' | *[!A-Za-z0-9._-]*) usage >&2; return 2 ;; esac
+  [ "$#" -eq 2 ] && [ -n "$text" ] || { usage >&2; return 2; }
+  fresh_session_off && return 1
+  [ -n "${FM_HOME:-}" ] || return 1
+  STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
+  meta="$STATE/$id.meta"
+  # shellcheck source=bin/fm-secondmate-restart-lib.sh
+  . "$SCRIPT_DIR/fm-secondmate-restart-lib.sh"
+  fm_secondmate_restart_capable "$meta" && [ "$FM_SECONDMATE_RESTART_PLACEMENT" = local ] || return 1
+  home=$(fm_meta_get "$meta" home)
+  [ -n "$home" ] && [ -d "$home/state" ] || return 1
+  if [ ! -f "$home/state/$MARKER_NAME" ]; then
+    FM_HOME="$home" FM_STATE_OVERRIDE='' "$0" request --source new-task --verb handover \
+      "new work is waiting" >/dev/null 2>&1 </dev/null || true
+    [ -f "$home/state/$MARKER_NAME" ] || return 1
+    created=1
+  fi
+  held="$STATE/$id.fresh-held"
+  file="$held/$(date +%s)-$$.msg"
+  if ! publish_file "$file" "$text"; then
+    [ "$created" = 0 ] || rm -f "$home/state/$MARKER_NAME"
+    return 1
+  fi
+  printf 'fm-send: %s is idle, so the new work is held at %s; the watcher restarts it on a fresh context, then delivers the work to its inbox\n' "$id" "$file"
 }
 
 # --- apply -----------------------------------------------------------------
@@ -284,8 +336,8 @@ dismiss_exit_dialog() {  # <id> <meta>
 # Run the persist-first step. Returns 0 once the mate's correlated answer is in
 # and every restart check passes; otherwise prints a deferral or a timeout and
 # returns 1.
-persist_gate() {  # <id> <meta> <home> <marker>
-  local id=$1 meta=$2 home=$3 marker=$4 wait poll deadline corr reason resolved=0 now line
+persist_gate() {  # <id> <meta> <home> <marker> [why]
+  local id=$1 meta=$2 home=$3 marker=$4 why=${5:-} wait poll deadline corr reason resolved=0 now line
   wait=${FM_SECONDMATE_PERSIST_WAIT:-900}
   case "$wait" in '' | *[!0-9]*) wait=900 ;; esac
   poll=${FM_SECONDMATE_PERSIST_POLL:-5}
@@ -294,7 +346,7 @@ persist_gate() {  # <id> <meta> <home> <marker>
     defer "$id" "$reason"
     return 1
   fi
-  if ! fm_secondmate_persist_send "$FM_HOME" "$STATE" "$id"; then
+  if ! fm_secondmate_persist_send "$FM_HOME" "$STATE" "$id" "$why"; then
     defer "$id" "$FM_SECONDMATE_PERSIST_REASON"
     return 1
   fi
@@ -325,10 +377,46 @@ persist_gate() {  # <id> <meta> <home> <marker>
   done
 }
 
+# Deliver held new work through fm-send, oldest first. A send that fails keeps
+# its file for the next sweep.
+release_held() {  # <id> <held-dir>
+  local f n=0
+  for f in "$2"/*.msg; do
+    [ -f "$f" ] || continue
+    if ! FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+      "$SCRIPT_DIR/fm-send.sh" "$1" --same-task "$(cat "$f")" >/dev/null 2>&1 </dev/null; then
+      printf 'held %s: %s could not be delivered yet; the next sweep retries\n' "$1" "$f"
+      return 0
+    fi
+    rm -f "$f"
+    n=$((n + 1))
+  done
+  [ "$n" -eq 0 ] || printf 'released %s: %s held new work message(s) delivered to its inbox\n' "$1" "$n"
+}
+
+skip_fresh_start() {  # <id> <marker> <held-dir>
+  [ ! -f "$2" ] || [ "$(marker_get "$2" source)" != new-task ] || rm -f "$2"
+  release_held "$1" "$3"
+}
+
+held_expired() {  # <held-dir>
+  local f oldest wait
+  wait=${FM_SECONDMATE_PERSIST_WAIT:-900}
+  case "$wait" in '' | *[!0-9]*) wait=900 ;; esac
+  for f in "$1"/*.msg; do
+    [ -f "$f" ] || continue
+    oldest=${f##*/}
+    oldest=${oldest%%-*}
+    case "$oldest" in '' | *[!0-9]*) return 0 ;; esac
+    [ $(($(date +%s) - oldest)) -ge "$wait" ]
+    return
+  done
+  return 1
+}
+
 do_apply() {
-  local id=${1:-} meta home marker reason out rc delivery note_path
+  local id=${1:-} meta home marker held why reason out rc delivery note_path
   case "$id" in '' | *[!A-Za-z0-9._-]*) usage >&2; return 2 ;; esac
-  fresh_session_off && return 0
   [ -n "${FM_HOME:-}" ] || { echo "error: FM_HOME is not set" >&2; return 2; }
   STATE="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
   export STATE
@@ -339,7 +427,8 @@ do_apply() {
   home=$(sed -n 's/^home=//p' "$meta" | head -1)
   [ -n "$home" ] || return 0
   marker="$home/state/$MARKER_NAME"
-  [ -f "$marker" ] && [ ! -L "$marker" ] || return 0
+  held="$STATE/$id.fresh-held"
+  { [ -f "$marker" ] && [ ! -L "$marker" ]; } || has_held "$held" || return 0
 
   # shellcheck source=bin/fm-secondmate-restart-lib.sh
   . "$SCRIPT_DIR/fm-secondmate-restart-lib.sh"
@@ -354,15 +443,30 @@ do_apply() {
   # shellcheck disable=SC2064
   trap "fm_secondmate_liveness_unlock '$id'" RETURN
 
-  if ! fm_secondmate_restart_capable "$meta"; then
-    defer "$id" "$FM_SECONDMATE_RESTART_REASON"
+  if fresh_session_off || [ ! -f "$marker" ] || [ -L "$marker" ]; then
+    release_held "$id" "$held"
     return 0
   fi
-  persist_gate "$id" "$meta" "$home" "$marker" || return 0
+  if ! fm_secondmate_restart_capable "$meta"; then
+    defer "$id" "$FM_SECONDMATE_RESTART_REASON"
+    skip_fresh_start "$id" "$marker" "$held"
+    return 0
+  fi
+  why=''
+  ! has_held "$held" || why='new work is arriving for you and you will start it on a fresh conversation'
+  if ! persist_gate "$id" "$meta" "$home" "$marker" "$why"; then
+    if [ ! -f "$marker" ] || held_expired "$held"; then
+      skip_fresh_start "$id" "$marker" "$held"
+    fi
+    return 0
+  fi
 
   note_path="$home/$NOTE_REL"
   msource=$(sed -n 's/^source=//p' "$marker" | head -1)
-  if [ "$msource" = context ]; then
+  if [ -n "$why" ]; then
+    relaunch_note="Fresh session for new work. Handover note: $note_path"
+    steer_why="your conversation was dropped on purpose so you start new work on a fresh context, and the new work follows in your inbox"
+  elif [ "$msource" = context ]; then
     relaunch_note="Fresh session after the context limit. Handover note: $note_path"
     steer_why="your conversation grew past the context limit and was dropped on purpose"
   else
@@ -377,6 +481,7 @@ do_apply() {
     dismiss_exit_dialog "$id" "$meta"
     mv -f "$marker" "$marker.failed" 2>/dev/null || true
     printf 'failed %s: %s\n' "$id" "$(one_line "$out" 300)"
+    release_held "$id" "$held"
     return 1
   fi
   rm -f "$marker"
@@ -389,6 +494,7 @@ do_apply() {
   else
     printf 'restarted %s: handover note %s (the pointer steer could not be delivered)\n' "$id" "$note_path"
   fi
+  release_held "$id" "$held"
   return 0
 }
 
@@ -462,17 +568,19 @@ do_context_check() {
 
 do_sweep() {
   local state meta id home out found='' rc=0
-  fresh_session_off && return 0
   [ -n "${FM_HOME:-}" ] || { echo "error: FM_HOME is not set" >&2; return 2; }
   state="${FM_STATE_OVERRIDE:-$FM_HOME/state}"
-  do_context_check
+  fresh_session_off || do_context_check
   for meta in "$state"/*.meta; do
     [ -e "$meta" ] || continue
     grep -q '^kind=secondmate$' "$meta" 2>/dev/null || continue
-    home=$(sed -n 's/^home=//p' "$meta" | head -1)
-    [ -n "$home" ] && [ -f "$home/state/$MARKER_NAME" ] || continue
     id=${meta##*/}
     id=${id%.meta}
+    home=$(sed -n 's/^home=//p' "$meta" | head -1)
+    [ -n "$home" ] || continue
+    if fresh_session_off || [ ! -f "$home/state/$MARKER_NAME" ]; then
+      has_held "$state/$id.fresh-held" || continue
+    fi
     found="$found $id"
   done
   for id in $found; do
@@ -489,6 +597,7 @@ do_sweep() {
 
 case "${1:-}" in
   request) shift; do_request "$@" ;;
+  hold) shift; do_hold "$@" ;;
   apply) shift; do_apply "$@" ;;
   sweep) do_sweep ;;
   -h | --help) usage ;;

@@ -25,21 +25,15 @@
 # The mate backlog is read through bin/fm-tasks-axi.sh with FM_HOME set to the
 # mate's home: a read-only `list --state in_flight`.
 #
-# fresh-context <target>   called by fm-send.sh --new-task after `check` passed and
-#   after the new work is already a durable record in the mate's local inbox: an
-#   idle mate saves its open records and restarts onto a fresh conversation, and
-#   the new work then waits in its inbox. Idle = no In flight item (what `check`
-#   just proved) AND bin/fm-crew-state.sh reads the mate as done; working, parked
-#   (open decision), paused, blocked, failed and unknown mates (dead, missing or
-#   unreachable endpoints read unknown) are left alone. The restart is
-#   bin/fm-secondmate-restart.sh (persist, then relaunch), never a second path,
-#   with its waits bounded so the whole send stays well under a 2-minute command
-#   limit: FM_FRESH_CONTEXT_PERSIST_WAIT (40s) for the save answer, 10s for the
-#   old agent to exit and 30s for the new one to come up. Always exits 0: a save
-#   answer that does not arrive in time, or a failed restart, prints a warning
-#   and the message stays in the inbox for the current session.
-#   FM_FRESH_CONTEXT_RESTART and FM_FRESH_CONTEXT_CREW_STATE replace the two
-#   scripts, for tests.
+# fresh-context <target> <text>   called by fm-send.sh --new-task after `check`
+#   passed and before anything is recorded. Exit 0 means the text is held for an
+#   idle mate's fresh start and fm-send stops there; any other exit means fm-send
+#   delivers as usual. Idle = no In flight item (what `check` just proved) AND
+#   bin/fm-crew-state.sh reads the mate as done; working, parked (open decision),
+#   paused, blocked, failed and unknown mates (dead, missing or unreachable
+#   endpoints read unknown) get the text at once. The hold, the restart and the
+#   release are bin/fm-secondmate-fresh-session.sh hold and its watcher sweep.
+#   FM_FRESH_CONTEXT_CREW_STATE replaces bin/fm-crew-state.sh, for tests.
 #
 # hook: Claude PreToolUse for Bash, MAIN session only. It denies (exit 2, reason
 # on stderr) an fm-send.sh call whose message starts "From firstmate (captain"
@@ -167,20 +161,13 @@ cmd_check() {
 }
 
 cmd_fresh_context() {
-  local target=${1:-} state out rc
-  [ -n "$target" ] && [ "$#" -eq 1 ] || { echo "usage: fm-new-task-guard.sh fresh-context <target-id>" >&2; return 2; }
-  secondmate_registry_line_for_id "$REGISTRY" "$target" || return 0
+  local target=${1:-} state
+  [ -n "$target" ] && [ "$#" -eq 2 ] || { echo "usage: fm-new-task-guard.sh fresh-context <target-id> <text>" >&2; return 2; }
+  secondmate_registry_line_for_id "$REGISTRY" "$target" || return 1
   state=$(FM_HOME="$FM_HOME" FM_CREW_STATE_NO_FORGE=1 "${FM_FRESH_CONTEXT_CREW_STATE:-$SCRIPT_DIR/fm-crew-state.sh}" "$target" 2>/dev/null \
     | sed -n '1s/^state: \([a-z]*\).*/\1/p')
-  [ "$state" = done ] || return 0
-  out=$(FM_HOME="$FM_HOME" FM_SECONDMATE_PERSIST_WAIT="${FM_FRESH_CONTEXT_PERSIST_WAIT:-40}" FM_SECONDMATE_PERSIST_POLL=1 \
-    FM_CONTROL_EXIT_WAIT=10 FM_CONTROL_LAUNCH_WAIT=30 \
-    "${FM_FRESH_CONTEXT_RESTART:-$SCRIPT_DIR/fm-secondmate-restart.sh}" "$target" 2>&1 </dev/null); rc=$?
-  if [ "$rc" -ne 0 ]; then
-    printf 'fm-new-task-guard: warning - mate %s did not start on a fresh context; the new work waits in its inbox for its current session:\n%s\n' \
-      "$target" "$(printf '%s\n' "$out" | sed 's/^/  /')" >&2
-  fi
-  return 0
+  [ "$state" = done ] || return 1
+  FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-secondmate-fresh-session.sh" hold "$target" "$2" </dev/null
 }
 
 # The hook's view of one command: sets HOOK_TARGET and HOOK_FLAGGED, and returns
@@ -244,5 +231,5 @@ case "${1:-}" in
   fresh-context) shift; cmd_fresh_context "$@"; exit $? ;;
   hook) shift; cmd_hook "$@"; exit $? ;;
   -h|--help) sed -n '2,/^set -u/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
-  *) echo "usage: fm-new-task-guard.sh check <target-id> | fresh-context <target-id> | hook [--claude]" >&2; exit 2 ;;
+  *) echo "usage: fm-new-task-guard.sh check <target-id> | fresh-context <target-id> <text> | hook [--claude]" >&2; exit 2 ;;
 esac
