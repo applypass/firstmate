@@ -11,7 +11,7 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-sessionstart-nudge.sh` | Print the native session-start hook nudge when the primary has not already run the digest |
 | `fm-sessionstart-run.sh` | Route a native session-open hook to the full digest, a context re-emit, or the nudge |
 | `fm-reemit-lib.sh`       | Fork-only: shrink the `fm-session-start.sh --reemit` digest to a short summary with file pointers |
-| `fm-new-task-guard.sh`   | Fork-only: refuse a new task to a busy second mate or an over-cap fleet; `fm-send.sh --new-task` and the main-session hook both call it |
+| `fm-new-task-guard.sh`   | Fork-only: refuse a new task to a busy second mate or an over-cap fleet, and hold one for an idle mate's fresh start; `fm-send.sh --new-task` and the main-session hook both call it |
 | `fm-operational-input.sh` | Construct and parse the canonical cross-language operational-input protocol |
 | `fm-bootstrap.sh`        | Detect toolchain and fleet problems, run the locked session-start sweeps, and install approved tools |
 | `fm-startup-network.sh`  | Run session start's network checks and inactive-outcome scan off its blocking path, retaining reports and durable findings |
@@ -61,7 +61,7 @@ The shared no-mistakes gate lifecycle boundary is summarized in [architecture.md
 | `fm-kimi-turnend-hook.sh` | Surgically install or remove Kimi's guarded global crew turn-end hook                |
 | `fm-arm-pretool-check.sh` | Stable PreToolUse transport for the watcher-arm command policy (docs/arm-pretool-check.md) |
 | `fm-final-run-handover.sh` | Fork-only: hand-over note a ship writes before its final no-mistakes run; `fm-validation-gate.sh release` relaunches a fresh worker from it instead of steering the long implementation conversation |
-| `fm-secondmate-fresh-session.sh` | Fork-only: restart an idle local second mate with a handover note after it reports finished work, a child's work lands, or its context passes the limit; the watcher poll runs its sweep |
+| `fm-secondmate-fresh-session.sh` | Fork-only: restart an idle local second mate with a handover note after it reports finished work, a child's work lands, its context passes the limit, or new work arrives while it is idle; the watcher poll runs its sweep |
 | `fm-context-replay.py` | Fork-only: replay supervisor transcripts with a context limit and print calls, context per call, and weighted tokens before and after |
 | `fm-op-pretool-check.sh` | Fork-only: PreToolUse transport that refuses a bare 1Password `op` call unless OP_SERVICE_ACCOUNT_TOKEN is loaded (decision in `fm-op-command-policy.mjs`) |
 | `fm-op-desktop-block.sh` | Fork-only: keep every agent off the 1Password desktop session; `fm-spawn.sh` exports `OP_BIOMETRIC_UNLOCK_ENABLED=false` into every launch, `install` writes it into a directory's untracked Claude settings, and `check` reports a session without it (session start runs both for the home); known gap: no-mistakes pipeline agents, which the shared daemon starts from its own launchd environment, do not get it |

@@ -25,6 +25,16 @@
 # The mate backlog is read through bin/fm-tasks-axi.sh with FM_HOME set to the
 # mate's home: a read-only `list --state in_flight`.
 #
+# fresh-context <target> <text>   called by fm-send.sh --new-task after `check`
+#   passed and before anything is recorded. Exit 0 means the text is held for an
+#   idle mate's fresh start and fm-send stops there; any other exit means fm-send
+#   delivers as usual. Idle = no In flight item (what `check` just proved) AND
+#   bin/fm-crew-state.sh reads the mate as done; working, parked (open decision),
+#   paused, blocked, failed and unknown mates (dead, missing or unreachable
+#   endpoints read unknown) get the text at once. The hold, the restart and the
+#   release are bin/fm-secondmate-fresh-session.sh hold and its watcher sweep.
+#   FM_FRESH_CONTEXT_CREW_STATE replaces bin/fm-crew-state.sh, for tests.
+#
 # hook: Claude PreToolUse for Bash, MAIN session only. It denies (exit 2, reason
 # on stderr) an fm-send.sh call whose message starts "From firstmate (captain"
 # when the call carries neither --new-task nor --same-task and the target mate
@@ -150,6 +160,16 @@ cmd_check() {
   check_fleet_cap
 }
 
+cmd_fresh_context() {
+  local target=${1:-} state
+  [ -n "$target" ] && [ "$#" -eq 2 ] || { echo "usage: fm-new-task-guard.sh fresh-context <target-id> <text>" >&2; return 2; }
+  secondmate_registry_line_for_id "$REGISTRY" "$target" || return 1
+  state=$(FM_HOME="$FM_HOME" FM_CREW_STATE_NO_FORGE=1 "${FM_FRESH_CONTEXT_CREW_STATE:-$SCRIPT_DIR/fm-crew-state.sh}" "$target" 2>/dev/null \
+    | sed -n '1s/^state: \([a-z]*\).*/\1/p')
+  [ "$state" = "done" ] || return 1
+  FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-secondmate-fresh-session.sh" hold "$target" "$2" </dev/null
+}
+
 # The hook's view of one command: sets HOOK_TARGET and HOOK_FLAGGED, and returns
 # 0 only for an fm-send.sh call whose message starts with the captain prefix.
 parse_send() { # <command>
@@ -208,7 +228,8 @@ cmd_hook() {
 
 case "${1:-}" in
   check) shift; cmd_check "$@"; exit $? ;;
+  fresh-context) shift; cmd_fresh_context "$@"; exit $? ;;
   hook) shift; cmd_hook "$@"; exit $? ;;
   -h|--help) sed -n '2,/^set -u/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
-  *) echo "usage: fm-new-task-guard.sh check <target-id> | hook [--claude]" >&2; exit 2 ;;
+  *) echo "usage: fm-new-task-guard.sh check <target-id> | fresh-context <target-id> <text> | hook [--claude]" >&2; exit 2 ;;
 esac

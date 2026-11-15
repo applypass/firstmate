@@ -6,7 +6,14 @@
 # Fork-only (applypass): --new-task | --same-task <target> ... marks whether a message to a
 #   second mate opens new work or continues work under way. --new-task refuses (exit 1,
 #   nothing recorded) when the mate has any In flight item or the fleet is at its cap, and
-#   prints how to create a per-task mate; --same-task never refuses. Main's PreToolUse hook
+#   prints how to create a per-task mate; --same-task never refuses. A passing --new-task
+#   text to an idle local mate is held instead of enqueued (fm-new-task-guard.sh
+#   fresh-context): the send exits 0 at once, and the watcher's fresh-session sweep saves and
+#   restarts the mate, then delivers the held text to its inbox. While held text waits, every
+#   later text send to that mate joins it and reaches the inbox in send order; --resolve-key
+#   answers, pending-reply resends and fire-and-forget steers still go straight to the
+#   inbox, and /-commands (or $-commands to a codex mate) still go straight to the agent's
+#   input. Main's PreToolUse hook
 #   denies a captain-prefixed send carrying neither. Contract: bin/fm-new-task-guard.sh.
 # Fork-only end
 #   <target> may be an exact task id, a legacy fm-<id> task label resolved
@@ -819,7 +826,6 @@ fm_send_resolve_pending_reply_records() {
   done
 }
 # Fork-only end
-
 # Feed the answered captain-held tasks to the ONE keyed-answer intake, as keyed
 # lines, exactly the way every other channel does. fm-send decides nothing here:
 # it does not build a decision record or choose a close path; the keys were
@@ -889,6 +895,24 @@ else
     echo "error: a text steer requires a nonempty message; nothing was sent (an empty marked request would deliver only marker and correlation bytes and leave the parent waiting on a reply to nothing)" >&2
     exit 1
   fi
+  # Fork-only (applypass): new work for an idle local mate waits for its fresh start
+  # (bin/fm-new-task-guard.sh fresh-context), and later text to that mate joins the wait
+  # (bin/fm-secondmate-fresh-session.sh hold --queued).
+  if [ "$MARK_FROM_FIRSTMATE" = 1 ] && [ "$TARGET_BACKEND" != remote ] && [ -z "$RESOLVE_KEYS" ] &&
+    [ -z "$FIRE_AND_FORGET_ID" ] && [ -z "${FM_PENDING_REPLY_EXISTING_CORR+x}" ] &&
+    [ -z "${FM_SEND_HELD_RELEASE:-}" ] && [ "${MESSAGE#/}" = "$MESSAGE" ] &&
+    { [ "${MESSAGE#\$}" = "$MESSAGE" ] || [ "$TARGET_HARNESS" != codex ]; }; then
+    if compgen -G "$STATE/$TARGET_TASK_ID.fresh-held/*.msg" >/dev/null &&
+      FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" \
+        "$SCRIPT_DIR/fm-secondmate-fresh-session.sh" hold --queued "$TARGET_TASK_ID" "$MESSAGE" </dev/null; then
+      exit 0
+    fi
+    if [ "$FORK_TASK_MODE" = --new-task ] &&
+      "$SCRIPT_DIR/fm-new-task-guard.sh" fresh-context "$TARGET_TASK_ID" "$MESSAGE"; then
+      exit 0
+    fi
+  fi
+  # Fork-only end
   if [ "$TARGET_BACKEND" = remote ]; then
     FM_SEND_REMOTE_BUDGET=${FM_SEND_REMOTE_BUDGET:-30}
     case "$FM_SEND_REMOTE_BUDGET" in
