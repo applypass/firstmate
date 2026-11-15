@@ -1,0 +1,89 @@
+## Herdr 0.9.5 lab session fm-lab-dbclr-r4-10518, pane w1:p2 (120x7), Claude 2.1.325 (Claude Code)
+## 1. empty composer: fm-control.sh release-delay-rca clear-doorbell
+no-doorbell release-delay-rca harness=claude backend=herdr endpoint=fm-lab-dbclr-r4-10518:w1:p2
+ (rc=0)
+## 2. doorbell typed unsent (as fm-send types it); the pane shows:
+
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'release-delay-rca.inbox' steering inbox, read
+  and act on each in numeric order, then mv each into its handled/.
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx -- | HEAD
+  ⏵⏵ bypass permissions on (shift+tab to cycle)
+## interrupt-free check: fm-control.sh clear-doorbell
+doorbell-cleared release-delay-rca harness=claude backend=herdr endpoint=fm-lab-dbclr-r4-10518:w1:p2
+ (rc=)
+## pane after (7 rows):
+
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                         Ctrl+Y to paste deleted text
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx -- | HEAD
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents

@@ -1,0 +1,12 @@
+===== D: another task's (release-delay-other) clipped doorbell in release-delay-rca's pane =====
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'release-delay-other.inbox' steering inbox, read and act on each in numeric
+$ bin/fm-control.sh release-delay-rca clear-doorbell
+error: task release-delay-rca's composer does not hold exactly this task's own doorbell, or the clear did not empty it; nothing else is ever cleared, so clear or submit it by hand
+rc=1
+$ bin/fm-control.sh release-delay-rca exit
+error: task release-delay-rca's composer visibly holds pending text; refusing to type the /exit exit command because it would concatenate onto that text. Clear or submit the pending text, then retry 'exit'
+rc=1
+--- enlarged to 152x30 after (untouched) ---
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'release-delay-other.inbox' steering inbox, read and act on each in numeric
+  order, then mv each into its handled/.

@@ -1,0 +1,68 @@
+=== S6 before exit: clipped own doorbell (pane 152x7) ===
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+                                                                                                                                    ◐ medium · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'ex1.inbox' steering inbox, read and act on each in numeric order, then mv each
+=== end ===
+=== S6 after exit (pane 152x7) ===
+
+The default interactive shell is now zsh.
+To update your account to use zsh, please run `chsh -s /bin/zsh`.
+For more details, please visit https://support.apple.com/kb/HT208050.
+bash-3.2$ CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_FEEDBACK=0 claude --dangerously-skip-permissions
+SessionEnd hook [node "${CLAUDE_PLUGIN_ROOT}/hooks/session-end-cleanup.mjs"] failed: Hook cancelled
+bash-3.2$
+=== end ===
+=== S8 before: own doorbell + appended user text, clipped (pane 152x7) ===
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+                                                  tmux focus-events off · add 'set -g focus-events on' to ~/.tmux.conf and reattach for focus tracking
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'ap1.inbox' steering inbox, read and act on each in numeric order, then mv each
+=== end ===
+=== S8 after clear-doorbell (pane 152x7) ===
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+                                                                                                                          Ctrl+Y to paste deleted text
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+=== end ===
+=== S8 after clear, pane enlarged to 152x30 to show the full composer (pane 152x30) ===
+
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                                                          Ctrl+Y to paste deleted text
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx -- | HEAD
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents
+=== end ===

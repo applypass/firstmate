@@ -1,0 +1,19 @@
+## Herdr 0.9.5 lab session fm-lab-dbclr-r4-10518, pane w1:p2 resized to 152x7, Claude 2.1.325 (Claude Code)
+## doorbell typed unsent; the 7-row pane shows only its first row:
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+## composer state: 
+unknown
+## $ fm-control.sh release-delay-rca clear-doorbell
+error: task release-delay-rca's composer state is 'unknown', not proven pending; refusing to clear it
+ (rc=)
+## pane after:
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+
+──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+## grow the pane to show the full composer:

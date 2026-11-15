@@ -1,0 +1,14 @@
+===== same-line, long unbreakable token after the doorbell (forces a wrap right at the doorbell's end) =====
+--- pane (152x7) before ---
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'release-delay-rca.inbox' steering inbox, read and act on each in numeric
+$ bin/fm-control.sh release-delay-rca clear-doorbell
+error: task release-delay-rca's composer does not hold exactly this task's own doorbell, or the clear did not empty it; nothing else is ever cleared, so clear or submit it by hand
+rc=
+--- enlarged to 152x30 after ---
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯  KEEPME_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx -- | HEAD
+  ⏵⏵ bypass permissions on (shift+tab to cycle)

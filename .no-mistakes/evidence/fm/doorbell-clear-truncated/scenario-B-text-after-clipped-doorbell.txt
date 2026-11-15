@@ -1,0 +1,38 @@
+===== same-line =====
+--- pane (152x7) before ---
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'release-delay-rca.inbox' steering inbox, read and act on each in numeric
+$ bin/fm-control.sh release-delay-rca clear-doorbell
+error: task release-delay-rca's composer does not hold exactly this task's own doorbell, or the clear did not empty it; nothing else is ever cleared, so clear or submit it by hand
+rc=
+$ bin/fm-control.sh release-delay-rca exit
+error: task release-delay-rca's composer visibly holds pending text; refusing to type the /exit exit command because it would concatenate onto that text. Clear or submit the pending text, then retry 'exit'
+rc=
+--- same pane enlarged to 152x30 after both refusals ---
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ numeric order, then mv each into its handled/. ALSO MY OWN DRAFT: remember to tell the captain the release-delay root cause is the cache key
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx -- | HEAD
+  ⏵⏵ bypass permissions on (shift+tab to cycle)
+agent window still present: 1
+===== new-line =====
+--- pane (152x7) before ---
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'release-delay-rca.inbox' steering inbox, read and act on each in numeric
+$ bin/fm-control.sh release-delay-rca clear-doorbell
+error: task release-delay-rca's composer does not hold exactly this task's own doorbell, or the clear did not empty it; nothing else is ever cleared, so clear or submit it by hand
+rc=
+$ bin/fm-control.sh release-delay-rca exit
+error: task release-delay-rca's composer visibly holds pending text; refusing to type the /exit exit command because it would concatenate onto that text. Clear or submit the pending text, then retry 'exit'
+rc=
+--- same pane enlarged to 152x30 after both refusals ---
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'release-delay-rca.inbox' steering inbox, read and act on each in numeric
+  order, then mv each into its handled/.
+  ALSO MY OWN DRAFT: remember to tell the captain the release-delay root cause is the cache key
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx -- | HEAD
+  ⏵⏵ bypass permissions on (shift+tab to cycle)
+agent window still present: 1

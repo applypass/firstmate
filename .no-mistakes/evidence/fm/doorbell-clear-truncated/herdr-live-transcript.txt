@@ -1,0 +1,20 @@
+=== H1 before: clipped own doorbell in a short herdr pane ===
+=== end ===
+$ bin/fm-control.sh release-delay-rca clear-doorbell
+error: task release-delay-rca's composer does not hold exactly this task's own doorbell, or the clear did not empty it; nothing else is ever cleared, so clear or submit it by hand
+exit=1
+=== H1 after clear-doorbell ===
+=== end ===
+RESULT H1: FAIL rc=1
+$ bin/fm-control.sh release-delay-rca clear-doorbell
+error: task release-delay-rca's composer does not hold exactly this task's own doorbell, or the clear did not empty it; nothing else is ever cleared, so clear or submit it by hand
+exit=1
+=== H2 after refused clear (another task's doorbell) ===
+=== end ===
+RESULT H2: pass
+$ bin/fm-control.sh release-delay-rca exit
+error: task release-delay-rca's composer visibly holds pending text; refusing to type the /exit exit command because it would concatenate onto that text. Clear or submit the pending text, then retry 'exit'
+exit=1
+RESULT H3: FAIL rc=1
+=== H3 after exit ===
+=== end ===

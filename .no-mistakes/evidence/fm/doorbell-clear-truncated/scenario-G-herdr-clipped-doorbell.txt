@@ -1,0 +1,97 @@
+===== herdr fm-lab-dbclip-92536-629 pane w2:p4, task release-delay-rca, composer: doorbell =====
+--- visible pane before ---
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+
+───────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your
+
+$ bin/fm-control.sh release-delay-rca clear-doorbell
+error: task release-delay-rca's composer does not hold exactly this task's own doorbell, or the clear did not empty it; nothing else is ever cleared, so clear or submit it by hand
+rc=1
+--- visible pane after ---
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+
+───────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your
+
+===== herdr fm-lab-dbclip-92536-629 pane w2:p6, task release-delay-rca-herdr-clip-check, composer: doorbell =====
+--- visible pane before ---
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+
+────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your
+
+$ bin/fm-control.sh release-delay-rca-herdr-clip-check clear-doorbell
+error: task release-delay-rca-herdr-clip-check's composer does not hold exactly this task's own doorbell, or the clear did not empty it; nothing else is ever cleared, so clear or submit it by hand
+rc=1
+--- visible pane after ---
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+
+────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your
+
+===== herdr pane w2:p6 grown to 94x10: doorbell shows 2 of 3 rows =====
+--- visible pane before ---
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+
+────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your
+  'release-delay-rca-herdr-clip-check.inbox' steering inbox, read and act on each in
+
+$ bin/fm-control.sh release-delay-rca-herdr-clip-check clear-doorbell
+error: task release-delay-rca-herdr-clip-check's composer does not hold exactly this task's own doorbell, or the clear did not empty it; nothing else is ever cleared, so clear or submit it by hand
+rc=1
+--- visible pane after ---
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+
+────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your
+  'release-delay-rca-herdr-clip-check.inbox' steering inbox, read and act on each in
+
+--- recent scrollback-free full composer read after (recent-unwrapped, last 4 lines) ---
+────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your
+  'release-delay-rca-herdr-clip-check.inbox' steering inbox, read and act on each in
+
+=== Root cause (bash -x trace of fm_control_trim_clipped_doorbell on herdr pane w2:p6) ===
+matcher fm_control_composer_holds_truncated_doorbell: rc=0 (accepts the clipped view)
+Ctrl-A (ctrl+a): sent ok; literal Q: sent; marked read back as 'Q: Firstmate instruction waiting: ...' (marker at input start)
+Backspace (backspace): sent ok; text read back equals held
+First Delete: trace tail:
++ '[' true = true ']'
++ return 0
++ local key
+++ fm_backend_herdr_normalize_key delete
+++ case "$1" in
+++ printf %s delete
++ key=delete
++ fm_backend_herdr_cli fm-lab-dbclip-92536-629 pane send-keys w2:p6 delete
++ return 1
++ echo 'trim rc=1'
+trim rc=1
+
+=== Direct herdr CLI check: which names herdr accepts for the forward-delete key ===
+$ herdr pane send-keys w2:p6 delete -> rc=1 {"error":{"code":"invalid_key","message":"unsupported key delete"},"id":"cli:request"}
+$ herdr pane send-keys w2:p6 Delete -> rc=1 {"error":{"code":"invalid_key","message":"unsupported key Delete"},"id":"cli:request"}
+$ herdr pane send-keys w2:p6 del -> rc=1 {"error":{"code":"invalid_key","message":"unsupported key del"},"id":"cli:request"}
+$ herdr pane send-keys w2:p6 DC -> rc=1 {"error":{"code":"invalid_key","message":"unsupported key DC"},"id":"cli:request"}
+
+Herdr does accept ctrl+d and right+backspace; on this pane after ctrl+a, ctrl+d removed the leading ':' and right+backspace removed the next ' ' (manual lab probe), so a forward delete exists on herdr, just not under the name 'delete'.
+
+Conclusion: _fm_control_trim_key maps DC to herdr key 'delete', which herdr rejects (invalid_key). Every clipped own-doorbell clear on herdr refuses at the first Delete. The refusal is safe (marker removed, composer unchanged), but the reported runtime (herdr second mate) is not cleared.

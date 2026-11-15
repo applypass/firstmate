@@ -1,0 +1,46 @@
+## Adversarial: own doorbell + operator text on a new line, clipped
+## task pane w1:p2 152x9 on Herdr 0.9.5, Claude 2.1.325 (Claude Code)
+## BEFORE - viewer screen:
+│  fm-release-delay-rca    +
+│┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+││ ▐▛███▛█   Claude Code v2.1.325                                                                                                                       │
+││▝▜██████▀  Opus 5.5 · Claude Team                                                                                                                     │
+││ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc                                                                     │
+││                                                                                                                              ctrl+g to edit in Nvim  │
+││──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────│
+││❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'release-delay-rca.inbox' steering inbox, read and act on each in numeric      │
+│└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+│┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+## composer state: pending
+## $ bin/fm-control.sh release-delay-rca clear-doorbell
+error: task release-delay-rca's composer does not hold exactly this task's own doorbell, or the clear did not empty it; nothing else is ever cleared, so clear or submit it by hand
+## rc=1
+## AFTER - viewer screen (clipped):
+│  fm-release-delay-rca    +
+│┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+││ ▐▛███▛█   Claude Code v2.1.325                                                                                                                       │
+││▝▜██████▀  Opus 5.5 · Claude Team                                                                                                                     │
+││ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc                                                                     │
+││──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────│
+││❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'release-delay-rca.inbox' steering inbox, read and act on each in numeric      │
+│└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+│┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+## composer state: pending
+## AFTER - pane grown to 28 rows, full composer:
+│  fm-release-delay-rca    +
+│┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+││ ▐▛███▛█   Claude Code v2.1.325                                                                                                                       │
+││▝▜██████▀  Opus 5.5 · Claude Team                                                                                                                     │
+││ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc                                                                     │
+││──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────│
+││❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'release-delay-rca.inbox' steering inbox, read and act on each in numeric      │
+││  order, then mv each into its handled/.                                                                                                              │
+││  ALSO MY OWN DRAFT keep me                                                                                                                           │
+││──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────│
+││  Opus 5.5 | ctx -- | HEAD                                                                                                                            │
+││  ⏵⏵ bypass permissions on (shift+tab to cycle)                                                                                                       │
+│└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+│┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+││01M7FG58MHVNX0MSQ9R1M84Z0R on  HEAD (b59dfd6) on ☁️  (us-east-1)                                                                                     │
+││❯                                                                                                                                                     │
+## agent: {"agent_status":"idle","agent":"claude"}

@@ -1,0 +1,10 @@
+first top-level call at 3142
+ok - fm-control relaunch: its own unsent doorbell is cleared, then the relaunch proceeds
+ok - fm-control relaunch: a draft beyond its own doorbell is left alone and still refuses
+ok - fm-control relaunch: a clear that does not empty the composer keeps the refusal
+ok - fm-control relaunch: a clipped view of its own doorbell is cleared
+ok - fm-control relaunch: a clipped doorbell naming another task refuses
+ok - fm-control relaunch: arbitrary composer text still refuses
+ok - fm-control relaunch: a partial line with a closing box under it refuses
+ok - fm-control clear-doorbell: clears only its own doorbell, never submits, refuses anything else
+rc=0

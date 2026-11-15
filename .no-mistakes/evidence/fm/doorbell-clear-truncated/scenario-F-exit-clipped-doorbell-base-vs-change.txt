@@ -1,0 +1,24 @@
+===== F: exit with the clipped own doorbell (claude launched inside the pane's shell, as fleet panes are) =====
+--- pane (152x7) ---
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'release-delay-rca.inbox' steering inbox, read and act on each in numeric
+## BASE commit db66ff34 (before this change):
+$ bin/fm-control.sh release-delay-rca clear-doorbell   [code: /tmp/fmbase]
+error: 'clear-doorbell' is not a control verb
+allowed verbs:
+  interrupt
+  exit
+  relaunch
+rc=2
+$ bin/fm-control.sh release-delay-rca exit   [code: /tmp/fmbase]
+error: task release-delay-rca's composer visibly holds pending text; refusing to type the /exit exit command because it would concatenate onto that text. Clear or submit the pending text, then retry 'exit'
+rc=1
+## THIS change (9f9f6d6c):
+$ bin/fm-control.sh release-delay-rca exit   [code: /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R]
+stopped release-delay-rca harness=claude backend=tmux endpoint=fmlab:fm-release-delay-rca worktree=/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R
+rc=0
+--- pane after exit, enlarged (claude gone, shell prompt back, doorbell never submitted) ---
+01M7FG58MHVNX0MSQ9R1M84Z0R on  HEAD (9f9f6d6) on ☁️  (us-east-1)
+❯ CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_FEEDBACK=0 claude --dangerously-skip-permissions
+01M7FG58MHVNX0MSQ9R1M84Z0R on  HEAD (9f9f6d6) on ☁️  (us-east-1) took 27s
+❯

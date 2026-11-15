@@ -1,0 +1,41 @@
+## exit (relaunch's stop step) with the own doorbell clipped after 'in numeric'
+## task pane w1:p2 152x9 on Herdr 0.9.5, Claude 2.1.325 (Claude Code)
+## BEFORE - viewer screen:
+│  fm-release-delay-rca    +
+│┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+││ ▐▛███▛█   Claude Code v2.1.325                                                                                                                       │
+││▝▜██████▀  Opus 5.5 · Claude Team                                                                                                                     │
+││ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc                                                                     │
+││──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────│
+││❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'release-delay-rca.inbox' steering inbox, read and act on each in numeric      │
+│└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+│┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+## composer state: pending
+## $ bin/fm-control.sh release-delay-rca exit
+stopped release-delay-rca harness=claude backend=herdr endpoint=fm-lab-dbclr-r4-10518:w1:p2 worktree=/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.JV9dVt/wt
+## rc=0
+## AFTER - viewer screen (clipped):
+│  fm-release-delay-rca    +
+│┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+││wt on  rdr on ☁️  (us-east-1)                                                                                                                        │
+││❯ cd /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R && CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_F │
+││EEDBACK=0 claude --dangerously-skip-permissions                                                                                                       │
+││01M7FG58MHVNX0MSQ9R1M84Z0R on  HEAD (b59dfd6) on ☁️  (us-east-1) took 5m25s                                                                          │
+││❯                                                                                                                                                     │
+│└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+│┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+## composer state: empty
+## AFTER - pane grown to 28 rows, full composer:
+│  fm-release-delay-rca    +
+│┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+││wt on  rdr on ☁️  (us-east-1)                                                                                                                        │
+││❯ cd /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R && CLAUDE_CODE_ENABLE_PROMPT_SUGGESTION=false CLAUDE_CODE_SEND_F │
+││EEDBACK=0 claude --dangerously-skip-permissions                                                                                                       │
+││01M7FG58MHVNX0MSQ9R1M84Z0R on  HEAD (b59dfd6) on ☁️  (us-east-1) took 5m25s                                                                          │
+││❯                                                                                                                                                     │
+│└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+│┌──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+││01M7FG58MHVNX0MSQ9R1M84Z0R on  HEAD (b59dfd6) on ☁️  (us-east-1)                                                                                     │
+││❯                                                                                                                                                     │
+│└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+## agent: {"agent_status":"unknown","agent":null}

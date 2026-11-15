@@ -1,0 +1,28 @@
+--- pane (152x7) before: the doorbell is typed, unsent, only its first row shows ---
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'release-delay-rca.inbox' steering inbox, read and act on each in numeric
+$ bin/fm-control.sh release-delay-rca clear-doorbell
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T/fm-lab.TnUVOe
+doorbell-cleared release-delay-rca harness=claude backend=tmux endpoint=fmlab:fm-release-delay-rca
+rc=0
+--- pane (152x7) after ---
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+--- same pane enlarged to 152x30 after (nothing hidden remains) ---
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx -- | HEAD
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← 5 agents

@@ -1,0 +1,10 @@
+=== Herdr lab pane w1:p2 (94 cols x 6 rows), own doorbell typed ===
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+                                                              Ctrl+Y to paste deleted text
+────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your
+
+=== end ===
+Pane capture only. The fm-control.sh run against this pane is in herdr-live-transcript.txt (H1): exit=1, "composer does not hold exactly this task's own doorbell". The first visible row ends at "in your", before the task's inbox name, so the clipped-view matcher refuses by design.

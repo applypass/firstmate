@@ -1,0 +1,124 @@
+=== S1 before: clipped own doorbell (pane 152x7) ===
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+                                                  tmux focus-events off · add 'set -g focus-events on' to ~/.tmux.conf and reattach for focus tracking
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'clip1.inbox' steering inbox, read and act on each in numeric order, then mv
+=== end ===
+$ bin/fm-control.sh clip1 clear-doorbell
+doorbell-cleared clip1 harness=claude backend=tmux endpoint=fmlab:fm-clip1
+exit=0
+=== S1 after clear-doorbell (pane 152x7) ===
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+                                                                                                                          Ctrl+Y to paste deleted text
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ 
+=== end ===
+RESULT S1: pass (composer=empty, pane still running 2.1.325)
+$ bin/fm-control.sh clip1 clear-doorbell
+no-doorbell clip1 harness=claude backend=tmux endpoint=fmlab:fm-clip1
+exit=0
+RESULT S2: pass
+$ bin/fm-control.sh clip1 clear-doorbell
+error: task clip1's composer does not hold exactly this task's own doorbell, or the clear did not empty it; nothing else is ever cleared, so clear or submit it by hand
+exit=1
+=== S3 after refused clear (another task's doorbell) (pane 152x7) ===
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'other2.inbox' steering inbox, read and act on each in numeric order, then mv
+=== end ===
+RESULT S3: pass
+$ bin/fm-control.sh clip1 clear-doorbell
+error: task clip1's composer does not hold exactly this task's own doorbell, or the clear did not empty it; nothing else is ever cleared, so clear or submit it by hand
+exit=1
+=== S4 after refused clear (user draft) (pane 152x7) ===
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+                                                                                                                          Ctrl+Y to paste deleted text
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ please remember to rerun the migration on test before the release goes out, and also double check the inbox handling for every queued message today
+=== end ===
+RESULT S4: pass
+=== S5 before: partial own doorbell fully visible with the box closed under it (pane 152x7) ===
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+                                                                                                                          Ctrl+Y to paste deleted text
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'clip1.inbox' steering inbox,
+=== end ===
+$ bin/fm-control.sh clip1 clear-doorbell
+doorbell-cleared clip1 harness=claude backend=tmux endpoint=fmlab:fm-clip1
+exit=0
+RESULT S5: FAIL rc=0
+=== S6 before exit: clipped own doorbell (pane 152x7) ===
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/.no-mistakes/worktrees/c5d69c01912a/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+                                                                                                                          Ctrl+Y to paste deleted text
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list "$FM_TASK_INBOX"/*.msg in your 'clip1.inbox' steering inbox, read and act on each in numeric order, then mv
+=== end ===
+$ bin/fm-control.sh clip1 exit
+error: exit-delivered clip1 interrupt=not-needed exit-command=delivered agent-state=missing exit=unconfirmed; the agent did not stop within 30s
+exit=1
+RESULT S6: FAIL rc=1
+=== S7 before: full wrapped own doorbell (pane 60x40) ===
+
+ ▐▛███▛█   Claude Code v2.1.325
+▝▜██████▀  Opus 5.5 · Claude Team
+ ▝▝   ▝▝   ~/…/01M7FG58MHVNX0MSQ9R1M84Z0R · /rc
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                        ◐ medium · /effort
+────────────────────────────────────────────────────────────
+❯ : Firstmate instruction waiting: list
+  "$FM_TASK_INBOX"/*.msg in your 'wrap1.inbox' steering
+  inbox, read and act on each in numeric order, then mv
+  each into its handled/.
+────────────────────────────────────────────────────────────
+  Opus 5.5 | ctx -- | HEAD
+  ⏵⏵ bypass permissions on (shift+tab to cycle)
+=== end ===
+$ bin/fm-control.sh wrap1 clear-doorbell
+doorbell-cleared wrap1 harness=claude backend=tmux endpoint=fmlab:fm-wrap1
+exit=0
+RESULT S7: pass
