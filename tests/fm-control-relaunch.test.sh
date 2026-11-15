@@ -89,6 +89,8 @@ case "${1:-}" in
     else
       printf '%s\n' "$payload" >> "$D/keys"
       case "$payload" in
+        # Fork-only: Ctrl-U empties the composer unless a test makes the clear stick.
+        C-u) [ -n "${FM_FAKE_CLEAR_STICKS:-}" ] || : > "$D/composer" ;;
         'export GOTMPDIR='*)
           if [ -n "${FM_FAKE_TRACE_PREPARE:-}" ]; then
             : > "$FM_FAKE_TRACE_PREPARE"
@@ -117,6 +119,11 @@ case "${1:-}" in
     printf 'fakepane\n'; exit 0 ;;
   capture-pane)
     [ -z "${FM_FAKE_COMPOSER_READ_FAIL:-}" ] || exit 1
+    # Fork-only: a box as wide as its text, so a long line does not read as ambiguous geometry.
+    if [ "$(wc -c < "$D/composer")" -gt 40 ]; then
+      text=$(cat "$D/composer"); rule=$(printf '%*s' "$((${#text} + 3))" '' | sed 's/ /─/g')
+      printf '╭%s╮\n│ %s  │\n╰%s╯\n' "$rule" "$text" "$rule"; exit 0
+    fi
     if [ -s "$D/composer" ]; then
       printf '╭────╮\n│ %s  │\n╰────╯\n' "$(cat "$D/composer")"
     else
@@ -408,6 +415,26 @@ test_relaunch_refuses_before_exit_when_the_composer_holds_pending_text() {
   pass "fm-control relaunch: pending composer text refuses before the exit command is typed"
 }
 
+# Fork-only: the task's own unsent doorbell is cleared, then the relaunch proceeds.
+own_doorbell_line() {  # <dir> <id>
+  bash -c '. "$1/bin/fm-task-inbox-lib.sh"; fm_task_inbox_doorbell_line "$2/home/state/$3.inbox/x.msg"' _ "$ROOT" "$1" "$2"
+}
+
+test_relaunch_clears_its_own_unsent_doorbell_then_proceeds() {
+  local dir out rc
+  dir=$(new_case own-doorbell rl45)
+  add_ship_task "$dir" rl45 claude
+  own_doorbell_line "$dir" rl45 > "$dir/fake/composer"
+  [ -s "$dir/fake/composer" ] || fail "the doorbell fixture must not be empty"
+  out=$(run_control "$dir" rl45 relaunch --note "own doorbell in the composer"); rc=$?
+  expect_code 0 "$rc" "a relaunch must clear its own unsent doorbell instead of refusing: $out"
+  assert_grep "C-u" "$dir/fake/keys" "the doorbell should be cleared with Ctrl-U"
+  assert_grep "/exit" "$dir/fake/literal" "the exit command should be typed once the composer is empty"
+  assert_no_grep "Firstmate instruction waiting" "$dir/fake/literal" "the doorbell must be cleared, never submitted"
+  [ ! -s "$dir/fake/composer" ] || fail "the composer should be empty after the clear"
+  pass "fm-control relaunch: its own unsent doorbell is cleared, then the relaunch proceeds"
+}
+
 test_relaunch_refuses_before_exit_when_the_composer_state_is_unproven() {
   local dir out rc
   dir=$(new_case unproven-exit rl44)
@@ -426,6 +453,34 @@ test_relaunch_refuses_before_exit_when_the_composer_state_is_unproven() {
   assert_no_grep "/exit" "$dir/fake/literal" \
     "the exit command must not be typed when the composer state is not proven empty"
   pass "fm-control relaunch: an unreadable composer fails safe before the exit command is typed"
+}
+
+# Fork-only: other pending text is never cleared, and a clear that does not take keeps the refusal.
+test_relaunch_never_clears_text_beyond_its_own_doorbell() {
+  local dir out rc
+  dir=$(new_case foreign-draft rl46)
+  add_ship_task "$dir" rl46 claude
+  printf '%s also keep this draft' "$(own_doorbell_line "$dir" rl46)" > "$dir/fake/composer"
+  out=$(run_control "$dir" rl46 relaunch --note "a draft after the doorbell"); rc=$?
+  expect_code 1 "$rc" "a relaunch must refuse when the composer holds more than its own doorbell"
+  assert_contains "$out" "composer visibly holds pending text" "the refusal should name the pending text"
+  assert_no_grep "C-u" "$dir/fake/keys" "another draft must never be cleared"
+  assert_grep "keep this draft" "$dir/fake/composer" "the draft must survive the refusal"
+  assert_no_grep "/exit" "$dir/fake/literal" "no exit command may be typed over a draft"
+  pass "fm-control relaunch: a draft beyond its own doorbell is left alone and still refuses"
+}
+
+test_relaunch_keeps_the_refusal_when_the_doorbell_clear_does_not_empty_the_composer() {
+  local dir out rc
+  dir=$(new_case sticky-doorbell rl47)
+  add_ship_task "$dir" rl47 claude
+  own_doorbell_line "$dir" rl47 > "$dir/fake/composer"
+  out=$(FM_FAKE_CLEAR_STICKS=1 run_control "$dir" rl47 relaunch --note "a clear that does not take"); rc=$?
+  expect_code 1 "$rc" "a relaunch must refuse when the composer is not proven empty after the clear"
+  assert_contains "$out" "composer visibly holds pending text" "the refusal should name the pending text"
+  [ "$(grep -c 'C-u' "$dir/fake/keys")" = 8 ] || fail "the clear should stop at its bound of eight presses"
+  assert_no_grep "/exit" "$dir/fake/literal" "no exit command may be typed when the clear did not empty the composer"
+  pass "fm-control relaunch: a clear that does not empty the composer keeps the refusal"
 }
 
 test_relaunch_from_linked_home_preserves_recorded_worktree() {
@@ -2972,6 +3027,10 @@ test_exit_removes_the_dialog_file_before_releasing_the_lock
 test_same_harness_relaunch_keeps_identity_and_reuses_the_endpoint
 test_relaunch_refuses_before_exit_when_the_composer_holds_pending_text
 test_relaunch_refuses_before_exit_when_the_composer_state_is_unproven
+# Fork-only: own-doorbell clear regressions.
+test_relaunch_clears_its_own_unsent_doorbell_then_proceeds
+test_relaunch_never_clears_text_beyond_its_own_doorbell
+test_relaunch_keeps_the_refusal_when_the_doorbell_clear_does_not_empty_the_composer
 test_relaunch_from_linked_home_preserves_recorded_worktree
 test_relaunch_preserves_durable_task_metadata
 test_relaunch_serializes_concurrent_durable_metadata_publication
