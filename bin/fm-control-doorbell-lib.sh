@@ -1,16 +1,18 @@
 #!/usr/bin/env bash
-# Fork-only: fm-control-doorbell-lib.sh - lets exit and relaunch clear their own unsent doorbell (applypass fork).
+# Fork-only: fm-control-doorbell-lib.sh - lets exit, relaunch, and clear-doorbell clear the task's own unsent doorbell (applypass fork).
 #
 # An idle worker whose context is full cannot read its steering inbox, so the
 # doorbell line fm-send typed stays unsent in its composer. The exit step of
 # bin/fm-control.sh refuses to type over pending text, so that worker could never
 # be relaunched. This lib clears that one line, and nothing else:
 #   - the composer must hold exactly this task's doorbell line, judged by the
-#     shared matcher in bin/fm-task-inbox-lib.sh (fm_task_inbox_composer_holds);
+#     shared matcher in bin/fm-task-inbox-lib.sh (fm_task_inbox_composer_holds),
+#     or the clipped view of it described below;
 #   - only Claude is covered, because only its clear mechanics were verified
 #     (docs/verification/runtime-backends.md "Claude own-doorbell clear");
 #   - Ctrl-U deletes one wrapped row per press on Claude 2.1.x, so it is pressed
-#     a bounded number of times, stopping at the first proven-empty composer;
+#     a bounded number of times, stopping at the first proven-empty composer
+#     (a clipped view is trimmed from the front instead, below);
 #   - the result is trusted only when the composer then classifies empty.
 # Escape twice also empties the composer but opens the rewind picker when it is
 # already empty, and Ctrl-C can exit the agent, so neither is used.
