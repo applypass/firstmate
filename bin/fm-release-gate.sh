@@ -49,9 +49,10 @@
 #          command, once per distinct failure set, so firstmate raises it at release
 #          open (fm-release.sh open calls refresh). A clean refresh closes an open raise
 #          with a resolved line on the same key, and otherwise adds nothing.
-#          When the release changes schema.sql and the body has no "## Database" heading,
-#          refresh also appends one with the unticked prod line and the schema.sql digest
-#          (bin/fm-release-db-lib.sh); an existing Database section is never touched.
+#          When the release changes schema.sql and the body has no "## Database" heading
+#          or prod DDL line, refresh also appends the heading with the unticked prod line
+#          and the schema.sql digest (bin/fm-release-db-lib.sh); an existing Database
+#          heading or prod DDL line, ticked or not, is never touched.
 # check    exit 0 when every row passes; exit 1 listing every failing row and its
 #          waiver command. A PR whose base is not main, or in a repo not listed
 #          in config/release-gate, passes with a note. A forge read that fails
@@ -468,7 +469,8 @@ case "$SUB" in
       printf '%s\n\n%s\n' "$cur" "$block" > "$tmp"
     fi
     # Fork-only: add the unticked "## Database" section when the release changes schema.sql and
-    # the body has none; an existing section stays verbatim (bin/fm-release-db-lib.sh).
+    # the body has no Database heading or prod DDL line; an existing one stays verbatim
+    # (bin/fm-release-db-lib.sh).
     # shellcheck source=bin/fm-release-db-lib.sh
     . "$(dirname "${BASH_SOURCE[0]}")/fm-release-db-lib.sh"
     dbsec=$(fm_release_db_section "$GH" "$SLUG" "$cur")
