@@ -43,12 +43,17 @@
 #
 # table    print the rows as a markdown table.
 # refresh  rewrite only the block between the fm-release-gate markers in the release
-#          PR body (appended when absent); the rest of the body is untouched. When a row
+#          PR body (appended when absent); the rest of the body is untouched apart from
+#          the Database section described below. When a row
 #          fails it also appends one needs-decision line (key release-gate-<repo>-<pr>)
 #          to state/release-main-<repo>-<pr>.status naming each failing PR and its fix
 #          command, once per distinct failure set, so firstmate raises it at release
 #          open (fm-release.sh open calls refresh). A clean refresh closes an open raise
 #          with a resolved line on the same key, and otherwise adds nothing.
+#          When the release changes schema.sql and the body has no "## Database" heading
+#          or prod DDL line, refresh also appends the heading with the unticked prod line
+#          and the schema.sql digest (bin/fm-release-db-lib.sh); an existing Database
+#          heading or prod DDL line, ticked or not, is never touched.
 # check    exit 0 when every row passes; exit 1 listing every failing row and its
 #          waiver command. A PR whose base is not main, or in a repo not listed
 #          in config/release-gate, passes with a note. A forge read that fails
@@ -464,6 +469,13 @@ case "$SUB" in
     else
       printf '%s\n\n%s\n' "$cur" "$block" > "$tmp"
     fi
+    # Fork-only: add the unticked "## Database" section when the release changes schema.sql and
+    # the body has no Database heading or prod DDL line; an existing one stays verbatim
+    # (bin/fm-release-db-lib.sh).
+    # shellcheck source=bin/fm-release-db-lib.sh
+    . "$(dirname "${BASH_SOURCE[0]}")/fm-release-db-lib.sh"
+    dbsec=$(fm_release_db_section "$GH" "$SLUG" "$cur")
+    [ -z "$dbsec" ] || printf '\n%s\n' "$dbsec" >> "$tmp"
     "$GH" pr edit "$URL" --body-file "$tmp" >/dev/null || die "could not update the body of $URL"
     echo "release gate table refreshed: $URL"
     # Fork-only: raise failing rows to the supervisor as soon as the release PR is opened or

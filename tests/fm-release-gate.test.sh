@@ -24,13 +24,16 @@ make_case() {
   printf '# Backlog\n\n## In flight\n\n## Done\n' > "$d/data/backlog.md"
   jq -n '{baseRefName:"main",headRefName:"dev",body:"Release body\n\nkeep me"}' > "$d/release.json"
   printf 'sha1\n' > "$d/shas"
+  printf '{"files":[]}\n' > "$d/compare.json"
   printf '7\n' > "$d/pulls-sha1"
   mkpr "$d" 7 "Add a thing sc-100" "body text" '[{"path":"src/app.ts"}]'
   cat > "$d/fakebin/gh" <<'GH'
 #!/usr/bin/env bash
 echo "$*" >> "$CASE_DIR/gh.log"
 case "$1 $2" in
-  "api repos/"*/compare/main...dev) [ ! -e "$CASE_DIR/compare-fails" ] || exit 1; cat "$CASE_DIR/shas" ;;
+  "api repos/"*/compare/main...dev)
+    if [[ "$*" == *'"schema.sql"'* ]]; then jq -r "${@: -1}" "$CASE_DIR/compare.json"; exit; fi
+    [ ! -e "$CASE_DIR/compare-fails" ] || exit 1; cat "$CASE_DIR/shas" ;;
   "api repos/"*/commits/*/pulls) cat "$CASE_DIR/pulls-$(basename "$(dirname "$2")")" ;;
   "api repos/"*/commits/*) cat "$CASE_DIR/files-$(basename "$2")" ;;
   "api repos/"*/pulls/*) jq -r '.files[].path' "$CASE_DIR/pr-$(basename "$(dirname "$2")").json" ;;
@@ -326,6 +329,49 @@ grep -q 'keep me' "$d/edited.md" || fail "refresh: text outside the block change
 jq -n --rawfile b "$d/edited.md" '{baseRefName:"main",headRefName:"dev",body:($b + "\nafter block\n")}' > "$d/release.json"
 run_gate "$d" refresh
 grep -q 'after block' "$d/edited.md" || fail "refresh: text after the block lost"
+
+# refresh: a release that changes schema.sql gets an unticked Database line with the digest;
+# a body that already has a Database section keeps it verbatim, tick state included.
+d=$(make_case dbsec)
+jq -n --arg p $'@@ -1,0 +2,2 @@\n+CREATE TABLE a (id int);\n+ALTER TABLE a ADD b int;\n context' \
+  '{files:[{filename:"src/app.ts",patch:"+x"},{filename:"schema.sql",patch:$p}]}' > "$d/compare.json"
+want=$(printf '+CREATE TABLE a (id int);\n+ALTER TABLE a ADD b int;\n' | shasum -a 256 | cut -c1-12)
+run_gate "$d" refresh
+[ "$RC" -eq 0 ] || fail "dbsec: exit $RC: $OUT"
+grep -qxF -- "- [ ] schema.sql DDL applied to the prod database (schema.sql $want)" "$d/edited.md" \
+  || fail "dbsec: unticked line missing: $(cat "$d/edited.md")"
+grep -q '^## Database$' "$d/edited.md" || fail "dbsec: heading missing"
+grep -q '\[x\]' "$d/edited.md" && fail "dbsec: must never tick"
+jq -n --rawfile b "$d/edited.md" '{baseRefName:"main",headRefName:"dev",body:$b}' > "$d/release.json"
+run_gate "$d" refresh
+[ "$(grep -c '^## Database$' "$d/edited.md")" -eq 1 ] || fail "dbsec: section duplicated on second refresh"
+ticked="- [x] schema.sql DDL applied to the prod database (schema.sql $want)"
+jq -n --arg b "Release body"$'\n\n## Database\n\n'"$ticked"$'\n\ntail note\n' '{baseRefName:"main",headRefName:"dev",body:$b}' > "$d/release.json"
+run_gate "$d" refresh
+grep -qxF -- "$ticked" "$d/edited.md" || fail "dbsec: ticked line not kept verbatim"
+grep -q 'tail note' "$d/edited.md" || fail "dbsec: text after section lost"
+[ "$(grep -c 'schema.sql DDL applied' "$d/edited.md")" -eq 1 ] || fail "dbsec: second line added next to a ticked one"
+# the ticked line pasted from the CI message with no Database heading counts as the section.
+jq -n --arg b "Release body"$'\n\n## Commits\n\n'"$ticked"$'\n' '{baseRefName:"main",headRefName:"dev",body:$b}' > "$d/release.json"
+run_gate "$d" refresh
+grep -qxF -- "$ticked" "$d/edited.md" || fail "dbsec: bare ticked line not kept verbatim"
+grep -q '^## Database' "$d/edited.md" && fail "dbsec: section added next to a bare ticked line"
+[ "$(grep -c 'schema.sql DDL applied' "$d/edited.md")" -eq 1 ] || fail "dbsec: second line added next to a bare ticked one"
+# GitHub drops the patch of a large diff, or lists only 300 files: warn, add nothing.
+d=$(make_case dbnopatch)
+jq -n '{files:[{filename:"schema.sql"}]}' > "$d/compare.json"
+run_gate "$d" refresh
+[ "$RC" -eq 0 ] || fail "dbnopatch: exit $RC: $OUT"
+[[ "$OUT" == *"could not read schema.sql changes"* ]] || fail "dbnopatch: no warning: $OUT"
+grep -q 'schema.sql DDL applied' "$d/edited.md" && fail "dbnopatch: line added without a patch"
+d=$(make_case db300)
+jq -n '{files:[range(300) | {filename:"f\(.)",patch:"+x"}]}' > "$d/compare.json"
+run_gate "$d" refresh
+[[ "$OUT" == *"could not read schema.sql changes"* ]] || fail "db300: no warning at the 300-file cap: $OUT"
+# no schema.sql change: no Database section.
+d=$(make_case nodb)
+run_gate "$d" refresh
+grep -q '^## Database' "$d/edited.md" && fail "nodb: section added without a schema.sql change"
 
 # main-merge guard runs the check when the base is main and refuses on a failing check.
 d=$(make_case guard)
