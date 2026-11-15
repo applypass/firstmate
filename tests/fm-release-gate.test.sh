@@ -30,7 +30,9 @@ make_case() {
 #!/usr/bin/env bash
 echo "$*" >> "$CASE_DIR/gh.log"
 case "$1 $2" in
-  "api repos/"*/compare/main...dev) [ ! -e "$CASE_DIR/compare-fails" ] || exit 1; cat "$CASE_DIR/shas" ;;
+  "api repos/"*/compare/main...dev)
+    if [[ "$*" == *'"schema.sql"'* ]]; then [ ! -e "$CASE_DIR/schema-patch" ] || cat "$CASE_DIR/schema-patch"; exit 0; fi
+    [ ! -e "$CASE_DIR/compare-fails" ] || exit 1; cat "$CASE_DIR/shas" ;;
   "api repos/"*/commits/*/pulls) cat "$CASE_DIR/pulls-$(basename "$(dirname "$2")")" ;;
   "api repos/"*/commits/*) cat "$CASE_DIR/files-$(basename "$2")" ;;
   "api repos/"*/pulls/*) jq -r '.files[].path' "$CASE_DIR/pr-$(basename "$(dirname "$2")").json" ;;
@@ -326,6 +328,31 @@ grep -q 'keep me' "$d/edited.md" || fail "refresh: text outside the block change
 jq -n --rawfile b "$d/edited.md" '{baseRefName:"main",headRefName:"dev",body:($b + "\nafter block\n")}' > "$d/release.json"
 run_gate "$d" refresh
 grep -q 'after block' "$d/edited.md" || fail "refresh: text after the block lost"
+
+# refresh: a release that changes schema.sql gets an unticked Database line with the digest;
+# a body that already has a Database section keeps it verbatim, tick state included.
+d=$(make_case dbsec)
+printf '@@ -1,0 +2,2 @@\n+CREATE TABLE a (id int);\n+ALTER TABLE a ADD b int;\n context\n' > "$d/schema-patch"
+want=$(printf '+CREATE TABLE a (id int);\n+ALTER TABLE a ADD b int;\n' | shasum -a 256 | cut -c1-12)
+run_gate "$d" refresh
+[ "$RC" -eq 0 ] || fail "dbsec: exit $RC: $OUT"
+grep -qxF -- "- [ ] schema.sql DDL applied to the prod database (schema.sql $want)" "$d/edited.md" \
+  || fail "dbsec: unticked line missing: $(cat "$d/edited.md")"
+grep -q '^## Database$' "$d/edited.md" || fail "dbsec: heading missing"
+grep -q '\[x\]' "$d/edited.md" && fail "dbsec: must never tick"
+jq -n --rawfile b "$d/edited.md" '{baseRefName:"main",headRefName:"dev",body:$b}' > "$d/release.json"
+run_gate "$d" refresh
+[ "$(grep -c '^## Database$' "$d/edited.md")" -eq 1 ] || fail "dbsec: section duplicated on second refresh"
+ticked="- [x] schema.sql DDL applied to the prod database (schema.sql $want)"
+jq -n --arg b "Release body"$'\n\n## Database\n\n'"$ticked"$'\n\ntail note\n' '{baseRefName:"main",headRefName:"dev",body:$b}' > "$d/release.json"
+run_gate "$d" refresh
+grep -qxF -- "$ticked" "$d/edited.md" || fail "dbsec: ticked line not kept verbatim"
+grep -q 'tail note' "$d/edited.md" || fail "dbsec: text after section lost"
+[ "$(grep -c 'schema.sql DDL applied' "$d/edited.md")" -eq 1 ] || fail "dbsec: second line added next to a ticked one"
+# no schema.sql change: no Database section.
+d=$(make_case nodb)
+run_gate "$d" refresh
+grep -q '^## Database' "$d/edited.md" && fail "nodb: section added without a schema.sql change"
 
 # main-merge guard runs the check when the base is main and refuses on a failing check.
 d=$(make_case guard)
