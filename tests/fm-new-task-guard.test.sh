@@ -167,6 +167,24 @@ test_hook_inert_in_secondmate_home() {
   pass "hook: inert in a secondmate home"
 }
 
+# Fresh context for an idle mate: --new-task to an idle mate runs the restart
+# (persist, then relaunch) before the message is delivered; a busy mate is untouched.
+# FM_FRESH_CONTEXT_RESTART / FM_FRESH_CONTEXT_CREW_STATE replace the two scripts the
+# guard calls, so no real agent or no-mistakes run is touched.
+make_fresh_stubs() { # <world> <crew-state> <restart-exit>
+  cat > "$1/crew-state-stub" <<SH
+#!/usr/bin/env bash
+echo "state: $2 · source: status-log · fixture"
+SH
+  cat > "$1/restart-stub" <<SH
+#!/usr/bin/env bash
+{ printf 'restart %s inbox-at-call=' "\$*"; ls "$1/state/mate-a.inbox" 2>/dev/null | grep -c '\.msg\$' ; } >> "$1/restart.log"
+[ "$3" = 0 ] || { echo "unreached: mate-a: fixture restart failure"; exit $3; }
+echo "restarted: mate-a (echo)"
+SH
+  chmod +x "$1/crew-state-stub" "$1/restart-stub"
+}
+
 # fm-send integration: a refused --new-task enqueues nothing.
 make_send_stubs() { # <fakebin>
   cat > "$1/tmux" <<'SH'
@@ -202,10 +220,64 @@ test_send_new_task_refusal_enqueues_nothing() {
   [ -e "$W/state/mate-a.inbox/001.msg" ] || fail "--same-task must enqueue"
   new_world send2; add_mate mate-a 0; make_send_stubs "$FB"
   fm_write_secondmate_meta "$W/state/mate-a.meta" "$W/mates/mate-a" "sess:fm-mate-a"
-  OUT=$(env PATH="$FB:$PATH" FM_HOME="$W" FM_ROOT_OVERRIDE="$W" FM_SEND_SETTLE=0 "$SEND" mate-a --new-task "do new thing" 2>&1); RC=$?
+  make_fresh_stubs "$W" working 0   # keep the real restart out of this test
+  OUT=$(env PATH="$FB:$PATH" FM_HOME="$W" FM_ROOT_OVERRIDE="$W" FM_SEND_SETTLE=0 \
+    FM_FRESH_CONTEXT_CREW_STATE="$W/crew-state-stub" FM_FRESH_CONTEXT_RESTART="$W/restart-stub" \
+    "$SEND" mate-a --new-task "do new thing" 2>&1); RC=$?
   expect_code 0 "$RC" "fm-send --new-task to an idle mate must send: $OUT"
   [ -e "$W/state/mate-a.inbox/001.msg" ] || fail "idle --new-task must enqueue"
   pass "fm-send: --new-task refuses a busy mate with nothing enqueued, sends to an idle one"
+}
+
+fresh_send() { # <flag> -> OUT, RC
+  OUT=$(env PATH="$FB:$PATH" FM_HOME="$W" FM_ROOT_OVERRIDE="$W" FM_SEND_SETTLE=0 \
+    FM_FRESH_CONTEXT_CREW_STATE="$W/crew-state-stub" FM_FRESH_CONTEXT_RESTART="$W/restart-stub" \
+    "$SEND" mate-a "$1" "do new thing" 2>&1); RC=$?
+}
+
+fresh_world() { # <name> <crew-state> <restart-exit>
+  new_world "$1"; add_mate mate-a 0; make_send_stubs "$FB"
+  fm_write_secondmate_meta "$W/state/mate-a.meta" "$W/mates/mate-a" "sess:fm-mate-a"
+  make_fresh_stubs "$W" "$2" "$3"
+}
+
+test_send_new_task_idle_mate_restarts_first_then_delivers() {
+  fresh_world fresh-idle 'done' 0
+  fresh_send --new-task
+  expect_code 0 "$RC" "idle --new-task must send: $OUT"
+  [ "$(grep -c '^restart mate-a inbox-at-call=0$' "$W/restart.log")" = 1 ] \
+    || fail "the restart must run exactly once, before the message is enqueued: $(cat "$W/restart.log" 2>&1)"
+  grep -q 'do new thing' "$W/state/mate-a.inbox/001.msg" || fail "the new work must be in the inbox after the restart"
+  pass "fm-send: --new-task to an idle mate saves and restarts it first, then delivers the message"
+}
+
+test_send_new_task_working_mate_is_untouched() {
+  fresh_world fresh-working working 0
+  fresh_send --new-task
+  expect_code 0 "$RC" "a working mate still receives the message: $OUT"
+  [ ! -e "$W/restart.log" ] || fail "a mate that is working must never be restarted"
+  [ -e "$W/state/mate-a.inbox/001.msg" ] || fail "the message must be delivered"
+  fresh_world fresh-parked parked 0
+  fresh_send --new-task
+  [ ! -e "$W/restart.log" ] || fail "a mate holding an open decision must never be restarted"
+  pass "fm-send: --new-task to a working or parked mate leaves it running and delivers"
+}
+
+test_send_same_task_never_restarts() {
+  fresh_world fresh-same 'done' 0
+  fresh_send --same-task
+  expect_code 0 "$RC" "--same-task must send: $OUT"
+  [ ! -e "$W/restart.log" ] || fail "--same-task continues work and must never restart"
+  pass "fm-send: --same-task never restarts the mate"
+}
+
+test_send_restart_failure_still_delivers() {
+  fresh_world fresh-fail 'done' 3
+  fresh_send --new-task
+  expect_code 0 "$RC" "a failed restart must not fail the send: $OUT"
+  case "$OUT" in *"not restarted"*"fresh context"*"fixture restart failure"*) : ;; *) fail "the failure must be reported: $OUT" ;; esac
+  grep -q 'do new thing' "$W/state/mate-a.inbox/001.msg" || fail "the message must still reach the existing session"
+  pass "fm-send: a failed restart reports the failure and still delivers the message"
 }
 
 fm_test_run \
@@ -219,4 +291,8 @@ fm_test_run \
   test_hook_refuses_captain_text_to_busy_mate \
   test_hook_inert_in_secondmate_home \
   test_installer_registers_hook_once \
-  test_send_new_task_refusal_enqueues_nothing
+  test_send_new_task_refusal_enqueues_nothing \
+  test_send_new_task_idle_mate_restarts_first_then_delivers \
+  test_send_new_task_working_mate_is_untouched \
+  test_send_same_task_never_restarts \
+  test_send_restart_failure_still_delivers

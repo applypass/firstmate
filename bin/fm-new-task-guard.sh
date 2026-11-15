@@ -25,6 +25,16 @@
 # The mate backlog is read through bin/fm-tasks-axi.sh with FM_HOME set to the
 # mate's home: a read-only `list --state in_flight`.
 #
+# fresh-context <target>   called by fm-send.sh --new-task after `check` passed: an
+#   idle mate saves its open records and restarts onto a fresh conversation before
+#   the new work arrives. Idle = no In flight item (what `check` just proved) AND
+#   bin/fm-crew-state.sh reads the mate as done or unknown; working, parked
+#   (open decision), paused, blocked and failed mates are left running. The
+#   restart is bin/fm-secondmate-restart.sh (persist, then relaunch), never a
+#   second path. Always exits 0: a failed restart prints a warning and the
+#   message is still delivered to the existing session. FM_FRESH_CONTEXT_RESTART
+#   and FM_FRESH_CONTEXT_CREW_STATE replace the two scripts, for tests.
+#
 # hook: Claude PreToolUse for Bash, MAIN session only. It denies (exit 2, reason
 # on stderr) an fm-send.sh call whose message starts "From firstmate (captain"
 # when the call carries neither --new-task nor --same-task and the target mate
@@ -150,6 +160,24 @@ cmd_check() {
   check_fleet_cap
 }
 
+cmd_fresh_context() {
+  local target=${1:-} state out rc
+  [ -n "$target" ] && [ "$#" -eq 1 ] || { echo "usage: fm-new-task-guard.sh fresh-context <target-id>" >&2; return 2; }
+  secondmate_registry_line_for_id "$REGISTRY" "$target" || return 0
+  state=$(FM_HOME="$FM_HOME" FM_CREW_STATE_NO_FORGE=1 "${FM_FRESH_CONTEXT_CREW_STATE:-$SCRIPT_DIR/fm-crew-state.sh}" "$target" 2>/dev/null \
+    | sed -n '1s/^state: \([a-z]*\).*/\1/p')
+  case "$state" in
+    done|unknown) ;;
+    *) return 0 ;;
+  esac
+  out=$(FM_HOME="$FM_HOME" "${FM_FRESH_CONTEXT_RESTART:-$SCRIPT_DIR/fm-secondmate-restart.sh}" "$target" 2>&1 </dev/null); rc=$?
+  if [ "$rc" -ne 0 ]; then
+    printf 'fm-new-task-guard: warning - mate %s was not restarted onto a fresh context (the message goes to its existing session):\n%s\n' \
+      "$target" "$(printf '%s\n' "$out" | sed 's/^/  /')" >&2
+  fi
+  return 0
+}
+
 # The hook's view of one command: sets HOOK_TARGET and HOOK_FLAGGED, and returns
 # 0 only for an fm-send.sh call whose message starts with the captain prefix.
 parse_send() { # <command>
@@ -208,7 +236,8 @@ cmd_hook() {
 
 case "${1:-}" in
   check) shift; cmd_check "$@"; exit $? ;;
+  fresh-context) shift; cmd_fresh_context "$@"; exit $? ;;
   hook) shift; cmd_hook "$@"; exit $? ;;
   -h|--help) sed -n '2,/^set -u/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 0 ;;
-  *) echo "usage: fm-new-task-guard.sh check <target-id> | hook [--claude]" >&2; exit 2 ;;
+  *) echo "usage: fm-new-task-guard.sh check <target-id> | fresh-context <target-id> | hook [--claude]" >&2; exit 2 ;;
 esac

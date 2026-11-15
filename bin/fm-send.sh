@@ -6,7 +6,9 @@
 # Fork-only (applypass): --new-task | --same-task <target> ... marks whether a message to a
 #   second mate opens new work or continues work under way. --new-task refuses (exit 1,
 #   nothing recorded) when the mate has any In flight item or the fleet is at its cap, and
-#   prints how to create a per-task mate; --same-task never refuses. Main's PreToolUse hook
+#   prints how to create a per-task mate; --same-task never refuses. A passing --new-task to
+#   an idle mate first saves and restarts it onto a fresh context (fm-new-task-guard.sh
+#   fresh-context); a restart failure warns and the message still goes to the existing session. Main's PreToolUse hook
 #   denies a captain-prefixed send carrying neither. Contract: bin/fm-new-task-guard.sh.
 # Fork-only end
 #   <target> may be an exact task id, a legacy fm-<id> task label resolved
@@ -586,6 +588,8 @@ fi
 # recorded (bin/fm-new-task-guard.sh owns the rule). --same-task never refuses.
 if [ "$FORK_TASK_MODE" = --new-task ] && [ "$MARK_FROM_FIRSTMATE" = 1 ]; then
   "$SCRIPT_DIR/fm-new-task-guard.sh" check "$TARGET_TASK_ID" || exit 1
+  # An idle mate starts fresh before new work arrives; failure never blocks the send.
+  "$SCRIPT_DIR/fm-new-task-guard.sh" fresh-context "$TARGET_TASK_ID" || true
 fi
 # Fork-only end
 
