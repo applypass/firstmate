@@ -439,29 +439,6 @@ test_relaunch_clears_its_own_unsent_doorbell_then_proceeds() {
   pass "fm-control relaunch: its own unsent doorbell is cleared, then the relaunch proceeds"
 }
 
-# Fork-only: user text and a closed box are never mistaken for a clipped doorbell.
-test_relaunch_refuses_arbitrary_clipped_text() {
-  local dir out rc
-  dir=$(new_case clipped-user rl50)
-  add_ship_task "$dir" rl50 claude
-  printf 'please remember to rerun the migration on test before the release goes out' > "$dir/fake/composer"
-  out=$(FM_FAKE_CLIP=1 run_control "$dir" rl50 relaunch --note "user text"); rc=$?
-  expect_code 1 "$rc" "arbitrary composer text must refuse"
-  assert_no_grep "C-u" "$dir/fake/keys" "user text must never be cleared"
-  pass "fm-control relaunch: arbitrary composer text still refuses"
-}
-
-test_relaunch_refuses_a_cut_doorbell_with_content_below() {
-  local dir out rc
-  dir=$(new_case clipped-below rl51)
-  add_ship_task "$dir" rl51 claude
-  clipped_doorbell "$dir" rl51 > "$dir/fake/composer"
-  out=$(run_control "$dir" rl51 relaunch --note "boxed, so nothing is clipped"); rc=$?
-  expect_code 1 "$rc" "a partial line inside a closed box is a user draft and must refuse"
-  assert_no_grep "C-u" "$dir/fake/keys" "a closed-box partial line must never be cleared"
-  pass "fm-control relaunch: a partial line with a closing box under it refuses"
-}
-
 test_relaunch_refuses_before_exit_when_the_composer_state_is_unproven() {
   local dir out rc
   dir=$(new_case unproven-exit rl44)
@@ -508,38 +485,6 @@ test_relaunch_keeps_the_refusal_when_the_doorbell_clear_does_not_empty_the_compo
   [ "$(grep -c 'C-u' "$dir/fake/keys")" = 8 ] || fail "the clear should stop at its bound of eight presses"
   assert_no_grep "/exit" "$dir/fake/literal" "no exit command may be typed when the clear did not empty the composer"
   pass "fm-control relaunch: a clear that does not empty the composer keeps the refusal"
-}
-
-# Fork-only: a pane too short for the whole doorbell shows a clipped first row.
-# Cut the line after its quoted inbox name, the shortest view the matcher accepts.
-clipped_doorbell() {  # <dir> <id> [keep-chars-after-cut]
-  local line pre
-  line=$(own_doorbell_line "$1" "$2")
-  pre=${line%steering inbox*}
-  printf '%s steering inbox, read and act on each in numeric' "${pre%?}"
-}
-
-test_relaunch_clears_a_clipped_own_doorbell() {
-  local dir out rc
-  dir=$(new_case clipped-doorbell rl48)
-  add_ship_task "$dir" rl48 claude
-  clipped_doorbell "$dir" rl48 > "$dir/fake/composer"
-  out=$(FM_FAKE_CLIP=1 run_control "$dir" rl48 relaunch --note "clipped own doorbell"); rc=$?
-  expect_code 0 "$rc" "a relaunch must clear a clipped view of its own doorbell: $out"
-  assert_grep "C-u" "$dir/fake/keys" "the clipped doorbell should be cleared with Ctrl-U"
-  assert_no_grep "Firstmate instruction waiting" "$dir/fake/literal" "the doorbell must never be submitted"
-  pass "fm-control relaunch: a clipped view of its own doorbell is cleared"
-}
-
-test_relaunch_refuses_a_clipped_doorbell_naming_another_task() {
-  local dir out rc
-  dir=$(new_case clipped-other rl49)
-  add_ship_task "$dir" rl49 claude
-  clipped_doorbell "$dir" rl49 | sed "s/rl49/rl99/" > "$dir/fake/composer"
-  out=$(FM_FAKE_CLIP=1 run_control "$dir" rl49 relaunch --note "another task's doorbell"); rc=$?
-  expect_code 1 "$rc" "a clipped doorbell naming another task's inbox must refuse"
-  assert_no_grep "C-u" "$dir/fake/keys" "another task's line must never be cleared"
-  pass "fm-control relaunch: a clipped doorbell naming another task refuses"
 }
 
 test_relaunch_from_linked_home_preserves_recorded_worktree() {
@@ -639,6 +584,38 @@ test_relaunch_preserves_durable_task_metadata() {
   pass "fm-control relaunch: durable task metadata survives replacement launch publication"
 }
 
+# Fork-only: a pane too short for the whole doorbell shows a clipped first row.
+# Cut the line after its quoted inbox name, the shortest view the matcher accepts.
+clipped_doorbell() {  # <dir> <id> [keep-chars-after-cut]
+  local line pre
+  line=$(own_doorbell_line "$1" "$2")
+  pre=${line%steering inbox*}
+  printf '%s steering inbox, read and act on each in numeric' "${pre%?}"
+}
+
+test_relaunch_clears_a_clipped_own_doorbell() {
+  local dir out rc
+  dir=$(new_case clipped-doorbell rl48)
+  add_ship_task "$dir" rl48 claude
+  clipped_doorbell "$dir" rl48 > "$dir/fake/composer"
+  out=$(FM_FAKE_CLIP=1 run_control "$dir" rl48 relaunch --note "clipped own doorbell"); rc=$?
+  expect_code 0 "$rc" "a relaunch must clear a clipped view of its own doorbell: $out"
+  assert_grep "C-u" "$dir/fake/keys" "the clipped doorbell should be cleared with Ctrl-U"
+  assert_no_grep "Firstmate instruction waiting" "$dir/fake/literal" "the doorbell must never be submitted"
+  pass "fm-control relaunch: a clipped view of its own doorbell is cleared"
+}
+
+test_relaunch_refuses_a_clipped_doorbell_naming_another_task() {
+  local dir out rc
+  dir=$(new_case clipped-other rl49)
+  add_ship_task "$dir" rl49 claude
+  clipped_doorbell "$dir" rl49 | sed "s/rl49/rl99/" > "$dir/fake/composer"
+  out=$(FM_FAKE_CLIP=1 run_control "$dir" rl49 relaunch --note "another task's doorbell"); rc=$?
+  expect_code 1 "$rc" "a clipped doorbell naming another task's inbox must refuse"
+  assert_no_grep "C-u" "$dir/fake/keys" "another task's line must never be cleared"
+  pass "fm-control relaunch: a clipped doorbell naming another task refuses"
+}
+
 test_relaunch_serializes_concurrent_durable_metadata_publication() {
   local dir control_pid link_pid rc i=0 traceparent prepare launch_release waiting ready release
   dir=$(new_case metadata-race rl28)
@@ -711,6 +688,29 @@ test_relaunch_serializes_concurrent_durable_metadata_publication() {
   fm_trace_context_valid "$traceparent" \
     || fail "concurrent metadata publication erased the replacement's trace carrier"
   pass "fm-control relaunch: delivery and concurrent task metadata publication serialize"
+}
+
+# Fork-only: user text and a closed box are never mistaken for a clipped doorbell.
+test_relaunch_refuses_arbitrary_clipped_text() {
+  local dir out rc
+  dir=$(new_case clipped-user rl50)
+  add_ship_task "$dir" rl50 claude
+  printf 'please remember to rerun the migration on test before the release goes out' > "$dir/fake/composer"
+  out=$(FM_FAKE_CLIP=1 run_control "$dir" rl50 relaunch --note "user text"); rc=$?
+  expect_code 1 "$rc" "arbitrary composer text must refuse"
+  assert_no_grep "C-u" "$dir/fake/keys" "user text must never be cleared"
+  pass "fm-control relaunch: arbitrary composer text still refuses"
+}
+
+test_relaunch_refuses_a_cut_doorbell_with_content_below() {
+  local dir out rc
+  dir=$(new_case clipped-below rl51)
+  add_ship_task "$dir" rl51 claude
+  clipped_doorbell "$dir" rl51 > "$dir/fake/composer"
+  out=$(run_control "$dir" rl51 relaunch --note "boxed, so nothing is clipped"); rc=$?
+  expect_code 1 "$rc" "a partial line inside a closed box is a user draft and must refuse"
+  assert_no_grep "C-u" "$dir/fake/keys" "a closed-box partial line must never be cleared"
+  pass "fm-control relaunch: a partial line with a closing box under it refuses"
 }
 
 test_disabled_relaunch_clears_prior_trace_context() {

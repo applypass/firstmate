@@ -3405,6 +3405,5 @@ The matcher takes it only as a proper prefix that reaches the task's quoted inbo
 ok - claude (2.1.325 (Claude Code)): a doorbell clipped by a short pane is cleared and the composer proves empty
 ```
 
-Result 2026-11-15, Claude 2.1.325: pass.
-The clip was reproduced on tmux; a Herdr pane at 120 by 40 shows the full line, and every backend shares the matcher.
+Result 2026-11-15, Claude 2.1.325: pass. The clip was reproduced on tmux (a 120 by 40 Herdr pane shows the full line); every backend shares the matcher.
 <!-- Fork-only end -->
