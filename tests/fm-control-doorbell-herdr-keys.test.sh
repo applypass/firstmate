@@ -61,7 +61,7 @@ fm_backend_herdr_cli() {  # <session> pane <verb> <pane> [arg...]
 }
 
 line=$(fm_task_inbox_doorbell_line "/state/release-delay-rca.inbox/x.msg")
-BACKEND=herdr T=fm-test:w1:p1 LABEL= POLL=0
+BACKEND=herdr T=fm-test:w1:p1 LABEL='' POLL=0
 
 # shellcheck disable=SC2329,SC2317
 sleep() { :; }
