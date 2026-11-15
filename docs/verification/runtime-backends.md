@@ -3400,9 +3400,16 @@ ok - claude (2.1.325 (Claude Code)): a draft that is not the doorbell is left un
 
 A clipped doorbell is the one extra shape accepted: Claude draws the composer from its top row, so a pane too short for every wrapped row (152 columns by 7 rows on tmux) shows only the first row, ending mid-line at "in numeric".
 The matcher takes it only as a proper prefix that reaches the task's quoted inbox name, with the composer last on screen; the guard's second pane covers it.
+The clip also hides any text typed after the doorbell, and Ctrl-U deletes that hidden text first, so the clipped view is cleared from the front instead.
+Ctrl-A moves to the start of the cursor's line; a marker typed there and removed with Backspace proves it is the input's start.
+Delete then removes only text already read on screen, and each deletion pulls the next hidden row into view to be read and checked.
+The last visible word waits for that next read unless it ends the doorbell, and once the whole doorbell is gone the composer must read empty.
+Text after the doorbell, on the same line or a new one, stays and the clear refuses.
 
 ```
 ok - claude (2.1.325 (Claude Code)): a doorbell clipped by a short pane is cleared and the composer proves empty
+ok - claude (2.1.325 (Claude Code)): text after a clipped doorbell (same-line) refuses and is kept
+ok - claude (2.1.325 (Claude Code)): text after a clipped doorbell (new-line) refuses and is kept
 ```
 
 Result 2026-11-15, Claude 2.1.325: pass. The clip was reproduced on tmux (a 120 by 40 Herdr pane shows the full line); every backend shares the matcher.

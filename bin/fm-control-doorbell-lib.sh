@@ -27,12 +27,24 @@
 # Anything else, including other text and another task's truncated line, stays
 # a refusal.
 #
+# A clipped view hides what follows the doorbell, so Ctrl-U, which deletes from
+# the end, could delete text the operator typed after it. fm_control_trim_clipped_doorbell
+# deletes from the front instead, and only text it has read on screen: Ctrl-A
+# moves to the start of the input, a marker typed there and removed proves it
+# (Ctrl-A only reaches the start of the cursor's own line), then Delete removes
+# the visible doorbell text, which pulls the hidden rows into view to be read
+# and checked in turn. The last visible word waits for the next read unless it
+# ends the doorbell, so nothing is deleted past what was read. Once the whole
+# doorbell is gone the composer must read empty; text after it stays and
+# refuses.
+#
 # fm_control_clear_own_doorbell returns 0 only when the composer is proven empty
 # afterwards, and nonzero in every other case. It touches nothing unless the
-# composer holds exactly the doorbell (or its proven truncated view), but once Ctrl-U presses start a failed
-# clear can leave part of the doorbell behind (a pane too narrow for the press
-# bound, or a composer read that fails mid-clear); the operator then clears it by
-# hand. It reads the caller's STATE, ID, BACKEND, T, LABEL, HARNESS and POLL.
+# composer holds exactly the doorbell (or its proven truncated view), but once
+# the clear starts a failed clear can leave part of the doorbell behind (a pane
+# too narrow for the press bound, or a composer read that fails mid-clear); the
+# operator then clears it by hand. It reads the caller's STATE, ID, BACKEND, T,
+# LABEL, HARNESS and POLL.
 #
 # `fm-control.sh <id> clear-doorbell` runs fm_control_do_clear_doorbell: only
 # that proven clear, reported as its own result, with no exit and no relaunch.
@@ -70,16 +82,82 @@ fm_control_composer_holds_truncated_doorbell() {  # <backend> <target> <line> [e
   return 1
 }
 
-fm_control_composer_holds_own_doorbell() {  # <line>
-  fm_task_inbox_composer_holds "$BACKEND" "$T" "$1" "${LABEL-}" \
-    || fm_control_composer_holds_truncated_doorbell "$BACKEND" "$T" "$1" "${LABEL-}"
+# One trim key: tmux names, mapped to herdr's own.
+_fm_control_trim_key() {  # <C-a|BSpace|DC>
+  local key=$1
+  if [ "$BACKEND" = herdr ]; then
+    case "$key" in C-a) key=ctrl+a ;; BSpace) key=backspace ;; DC) key=delete ;; esac
+  fi
+  fm_backend_send_key "$BACKEND" "$T" "$key" "${LABEL-}"
+}
+
+# The composer's visible text, whitespace collapsed.
+_fm_control_composer_text() {
+  local cap
+  cap=$(fm_backend_capture "$BACKEND" "$T" 60 "${LABEL-}" 2>/dev/null) || return 1
+  fm_composer_extract_selected_content styled=0 "$cap"
+}
+
+# The composer's text once it differs from <old>: a bounded wait for the redraw.
+_fm_control_composer_text_after() {  # <old>
+  local n=0 text=$1
+  while [ "$n" -lt 10 ] && [ "$text" = "$1" ]; do
+    sleep "${POLL:-0.5}"
+    text=$(_fm_control_composer_text) || return 1
+    n=$((n + 1))
+  done
+  printf '%s' "$text"
+}
+
+# Clear a clipped view of <line> from the front: see the header.
+fm_control_trim_clipped_doorbell() {  # <line>
+  local rem=$1 held marked k last i n=0
+  held=$(_fm_control_composer_text) || return 1
+  [ -n "$held" ] || return 1
+  _fm_control_trim_key C-a || return 1
+  fm_backend_send_literal "$BACKEND" "$T" Q "${LABEL-}" || return 1
+  marked=$(_fm_control_composer_text_after "$held") || marked=
+  _fm_control_trim_key BSpace || return 1
+  case "$marked" in "Q${held:0:1}"*) ;; *) return 1 ;; esac
+  [ "$(_fm_control_composer_text_after "$marked")" = "$held" ] || return 1
+  while [ -n "$rem" ]; do
+    [ "$n" -lt 12 ] || return 1
+    n=$((n + 1))
+    case "$rem" in "$held"*) ;; *) return 1 ;; esac
+    if [ "$held" = "$rem" ]; then
+      k=${#held}
+    else
+      last=${held##* }
+      k=$(( ${#held} - ${#last} ))
+    fi
+    [ "$k" -gt 0 ] || return 1
+    i=0
+    while [ "$i" -lt "$k" ]; do
+      _fm_control_trim_key DC || return 1
+      i=$((i + 1))
+    done
+    rem=${rem:$k}
+    [ -z "$rem" ] && break
+    held=$(_fm_control_composer_text_after "$held") || return 1
+  done
+  n=0
+  while [ "$n" -lt 10 ]; do
+    sleep "${POLL:-0.5}"
+    [ "$(fm_backend_composer_state "$BACKEND" "$T" "${LABEL-}" 2>/dev/null)" = empty ] && return 0
+    n=$((n + 1))
+  done
+  return 1
 }
 
 fm_control_clear_own_doorbell() {
   local line n=0 verdict
   [ "${HARNESS-}" = claude ] || return 1
   line=$(fm_task_inbox_doorbell_line "$(fm_task_inbox_dir "$STATE" "$ID")/x.msg") || return 1
-  fm_control_composer_holds_own_doorbell "$line" || return 1
+  if ! fm_task_inbox_composer_holds "$BACKEND" "$T" "$line" "${LABEL-}"; then
+    fm_control_composer_holds_truncated_doorbell "$BACKEND" "$T" "$line" "${LABEL-}" || return 1
+    fm_control_trim_clipped_doorbell "$line"
+    return
+  fi
   while [ "$n" -lt 8 ]; do
     fm_backend_send_key "$BACKEND" "$T" C-u "${LABEL-}" || return 1
     n=$((n + 1))

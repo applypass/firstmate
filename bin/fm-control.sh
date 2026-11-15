@@ -23,11 +23,13 @@
 # Fork-only: the clear-doorbell verb (applypass fork).
 #   clear-doorbell  fm-control.sh <task-id> clear-doorbell
 #              Clear the task's own unsent steering-inbox doorbell from a Claude
-#              composer with the bounded Ctrl-U clear, without exiting or
+#              composer with the bounded Ctrl-U clear (a clipped view is
+#              cleared from the front instead), without exiting or
 #              relaunching the agent. It never submits the line. The composer
 #              must hold exactly the task's doorbell, or a clipped view of it
 #              (a prefix that names the task's inbox, with nothing drawn under
-#              it); any other content refuses. Prints `doorbell-cleared`, or
+#              it); any other content, including text after a clipped
+#              doorbell, refuses. Prints `doorbell-cleared`, or
 #              `no-doorbell` when the composer is already empty. Claude only;
 #              bin/fm-control-doorbell-lib.sh owns the rules.
 #

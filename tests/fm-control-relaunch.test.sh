@@ -76,6 +76,11 @@ case "${1:-}" in
         ". '"*"'") staged=${payload#". '"}; staged=${staged%"'"}; [ ! -f "$staged" ] || payload=$(cat "$staged") ;;
       esac
       printf '%s\n' "$payload" >> "$D/literal"
+      # Fork-only: in a clipped pane, text typed at the input's start lands there.
+      if [ -n "${FM_FAKE_CLIP:-}" ] && [ "$(cat "$D/cursor" 2>/dev/null)" = 0 ]; then
+        printf '%s%s' "$payload" "$(cat "$D/composer")" > "$D/composer.new"
+        mv "$D/composer.new" "$D/composer"; printf '%s' "${#payload}" > "$D/cursor"
+      fi
       case "$payload" in
         /exit|/quit)
           printf 'zsh' > "$D/command"
@@ -91,6 +96,13 @@ case "${1:-}" in
       case "$payload" in
         # Fork-only: Ctrl-U empties the composer unless a test makes the clear stick.
         C-u) [ -n "${FM_FAKE_CLEAR_STICKS:-}" ] || : > "$D/composer" ;;
+        # Fork-only: Ctrl-A goes to the input's start; Backspace and Delete edit there.
+        C-a) printf 0 > "$D/cursor" ;;
+        BSpace|DC)
+          cur=$(cat "$D/cursor" 2>/dev/null || printf end)
+          [ "$payload" = DC ] || cur=$((cur - 1))
+          text=$(cat "$D/composer")
+          if [ "$cur" = 0 ]; then printf '%s' "${text:1}" > "$D/composer"; printf 0 > "$D/cursor"; fi ;;
         'export GOTMPDIR='*)
           if [ -n "${FM_FAKE_TRACE_PREPARE:-}" ]; then
             : > "$FM_FAKE_TRACE_PREPARE"
@@ -119,9 +131,10 @@ case "${1:-}" in
     printf 'fakepane\n'; exit 0 ;;
   capture-pane)
     [ -z "${FM_FAKE_COMPOSER_READ_FAIL:-}" ] || exit 1
-    # Fork-only: a pane too short for every wrapped row shows the composer's first row with no rule under it.
+    # Fork-only: a pane too short for every wrapped row shows the composer's first
+    # 120-column row with no rule under it.
     if [ -n "${FM_FAKE_CLIP:-}" ]; then
-      printf '%s\n❯ %s\n' '──────────────────────────────' "$(cat "$D/composer")"; exit 0
+      printf '%s\n❯ %s\n' '──────────────────────────────' "$(fold -s -w 120 "$D/composer" | head -1)"; exit 0
     fi
     # Fork-only: a box as wide as its text, so a long line does not read as ambiguous geometry.
     if [ "$(wc -c < "$D/composer")" -gt 40 ]; then
@@ -553,10 +566,19 @@ test_clear_doorbell_verb_clears_only_the_own_doorbell() {
 
   dir=$(new_case verb-clip cd4)
   add_ship_task "$dir" cd4 claude
-  clipped_doorbell "$dir" cd4 > "$dir/fake/composer"
+  own_doorbell_line "$dir" cd4 > "$dir/fake/composer"
   out=$(FM_FAKE_CLIP=1 run_control "$dir" cd4 clear-doorbell); rc=$?
   expect_code 0 "$rc" "clear-doorbell must clear a clipped own doorbell: $out"
   assert_contains "$out" "doorbell-cleared" "the clipped clear should report the clear"
+  [ ! -s "$dir/fake/composer" ] || fail "the clipped clear should empty the composer"
+
+  dir=$(new_case verb-clip-tail cd5)
+  add_ship_task "$dir" cd5 claude
+  printf '%s ALSO MY OWN DRAFT keep me' "$(own_doorbell_line "$dir" cd5)" > "$dir/fake/composer"
+  out=$(FM_FAKE_CLIP=1 run_control "$dir" cd5 clear-doorbell); rc=$?
+  expect_code 1 "$rc" "text hidden after a clipped doorbell must refuse: $out"
+  assert_grep "ALSO MY OWN DRAFT keep me" "$dir/fake/composer" "text after a clipped doorbell must survive"
+  assert_no_grep "C-u" "$dir/fake/keys" "a clipped composer must never be cleared from the end"
   pass "fm-control clear-doorbell: clears only its own doorbell, never submits, refuses anything else"
 }
 
@@ -597,10 +619,11 @@ test_relaunch_clears_a_clipped_own_doorbell() {
   local dir out rc
   dir=$(new_case clipped-doorbell rl48)
   add_ship_task "$dir" rl48 claude
-  clipped_doorbell "$dir" rl48 > "$dir/fake/composer"
+  own_doorbell_line "$dir" rl48 > "$dir/fake/composer"
   out=$(FM_FAKE_CLIP=1 run_control "$dir" rl48 relaunch --note "clipped own doorbell"); rc=$?
   expect_code 0 "$rc" "a relaunch must clear a clipped view of its own doorbell: $out"
-  assert_grep "C-u" "$dir/fake/keys" "the clipped doorbell should be cleared with Ctrl-U"
+  assert_grep "DC" "$dir/fake/keys" "the clipped doorbell should be deleted from the front"
+  assert_no_grep "C-u" "$dir/fake/keys" "a clipped composer must never be cleared from the end"
   assert_no_grep "Firstmate instruction waiting" "$dir/fake/literal" "the doorbell must never be submitted"
   pass "fm-control relaunch: a clipped view of its own doorbell is cleared"
 }
@@ -609,10 +632,11 @@ test_relaunch_refuses_a_clipped_doorbell_naming_another_task() {
   local dir out rc
   dir=$(new_case clipped-other rl49)
   add_ship_task "$dir" rl49 claude
-  clipped_doorbell "$dir" rl49 | sed "s/rl49/rl99/" > "$dir/fake/composer"
+  own_doorbell_line "$dir" rl49 | sed "s/rl49/rl99/" > "$dir/fake/composer"
   out=$(FM_FAKE_CLIP=1 run_control "$dir" rl49 relaunch --note "another task's doorbell"); rc=$?
   expect_code 1 "$rc" "a clipped doorbell naming another task's inbox must refuse"
   assert_no_grep "C-u" "$dir/fake/keys" "another task's line must never be cleared"
+  assert_no_grep "DC" "$dir/fake/keys" "another task's line must never be deleted"
   pass "fm-control relaunch: a clipped doorbell naming another task refuses"
 }
 
