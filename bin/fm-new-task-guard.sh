@@ -166,7 +166,7 @@ cmd_fresh_context() {
   secondmate_registry_line_for_id "$REGISTRY" "$target" || return 1
   state=$(FM_HOME="$FM_HOME" FM_CREW_STATE_NO_FORGE=1 "${FM_FRESH_CONTEXT_CREW_STATE:-$SCRIPT_DIR/fm-crew-state.sh}" "$target" 2>/dev/null \
     | sed -n '1s/^state: \([a-z]*\).*/\1/p')
-  [ "$state" = done ] || return 1
+  [ "$state" = "done" ] || return 1
   FM_HOME="$FM_HOME" "$SCRIPT_DIR/fm-secondmate-fresh-session.sh" hold "$target" "$2" </dev/null
 }
 
