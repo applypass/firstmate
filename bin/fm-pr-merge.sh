@@ -1174,6 +1174,7 @@ $red
 EOF
 
   # Fork-only: refuse a body whose proof admits an unchecked path (bin/fm-merge-proof-lib.sh).
+  FM_MERGE_PROOF_PROJECT=$PR_REPO  # Fork-only: names the project whose CI test checks prove the tests ran (.fork/ci-test-checks).
   fm_merge_proof_evaluate "$json" || refusals="$refusals$FM_MERGE_PROOF_REFUSALS"
 
   unreported=''

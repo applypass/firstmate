@@ -23,9 +23,25 @@ export PATH="$BIN:$PATH"
 
 RUN='no-mistakes axi run --intent "ship it"'
 
-run_check() {  # <base or empty> <command>
-  CHECK_OUT=$(STUB_BASE="$1" "$CHECK" --command "$2" --cwd "$TMP_ROOT" --claude 2>&1)
+# A clone whose origin names the project, as a worker worktree does. The default
+# project declares CI test checks in .fork/ci-test-checks.
+make_clone() {  # <project>
+  mkdir -p "$TMP_ROOT/clones/$1"
+  git -C "$TMP_ROOT/clones/$1" init -q
+  git -C "$TMP_ROOT/clones/$1" remote add origin "https://github.com/applypass/$1.git"
+}
+make_clone apply_pass_backend
+make_clone apply_pass_frontend
+make_clone ai_backend
+make_clone never-declared
+
+run_check_in() {  # <project> <base or empty> <command>
+  CHECK_OUT=$(STUB_BASE="$2" "$CHECK" --command "$3" --cwd "$TMP_ROOT/clones/$1" --claude 2>&1)
   CHECK_RC=$?
+}
+
+run_check() {  # <base or empty> <command>
+  run_check_in apply_pass_backend "$1" "$2"
 }
 
 test_dev_base_without_skip_refused() {
@@ -51,6 +67,34 @@ test_dev_base_with_other_skips_refused() {
   run_check dev "$RUN --skip pr,ci,testing"
   expect_code 2 "$CHECK_RC" "a step merely named like test does not count"
   pass "a skip list without the test step is refused on dev"
+}
+
+test_dev_base_frontend_declares_checks() {
+  run_check_in apply_pass_frontend dev "$RUN"
+  expect_code 2 "$CHECK_RC" "frontend declares CI test checks, so dev must skip test"
+  run_check_in apply_pass_frontend dev "$RUN --skip test"
+  expect_code 0 "$CHECK_RC" "frontend dev run that skips test"
+  pass "a project with declared CI test checks is held to --skip test on dev"
+}
+
+test_dev_base_without_ci_test_checks_keeps_local_tests() {
+  local project
+  for project in ai_backend never-declared; do
+    run_check_in "$project" dev "$RUN"
+    expect_code 0 "$CHECK_RC" "$project dev run without skip keeps the local test step"
+    [ -z "$CHECK_OUT" ] || fail "allowed case printed output: $CHECK_OUT"
+    run_check_in "$project" dev "$RUN --skip push,pr,ci,test"
+    expect_code 2 "$CHECK_RC" "$project dev run must not skip the only tests"
+    assert_contains "$CHECK_OUT" 'declares no CI test check' "says why"
+    assert_contains "$CHECK_OUT" 'Re-run the same command without' "names the fix"
+  done
+  pass "a dev-bound project with no CI test checks keeps the local test step"
+}
+
+test_unreadable_project_keeps_local_tests() {
+  CHECK_OUT=$(STUB_BASE=dev "$CHECK" --command "$RUN --skip test" --cwd "$TMP_ROOT" --claude 2>&1)
+  expect_code 2 $? "no origin remote means no declared checks, so skipping test is refused"
+  pass "an unreadable project is treated as having no CI test checks"
 }
 
 test_main_base_keeps_tests() {
@@ -90,7 +134,7 @@ test_only_new_runs_checked() {
 
 test_hook_payload() {
   local out
-  out=$(printf '{"tool_input":{"command":"%s"},"cwd":"%s"}' 'no-mistakes axi run --intent x' "$TMP_ROOT" \
+  out=$(printf '{"tool_input":{"command":"%s"},"cwd":"%s"}' 'no-mistakes axi run --intent x' "$TMP_ROOT/clones/apply_pass_backend" \
     | STUB_BASE=dev "$CHECK" --claude 2>&1)
   expect_code 2 $? "payload command is checked"
   assert_contains "$out" '"permissionDecision":"deny"' "deny object"
@@ -109,6 +153,9 @@ test_installer_registers_hook() {
 test_dev_base_without_skip_refused
 test_dev_base_with_skip_allowed
 test_dev_base_with_other_skips_refused
+test_dev_base_frontend_declares_checks
+test_dev_base_without_ci_test_checks_keeps_local_tests
+test_unreadable_project_keeps_local_tests
 test_main_base_keeps_tests
 test_unknown_base_keeps_full_run
 test_base_branch_flag_wins

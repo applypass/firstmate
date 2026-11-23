@@ -8,11 +8,18 @@
 # the full run with tests. A local test step on a loaded machine hung for 30-45
 # minutes while GitHub CI was green.
 #
+# Update (2026-11-23): the skip assumes CI runs the tests, which holds only for a
+# project that declares CI test checks in .fork/ci-test-checks. The merge proof
+# (bin/fm-merge-proof-lib.sh) reads the same file, so a skipped step and the
+# proof agree on which checks count. The project is the repo name of the
+# worktree's origin remote.
+#
 # Rule, applied to a command that starts a NEW run (`no-mistakes axi run` with
 # --intent, as in bin/fm-nm-mirror-pretool-check.sh):
-#   base branch dev: the command must pass `--skip test` (alone or inside a
-#     comma list), else it is refused.
-#   any other base: the command must not skip `test`, else it is refused.
+#   base branch dev and the project declares CI test checks: the command must
+#     pass `--skip test` (alone or inside a comma list), else it is refused.
+#   any other base, or a project with no declared CI test checks (or an origin
+#     that cannot be read): the command must not skip `test`, else it is refused.
 #   base unknown: allowed unchanged, so the full run with tests stays the default.
 # The base is the command's --base-branch when given, else the base of the open
 # PR for the current branch read from the forge (gh, 20s bound). A bare `axi
@@ -30,6 +37,10 @@
 #     the exact flag to add or drop; stdout stays empty.
 #   FAIL OPEN - malformed or empty stdin, missing jq, or an unreadable base.
 set -u
+
+# Fork-only: shared reader of the per-project CI test checks.
+# shellcheck source=bin/fm-ci-test-checks-lib.sh
+. "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/fm-ci-test-checks-lib.sh"
 
 CMD=""
 CMD_SET=0
@@ -98,14 +109,21 @@ SKIPS=",$SKIPS,"
 SKIPS_TEST=0
 case "$SKIPS" in *,test,*) SKIPS_TEST=1 ;; esac
 
+# The project is the origin repo name, read locally with no network.
+PROJECT=$(git -C "$CWD" remote get-url origin 2>/dev/null | sed -e 's#/*$##' -e 's#.*[/:]##' -e 's#\.git$##')
+
 IS_SKIP_BASE=0
-[ "$BASE" = "dev" ] && IS_SKIP_BASE=1
+[ "$BASE" = "dev" ] && fm_ci_test_checks_has "$PROJECT" && IS_SKIP_BASE=1
 
 REASON=""
 if [ "$IS_SKIP_BASE" -eq 1 ] && [ "$SKIPS_TEST" -eq 0 ]; then
-  REASON="This PR targets $BASE, which merges on green GitHub CI that already runs the tests, so the final no-mistakes run skips the local test step. Re-run the same command with the test step added to --skip (for example '--skip test', or '--skip push,pr,ci,test' when the brief already skips those). Review, document and lint still run."
+  REASON="This PR targets $BASE, which merges on green GitHub CI that already runs the tests (${PROJECT}'s declared checks: $(fm_ci_test_checks_patterns "$PROJECT" | paste -sd, - | sed 's/,/, /g')), so the final no-mistakes run skips the local test step. Re-run the same command with the test step added to --skip (for example '--skip test', or '--skip push,pr,ci,test' when the brief already skips those). Review, document and lint still run."
 elif [ "$IS_SKIP_BASE" -eq 0 ] && [ "$SKIPS_TEST" -eq 1 ]; then
-  REASON="This PR targets $BASE, so the final no-mistakes run keeps the test step. Re-run the same command without 'test' in --skip."
+  if [ "$BASE" = "dev" ]; then
+    REASON="This PR targets $BASE, but ${PROJECT:-this project} declares no CI test check in .fork/ci-test-checks, so skipping the local test step would leave the tests unrun. Re-run the same command without 'test' in --skip."
+  else
+    REASON="This PR targets $BASE, so the final no-mistakes run keeps the test step. Re-run the same command without 'test' in --skip."
+  fi
 fi
 [ -n "$REASON" ] || exit 0
 
