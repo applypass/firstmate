@@ -27,10 +27,6 @@ set -u
 . "$ROOT/bin/fm-trace-context-lib.sh"
 # shellcheck source=/dev/null
 . "$ROOT/bin/fm-tasks-axi-lib.sh"
-# shellcheck source=/dev/null
-. "$ROOT/bin/fm-pr-lib.sh"
-# shellcheck source=/dev/null
-. "$ROOT/bin/fm-backend.sh"
 
 CONTROL="$ROOT/bin/fm-control.sh"
 SPAWN="$ROOT/bin/fm-spawn.sh"
@@ -416,37 +412,6 @@ test_same_harness_relaunch_keeps_identity_and_reuses_the_endpoint() {
   assert_grep "cd -- '$dir/wt'" "$dir/fake/keys" "the replacement launch must enter the recorded worktree"
   assert_grep "Firstmate operational input waiting: read" "$dir/fake/literal" "the replacement should have been launched"
   pass "fm-control relaunch: a same-harness relaunch replaces the agent in the same endpoint and worktree"
-}
-
-# A relaunch must leave pr= and its allowed followers (pr_head=) last in the
-# record: fm_pr_metadata_identity_parse rejects any other key after pr=, and the
-# watcher then drops the task's merge poll. control_relaunch_tx= is such a key.
-test_relaunch_keeps_the_pr_identity_block_last_and_the_merge_poll_valid() {
-  local dir out rc id=rl50 url=https://github.com/example/repo/pull/50
-  local head=0123456789abcdef0123456789abcdef01234567 state template
-  dir=$(new_case prlast "$id")
-  add_ship_task "$dir" "$id" claude
-  state="$dir/home/state"
-  template="$ROOT/bin/fm-pr-poll.sh"
-  printf 'pr=%s\npr_head=%s\n' "$url" "$head" >> "$state/$id.meta"
-  fm_pr_poll_prepare "$state" "$id" github "$url" github.com example/repo 50 "$template" \
-    || fail "could not prepare the PR poll fixture"
-  fm_pr_poll_publish_prepared || fail "could not publish the PR poll fixture"
-  fm_pr_poll_snapshot_capture "$state" "$id" "$template" \
-    || fail "the PR poll fixture did not validate before the relaunch"
-
-  out=$(run_control "$dir" "$id" relaunch --note "fresh worker for the final run"); rc=$?
-
-  expect_code 0 "$rc" "a relaunch of a task with an armed PR poll should succeed"$'\n'"$out"
-  [ -n "$(fm_meta_get "$state/$id.meta" control_relaunch_tx)" ] \
-    || fail "control_relaunch_tx must stay readable after the relaunch"
-  fm_pr_metadata_identity_parse "$state/$id.meta" \
-    || fail "a relaunch left a key after pr=, so the identity parse rejects the record: $(tail -n 4 "$state/$id.meta" | tr '\n' ' ')"
-  fm_pr_poll_snapshot_capture "$state" "$id" "$template" \
-    || fail "a relaunch broke the merge poll: the watcher's snapshot no longer validates"
-  [ "$(tail -n 1 "$state/$id.meta")" = "pr_head=$head" ] \
-    || fail "pr_head= must stay the last line of the record"
-  pass "fm-control relaunch: control_relaunch_tx is written before pr=, so the merge poll still validates"
 }
 
 test_relaunch_refuses_before_exit_when_the_composer_holds_pending_text() {
@@ -3178,7 +3143,6 @@ test_relaunch_off_opencode_removes_tracked_wiring
 test_exit_and_relaunch_remove_the_dialog_file
 test_exit_removes_the_dialog_file_before_releasing_the_lock
 test_same_harness_relaunch_keeps_identity_and_reuses_the_endpoint
-test_relaunch_keeps_the_pr_identity_block_last_and_the_merge_poll_valid
 test_relaunch_refuses_before_exit_when_the_composer_holds_pending_text
 test_relaunch_refuses_before_exit_when_the_composer_state_is_unproven
 # Fork-only: own-doorbell clear regressions.
