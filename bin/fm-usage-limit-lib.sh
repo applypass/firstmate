@@ -85,8 +85,12 @@ fm_usage_limit_parse_reset() {
       else
         d=$(fm_ul_today "$tz" "$now" %Y-%m-%d)
         cand=$(fm_ul_epoch "$tz" "$d" "$hm") || continue
-        # Fork-only: a time up to FM_UL_PAST_SECS (6h) past is today, not tomorrow.
-        [ "$cand" -gt $((now - ${FM_UL_PAST_SECS:-21600})) ] || cand=$((cand + 86400))
+        # Fork-only: a clock time lands in (now - FM_UL_PAST_SECS, now - FM_UL_PAST_SECS + 24h].
+        if [ "$cand" -le $((now - ${FM_UL_PAST_SECS:-21600})) ]; then
+          cand=$((cand + 86400))
+        elif [ "$cand" -gt $((now - ${FM_UL_PAST_SECS:-21600} + 86400)) ]; then
+          cand=$((cand - 86400))
+        fi
       fi
       [ "$had_nocase" = 1 ] || shopt -u nocasematch
       printf '%s\n' "$cand"
@@ -145,9 +149,11 @@ fm_usage_limit_detect() {  # <screen-text> [now]
 }
 
 # fm_usage_limit_last_block <screen>: print main's closing usage-limit banner,
-# the transcript above the composer prompt from the last marker line down, or
-# nothing when a prompt or reply line follows that marker. Only a menu option,
-# a slash-command hint, or a key hint may follow it.
+# the transcript above the composer prompt from the last harness marker line
+# down, or nothing when a prompt or reply line follows that marker. A marker
+# inside a prompt or reply (a line opened by a prompt or reply glyph, and its
+# indented continuation) is prose, never a banner. Only a menu option, a
+# slash-command hint, or a key hint other than a busy spinner may follow it.
 fm_usage_limit_last_block() {  # <screen>
   printf '%s\n' "$1" | awk '
     { a[NR] = $0 }
@@ -156,16 +162,19 @@ fm_usage_limit_last_block() {  # <screen>
       for (i = 1; i < NR; i++)
         if (a[i] ~ /^[[:space:]]*(╭|─)/ && a[i + 1] ~ /^[[:space:]]*(│[[:space:]]*)?(>|❯)([[:space:]]*$|[[:space:]]+[^0-9[:space:]])/) end = i - 1
       mark = 0
+      prose = 0
       for (i = 1; i <= end; i++) {
         l = tolower(a[i])
-        if (l ~ /["`]/) continue
+        if (l ~ /^[[:space:]]*(⏺|●|>|❯)/) prose = 1
+        else if (l ~ /^[[:space:]]*⎿/ || l ~ /^[^[:space:]]/) prose = 0
+        if (prose || l ~ /["`]/) continue
         if (l ~ /out of usage credits|limit reached|hit your( [a-z0-9-]+)? limit|usage limit.*(reset|reached)|limit will reset|stop and wait for limit to reset|wait here, then continue automatically/) mark = i
       }
       if (!mark) exit
       for (i = mark + 1; i <= end; i++) {
         l = tolower(a[i])
         if (l ~ /^[[:space:]]*$/ || l ~ /^[[:space:]]*(❯|›|>)?[[:space:]]*[0-9]+[.)][[:space:]]/ \
-          || l ~ /^[[:space:]]*(⎿[[:space:]]*)?\/[a-z]/ || l ~ /(enter|esc)[[:space:]]+to/) continue
+          || l ~ /^[[:space:]]*(⎿[[:space:]]*)?\/[a-z]/ || (l ~ /(enter|esc)[[:space:]]+to/ && l !~ /interrupt/)) continue
         exit
       }
       for (i = mark; i <= end; i++) print a[i]

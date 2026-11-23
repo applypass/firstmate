@@ -213,9 +213,6 @@ if ! fm_session_lock_owned_by_self "$STATE"; then
   RECOVER_SESSION_LOCK=1
 fi
 
-# --- AFK: the away daemon owns the watcher and triage; never rewake ----------
-[ -e "$STATE/.afk" ] && exit 0
-
 # --- usage limit: main's own stop is need until the tick resumes it -----------
 # bin/fm-usage-limit-tick.sh fills in this record and removes it once main's
 # limit banner is gone; bin/fm-supervision-lib.sh counts it as need meanwhile.
@@ -225,6 +222,9 @@ if [ -n "$PAYLOAD" ] && command -v jq >/dev/null 2>&1 \
   && printf '%s' "$PAYLOAD" | jq -e '.hook_event_name == "StopFailure" and .error == "rate_limit"' >/dev/null 2>&1; then
   printf 'endpoint=primary\nkind=primary\nfirst_seen=%s\n' "$(date +%s)" >"$STATE/primary.usage-limit" || true
 fi
+
+# --- AFK: the away daemon owns the watcher and triage; never rewake ----------
+[ -e "$STATE/.afk" ] && exit 0
 
 # --- need: whatever bin/fm-supervision-lib.sh counts as supervision need ------
 need_supervision() {

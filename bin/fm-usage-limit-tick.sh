@@ -208,6 +208,7 @@ handle_target() {  # <id> <kind> <backend> <target> <harness>
   local id=$1 kind=$2 backend=$3 target=$4 harness=$5 rec screen first reset attempts last
   local source stuck_text key=''
   rec="$STATE/$id.usage-limit"
+  [ "$kind" != primary ] || [ -f "$rec" ] || return 0
 
   screen=$(capture_screen "$backend" "$target") || return 0
   [ -n "$screen" ] || return 0

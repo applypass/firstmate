@@ -14,8 +14,9 @@
 #   5. Detection is idempotent and ignores a screen that only mentions a limit.
 #   7. Reset parse (23 Nov): "resets 2:30am" read at 03:10 the same day is today, not
 #      tomorrow; a time far past still rolls to tomorrow.
-#   8. Primary chat (23 Nov): the primary session's pane is recorded at session start and a
-#      usage-limit stop in it is recorded, left alone before reset, and resumed after it.
+#   8. Primary chat (23 Nov): the primary session's pane is recorded at session start; a
+#      usage-limit stop recorded by main's StopFailure hook is filled in from the screen, left
+#      alone before reset, and resumed after it; main's own prose is never a stop.
 #   6. Sleep/wake (fork-only, docs/usage-limit-resume.md): a wall-clock gap across ticks
 #      plus a connection-error stop at an idle prompt is recorded and resumed after the
 #      settle time; a retrying spinner, a quoted marker and a working agent are not stops;
@@ -392,7 +393,9 @@ test_reset_few_hours_past_is_today() {
   [ "$got" = "$(utc '2026-11-24 02:30')" ] || fail "02:30 read at 15:00 (far past) must be tomorrow, got $got"
   got=$(reset_of "$(utc '2026-11-23 01:00')" "$banner")
   [ "$got" = "$(utc '2026-11-23 02:30')" ] || fail "02:30 read at 01:00 must be today, got $got"
-  pass "usage-limit: a reset time a few hours past is today, a far-past one is tomorrow"
+  got=$(reset_of "$(utc '2026-11-24 00:30')" '5-hour limit reached - resets 11:30pm (UTC)')
+  [ "$got" = "$(utc '2026-11-23 23:30')" ] || fail "23:30 read at 00:30 next day must be the past reset, got $got"
+  pass "usage-limit: a reset time a few hours past is today (or yesterday), a far-past one is tomorrow"
 }
 
 # --- primary chat: main's own pane is recorded and resumed (23 Nov) --------------
@@ -403,6 +406,10 @@ LIMIT_LINES=$'earlier output\n5-hour limit reached - resets 3:10am (Asia/Kolkata
 # Main's chat: the limit banner above an empty composer, cursor on the prompt row (3).
 PRIMARY_SCREEN="$LIMIT_LINES"$'\n'"$BOX_TOP"$'\n'"$BAR >      $BAR"$'\n'"$BOX_BOTTOM"
 PRIMARY_TYPED="$LIMIT_LINES"$'\n'"$BOX_TOP"$'\n'"$BAR > fix  $BAR"$'\n'"$BOX_BOTTOM"
+
+hook_record() { # <case-dir> <first-seen>: what main's rate_limit StopFailure hook writes
+  printf 'endpoint=primary\nkind=primary\nfirst_seen=%s\n' "$2" >"$1/home/state/primary.usage-limit"
+}
 
 main_screen() { # <case-dir> <screen>
   printf '%s\n' "$2" >"$1/screens/fm-main"
@@ -432,6 +439,9 @@ test_primary_stop_recorded_and_resumed() {
   t0=$(ist '2026-11-14 02:50')
   reset=$(ist '2026-11-14 03:10')
   tick "$dir" "$t0" >/dev/null
+  [ ! -e "$dir/home/state/primary.usage-limit" ] || fail "a banner alone, with no StopFailure record, recorded main"
+  hook_record "$dir" "$t0"
+  tick "$dir" "$t0" >/dev/null
   [ -f "$dir/home/state/primary.usage-limit" ] || fail "primary stop not recorded"
   assert_contains "$(cat "$dir/home/state/primary.usage-limit")" "kind=primary" "primary kind"
   assert_contains "$(cat "$dir/home/state/primary.usage-limit")" "reset_epoch=$reset" "primary reset parsed"
@@ -454,6 +464,7 @@ test_primary_stuck_surfaces_once() {
   printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
   t0=$(ist '2026-11-14 02:50')
   reset=$(ist '2026-11-14 03:10')
+  hook_record "$dir" "$t0"
   tick "$dir" "$t0" >/dev/null
   lines=''
   for n in 1 2 3 4 5 6 7 8; do
@@ -474,6 +485,7 @@ test_primary_composer_must_be_empty() {
   printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
   t0=$(ist '2026-11-14 02:50')
   reset=$(ist '2026-11-14 03:10')
+  hook_record "$dir" "$t0"
   # A half-typed composer, then a screen with no provable composer at all.
   for screen in "$PRIMARY_TYPED" "$LIMIT_LINES"; do
     main_screen "$dir" "$screen"
@@ -514,11 +526,17 @@ test_primary_banner_must_be_last_output() {
   t0=$(ist '2026-11-14 02:50')
   reset=$(ist '2026-11-14 03:10')
   box="$BOX_TOP"$'\n'"$BAR >      $BAR"$'\n'"$BOX_BOTTOM"
-  # A relayed stuck line, a reply that mentions the limit, and a banner left above a later reply.
+  # With main's StopFailure record present: a relayed stuck line, replies that mention or end
+  # on the limit, a captain prompt quoting a banner while main thinks, and a banner left above
+  # a later reply. None is a stop, so each clears the record and types nothing.
   for screen in \
     $'> check on the mate\n\xe2\x8f\xba Relayed: usage-limit stuck: endpoint=m1 5-hour limit reached - resets 3:10am\n  I will retry it after the reset.' \
     $'\xe2\x8f\xba The mate hit the 5-hour limit reached banner earlier; it resets 3:10am.\n  Nothing to do yet.' \
+    $'\xe2\x8f\xba relmate hit its usage limit, it resets at 3:10am.' \
+    $'\xe2\x8f\xba Done. PR 105 now resumes main after\n  the usage limit resets.' \
+    $'> relmate shows 5-hour limit reached - resets 3:10am, wait?\n\xe2\x9c\xbb Thinking\xe2\x80\xa6 (esc to interrupt)' \
     "$LIMIT_LINES"$'\n> usage limit has reset - carry on\n\xe2\x8f\xba Picking the task back up.'; do
+    hook_record "$dir" "$t0"
     main_screen "$dir" "$screen"$'\n'"$box"
     tick "$dir" "$t0" >/dev/null
     tick "$dir" $((reset + 120)) >/dev/null
@@ -526,7 +544,7 @@ test_primary_banner_must_be_last_output() {
     ! grep -q 'fm-main' "$dir/send.log" || fail "typed into main that was not stopped: $(cat "$dir/send.log")"
   done
   # Main's own StopFailure hook leaves a record with no reset; the tick fills it in, sending nothing yet.
-  printf 'endpoint=primary\nkind=primary\nfirst_seen=%s\n' "$t0" >"$dir/home/state/primary.usage-limit"
+  hook_record "$dir" "$t0"
   main_screen "$dir" "$PRIMARY_SCREEN"
   tick "$dir" $((t0 + 60)) >/dev/null
   assert_contains "$(cat "$dir/home/state/primary.usage-limit")" "reset_epoch=$reset" "hook record gets the screen reset"

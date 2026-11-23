@@ -25,9 +25,13 @@ Main has no `state/*.meta`, so the sweep above would never see its session.
 `bin/fm-session-start.sh` runs `bin/fm-primary-endpoint.sh record` in the locked start, and that script writes the pane it runs in to `state/.primary-endpoint` (`backend`, `target`, `harness`).
 When no pane is found it removes the record instead of keeping an old one.
 A secondmate home records nothing and removes any old record, so only the main home ever types into main.
-Each tick then sweeps that pane like any other endpoint, with `kind=primary` and the record `state/primary.usage-limit`.
-Main counts as stopped only when the limit banner is the last transcript output directly above its composer.
-A menu option, a slash-command hint or a key hint may follow the banner; a later prompt or reply line means main is not stopped, so a relayed `usage-limit stuck` line or a reply that mentions a limit is never a stop.
+Each tick then sweeps that pane with `kind=primary` and the record `state/primary.usage-limit`.
+Unlike other endpoints, the screen alone never creates that record: only main's own `rate_limit` `StopFailure` hook does (below).
+The screen fills in the reset time and clears the record.
+Main counts as stopped only when a harness limit banner is the last transcript output directly above its composer.
+A marker inside a prompt or reply is prose, not a banner: a line that opens with a prompt or reply glyph (`>`, `❯`, `⏺`, `●`) and the indented lines that continue it.
+A menu option, a slash-command hint or a key hint may follow the banner; a later prompt or reply line, or a busy spinner, means main is not stopped.
+So a relayed `usage-limit stuck` line or a reply that mentions a limit is never a stop.
 After the reset it types the resume text straight into the pane through the backend, because `bin/fm-send.sh` needs a task id.
 It types only when the composer reads exactly `empty`; a half-typed or unreadable composer means wait, so it never types over the captain, and a skipped tick costs no attempt.
 After a menu key it checks the composer again before it types.
@@ -66,7 +70,8 @@ Pmset logs are not read; the tick-gap is the wake signal.
 The tick reads the reset from the screen first and honors a timezone shown there, for example `resets 3:10am (Asia/Kolkata)`.
 Without one it asks `quota-axi --json --no-credential-refresh` for the exhausted `five_hour` or `seven_day` window.
 Without that it assumes 15 minutes and re-reads the screen each tick.
-A time with no date, such as `resets 2:30am`, means today when it is at most 6 hours past (`FM_UL_PAST_SECS`), and tomorrow when it is older.
+A time with no date, such as `resets 2:30am`, resolves to the one moment within the window from 6 hours past (`FM_UL_PAST_SECS`) to 18 hours ahead.
+So `resets 2:30am` read at 03:10 is today, read at 15:00 is tomorrow, and `resets 11:30pm` read at 00:30 is yesterday.
 A banner read just after the reset therefore resumes at once instead of waiting a day.
 
 ## Menus
