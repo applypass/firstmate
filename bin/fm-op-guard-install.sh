@@ -5,7 +5,7 @@
 #
 # Merges PreToolUse Bash hooks that run bin/fm-op-pretool-check.sh and
 # bin/fm-nm-mirror-pretool-check.sh (diverged no-mistakes mirror) and
-# bin/fm-nm-base-skip-pretool-check.sh (test step follows the PR base) and
+# bin/fm-nm-base-skip-pretool-check.sh (test step follows the PR base and project) and
 # bin/fm-new-task-guard.sh hook (one task per second mate; main session only) into
 # <dir>/.claude/settings.local.json, keeping every other setting. Idempotent: a
 # hook already pointing at this script is left alone. bin/fm-spawn.sh runs it for
