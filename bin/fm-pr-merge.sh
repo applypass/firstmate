@@ -183,8 +183,9 @@
 # --waive-proof <line> <reason> (repeatable, attended-only) waives a finding and
 # records proof_waiver= and proof_waiver_reason= in the task meta. The rules
 # and the GitLab/Forgejo gap live in bin/fm-merge-proof-lib.sh.
+# Every waiver flag also needs --decision-key <key>, a fm-decide.sh record for the task quoting the captain as captain: "<words>" (bin/fm-waiver-key-lib.sh).
 #
-# Usage: fm-pr-merge.sh <task-id> <pr-url> [--attended-override] [--release-main] [--waive-proof <line> <reason>] [--allow-red <check-name>] [--allow-missing <check-name>] [--allow-no-pipeline] [-- <extra forge merge args>]
+# Usage: fm-pr-merge.sh <task-id> <pr-url> [--attended-override] [--release-main] [--waive-proof <line> <reason>] [--allow-red <check-name>] [--allow-missing <check-name>] [--allow-no-pipeline] [--decision-key <key>] [-- <extra forge merge args>]
 #
 # On GitLab, this script confirms the MR is actually merged before reporting it;
 # an auto-merge-queued or unconfirmed request leaves the poll armed and records
@@ -261,6 +262,7 @@ ATTENDED_OVERRIDE=false
 # Fork-only: --release-main permits a merge whose base is main (bin/fm-main-merge-guard.sh).
 RELEASE_MAIN=false
 ALLOW_NO_PIPELINE=false
+DECISION_KEY=
 ALLOW_RED=()
 ALLOW_MISSING=()
 # Fork-only: --waive-proof <line> <reason> pairs for the merge proof gate.
@@ -316,6 +318,12 @@ while [ "$#" -gt 0 ]; do
       echo "error: --allow-no-pipeline takes no value" >&2
       exit 2
       ;;
+    --decision-key)
+      # Fork-only: ties a waiver to a captain decision recorded by fm-decide.sh.
+      [ -n "${2:-}" ] || { echo "error: --decision-key requires a recorded decision key" >&2; exit 2; }
+      DECISION_KEY=$2
+      shift 2
+      ;;
     --) shift; break ;;
     *) break ;;
   esac
@@ -363,6 +371,23 @@ if [ "${#ALLOW_MISSING[@]}" -gt 0 ]; then
       ;;
   esac
 fi
+
+# Fork-only: every waiver needs a recorded captain decision (bin/fm-waiver-key-lib.sh).
+WAIVER_FLAGS=()
+[ "${#FM_MERGE_PROOF_WAIVE_LINES[@]}" -eq 0 ] || WAIVER_FLAGS+=(--waive-proof)
+[ "${#ALLOW_RED[@]}" -eq 0 ] || WAIVER_FLAGS+=(--allow-red)
+[ "${#ALLOW_MISSING[@]}" -eq 0 ] || WAIVER_FLAGS+=(--allow-missing)
+[ "$ALLOW_NO_PIPELINE" != true ] || WAIVER_FLAGS+=(--allow-no-pipeline)
+if [ "${#WAIVER_FLAGS[@]}" -gt 0 ]; then
+  # shellcheck source=bin/fm-waiver-key-lib.sh
+  . "$SCRIPT_DIR/fm-waiver-key-lib.sh"
+  FM_HOME=$FM_HOME FM_DATA_OVERRIDE=$LEDGER_DATA \
+    fm_waiver_key_require "$ID" "$DECISION_KEY" "${WAIVER_FLAGS[@]}" || exit 2
+elif [ -n "$DECISION_KEY" ]; then
+  echo "error: --decision-key applies only with a waiver (--waive-proof, --allow-red, --allow-missing, --allow-no-pipeline)" >&2
+  exit 2
+fi
+# Fork-only end
 
 # Fork-only: with no caller method, ask GitHub which merge methods the repository
 # allows and pick the first allowed of squash, merge, rebase (squash stays the

@@ -6,6 +6,7 @@
 #        fm-decide.sh record <key> --file <file> [...]
 #        fm-decide.sh sync [<key>]                post entries still waiting for Shortcut, now
 #        fm-decide.sh audit                       list entries with no Shortcut stamp
+#        fm-decide.sh show <key>                  print a recorded entry's text (no date, no stamp); exit 1 when unrecorded
 #        fm-decide.sh guard-hook                  PreToolUse hook: block direct writes to data/decided.md
 #        fm-decide.sh guard-line                  print the settings.local.json hook that installs the guard
 #
@@ -176,6 +177,25 @@ pending_entry() {
     BEGIN { p = "- [" ENVIRON["FM_KEY"] "] " }
     index($0, p) == 1 && $0 ~ / \(shortcut: pending( sc-[0-9]+)?\)$/ { print; exit }
   ' "$DECIDED"
+}
+
+# command_show <key>: the recorded text of one entry, the single reader other
+# scripts use (bin/fm-waiver-key-lib.sh). Exits 1 when the key is not recorded.
+command_show() {
+  local key=${1:-} text
+  [ -n "$key" ] || die "show needs a key"
+  [ -f "$DECIDED" ] || return 1
+  text=$(FM_KEY=$key awk '
+    BEGIN { p = "- [" ENVIRON["FM_KEY"] "] " }
+    index($0, p) == 1 {
+      t = substr($0, length(p) + 1)
+      sub(/^[0-9]{4}-[0-9]{2}-[0-9]{2} /, "", t)
+      sub(/ \(shortcut: [^)]*\)$/, "", t)
+      print t; found = 1; exit
+    }
+    END { exit found ? 0 : 1 }
+  ' "$DECIDED") || return 1
+  printf '%s\n' "$text"
 }
 
 # pending_keys: the key of every entry still waiting for Shortcut.
@@ -429,6 +449,7 @@ case "${1:-}" in
   record) shift; command_record "$@" ;;
   sync) shift; command_sync "$@" ;;
   audit) command_audit ;;
+  show) shift; command_show "$@" ;;
   guard-hook) command_guard_hook ;;
   guard-line) guard_line ;;
   -h | --help) usage ;;

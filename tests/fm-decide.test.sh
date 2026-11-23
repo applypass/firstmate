@@ -371,7 +371,23 @@ test_supersedes_writes_the_suffix_and_sweeps_before_the_post() {
   pass "--supersedes writes the shared suffix, runs the sweep before the post, and refuses refs that are not a key, story or PR"
 }
 
+test_show_prints_the_recorded_text_and_refuses_an_unknown_key() {
+  local dir out rc
+  dir=$(make_case show)
+  decide "$dir" record dd-show "Ship option B - captain: \"go with B\"." --story sc-6523 >/dev/null || fail "record failed"
+  wait_stamped "$dir" dd-show
+  out=$(decide "$dir" show dd-show) || fail "show failed on a recorded key: $out"
+  assert_equals 'Ship option B - captain: "go with B".' "$out" "show did not print the bare recorded text"
+  out=$(decide "$dir" show dd-nope); rc=$?
+  expect_code 1 "$rc" "show on an unrecorded key must exit 1"
+  assert_equals "" "$out" "show printed text for an unrecorded key"
+  out=$(decide "$dir" show dd-sho); rc=$?
+  expect_code 1 "$rc" "show must not match a key prefix"
+  pass "show prints one entry's bare text and exits 1 for an unknown key or a key prefix"
+}
+
 test_record_with_story_posts_then_stamps
+test_show_prints_the_recorded_text_and_refuses_an_unknown_key
 test_post_failure_leaves_the_entry_pending
 test_no_story_files_a_chore_then_posts
 test_same_decision_twice_is_a_noop_and_changed_text_refuses
