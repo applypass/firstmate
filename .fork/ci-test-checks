@@ -12,8 +12,9 @@
 #   <project> -           the project declares no CI test check
 # <project> is the GitHub repository name (the clone's name in data/projects.md).
 # <pattern> is the rest of the line: an extended regex matched against the whole
-# check name in lower case, optionally behind a "workflow / " prefix. Repeat a
-# project to require several checks; every one must have a green match.
+# check's own job name in lower case (the rollup name, without the workflow
+# name). Repeat a project to require several checks; every one must have a
+# green match.
 # Spaces inside a pattern are literal.
 #
 # What a declaration changes:
@@ -23,9 +24,6 @@
 #   skip hook    a dev-bound run must `--skip test` only for a project with
 #                declared checks. Any other project keeps the local test step,
 #                so a dev-bound PR never reaches merge with no tests run.
-#
-# Override: lines in $FM_HOME/config/ci-test-checks (captain-private) replace
-# this file's lines for the same project.
 #
 # Evidence (read from each clone's .github/workflows on 2026-11-23):
 #   apply_pass_backend  ci.yml runs on pull_request: jobs `unit` and `integration`

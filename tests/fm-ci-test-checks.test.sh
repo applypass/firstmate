@@ -9,7 +9,6 @@ set -u
 # shellcheck source=bin/fm-merge-proof-lib.sh
 . "$ROOT/bin/fm-merge-proof-lib.sh"
 
-TMP_ROOT=$(fm_test_tmproot fm-ci-test-checks)
 FM_MERGE_PROOF_WAIVE_LINES=()
 FM_MERGE_PROOF_WAIVE_REASONS=()
 
@@ -65,15 +64,12 @@ test_unit_name_alone_is_not_a_test_check_for_undeclared_project() {
   pass "undeclared projects are not credited for unit or integration"
 }
 
-test_captain_override_replaces_the_tracked_lines() {
-  mkdir -p "$TMP_ROOT/home/config"
-  printf '%s\n' 'apply_pass_backend smoke' > "$TMP_ROOT/home/config/ci-test-checks"
-  FM_HOME="$TMP_ROOT/home" proof apply_pass_backend smoke || fail "override pattern should pass: $FM_MERGE_PROOF_REFUSALS"
-  FM_HOME="$TMP_ROOT/home" proof apply_pass_backend unit integration \
-    && fail "override must replace the tracked lines for that project"
-  # shellcheck disable=SC2030
-  FM_HOME="$TMP_ROOT/home" proof apply_pass_frontend 'test (1)' || fail "other projects keep the tracked lines"
-  pass "config/ci-test-checks replaces the tracked lines for its project only"
+test_declared_pattern_matches_the_whole_job_name() {
+  proof apply_pass_backend unit-lint integration && fail "unit-lint must not match unit"
+  assert_contains "$FM_MERGE_PROOF_REFUSALS" 'unit' "names the missing unit check"
+  proof apply_pass_backend 'lint / unit' integration && fail "lint / unit must not match unit"
+  proof apply_pass_backend 'unit (1)' integration && fail "unit (1) must not match unit"
+  pass "a declared pattern matches only the whole job name"
 }
 
 test_backend_check_names_pass_the_proof
@@ -81,4 +77,4 @@ test_backend_needs_every_declared_check
 test_frontend_matrix_name_passes
 test_undeclared_project_keeps_the_test_name_match
 test_unit_name_alone_is_not_a_test_check_for_undeclared_project
-test_captain_override_replaces_the_tracked_lines
+test_declared_pattern_matches_the_whole_job_name

@@ -92,7 +92,7 @@ fm_merge_proof_green_test_job() {  # <pr json>
   patterns=$(fm_ci_test_checks_patterns "$FM_MERGE_PROOF_PROJECT")
   [ -n "$patterns" ] || { fm_merge_proof_green_match "$1" '(^|[^a-z])tests?([^a-z]|$)'; return; }
   while IFS= read -r pattern; do
-    fm_merge_proof_green_match "$1" "^(.* / )?($pattern)\$" || return 1
+    fm_merge_proof_green_match "$1" "^($pattern)\$" || return 1
   done <<EOF
 $patterns
 EOF

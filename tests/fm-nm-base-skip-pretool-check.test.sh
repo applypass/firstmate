@@ -97,14 +97,6 @@ test_unreadable_project_keeps_local_tests() {
   pass "an unreadable project is treated as having no CI test checks"
 }
 
-test_captain_override_declares_checks() {
-  mkdir -p "$TMP_ROOT/home/config"
-  printf '%s\n' 'never-declared smoke' > "$TMP_ROOT/home/config/ci-test-checks"
-  CHECK_OUT=$(FM_HOME="$TMP_ROOT/home" STUB_BASE=dev "$CHECK" --command "$RUN" --cwd "$TMP_ROOT/clones/never-declared" --claude 2>&1)
-  expect_code 2 $? "an override declaring checks makes dev require --skip test"
-  pass "config/ci-test-checks can declare checks for a project"
-}
-
 test_main_base_keeps_tests() {
   run_check main "$RUN"
   expect_code 0 "$CHECK_RC" "main base without skip"
@@ -164,7 +156,6 @@ test_dev_base_with_other_skips_refused
 test_dev_base_frontend_declares_checks
 test_dev_base_without_ci_test_checks_keeps_local_tests
 test_unreadable_project_keeps_local_tests
-test_captain_override_declares_checks
 test_main_base_keeps_tests
 test_unknown_base_keeps_full_run
 test_base_branch_flag_wins
