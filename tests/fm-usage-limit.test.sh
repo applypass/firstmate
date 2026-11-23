@@ -507,6 +507,36 @@ test_primary_gets_no_sleep_resume() {
   pass "sleep-resume: main's own chat gets no sleep or network resume"
 }
 
+test_primary_banner_must_be_last_output() {
+  local dir t0 reset screen box
+  dir=$(setup_case primlast)
+  printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
+  t0=$(ist '2026-11-14 02:50')
+  reset=$(ist '2026-11-14 03:10')
+  box="$BOX_TOP"$'\n'"$BAR >      $BAR"$'\n'"$BOX_BOTTOM"
+  # A relayed stuck line, a reply that mentions the limit, and a banner left above a later reply.
+  for screen in \
+    $'> check on the mate\n\xe2\x8f\xba Relayed: usage-limit stuck: endpoint=m1 5-hour limit reached - resets 3:10am\n  I will retry it after the reset.' \
+    $'\xe2\x8f\xba The mate hit the 5-hour limit reached banner earlier; it resets 3:10am.\n  Nothing to do yet.' \
+    "$LIMIT_LINES"$'\n> usage limit has reset - carry on\n\xe2\x8f\xba Picking the task back up.'; do
+    main_screen "$dir" "$screen"$'\n'"$box"
+    tick "$dir" "$t0" >/dev/null
+    tick "$dir" $((reset + 120)) >/dev/null
+    [ ! -e "$dir/home/state/primary.usage-limit" ] || fail "main recorded as stopped below a later line: $screen"
+    ! grep -q 'fm-main' "$dir/send.log" || fail "typed into main that was not stopped: $(cat "$dir/send.log")"
+  done
+  # Main's own StopFailure hook leaves a record with no reset; the tick fills it in, sending nothing yet.
+  printf 'endpoint=primary\nkind=primary\nfirst_seen=%s\n' "$t0" >"$dir/home/state/primary.usage-limit"
+  main_screen "$dir" "$PRIMARY_SCREEN"
+  tick "$dir" $((t0 + 60)) >/dev/null
+  assert_contains "$(cat "$dir/home/state/primary.usage-limit")" "reset_epoch=$reset" "hook record gets the screen reset"
+  ! grep -q 'fm-main' "$dir/send.log" || fail "a hook record made the tick type before reset: $(cat "$dir/send.log")"
+  tick "$dir" $((reset + 120)) >/dev/null
+  grep 'fm-main' "$dir/send.log" | grep -q 'usage limit has reset' \
+    || fail "main got no resume with the banner right above its composer: $(cat "$dir/send.log")"
+  pass "usage-limit: main is stopped only when the banner is the last output above its composer"
+}
+
 test_secondmate_home_records_no_primary() {
   local dir
   dir=$(setup_case primsm)
@@ -524,4 +554,5 @@ test_primary_stop_recorded_and_resumed
 test_primary_stuck_surfaces_once
 test_primary_composer_must_be_empty
 test_primary_gets_no_sleep_resume
+test_primary_banner_must_be_last_output
 test_secondmate_home_records_no_primary

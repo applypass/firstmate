@@ -144,6 +144,34 @@ fm_usage_limit_detect() {  # <screen-text> [now]
   FM_UL_KEY=$(fm_usage_limit_menu_key "$tail")
 }
 
+# fm_usage_limit_last_block <screen>: print main's closing usage-limit banner,
+# the transcript above the composer prompt from the last marker line down, or
+# nothing when a prompt or reply line follows that marker. Only a menu option,
+# a slash-command hint, or a key hint may follow it.
+fm_usage_limit_last_block() {  # <screen>
+  printf '%s\n' "$1" | awk '
+    { a[NR] = $0 }
+    END {
+      end = NR
+      for (i = 1; i < NR; i++)
+        if (a[i] ~ /^[[:space:]]*(╭|─)/ && a[i + 1] ~ /^[[:space:]]*(│[[:space:]]*)?(>|❯)([[:space:]]*$|[[:space:]]+[^0-9[:space:]])/) end = i - 1
+      mark = 0
+      for (i = 1; i <= end; i++) {
+        l = tolower(a[i])
+        if (l ~ /["`]/) continue
+        if (l ~ /out of usage credits|limit reached|hit your( [a-z0-9-]+)? limit|usage limit.*(reset|reached)|limit will reset|stop and wait for limit to reset|wait here, then continue automatically/) mark = i
+      }
+      if (!mark) exit
+      for (i = mark + 1; i <= end; i++) {
+        l = tolower(a[i])
+        if (l ~ /^[[:space:]]*$/ || l ~ /^[[:space:]]*(❯|›|>)?[[:space:]]*[0-9]+[.)][[:space:]]/ \
+          || l ~ /^[[:space:]]*(⎿[[:space:]]*)?\/[a-z]/ || l ~ /(enter|esc)[[:space:]]+to/) continue
+        exit
+      }
+      for (i = mark; i <= end; i++) print a[i]
+    }'
+}
+
 # fm_usage_limit_quota_reset <harness> <now>: print a reset epoch read from
 # quota-axi, or fail. Read-only (--no-credential-refresh). An exhausted window
 # wins; with none exhausted, the five_hour window is the best evidence.

@@ -198,10 +198,9 @@ handle_endpoint() {  # <meta>
 # Main's own chat: the pane bin/fm-primary-endpoint.sh recorded at session start.
 handle_primary() {
   local file="$STATE/.primary-endpoint"
-  [ -f "$file" ] || return 0
   PRIMARY_BACKEND=$(rec_get "$file" backend)
   PRIMARY_TARGET=$(rec_get "$file" target)
-  [ -n "$PRIMARY_BACKEND" ] && [ -n "$PRIMARY_TARGET" ] || return 0
+  [ -n "$PRIMARY_BACKEND" ] && [ -n "$PRIMARY_TARGET" ] || { rm -f "$STATE/primary.usage-limit"; return 0; }
   handle_target primary primary "$PRIMARY_BACKEND" "$PRIMARY_TARGET" "$(rec_get "$file" harness)"
 }
 
@@ -212,7 +211,11 @@ handle_target() {  # <id> <kind> <backend> <target> <harness>
 
   screen=$(capture_screen "$backend" "$target") || return 0
   [ -n "$screen" ] || return 0
-  fm_usage_limit_detect "$screen" "$NOW"
+  if [ "$kind" = primary ]; then
+    fm_usage_limit_detect "$(fm_usage_limit_last_block "$screen")" "$NOW"
+  else
+    fm_usage_limit_detect "$screen" "$NOW"
+  fi
 
   if [ "$FM_UL_STOPPED" != 1 ]; then
     # Limit screen gone: the endpoint resumed (or the stop was never real).
@@ -222,7 +225,7 @@ handle_target() {  # <id> <kind> <backend> <target> <harness>
   fi
   rm -f "$STATE/$id.sleep-resume"   # a limit screen stays on the usage-limit path
 
-  if [ ! -f "$rec" ]; then
+  if [ -z "$(rec_get "$rec" reset_epoch)" ]; then
     reset=$FM_UL_RESET source=screen
     if [ -z "$reset" ]; then
       reset=$(fm_usage_limit_quota_reset "$harness" "$NOW" 2>/dev/null || true)

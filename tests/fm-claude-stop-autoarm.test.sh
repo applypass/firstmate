@@ -476,6 +476,34 @@ test_stop_failure_entry_arms_the_watcher() {
   pass "auto-arm: a StopFailure turn end (usage limit) arms the watcher like Stop"
 }
 
+# Main's own usage-limit stop in an idle fleet (no state/*.meta): the StopFailure
+# entry records the pending primary stop, which is the need that arms a watcher.
+# Any other API error leaves the idle home inert.
+test_stop_failure_usage_limit_arms_idle_fleet() {
+  local dir cmd out status payload
+  cmd=$(jq -r '[.hooks.StopFailure[]?.hooks[] | select(.asyncRewake == true) | .command][0] // empty' "$ROOT/.claude/settings.json")
+  [ -n "$cmd" ] || fail "no asyncRewake StopFailure entry in .claude/settings.json"
+  for payload in server_error rate_limit; do
+    dir=$(make_primary_dir "$TMP_ROOT/stop-failure-idle-$payload")
+    printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' > "$dir/state/.primary-endpoint"
+    write_arm_fixture "$dir" actionable
+    out=$(printf '{"session_id":"sess-autoarm","hook_event_name":"StopFailure","error":"%s"}\n' "$payload" \
+      | env -u GROK_AGENT -u GROK_HOOK_EVENT FM_HOME="$dir" CLAUDE_PROJECT_DIR="$dir" FM_HOOK_CMD="$cmd" \
+        "$FAKE_CLAUDE" -c 'printf "%s\n" "$$" > "$FM_HOME/state/.lock"; bash -c "$FM_HOOK_CMD"' 2>&1)
+    status=$?
+    if [ "$payload" = server_error ]; then
+      expect_code 0 "$status" "a non-usage-limit StopFailure in an idle fleet stays inert"
+      [ ! -e "$dir/state/primary.usage-limit" ] || fail "a server_error stop recorded a usage limit"
+      [ ! -e "$dir/state/arm-ran" ] || fail "a server_error stop in an idle fleet armed a watcher"
+    else
+      expect_code 2 "$status" "main's usage-limit stop must rewake through the arm close"
+      assert_contains "$(cat "$dir/state/primary.usage-limit" 2>/dev/null)" "kind=primary" "pending primary record"
+      [ -e "$dir/state/arm-ran" ] || fail "main's usage-limit stop in an idle fleet armed no watcher: $out"
+    fi
+  done
+  pass "auto-arm: main's usage-limit StopFailure arms a watcher in an idle fleet; other errors do not"
+}
+
 # pi-code (Pi's Claude-hook compatibility extension) delivers a Claude-shaped
 # Stop payload but awaits the hook with no asyncRewake support, so the hook
 # must stand down or it wedges Pi's turn for the declared timeout (issue
@@ -2080,6 +2108,7 @@ test_host_lost_handback_notifies_once_per_episode
 test_host_lost_announced_handback_notifies_once_per_episode
 test_host_crash_is_retried_then_reported
 test_stop_failure_entry_arms_the_watcher
+test_stop_failure_usage_limit_arms_idle_fleet
 test_arguments_never_arm
 test_fm_lock_status_still_works_with_shared_lib
 test_stands_down_only_on_pi_code_transcript_path
