@@ -71,6 +71,7 @@ labels_joined() {
   printf '%s' "$out"
 }
 
+# shellcheck disable=SC2016 # backticks are literal markdown in the brief, not command substitution
 cmd_brief_block() {
   local root=${1:-}
   [ -n "$root" ] || { echo "fm-framing.sh: brief-block needs <fm-root>" >&2; return 2; }
