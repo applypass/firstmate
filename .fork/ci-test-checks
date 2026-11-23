@@ -1,0 +1,45 @@
+# Fork-only: per-project CI checks that prove "the tests ran".
+#
+# Single source of truth read by bin/fm-ci-test-checks-lib.sh, which both
+# bin/fm-merge-proof-lib.sh (merge proof) and bin/fm-nm-base-skip-pretool-check.sh
+# (dev-bound `--skip test`) use. Without it the merge proof could only look for
+# a check named "test", and backend CI names its test jobs `unit` and
+# `integration`, so a dev-bound PR that skipped the local test step could not
+# merge without a waiver.
+#
+# Schema, one entry per line, `#` starts a comment:
+#   <project> <pattern>   a CI check that must pass at the PR head
+#   <project> -           the project declares no CI test check
+# <project> is the GitHub repository name (the clone's name in data/projects.md).
+# <pattern> is the rest of the line: an extended regex matched against the whole
+# check name in lower case, optionally behind a "workflow / " prefix. Repeat a
+# project to require several checks; every one must have a green match.
+# Spaces inside a pattern are literal.
+#
+# What a declaration changes:
+#   merge proof  a skipped local test step needs every declared check green.
+#                A project that is `-` or absent keeps the old rule: any green
+#                check with "test" or "tests" as a word in its name.
+#   skip hook    a dev-bound run must `--skip test` only for a project with
+#                declared checks. Any other project keeps the local test step,
+#                so a dev-bound PR never reaches merge with no tests run.
+#
+# Override: lines in $FM_HOME/config/ci-test-checks (captain-private) replace
+# this file's lines for the same project.
+#
+# Evidence (read from each clone's .github/workflows on 2026-11-23):
+#   apply_pass_backend  ci.yml runs on pull_request: jobs `unit` and `integration`
+#                       (plus integration-shard (N/4), which `integration` waits for).
+#   apply_pass_frontend ci.yml runs on pull_request: matrix job `test`, reported as `test (N)`.
+#   ai_backend          no pull_request test check on dev: the "Lint & test" job runs only
+#                       from push to dev and from PRs to main. Its .no-mistakes.yaml has
+#                       no commands.test, so the local test step is the only dev-bound test.
+#   applypass-infra, applypass-plugins, auto_applier_py, auto_scraper: no test workflow.
+apply_pass_backend unit
+apply_pass_backend integration
+apply_pass_frontend test \([0-9]+\)
+ai_backend -
+applypass-infra -
+applypass-plugins -
+auto_applier_py -
+auto_scraper -

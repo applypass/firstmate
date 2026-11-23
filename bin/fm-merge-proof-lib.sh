@@ -14,11 +14,15 @@
 #      A section whose heading matches the pattern, such as "## Not checked
 #      here", refuses on its heading and on each non-blank line under it.
 #   2. The no-mistakes test step was skipped (a "**Test** - skipped" section
-#      or an attestation with test status "skipped") AND no check whose name
-#      has "test" or "tests" as a word (any case) concluded SUCCESS in the
-#      rollup. The rollup is read live for the current head, so "at the head"
-#      holds by construction. A skipped test step alone does not block: dev-bound PRs
-#      skip it by design and rely on GitHub CI.
+#      or an attestation with test status "skipped") AND the PR's CI did not
+#      run the tests. A project that declares CI test checks in
+#      .fork/ci-test-checks needs every declared check to have concluded
+#      SUCCESS in the rollup; any other project needs a check whose name has
+#      "test" or "tests" as a word (any case). The project is
+#      FM_MERGE_PROOF_PROJECT, set by the caller. The rollup is read live for
+#      the current head, so "at the head" holds by construction. A skipped test
+#      step alone does not block: dev-bound PRs of a project with declared CI
+#      test checks skip it by design (bin/fm-nm-base-skip-pretool-check.sh).
 # A caller waives a finding with --waive-proof <line> <reason> (repeatable).
 # The line must equal one whole finding, as the refusal prints it, after
 # trimming; the reason must be non-empty. Every waived finding is returned in
@@ -38,8 +42,12 @@ FM_MERGE_PROOF_APPENDIX_MARKER='<!-- no-mistakes-pr-appendix'
 # Fragments of the no-mistakes body that say its test step was skipped.
 FM_MERGE_PROOF_SKIP_PATTERN='\*\*Test\*\* - skipped|"step":"test","status":"skipped"'
 
+# shellcheck source=bin/fm-ci-test-checks-lib.sh
+. "$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/fm-ci-test-checks-lib.sh"
+
 FM_MERGE_PROOF_REFUSALS=
 FM_MERGE_PROOF_WAIVED=
+FM_MERGE_PROOF_PROJECT=${FM_MERGE_PROOF_PROJECT:-}
 
 # Print each unchecked line of the body before the no-mistakes appendix marker:
 # every line outside the background sections, plus each non-blank line under a
@@ -68,13 +76,26 @@ fm_merge_proof_skip_fragment() {  # <body>
   printf '%s\n' "$1" | grep -oE -- "$FM_MERGE_PROOF_SKIP_PATTERN" | head -n 1 || true
 }
 
-# Whether the rollup JSON holds a passed check with "test" or "tests" as a word in its name.
-fm_merge_proof_green_test_job() {  # <pr json>
-  printf '%s' "$1" | jq -e '
+# Whether the rollup JSON holds a green check matching <regex> (lower-case name).
+fm_merge_proof_green_match() {  # <pr json> <regex>
+  printf '%s' "$1" | jq -e --arg re "$2" '
     [ (.statusCheckRollup // [])[]
-      | select(((.name // .context // "") | ascii_downcase | test("(^|[^a-z])tests?([^a-z]|$)"))
+      | select(((.name // .context // "") | ascii_downcase | test($re))
                and ((.conclusion // .state // "") == "SUCCESS")) ]
     | length > 0' >/dev/null 2>&1
+}
+
+# Whether the rollup proves the tests ran: every declared CI test check of the
+# project is green, else a check with "test" or "tests" as a word in its name.
+fm_merge_proof_green_test_job() {  # <pr json>
+  local pattern patterns
+  patterns=$(fm_ci_test_checks_patterns "$FM_MERGE_PROOF_PROJECT")
+  [ -n "$patterns" ] || { fm_merge_proof_green_match "$1" '(^|[^a-z])tests?([^a-z]|$)'; return; }
+  while IFS= read -r pattern; do
+    fm_merge_proof_green_match "$1" "^(.* / )?($pattern)\$" || return 1
+  done <<EOF
+$patterns
+EOF
 }
 
 fm_merge_proof_trim() {  # <text>
@@ -86,7 +107,7 @@ fm_merge_proof_trim() {  # <text>
 # Return 0 when the PR proof is acceptable, 1 after setting FM_MERGE_PROOF_REFUSALS.
 fm_merge_proof_evaluate() {  # <pr json>
   local json=$1 body finding findings='' fragment i n waiver reason covered w
-  local unchecked
+  local unchecked what declared
   FM_MERGE_PROOF_REFUSALS=
   FM_MERGE_PROOF_WAIVED=
   body=$(printf '%s' "$json" | jq -r '.body // ""' 2>/dev/null) || body=
@@ -152,7 +173,10 @@ $(fm_merge_proof_trim "$waiver")
     [ "$covered" -eq 0 ] || continue
     case "$finding" in
       *'Test** - skipped'*|*'"step":"test"'*)
-        FM_MERGE_PROOF_REFUSALS="$FM_MERGE_PROOF_REFUSALS  - the no-mistakes test step was skipped and no test check (a name with \"test\" or \"tests\" as a word) passed at this head; pass the tests in CI, or waive with: --waive-proof '$finding' '<reason>'
+        what='no test check (a name with "test" or "tests" as a word)'
+        declared=$(fm_ci_test_checks_patterns "$FM_MERGE_PROOF_PROJECT" | paste -sd, - | sed 's/,/, /g')
+        [ -z "$declared" ] || what="not every declared CI test check ($declared)"
+        FM_MERGE_PROOF_REFUSALS="$FM_MERGE_PROOF_REFUSALS  - the no-mistakes test step was skipped and $what passed at this head; pass the tests in CI, or waive with: --waive-proof '$finding' '<reason>'
 "
         ;;
       *)
