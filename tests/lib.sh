@@ -37,6 +37,8 @@ export FM_CLEAR_REMINDER=off
 export FM_TASK_LEDGER=off
 # Fork-only: the never-wait checks (brief check at spawn, blocked-status sweep) stay out of fixtures.
 export FM_NEVER_WAIT=off
+# Fork-only: the scout framing check (teardown backstop) stays out of fixtures; fm-framing and fm-teardown tests set it themselves.
+export FM_FRAMING_GATE=off
 # Fork-only end
 
 # Pin the fixture umask. Firstmate's state-root and process-event contracts

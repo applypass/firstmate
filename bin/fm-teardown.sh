@@ -3724,6 +3724,9 @@ if [ "$KIND" = scout ] && [ "$FORCE" != "--force" ]; then
     echo "Inventory its report and any visual review through bin/fm-captain-hold.sh before teardown." >&2
     exit 1
   fi
+  # Fork-only: framing-list backstop (bin/fm-framing.sh; FM_FRAMING_GATE=warn|fail|off, default warn).
+  "$SCRIPT_DIR/fm-framing.sh" gate "$REPORT" "$ID" || exit 1
+  # Fork-only end
 fi
 
 # A public commitment is not kept until its final reply lands in the ORIGINAL

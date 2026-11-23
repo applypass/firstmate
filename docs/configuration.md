@@ -489,6 +489,23 @@ Check 3 and 5 judge a worker's own lines only.
 A line the system wrote does not count: one whose note starts `system:` or whose key is machine-written (`pending-reply-`, `remote-reply-continuity-`, `branch-outcome-`, `child-outcome-`, `captain-hold-`).
 The sweep judges the latest blocked line of an open block, so a worker that re-blocks with a legal reason is not rejected for its first line.
 
+### Framing gate (applypass fork)
+
+Gate 0 of the SDLC is research that answers eight questions before any solution: five whys from evidence, need, who and how many it affects, how often, manual vs automated ROI, whether a small product change removes it, whether a non-code way is simpler, and who owns the metric it is judged by.
+Each later gate's review rejects work whose framing answers are missing.
+`bin/fm-framing.sh` holds the eight labels once.
+
+- `bin/fm-brief.sh` prints the full block into every scout brief, reviews included.
+  A report answers in a `## Framing` section: `Label: answer` lines, one table row per item for a review, or `Not applicable: <reason>` for a pure data pull.
+  `unknown - <cheapest way to find out>` counts as an answer; a bare `unknown` does not.
+- A ship brief gets the short form (the labels on one line) only when `data/decided.md` has no approved `[plan-<id>]` entry for the task at scaffold time.
+  A ship with an approved plan gets nothing extra.
+- `bin/fm-framing.sh check <report>` proves the answers exist, not that they are right.
+- Scout cleanup in `bin/fm-teardown.sh` runs `bin/fm-framing.sh gate`.
+  `FM_FRAMING_GATE=warn` (default) prints a warning and continues, `fail` refuses cleanup, and `off` skips the check.
+  `tests/lib.sh` sets `off` for fixtures.
+  The default moves from `warn` to `fail` after one week of warnings, in a separate change.
+
 ### Wake noise (applypass fork)
 
 Each wake costs the supervisor one turn, so `bin/fm-wake-noise-lib.sh` holds back wakes that add no new fact.

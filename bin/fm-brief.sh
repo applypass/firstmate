@@ -751,7 +751,7 @@ When the report is complete, append \`done [at=<epoch>]: {one-line conclusion}\`
 If your findings reveal work that should ship (e.g. you reproduced a bug and the fix is clear), say so in the report; firstmate may promote this task in place, and you would then receive mode-specific ship instructions as a follow-up message.
 EOF
 fm_handbook_brief_block "$FM_HOME" "$PROJECT_DIR" "$FM_ROOT" >> "$BRIEF"  # Fork-only
-fm_cleanup_brief_block >> "$BRIEF"  # Fork-only
+{ fm_cleanup_brief_block; "$SCRIPT_DIR/fm-framing.sh" brief-block "$FM_ROOT"; } >> "$BRIEF"  # Fork-only
 append_brief_include
 echo "scaffolded: $BRIEF (scout; replace {TASK} and {FIRSTMATE_SPEC})"
 exit 0
@@ -833,7 +833,7 @@ A correction edits only the wrong text: do not run \`$FM_ROOT/bin/fm-ensure-agen
 $DOD
 EOF
 fm_handbook_brief_block "$FM_HOME" "$PROJECT_DIR" "$FM_ROOT" >> "$BRIEF"  # Fork-only
-{ fm_cleanup_brief_block; fm_release_audit_brief_block; } >> "$BRIEF"  # Fork-only
+{ fm_cleanup_brief_block; fm_release_audit_brief_block; "$SCRIPT_DIR/fm-framing.sh" ship-block "$FM_ROOT" "$DATA" "$ID"; } >> "$BRIEF"  # Fork-only
 append_brief_include
 if [ "$FORGE" = none ]; then
   echo "scaffolded: $BRIEF (ship, mode=$MODE; replace {TASK} and {FIRSTMATE_SPEC})"
