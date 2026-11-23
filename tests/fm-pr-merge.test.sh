@@ -4687,14 +4687,14 @@ test_app_bound_required_status_context_matches_by_name
 test_required_partial_reads_report_all_failures
 # Fork-only: a merge whose live base is main is refused without --release-main.
 # Every waiver path needs --decision-key naming a decision fm-decide.sh recorded
-# for this task whose text quotes the captain. Each refusal exits 2 before any
+# for this task whose text quotes the captain as captain: "...". Each refusal exits 2 before any
 # merge call; a valid key passes the gate and merges.
 test_waivers_need_a_recorded_captain_decision() {
   local case_dir rc name key url want
   local head=a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7
   local flags args n=0
   for name in red missing proof nopipeline; do
-    for key in none unknown unquoted wrongtask good; do
+    for key in none unknown unquoted unattributed wrongtask good; do
       n=$((n + 1))
       url=https://github.com/example/repo/pull/$((700 + n))
       case "$name" in
@@ -4717,11 +4717,13 @@ test_waivers_need_a_recorded_captain_decision() {
       esac
       seed_waiver_decision "$case_dir/home" task-x1
       seed_waiver_decision "$case_dir/home" task-x1-bare 'waive with no quote'
+      seed_waiver_decision "$case_dir/home" task-x1-lint 'allow-red "lint" - flaky, merging'
       seed_waiver_decision "$case_dir/home" other-task
       args=(); want=2
       case "$key" in
         unknown) args=(--decision-key task-x1-nothing) ;;
         unquoted) args=(--decision-key task-x1-bare-waiver) ;;
+        unattributed) args=(--decision-key task-x1-lint-waiver) ;;
         wrongtask) args=(--decision-key other-task-waiver) ;;
         good) args=(--decision-key task-x1-waiver); want=0 ;;
       esac

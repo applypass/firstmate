@@ -183,7 +183,7 @@
 # --waive-proof <line> <reason> (repeatable, attended-only) waives a finding and
 # records proof_waiver= and proof_waiver_reason= in the task meta. The rules
 # and the GitLab/Forgejo gap live in bin/fm-merge-proof-lib.sh.
-# Every waiver flag also needs --decision-key <key>, a fm-decide.sh record for the task quoting the captain (bin/fm-waiver-key-lib.sh).
+# Every waiver flag also needs --decision-key <key>, a fm-decide.sh record for the task quoting the captain as captain: "<words>" (bin/fm-waiver-key-lib.sh).
 #
 # Usage: fm-pr-merge.sh <task-id> <pr-url> [--attended-override] [--release-main] [--waive-proof <line> <reason>] [--allow-red <check-name>] [--allow-missing <check-name>] [--allow-no-pipeline] [--decision-key <key>] [-- <extra forge merge args>]
 #

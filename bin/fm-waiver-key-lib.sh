@@ -5,7 +5,9 @@
 # needs the captain's explicit word. fm_waiver_key_require turns that rule into a
 # check: the caller passes --decision-key <key>, and the key must be one that
 # bin/fm-decide.sh recorded for this task (the key is the task id or starts with
-# "<task-id>-") whose text quotes the captain's words in double quotes.
+# "<task-id>-") whose text quotes the captain's words with the word "captain" right
+# before the quote: captain: "<words>" or captain said "<words>" (any case, straight
+# or curly quotes, 3+ characters inside). A bare quoted span such as "lint" fails.
 # It reads the entry through `fm-decide.sh show`, the one reader of decided.md.
 #
 # fm_waiver_key_require <task-id> <key> <waiver-flag>...
@@ -33,8 +35,8 @@ fm_waiver_key_require() {
     echo "error: --decision-key '$key' is not recorded in data/decided.md; record the captain's words with: fm-decide.sh record $key '<what was waived> - captain: \"<the captain's exact words>\"'" >&2
     return 1
   fi
-  if ! printf '%s' "$text" | grep -Eq '("[^"]{3,}"|“[^”]{3,}”)'; then
-    echo "error: decision '$key' does not quote the captain; its text must include the captain's exact words in double quotes; record a new key with: fm-decide.sh record ${key}-quoted '<what was waived> - captain: \"<the captain's exact words>\"'" >&2
+  if ! printf '%s' "$text" | grep -Eiq 'captain([[:space:]]+said)?:?[[:space:]]*("[^"]{3,}"|“[^”]{3,}”)'; then
+    echo "error: decision '$key' does not quote the captain; its text must attribute the captain's exact words as captain: \"<words>\" or captain said \"<words>\"; record a new key with: fm-decide.sh record ${key}-quoted '<what was waived> - captain: \"<the captain's exact words>\"'" >&2
     return 1
   fi
   return 0
