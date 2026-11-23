@@ -12,6 +12,10 @@
 #   3. An option list never picks credits or extra usage.
 #   4. An endpoint still stopped after the retries surfaces exactly once.
 #   5. Detection is idempotent and ignores a screen that only mentions a limit.
+#   7. Reset parse (23 Nov): "resets 2:30am" read at 03:10 the same day is today, not
+#      tomorrow; a time far past still rolls to tomorrow.
+#   8. Primary chat (23 Nov): the primary session's pane is recorded at session start and a
+#      usage-limit stop in it is recorded, left alone before reset, and resumed after it.
 #   6. Sleep/wake (fork-only, docs/usage-limit-resume.md): a wall-clock gap across ticks
 #      plus a connection-error stop at an idle prompt is recorded and resumed after the
 #      settle time; a retrying spinner, a quoted marker and a working agent are not stops;
@@ -47,7 +51,7 @@ case "${1:-}" in
     for a in "$@"; do case "$a" in *cursor_y*) printf '1\n'; exit 0 ;; esac; done
     printf 'fakepane\n'; exit 0 ;;
   capture-pane) cat "$FM_SCREENS/$win" 2>/dev/null; exit 0 ;;
-  list-windows) printf 'fm-mate\nfm-work\n'; exit 0 ;;
+  list-windows) printf 'fm-mate\nfm-work\nfm-main\n'; exit 0 ;;
 esac
 exit 0
 SH
@@ -368,3 +372,91 @@ test_retrying_or_working_is_not_a_stop
 test_connection_stop_without_wake_waits_longer
 test_sleep_resume_bounded_and_surfaced_once
 test_limit_screen_stays_on_limit_path
+
+# --- reset parse: a time a few hours past is today (23 Nov) ----------------------
+utc() { TZ=UTC date -j -f '%Y-%m-%d %H:%M:%S' "$1:00" +%s 2>/dev/null \
+  || TZ=UTC date -d "$1" +%s; }
+
+reset_of() { # <now-epoch> <banner>
+  printf '%s\n' "$2" | "$DETECT" --now "$1" | sed -n 's/^reset=//p'
+}
+
+test_reset_few_hours_past_is_today() {
+  local banner got
+  banner='5-hour limit reached - resets 2:30am (UTC)'
+  got=$(reset_of "$(utc '2026-11-23 03:10')" "$banner")
+  [ "$got" = "$(utc '2026-11-23 02:30')" ] || fail "02:30 read at 03:10 must be today, got $got"
+  got=$(reset_of "$(utc '2026-11-23 07:50')" "$banner")
+  [ "$got" = "$(utc '2026-11-23 02:30')" ] || fail "02:30 read at 07:50 (5h20m past) must be today, got $got"
+  got=$(reset_of "$(utc '2026-11-23 15:00')" "$banner")
+  [ "$got" = "$(utc '2026-11-24 02:30')" ] || fail "02:30 read at 15:00 (far past) must be tomorrow, got $got"
+  got=$(reset_of "$(utc '2026-11-23 01:00')" "$banner")
+  [ "$got" = "$(utc '2026-11-23 02:30')" ] || fail "02:30 read at 01:00 must be today, got $got"
+  pass "usage-limit: a reset time a few hours past is today, a far-past one is tomorrow"
+}
+
+# --- primary chat: main's own pane is recorded and resumed (23 Nov) --------------
+PRIMARY_SCREEN=$'earlier output\n5-hour limit reached - resets 3:10am (Asia/Kolkata)'
+
+test_primary_endpoint_record() {
+  local dir
+  dir=$(setup_case primrec)
+  env -u TMUX_PANE -u HERDR_ENV -u HERDR_PANE_ID -u FM_SUPERVISOR_TARGET PATH="$dir/fakebin:$PATH" \
+    FM_HOME="$dir/home" "$ROOT/bin/fm-primary-endpoint.sh" record >/dev/null 2>&1
+  [ ! -e "$dir/home/state/.primary-endpoint" ] || fail "no pane found: nothing may be recorded"
+  env -u HERDR_ENV -u HERDR_PANE_ID -u FM_SUPERVISOR_TARGET PATH="$dir/fakebin:$PATH" TMUX_PANE=sess:fm-main \
+    CLAUDECODE=1 FM_HOME="$dir/home" "$ROOT/bin/fm-primary-endpoint.sh" record >/dev/null 2>&1
+  assert_contains "$(cat "$dir/home/state/.primary-endpoint")" "target=sess:fm-main" "primary target recorded"
+  assert_contains "$(cat "$dir/home/state/.primary-endpoint")" "backend=tmux" "primary backend recorded"
+  pass "usage-limit: the primary session's pane is recorded at session start"
+}
+
+test_primary_stop_recorded_and_resumed() {
+  local dir t0 reset out
+  dir=$(setup_case primary)
+  printf '%s\n' "$PRIMARY_SCREEN" >"$dir/screens/fm-main"
+  env -u HERDR_ENV -u HERDR_PANE_ID -u FM_SUPERVISOR_TARGET PATH="$dir/fakebin:$PATH" TMUX_PANE=sess:fm-main \
+    CLAUDECODE=1 FM_HOME="$dir/home" "$ROOT/bin/fm-primary-endpoint.sh" record >/dev/null 2>&1
+  t0=$(ist '2026-11-14 02:50')
+  reset=$(ist '2026-11-14 03:10')
+  tick "$dir" "$t0" >/dev/null
+  [ -f "$dir/home/state/primary.usage-limit" ] || fail "primary stop not recorded"
+  assert_contains "$(cat "$dir/home/state/primary.usage-limit")" "kind=primary" "primary kind"
+  assert_contains "$(cat "$dir/home/state/primary.usage-limit")" "reset_epoch=$reset" "primary reset parsed"
+  tick "$dir" $((t0 + 60)) >/dev/null
+  ! grep -q 'fm-main' "$dir/send.log" || fail "nothing may be typed into main before reset: $(cat "$dir/send.log")"
+  tick "$dir" $((reset + 120)) >/dev/null
+  grep 'fm-main' "$dir/send.log" | grep -q 'usage limit has reset' \
+    || fail "main's chat got no resume at reset: $(cat "$dir/send.log")"
+  printf '%s\n' "$OK_SCREEN" >"$dir/screens/fm-main"
+  out=$(tick "$dir" $((reset + 240)))
+  [ -z "$out" ] || fail "a recovered primary prints nothing: $out"
+  [ ! -e "$dir/home/state/primary.usage-limit" ] || fail "primary record not cleared after recovery"
+  pass "usage-limit: a stop in the primary chat is recorded, waits for reset, resumes, clears"
+}
+
+test_primary_stuck_surfaces_once() {
+  local dir t0 reset out lines n
+  dir=$(setup_case primstuck)
+  printf '%s\n' "$PRIMARY_SCREEN" >"$dir/screens/fm-main"
+  printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
+  t0=$(ist '2026-11-14 02:50')
+  reset=$(ist '2026-11-14 03:10')
+  tick "$dir" "$t0" >/dev/null
+  lines=''
+  for n in 1 2 3 4 5 6 7 8; do
+    out=$(tick "$dir" $((reset + 100 + n * 130)))
+    lines="$lines$out"$'\n'
+  done
+  [ "$(printf '%s' "$lines" | grep -c 'usage-limit stuck')" = 1 ] \
+    || fail "a stuck primary must surface exactly once: $lines"
+  assert_contains "$lines" "endpoint=primary" "evidence names the primary"
+  [ "$(grep 'fm-main' "$dir/send.log" | grep -c 'usage limit has reset')" = 3 ] \
+    || fail "primary retries are bounded to 3: $(cat "$dir/send.log")"
+  pass "usage-limit: a stuck primary surfaces once after bounded retries"
+}
+
+test_reset_few_hours_past_is_today
+test_primary_endpoint_record
+test_primary_stop_recorded_and_resumed
+test_primary_stuck_surfaces_once

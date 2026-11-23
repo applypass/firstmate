@@ -85,7 +85,8 @@ fm_usage_limit_parse_reset() {
       else
         d=$(fm_ul_today "$tz" "$now" %Y-%m-%d)
         cand=$(fm_ul_epoch "$tz" "$d" "$hm") || continue
-        [ "$cand" -gt $((now - 60)) ] || cand=$((cand + 86400))
+        # Fork-only: a time up to FM_UL_PAST_SECS (6h) past is today, not tomorrow.
+        [ "$cand" -gt $((now - ${FM_UL_PAST_SECS:-21600})) ] || cand=$((cand + 86400))
       fi
       [ "$had_nocase" = 1 ] || shopt -u nocasematch
       printf '%s\n' "$cand"

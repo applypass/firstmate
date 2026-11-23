@@ -18,6 +18,10 @@
 # connection-error stop at an idle prompt writes state/<id>.sleep-resume (cause=wake).
 # The same stop with no wake gap is cause=network. Resume after FM_SR_SETTLE_WAKE_SECS
 # (wake) or FM_SR_SETTLE_NET_SECS (network), same bounded retries, `sleep-resume stuck` line.
+# Primary chat: main's own session has no meta, so bin/fm-primary-endpoint.sh records its pane in
+# state/.primary-endpoint at session start. The same sweep reads that pane, records
+# state/primary.usage-limit (kind=primary) and, after reset, types the resume text straight into
+# it through the backend (never fm-send, which needs a task id). A half-typed composer is left alone.
 # Prints nothing except a stuck line; the watcher turns that into a wake.
 # Nothing is killed, torn down or discarded. Contract: docs/usage-limit-resume.md.
 set -u
@@ -97,12 +101,24 @@ send_resume() {  # <id> <kind> <first_seen> <attempt> [cause]
   local id=$1 kind=$2 first=$3 attempt=$4 cause=${5:-limit} ref text did
   case "$cause" in limit) ref="ul-$first-$attempt" ;; *) ref="sr-$first-$attempt" ;; esac
   text=$(resume_text "$ref" "$cause")
-  if [ "$kind" = mate ]; then
+  if [ "$kind" = primary ]; then
+    primary_send_text "$text"
+  elif [ "$kind" = mate ]; then
     did=$(delivery_id "$id" "$first" "$attempt")
     FM_HOME="$FM_HOME" "$SEND" "$id" --fire-and-forget "$did" "$text" >/dev/null 2>&1
   else
     FM_HOME="$FM_HOME" "$SEND" "$id" "$text" >/dev/null 2>&1
   fi
+}
+
+# Primary chat sends go straight to main's recorded pane. handle_target skips the attempt while
+# the composer holds text (the captain is typing).
+PRIMARY_BACKEND='' PRIMARY_TARGET=''
+primary_send_text() {  # <text>
+  fm_backend_send_text_submit "$PRIMARY_BACKEND" "$PRIMARY_TARGET" "$1" 3 0.4 "${FM_SEND_SETTLE:-1}" >/dev/null 2>&1
+}
+primary_send_key() {  # <key>
+  fm_backend_send_key "$PRIMARY_BACKEND" "$PRIMARY_TARGET" "$1" >/dev/null 2>&1
 }
 
 # A wall-clock gap between ticks is a wake. Records the wake epoch for the sweep window.
@@ -160,8 +176,7 @@ handle_sleep_resume() {  # <id> <kind> <backend> <target> <screen>
 }
 
 handle_endpoint() {  # <meta>
-  local meta=$1 id backend target kind harness rec screen first reset attempts last
-  local source stuck_text
+  local meta=$1 id backend target kind harness
   id=$(basename "$meta" .meta)
   case "$id" in ''|*[!A-Za-z0-9._-]*|.*) return 0 ;; esac
   [ -z "$(fm_meta_get "$meta" remote_host)" ] || return 0
@@ -171,6 +186,22 @@ handle_endpoint() {  # <meta>
   harness=$(fm_meta_get "$meta" harness)
   kind=worker
   [ "$(fm_meta_get "$meta" kind)" = secondmate ] && kind=mate
+  handle_target "$id" "$kind" "$backend" "$target" "$harness"
+}
+
+# Main's own chat: the pane bin/fm-primary-endpoint.sh recorded at session start.
+handle_primary() {
+  local file="$STATE/.primary-endpoint"
+  [ -f "$file" ] || return 0
+  PRIMARY_BACKEND=$(rec_get "$file" backend)
+  PRIMARY_TARGET=$(rec_get "$file" target)
+  [ -n "$PRIMARY_BACKEND" ] && [ -n "$PRIMARY_TARGET" ] || return 0
+  handle_target primary primary "$PRIMARY_BACKEND" "$PRIMARY_TARGET" "$(rec_get "$file" harness)"
+}
+
+handle_target() {  # <id> <kind> <backend> <target> <harness>
+  local id=$1 kind=$2 backend=$3 target=$4 harness=$5 rec screen first reset attempts last
+  local source stuck_text
   rec="$STATE/$id.usage-limit"
 
   screen=$(capture_screen "$backend" "$target") || return 0
@@ -224,12 +255,20 @@ handle_endpoint() {  # <meta>
     return 0
   fi
   [ "$NOW" -ge $((last + RETRY_SECS)) ] || return 0
+  if [ "$kind" = primary ] && [ "$(fm_backend_composer_state "$backend" "$target" 2>/dev/null)" = pending ]; then
+    return 0   # the captain is typing: wait, and do not spend an attempt
+  fi
 
   attempts=$((attempts + 1))
   rec_set "$rec" attempts "$attempts" && rec_set "$rec" last_attempt "$NOW" || return 0
   # Dismiss a menu only when its highlighted option waits; never a credits option.
   case "$FM_UL_KEY" in
-    Enter|Escape) FM_HOME="$FM_HOME" "$SEND" "$id" --key "$FM_UL_KEY" >/dev/null 2>&1 || true ;;
+    Enter|Escape)
+      if [ "$kind" = primary ]; then
+        primary_send_key "$FM_UL_KEY" || true
+      else
+        FM_HOME="$FM_HOME" "$SEND" "$id" --key "$FM_UL_KEY" >/dev/null 2>&1 || true
+      fi ;;
   esac
   send_resume "$id" "$kind" "$first" "$attempts" || true
 }
@@ -241,4 +280,5 @@ for meta in "$STATE"/*.meta; do
   [ -f "$meta" ] || continue
   handle_endpoint "$meta"
 done
+handle_primary
 exit 0

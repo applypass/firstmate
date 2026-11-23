@@ -19,6 +19,16 @@ This fork detects the stop with plain scripts and resumes each endpoint after th
 
 `bin/fm-crew-state.sh` reports an endpoint with a record as `blocked` (source `usage-limit`), never as healthy idle.
 
+## Main's own chat
+
+Main has no `state/*.meta`, so the sweep above would never see its session.
+`bin/fm-session-start.sh` runs `bin/fm-primary-endpoint.sh record` in the locked start, and that script writes the pane it runs in to `state/.primary-endpoint` (`backend`, `target`, `harness`).
+When no pane is found it removes the record instead of keeping an old one.
+Each tick then sweeps that pane like any other endpoint, with `kind=primary` and the record `state/primary.usage-limit`.
+After the reset it types the resume text straight into the pane through the backend, because `bin/fm-send.sh` needs a task id.
+It waits while the composer holds text, so it never types over the captain, and a skipped tick costs no attempt.
+The retry limit, the menu rule and the one `usage-limit stuck` line are the same as for any endpoint.
+
 ## Sleep and network stops
 
 A laptop sleep kills every request in flight, and an agent can sit at an idle prompt with a connection error until someone types.
@@ -44,6 +54,8 @@ Pmset logs are not read; the tick-gap is the wake signal.
 The tick reads the reset from the screen first and honors a timezone shown there, for example `resets 3:10am (Asia/Kolkata)`.
 Without one it asks `quota-axi --json --no-credential-refresh` for the exhausted `five_hour` or `seven_day` window.
 Without that it assumes 15 minutes and re-reads the screen each tick.
+A time with no date, such as `resets 2:30am`, means today when it is at most 6 hours past (`FM_UL_PAST_SECS`), and tomorrow when it is older.
+A banner read just after the reset therefore resumes at once instead of waiting a day.
 
 ## Menus
 
