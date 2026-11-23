@@ -1,0 +1,111 @@
+### task meta present at /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.qkGoOf/state/task-x1.meta; forge CLIs (gh, gh-axi, glab) are offline stubs that log and fail
+
+================ --waive-proof L1 reason (https://github.com/example-lab/repo/pull/886) ================
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --waive-proof L1 reason
+error: --waive-proof needs the captain's explicit word recorded as a decision; record it with: fm-decide.sh record task-x1-waiver '<what was waived> - captain: "<the captain's exact words>"', then pass --decision-key task-x1-waiver
+[exit 2]
+  forge calls made: 0 
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --waive-proof L1 reason --decision-key task-x1-lint
+error: decision 'task-x1-lint' does not quote the captain; its text must attribute the captain's exact words as captain: "<words>" or captain said "<words>"; record a new key with: fm-decide.sh record task-x1-lint-quoted '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls made: 0 
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --waive-proof L1 reason --decision-key task-x1-waiver
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+●  WATCHER DOWN - SUPERVISION IS OFF
+●  1 task(s) in flight, but no watcher has a fresh beacon (last beat: never, grace 300s).
+●  Trust the emitted supervision protocol for this harness; do not use shell & for watcher repair.
+●  This is a supervision warning only; the guarded operation WILL still run.
+●  After draining queued wakes, watcher supervision needs Stop-owned automatic recovery; inspect the hook registration and startup status before ending the turn.
+●━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+error: named head cd7b00d2341718434259fe583b1898e28f43753e is unreachable outside the worker copy
+[exit 1]
+  forge calls made: 1 (first: fake-gh pr view https://github.com/example-lab/repo/pull/886 --json headRefOid -q .headRefOid)
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --waive-proof L1 reason --decision-key task-x1-curly
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+error: named head cd7b00d2341718434259fe583b1898e28f43753e is unreachable outside the worker copy
+[exit 1]
+  forge calls made: 1 (first: fake-gh pr view https://github.com/example-lab/repo/pull/886 --json headRefOid -q .headRefOid)
+
+================ --allow-red lint (https://github.com/example-lab/repo/pull/886) ================
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-red lint
+error: --allow-red needs the captain's explicit word recorded as a decision; record it with: fm-decide.sh record task-x1-waiver '<what was waived> - captain: "<the captain's exact words>"', then pass --decision-key task-x1-waiver
+[exit 2]
+  forge calls made: 0 
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-red lint --decision-key task-x1-lint
+error: decision 'task-x1-lint' does not quote the captain; its text must attribute the captain's exact words as captain: "<words>" or captain said "<words>"; record a new key with: fm-decide.sh record task-x1-lint-quoted '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls made: 0 
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-red lint --decision-key task-x1-waiver
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+error: named head cd7b00d2341718434259fe583b1898e28f43753e is unreachable outside the worker copy
+[exit 1]
+  forge calls made: 1 (first: fake-gh pr view https://github.com/example-lab/repo/pull/886 --json headRefOid -q .headRefOid)
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-red lint --decision-key task-x1-curly
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+error: named head cd7b00d2341718434259fe583b1898e28f43753e is unreachable outside the worker copy
+[exit 1]
+  forge calls made: 1 (first: fake-gh pr view https://github.com/example-lab/repo/pull/886 --json headRefOid -q .headRefOid)
+
+================ --allow-missing validate (https://github.com/example-lab/repo/pull/886) ================
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-missing validate
+error: --allow-missing needs the captain's explicit word recorded as a decision; record it with: fm-decide.sh record task-x1-waiver '<what was waived> - captain: "<the captain's exact words>"', then pass --decision-key task-x1-waiver
+[exit 2]
+  forge calls made: 0 
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-missing validate --decision-key task-x1-lint
+error: decision 'task-x1-lint' does not quote the captain; its text must attribute the captain's exact words as captain: "<words>" or captain said "<words>"; record a new key with: fm-decide.sh record task-x1-lint-quoted '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls made: 0 
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-missing validate --decision-key task-x1-waiver
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+error: named head cd7b00d2341718434259fe583b1898e28f43753e is unreachable outside the worker copy
+[exit 1]
+  forge calls made: 1 (first: fake-gh pr view https://github.com/example-lab/repo/pull/886 --json headRefOid -q .headRefOid)
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-missing validate --decision-key task-x1-curly
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+error: named head cd7b00d2341718434259fe583b1898e28f43753e is unreachable outside the worker copy
+[exit 1]
+  forge calls made: 1 (first: fake-gh pr view https://github.com/example-lab/repo/pull/886 --json headRefOid -q .headRefOid)
+
+================ --allow-no-pipeline (https://gitlab.com/example-lab/repo/-/merge_requests/886) ================
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://gitlab.com/example-lab/repo/-/merge_requests/886 --allow-no-pipeline
+error: --allow-no-pipeline needs the captain's explicit word recorded as a decision; record it with: fm-decide.sh record task-x1-waiver '<what was waived> - captain: "<the captain's exact words>"', then pass --decision-key task-x1-waiver
+[exit 2]
+  forge calls made: 0 
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://gitlab.com/example-lab/repo/-/merge_requests/886 --allow-no-pipeline --decision-key task-x1-lint
+error: decision 'task-x1-lint' does not quote the captain; its text must attribute the captain's exact words as captain: "<words>" or captain said "<words>"; record a new key with: fm-decide.sh record task-x1-lint-quoted '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls made: 0 
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://gitlab.com/example-lab/repo/-/merge_requests/886 --allow-no-pipeline --decision-key task-x1-waiver
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+error: named head cd7b00d2341718434259fe583b1898e28f43753e is unreachable outside the worker copy
+[exit 1]
+  forge calls made: 0 
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://gitlab.com/example-lab/repo/-/merge_requests/886 --allow-no-pipeline --decision-key task-x1-curly
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+error: named head cd7b00d2341718434259fe583b1898e28f43753e is unreachable outside the worker copy
+[exit 1]
+  forge calls made: 0 

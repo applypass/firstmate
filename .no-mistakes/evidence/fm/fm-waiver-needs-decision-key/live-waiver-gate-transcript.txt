@@ -1,0 +1,323 @@
+### setup: task ledger records pr-ready and captain-approval for task-x1
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-task-ledger.sh record task-x1 pr-ready
+[exit 0]
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-task-ledger.sh record task-x1 captain-approval
+[exit 0]
+
+### setup: record decisions with the real fm-decide.sh
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-decide.sh record task-x1-waiver waive proof line on PR 886 - captain: "merge 886 without proof" --story sc-14271
+fm-decide: recorded task-x1-waiver locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.qkGoOf/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+[exit 0]
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-decide.sh record task-x1-curly allow-red lint - Captain said “ship it anyway” --story sc-14271
+fm-decide: recorded task-x1-curly locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.qkGoOf/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+[exit 0]
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-decide.sh record task-x1-lint allow-red "lint" - flaky, merging --story sc-14271
+fm-decide: recorded task-x1-lint locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.qkGoOf/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+[exit 0]
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-decide.sh record task-x1-bare waive with no quote at all --story sc-14271
+fm-decide: recorded task-x1-bare locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.qkGoOf/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+[exit 0]
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-decide.sh record task-x1-short captain: "ok" --story sc-14271
+fm-decide: recorded task-x1-short locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.qkGoOf/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+[exit 0]
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-decide.sh record other-task-waiver captain: "merge it" --story sc-14271
+fm-decide: recorded other-task-waiver locally; posting to Shortcut in the background
+fm-decide: warning: direct writes to data/decided.md are not blocked here; add this to /var/folders/vr/_90lw3_s0bs_nw2f7b6t9yrm0000gn/T//fm-lab.qkGoOf/.claude/settings.local.json (merge into its "hooks"):
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-decide.sh' guard-hook"
+          }
+        ]
+      }
+    ]
+  }
+}
+[exit 0]
+
+### data/decided.md as written
+- [task-x1-waiver] 2026-11-23 waive proof line on PR 886 - captain: "merge 886 without proof" (shortcut: pending sc-14271)
+- [task-x1-curly] 2026-11-23 allow-red lint - Captain said “ship it anyway” (shortcut: pending sc-14271)
+- [task-x1-lint] 2026-11-23 allow-red "lint" - flaky, merging (shortcut: pending sc-14271)
+- [task-x1-bare] 2026-11-23 waive with no quote at all (shortcut: pending sc-14271)
+- [task-x1-short] 2026-11-23 captain: "ok" (shortcut: pending sc-14271)
+- [other-task-waiver] 2026-11-23 captain: "merge it" (shortcut: pending sc-14271)
+
+### fm-decide.sh show
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-decide.sh show task-x1-waiver
+waive proof line on PR 886 - captain: "merge 886 without proof"
+[exit 0]
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-decide.sh show task-x1-nothing
+[exit 1]
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-decide.sh show task-x1-wai
+[exit 1]
+
+================ waiver: --waive-proof L1 reason ================
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --waive-proof L1 reason
+error: --waive-proof needs the captain's explicit word recorded as a decision; record it with: fm-decide.sh record task-x1-waiver '<what was waived> - captain: "<the captain's exact words>"', then pass --decision-key task-x1-waiver
+[exit 2]
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --waive-proof L1 reason --decision-key task-x1-nothing
+error: --decision-key 'task-x1-nothing' is not recorded in data/decided.md; record the captain's words with: fm-decide.sh record task-x1-nothing '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --waive-proof L1 reason --decision-key task-x1-bare
+error: decision 'task-x1-bare' does not quote the captain; its text must attribute the captain's exact words as captain: "<words>" or captain said "<words>"; record a new key with: fm-decide.sh record task-x1-bare-quoted '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --waive-proof L1 reason --decision-key task-x1-lint
+error: decision 'task-x1-lint' does not quote the captain; its text must attribute the captain's exact words as captain: "<words>" or captain said "<words>"; record a new key with: fm-decide.sh record task-x1-lint-quoted '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --waive-proof L1 reason --decision-key task-x1-short
+error: decision 'task-x1-short' does not quote the captain; its text must attribute the captain's exact words as captain: "<words>" or captain said "<words>"; record a new key with: fm-decide.sh record task-x1-short-quoted '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --waive-proof L1 reason --decision-key other-task-waiver
+error: --decision-key 'other-task-waiver' is not for task task-x1; its key must be 'task-x1' or start with 'task-x1-'; record the captain's words with: fm-decide.sh record task-x1-waiver '<what was waived> - captain: "<the captain's exact words>"' and pass that key
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --waive-proof L1 reason --decision-key task-x1-waiver
+error: task metadata is unavailable
+[exit 1]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --waive-proof L1 reason --decision-key task-x1-curly
+error: task metadata is unavailable
+[exit 1]
+  forge calls after gate: 0
+
+================ waiver: --allow-red lint ================
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-red lint
+error: --allow-red needs the captain's explicit word recorded as a decision; record it with: fm-decide.sh record task-x1-waiver '<what was waived> - captain: "<the captain's exact words>"', then pass --decision-key task-x1-waiver
+[exit 2]
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-red lint --decision-key task-x1-nothing
+error: --decision-key 'task-x1-nothing' is not recorded in data/decided.md; record the captain's words with: fm-decide.sh record task-x1-nothing '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-red lint --decision-key task-x1-bare
+error: decision 'task-x1-bare' does not quote the captain; its text must attribute the captain's exact words as captain: "<words>" or captain said "<words>"; record a new key with: fm-decide.sh record task-x1-bare-quoted '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-red lint --decision-key task-x1-lint
+error: decision 'task-x1-lint' does not quote the captain; its text must attribute the captain's exact words as captain: "<words>" or captain said "<words>"; record a new key with: fm-decide.sh record task-x1-lint-quoted '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-red lint --decision-key task-x1-short
+error: decision 'task-x1-short' does not quote the captain; its text must attribute the captain's exact words as captain: "<words>" or captain said "<words>"; record a new key with: fm-decide.sh record task-x1-short-quoted '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-red lint --decision-key other-task-waiver
+error: --decision-key 'other-task-waiver' is not for task task-x1; its key must be 'task-x1' or start with 'task-x1-'; record the captain's words with: fm-decide.sh record task-x1-waiver '<what was waived> - captain: "<the captain's exact words>"' and pass that key
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-red lint --decision-key task-x1-waiver
+error: task metadata is unavailable
+[exit 1]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-red lint --decision-key task-x1-curly
+error: task metadata is unavailable
+[exit 1]
+  forge calls after gate: 0
+
+================ waiver: --allow-missing validate ================
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-missing validate
+error: --allow-missing needs the captain's explicit word recorded as a decision; record it with: fm-decide.sh record task-x1-waiver '<what was waived> - captain: "<the captain's exact words>"', then pass --decision-key task-x1-waiver
+[exit 2]
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-missing validate --decision-key task-x1-nothing
+error: --decision-key 'task-x1-nothing' is not recorded in data/decided.md; record the captain's words with: fm-decide.sh record task-x1-nothing '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-missing validate --decision-key task-x1-bare
+error: decision 'task-x1-bare' does not quote the captain; its text must attribute the captain's exact words as captain: "<words>" or captain said "<words>"; record a new key with: fm-decide.sh record task-x1-bare-quoted '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-missing validate --decision-key task-x1-lint
+error: decision 'task-x1-lint' does not quote the captain; its text must attribute the captain's exact words as captain: "<words>" or captain said "<words>"; record a new key with: fm-decide.sh record task-x1-lint-quoted '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-missing validate --decision-key task-x1-short
+error: decision 'task-x1-short' does not quote the captain; its text must attribute the captain's exact words as captain: "<words>" or captain said "<words>"; record a new key with: fm-decide.sh record task-x1-short-quoted '<what was waived> - captain: "<the captain's exact words>"'
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-missing validate --decision-key other-task-waiver
+error: --decision-key 'other-task-waiver' is not for task task-x1; its key must be 'task-x1' or start with 'task-x1-'; record the captain's words with: fm-decide.sh record task-x1-waiver '<what was waived> - captain: "<the captain's exact words>"' and pass that key
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-missing validate --decision-key task-x1-waiver
+error: task metadata is unavailable
+[exit 1]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-missing validate --decision-key task-x1-curly
+error: task metadata is unavailable
+[exit 1]
+  forge calls after gate: 0
+
+================ waiver: --allow-no-pipeline ================
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-no-pipeline
+error: --allow-no-pipeline applies only to GitLab, where it waives a merge request that has no head pipeline at all
+[exit 2]
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-no-pipeline --decision-key task-x1-nothing
+error: --allow-no-pipeline applies only to GitLab, where it waives a merge request that has no head pipeline at all
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-no-pipeline --decision-key task-x1-bare
+error: --allow-no-pipeline applies only to GitLab, where it waives a merge request that has no head pipeline at all
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-no-pipeline --decision-key task-x1-lint
+error: --allow-no-pipeline applies only to GitLab, where it waives a merge request that has no head pipeline at all
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-no-pipeline --decision-key task-x1-short
+error: --allow-no-pipeline applies only to GitLab, where it waives a merge request that has no head pipeline at all
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-no-pipeline --decision-key other-task-waiver
+error: --allow-no-pipeline applies only to GitLab, where it waives a merge request that has no head pipeline at all
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-no-pipeline --decision-key task-x1-waiver
+error: --allow-no-pipeline applies only to GitLab, where it waives a merge request that has no head pipeline at all
+[exit 2]
+  forge calls after gate: 0
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --allow-no-pipeline --decision-key task-x1-curly
+error: --allow-no-pipeline applies only to GitLab, where it waives a merge request that has no head pipeline at all
+[exit 2]
+  forge calls after gate: 0
+
+================ stray key, no waiver ================
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --decision-key task-x1-waiver
+error: --decision-key applies only with a waiver (--waive-proof, --allow-red, --allow-missing, --allow-no-pipeline)
+[exit 2]
+
+$ /Users/uayyagari/.no-mistakes/worktrees/c5d69c01912a/01M84M77XR7FPPQ645F4P8Q69W/bin/fm-pr-merge.sh task-x1 https://github.com/example-lab/repo/pull/886 --decision-key
+error: --decision-key requires a recorded decision key
+[exit 2]
