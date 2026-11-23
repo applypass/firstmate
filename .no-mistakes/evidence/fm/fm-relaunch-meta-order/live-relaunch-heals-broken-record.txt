@@ -1,0 +1,78 @@
+# Live lab: fixed relaunch run from a record an old (pre-fix) relaunch had broken (control_relaunch_tx after pr_head)
+
+## state/rl50.meta BEFORE (broken by pre-fix relaunch)
+window=primary:fm-rl50
+endpoint_task_id=rl50
+worktree=/private/tmp/fm-lab.JmPccV/wt
+project=/private/tmp/fm-lab.JmPccV/proj
+harness=claude
+approval_mode=bypass
+kind=ship
+mode=no-mistakes
+yolo=off
+branch=fm/rl50
+tasktmp=/tmp/fm-rl50
+model=default
+effort=default
+busy_gen=g1795418012.19775.18497
+spawn_gen=s1795418012.16904.12463
+validation_gate=on
+pr=https://github.com/applypass/firstmate/pull/107
+pr_head=a503c636c348e30236d19189638b67f4bc89c1f7
+control_relaunch_tx=14036.20261123T071329Z.5916
+
+## release output
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/tmp/fm-lab.JmPccV
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/tmp/fm-lab.JmPccV
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+warning: /private/tmp/fm-lab.JmPccV/data/rl50/launch-brief.md records no ship branch; defaulting to legacy branch fm/rl50
+warning: /private/tmp/fm-lab.JmPccV/data/rl50/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode no-mistakes - confirm its definition of done matches
+released rl50 at 163327b4e55b4c0ddd211b4c6844f7a2aef563d3 and relaunched a fresh worker from the hand-over note to run /no-mistakes on that head
+RC=0
+
+## state/rl50.meta AFTER fixed relaunch
+window=primary:fm-rl50
+endpoint_task_id=rl50
+worktree=/private/tmp/fm-lab.JmPccV/wt
+project=/private/tmp/fm-lab.JmPccV/proj
+harness=claude
+approval_mode=bypass
+kind=ship
+mode=no-mistakes
+yolo=off
+branch=fm/rl50
+tasktmp=/tmp/fm-rl50
+model=default
+effort=default
+busy_gen=g1795418054.47023.19077
+spawn_gen=s1795418056.43164.26450
+control_relaunch_tx=38160.20261123T071410Z.29781
+validation_gate=on
+pr=https://github.com/applypass/firstmate/pull/107
+pr_head=a503c636c348e30236d19189638b67f4bc89c1f7
+
+## watcher view
+--- state/rl50.meta (last 6 lines) ---
+busy_gen=g1795418054.47023.19077
+spawn_gen=s1795418056.43164.26450
+control_relaunch_tx=38160.20261123T071410Z.29781
+validation_gate=on
+pr=https://github.com/applypass/firstmate/pull/107
+pr_head=a503c636c348e30236d19189638b67f4bc89c1f7
+identity parse: ok (https://github.com/applypass/firstmate/pull/107)
+watcher snapshot: valid (PR poll kept)
+check file: present
+
+## watcher's validated merge poll against the real forge (applypass/firstmate#107)
+snapshot: github https://github.com/applypass/firstmate/pull/107
+poll rc=0 (empty output = PR still open, no wake)
+
+## worker pane after relaunch
+bash-5.3$ export COMPACT_ADVISER_DISABLE=1
+bash-5.3$ export FM_TASK_ID=rl50
+bash-5.3$ . '/tmp/fm-rl50+2845ff075a9d6aba0f93e0881a0a52197b6bf65e887f272696e7c12adcac1fce/launch.s1795418056.43164.26450.sh'
+Error: Invalid MCP configuration:
+MCP config file not found: /private/tmp/fm-lab.JmPccV/wt/: Firstmate operational input waiting: read '/private/tmp/fm-lab.JmPccV/state/operational-inbox/1795418059-5db60df32fd76cff.msg' and handle its
+ contents as Firstmate operational input.
+": Firstmate operational input waiting: …" was read as a value of --mcp-config, not as a prompt · put a prompt before --mcp-config or after --
+bash-5.3$

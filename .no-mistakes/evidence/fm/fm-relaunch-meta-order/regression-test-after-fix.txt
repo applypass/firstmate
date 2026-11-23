@@ -1,0 +1,1 @@
+ok - fm-control relaunch: control_relaunch_tx is written before pr=, so the merge poll still validates

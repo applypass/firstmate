@@ -1,0 +1,64 @@
+# Live lab REPRODUCTION on base 7862d5a4 bin/fm-spawn.sh (pre-fix), same lab and real path: fm-validation-gate.sh release -> fm-control.sh relaunch
+
+## state/rl50.meta BEFORE release
+window=primary:fm-rl50
+endpoint_task_id=rl50
+worktree=/private/tmp/fm-lab.JmPccV/wt
+project=/private/tmp/fm-lab.JmPccV/proj
+harness=claude
+approval_mode=bypass
+kind=ship
+mode=no-mistakes
+yolo=off
+branch=fm/rl50
+tasktmp=/tmp/fm-rl50
+model=default
+effort=default
+busy_gen=g1795417924.49183.28007
+spawn_gen=s1795417924.44847.30322
+control_relaunch_tx=34360.20261123T071200Z.5660
+validation_gate=on
+pr=https://github.com/applypass/firstmate/pull/107
+pr_head=a503c636c348e30236d19189638b67f4bc89c1f7
+
+## release output
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/tmp/fm-lab.JmPccV
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/tmp/fm-lab.JmPccV
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+warning: /private/tmp/fm-lab.JmPccV/data/rl50/launch-brief.md records no ship branch; defaulting to legacy branch fm/rl50
+warning: /private/tmp/fm-lab.JmPccV/data/rl50/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode no-mistakes - confirm its definition of done matches
+released rl50 at 824cd892d47f6f8732c4018c1075039096089c29 and relaunched a fresh worker from the hand-over note to run /no-mistakes on that head
+RC=0
+
+## state/rl50.meta AFTER release
+window=primary:fm-rl50
+endpoint_task_id=rl50
+worktree=/private/tmp/fm-lab.JmPccV/wt
+project=/private/tmp/fm-lab.JmPccV/proj
+harness=claude
+approval_mode=bypass
+kind=ship
+mode=no-mistakes
+yolo=off
+branch=fm/rl50
+tasktmp=/tmp/fm-rl50
+model=default
+effort=default
+busy_gen=g1795418012.19775.18497
+spawn_gen=s1795418012.16904.12463
+validation_gate=on
+pr=https://github.com/applypass/firstmate/pull/107
+pr_head=a503c636c348e30236d19189638b67f4bc89c1f7
+control_relaunch_tx=14036.20261123T071329Z.5916
+
+## watcher view after release
+--- state/rl50.meta (last 6 lines) ---
+busy_gen=g1795418012.19775.18497
+spawn_gen=s1795418012.16904.12463
+validation_gate=on
+pr=https://github.com/applypass/firstmate/pull/107
+pr_head=a503c636c348e30236d19189638b67f4bc89c1f7
+control_relaunch_tx=14036.20261123T071329Z.5916
+identity parse: REJECTED
+watcher snapshot: INVALID (PR poll dropped)
+check file: present

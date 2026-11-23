@@ -1,0 +1,76 @@
+# Live lab: real fm-validation-gate.sh release -> fm-final-run-handover relaunch-note -> fm-control.sh relaunch -> fm-spawn.sh --relaunch
+# Code: target commit a503c636 (fixed). Lab home: /private/tmp/fm-lab.JmPccV, private tmux socket fm-lab, real claude worker (normal login, lab HOME copy).
+
+## state/rl50.meta BEFORE release
+window=primary:fm-rl50
+endpoint_task_id=rl50
+worktree=/private/tmp/fm-lab.JmPccV/wt
+project=/private/tmp/fm-lab.JmPccV/proj
+harness=claude
+kind=ship
+mode=no-mistakes
+yolo=off
+tasktmp=/tmp/fm-rl50
+model=default
+effort=default
+validation_gate=on
+pr=https://github.com/applypass/firstmate/pull/107
+pr_head=a503c636c348e30236d19189638b67f4bc89c1f7
+
+## release output
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/tmp/fm-lab.JmPccV
+fm-gate-refuse: gate agent lifecycle permitted only against lab home /private/tmp/fm-lab.JmPccV
+WARNING: watcher still down (same stale episode; last beat: never, grace 300s) - full banner already printed this episode.
+warning: /private/tmp/fm-lab.JmPccV/data/rl50/launch-brief.md records no ship branch; defaulting to legacy branch fm/rl50
+warning: /private/tmp/fm-lab.JmPccV/data/rl50/launch-brief.md records no delivery contract line (scaffolded before ship briefs recorded one); launching on the explicit --mode no-mistakes - confirm its definition of done matches
+released rl50 at 96c0935cfb5f9640291685c76e7b42b72febadd3 and relaunched a fresh worker from the hand-over note to run /no-mistakes on that head
+RC=0
+
+## state/rl50.meta AFTER release
+window=primary:fm-rl50
+endpoint_task_id=rl50
+worktree=/private/tmp/fm-lab.JmPccV/wt
+project=/private/tmp/fm-lab.JmPccV/proj
+harness=claude
+approval_mode=bypass
+kind=ship
+mode=no-mistakes
+yolo=off
+branch=fm/rl50
+tasktmp=/tmp/fm-rl50
+model=default
+effort=default
+busy_gen=g1795417924.49183.28007
+spawn_gen=s1795417924.44847.30322
+control_relaunch_tx=34360.20261123T071200Z.5660
+validation_gate=on
+pr=https://github.com/applypass/firstmate/pull/107
+pr_head=a503c636c348e30236d19189638b67f4bc89c1f7
+
+## watcher view after release
+--- state/rl50.meta (last 6 lines) ---
+busy_gen=g1795417924.49183.28007
+spawn_gen=s1795417924.44847.30322
+control_relaunch_tx=34360.20261123T071200Z.5660
+validation_gate=on
+pr=https://github.com/applypass/firstmate/pull/107
+pr_head=a503c636c348e30236d19189638b67f4bc89c1f7
+identity parse: ok (https://github.com/applypass/firstmate/pull/107)
+watcher snapshot: valid (PR poll kept)
+check file: present
+
+## worker pane primary:fm-rl50 after relaunch (pane_current_command=bash)
+claude
+bash-5.3$ claude
+bash-5.3$ cd -- '/private/tmp/fm-lab.JmPccV/wt'
+bash-5.3$ export PATH='/Users/uayyagari/.asdf/installs/nodejs/24.14.0/bin':$PATH; claude
+bash-5.3$ cd -- '/private/tmp/fm-lab.JmPccV/wt'
+bash-5.3$ export GOTMPDIR=/tmp/fm-rl50/gotmp
+bash-5.3$ export COMPACT_ADVISER_DISABLE=1
+bash-5.3$ export FM_TASK_ID=rl50
+bash-5.3$ . '/tmp/fm-rl50+2845ff075a9d6aba0f93e0881a0a52197b6bf65e887f272696e7c12adcac1fce/launch.s1795417924.44847.30322.sh'
+Error: Invalid MCP configuration:
+MCP config file not found: /private/tmp/fm-lab.JmPccV/wt/: Firstmate operational input waiting: read '/private/tmp/fm-lab.JmPccV/state/operational-inbox/1795417926-97176712d06f3679.msg' and handle its
+ contents as Firstmate operational input.
+": Firstmate operational input waiting: …" was read as a value of --mcp-config, not as a prompt · put a prompt before --mcp-config or after --
+bash-5.3$

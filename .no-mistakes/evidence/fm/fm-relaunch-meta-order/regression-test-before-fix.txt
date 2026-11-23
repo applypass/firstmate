@@ -1,0 +1,1 @@
+not ok - a relaunch left a key after pr=, so the identity parse rejects the record: spawn_gen=s1795417580.63873.5880 pr=https://github.com/example/repo/pull/50 pr_head=0123456789abcdef0123456789abcdef01234567 control_relaunch_tx=61378.20261123T070616Z.18630 
