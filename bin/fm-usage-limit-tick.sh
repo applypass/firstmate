@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fork-only (applypass): usage-limit sweep and auto-resume for this home's endpoints.
-# Usage: fm-usage-limit-tick.sh [--now <epoch>]
+# Usage: fm-usage-limit-tick.sh [--now <epoch> | --wait-primary]
 # Run by bin/fm-watch.sh about every minute. For every local endpoint recorded in
 # state/*.meta (mates and workers; a remote mate runs its own home's sweep):
 #   1. Read the visible screen (fm_backend_visible_capture, else fm_backend_capture).
@@ -23,6 +23,9 @@
 # state/primary.usage-limit (kind=primary) and, after reset, types the resume text straight into
 # it through the backend (never fm-send, which needs a task id). Text is typed only into a composer
 # proven empty, and main gets no sleep/network resume.
+# --wait-primary: main's StopFailure hook runs this after it records main's limit. It sweeps only
+# main's pane, once every FM_USAGE_LIMIT_TICK_SECS, until the record clears or all attempts are
+# spent, and prints nothing. It never reads worker signals or meta files and never wakes anyone.
 # Prints nothing except a stuck line; the watcher turns that into a wake.
 # Nothing is killed, torn down or discarded. Contract: docs/usage-limit-resume.md.
 set -u
@@ -284,6 +287,14 @@ handle_target() {  # <id> <kind> <backend> <target> <harness>
 }
 
 [ -d "$STATE" ] || exit 0
+if [ "${1:-}" = --wait-primary ]; then
+  while :; do
+    NOW=${FM_USAGE_LIMIT_NOW:-$(date +%s)}
+    handle_primary >/dev/null
+    [ -f "$STATE/primary.usage-limit" ] && [ "$(rec_get "$STATE/primary.usage-limit" surfaced)" != 1 ] || exit 0
+    sleep "${FM_USAGE_LIMIT_TICK_SECS:-60}"
+  done
+fi
 WAKE_EPOCH=''
 detect_wake
 for meta in "$STATE"/*.meta; do

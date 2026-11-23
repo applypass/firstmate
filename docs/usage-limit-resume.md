@@ -41,8 +41,13 @@ The retry limit, the menu rule and the one `usage-limit stuck` line are the same
 A usage-limit stop ends main's turn through Claude's `StopFailure` event, not `Stop`.
 `.claude/settings.json` registers the same `bin/fm-claude-stop-autoarm.sh` hook on both.
 On a `rate_limit` `StopFailure` in the main home, the hook writes `state/primary.usage-limit` with only `endpoint`, `kind` and `first_seen`.
-Claude ignores a `StopFailure` hook's exit code, so that run does nothing else: it never arms a watcher or commits a wake, and pending signals stay on disk for the next `Stop`'s arm.
-The watcher already running for the fleet sweeps main's pane.
+Claude ignores a `StopFailure` hook's exit code, so that run never arms a watcher or commits a wake, and pending signals stay on disk for the next `Stop`'s arm.
+Instead the run that wrote the record waits in the background with `bin/fm-usage-limit-tick.sh --wait-primary`.
+That waiter sweeps only main's pane, once every `FM_USAGE_LIMIT_TICK_SECS`, with the same reset parse, grace, empty-composer check and bounded retries as the watcher's tick.
+It never reads worker signals or `state/*.meta`, never wakes anyone and prints nothing.
+It exits once the record clears or all attempts are spent, so main resumes even when the limit hit a turn that no watcher outlives.
+Claude ends the waiter with the session or at the hook's 8-hour timeout, so a reset further out than that waits for the watcher.
+A watcher already running for the fleet also sweeps main's pane; the retry spacing and the empty-composer check keep the two from typing twice.
 `bin/fm-supervision-lib.sh` counts the record as supervision need, so the next `Stop` arms a watcher even in an idle fleet with no `state/*.meta`.
 The tick fills in the rest of the record on its first sweep and removes it once main's banner is gone or no primary pane is recorded, which ends that need.
 The watcher runs the tick before any wake can end its cycle, so a watcher that wakes main at once still resumes it first.
