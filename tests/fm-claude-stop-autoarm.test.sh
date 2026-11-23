@@ -453,6 +453,29 @@ test_actionable_close_rewakes_with_reason() {
   pass "auto-arm: actionable close translates to exactly one exit-2 rewake with reason"
 }
 
+# A usage-limit turn end fires Claude's StopFailure, not Stop. The tracked
+# StopFailure entry must still arm the watcher so the usage-limit tick runs.
+test_stop_failure_entry_arms_the_watcher() {
+  local dir out status cmd n=0
+  dir=$(make_primary_dir "$TMP_ROOT/stop-failure")
+  : > "$dir/state/task.meta"
+  while IFS= read -r cmd; do
+    [ -n "$cmd" ] || continue
+    n=$((n + 1))
+    write_arm_fixture "$dir" actionable
+    rm -f "$dir/state/arm-ran"
+    out=$(printf '%s\n' '{"session_id":"sess-autoarm","hook_event_name":"StopFailure","error":"rate_limit"}' \
+      | env -u GROK_AGENT -u GROK_HOOK_EVENT FM_HOME="$dir" CLAUDE_PROJECT_DIR="$dir" FM_HOOK_CMD="$cmd" \
+        "$FAKE_CLAUDE" -c 'printf "%s\n" "$$" > "$FM_HOME/state/.lock"; bash -c "$FM_HOOK_CMD"' 2>&1)
+    status=$?
+    expect_code 2 "$status" "a StopFailure turn end must rewake through the arm close"
+    assert_contains "$out" "firstmate watcher wake" "StopFailure rewake carries the wake banner"
+    [ -e "$dir/state/arm-ran" ] || fail "the StopFailure entry never foregrounded the arm"
+  done < <(jq -r '.hooks.StopFailure[]?.hooks[] | select(.asyncRewake == true) | .command' "$ROOT/.claude/settings.json")
+  [ "$n" -ge 1 ] || fail "no asyncRewake StopFailure entry in .claude/settings.json"
+  pass "auto-arm: a StopFailure turn end (usage limit) arms the watcher like Stop"
+}
+
 # pi-code (Pi's Claude-hook compatibility extension) delivers a Claude-shaped
 # Stop payload but awaits the hook with no asyncRewake support, so the hook
 # must stand down or it wedges Pi's turn for the declared timeout (issue
@@ -2056,6 +2079,7 @@ test_host_benign_rewake_refusal_opens_no_failure_episode
 test_host_lost_handback_notifies_once_per_episode
 test_host_lost_announced_handback_notifies_once_per_episode
 test_host_crash_is_retried_then_reported
+test_stop_failure_entry_arms_the_watcher
 test_arguments_never_arm
 test_fm_lock_status_still_works_with_shared_lib
 test_stands_down_only_on_pi_code_transcript_path

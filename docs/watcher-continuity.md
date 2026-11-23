@@ -28,7 +28,7 @@ Codex and Grok keep their own protocols; see [Manual recovery and other harnesse
 | omp | `.omp/extensions/fm-primary-omp-watch.ts` |
 | OpenCode | `.opencode/plugins/fm-primary-watch-arm.js` |
 | Cursor | `.cursor/hooks.json` `stop` hook (`bin/fm-turnend-guard-cursor.sh`) |
-| Claude | `.claude/settings.json` Stop `asyncRewake` hook (`bin/fm-claude-stop-autoarm.sh`) |
+| Claude | `.claude/settings.json` Stop and StopFailure `asyncRewake` hooks (`bin/fm-claude-stop-autoarm.sh`) |
 
 On a non-Pi primary, a home that runs the supervision host also changes what the owner runs; see [Supervision host](#supervision-host).
 
@@ -84,7 +84,7 @@ It re-arms by parking that awaited hook on `bin/fm-watch-arm.sh` and returning a
 
 Claude's `.claude/settings.json` Stop `asyncRewake` hook (`bin/fm-claude-stop-autoarm.sh`) owns routine tokenless re-arm.
 Do not run the hook as a manual arm from a tool turn: a short-lived tool process cannot own its park; its header and help own the invocation contract.
-The hook fires on every Stop.
+The hook fires on every Stop, and on every StopFailure, which is how Claude ends a turn on an API error such as a usage limit.
 On each Stop, an eligible primary with supervision need admits one home-scoped owner, which foregrounds `bin/fm-watch-arm.sh` inside the hook-owned process tree.
 If a session exits mid-cycle and leaves an orphaned Stop hook, the replacement session's first eligible Stop supersedes its claim, attaches to the running watcher through `bin/fm-watch-arm.sh`, and delivers the cycle's close.
 [`turnend-guard.md`](turnend-guard.md#auto-arm-generation-claim) owns the open-claim definition.

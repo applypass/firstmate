@@ -21,7 +21,8 @@
 # Primary chat: main's own session has no meta, so bin/fm-primary-endpoint.sh records its pane in
 # state/.primary-endpoint at session start. The same sweep reads that pane, records
 # state/primary.usage-limit (kind=primary) and, after reset, types the resume text straight into
-# it through the backend (never fm-send, which needs a task id). A half-typed composer is left alone.
+# it through the backend (never fm-send, which needs a task id). Text is typed only into a composer
+# proven empty, and main gets no sleep/network resume.
 # Prints nothing except a stuck line; the watcher turns that into a wake.
 # Nothing is killed, torn down or discarded. Contract: docs/usage-limit-resume.md.
 set -u
@@ -111,14 +112,19 @@ send_resume() {  # <id> <kind> <first_seen> <attempt> [cause]
   fi
 }
 
-# Primary chat sends go straight to main's recorded pane. handle_target skips the attempt while
-# the composer holds text (the captain is typing).
+# Primary chat sends go straight to main's recorded pane. handle_target types text only while
+# primary_composer_empty holds: any other verdict may be the captain's half-typed line or a busy
+# harness (the bin/fm-supervise-daemon.sh rule).
 PRIMARY_BACKEND='' PRIMARY_TARGET=''
 primary_send_text() {  # <text>
   fm_backend_send_text_submit "$PRIMARY_BACKEND" "$PRIMARY_TARGET" "$1" 3 0.4 "${FM_SEND_SETTLE:-1}" >/dev/null 2>&1
 }
 primary_send_key() {  # <key>
   fm_backend_send_key "$PRIMARY_BACKEND" "$PRIMARY_TARGET" "$1" >/dev/null 2>&1
+  sleep "${FM_SEND_SETTLE:-1}"
+}
+primary_composer_empty() {
+  [ "$(fm_backend_composer_state "$PRIMARY_BACKEND" "$PRIMARY_TARGET" 2>/dev/null)" = empty ]
 }
 
 # A wall-clock gap between ticks is a wake. Records the wake epoch for the sweep window.
@@ -201,7 +207,7 @@ handle_primary() {
 
 handle_target() {  # <id> <kind> <backend> <target> <harness>
   local id=$1 kind=$2 backend=$3 target=$4 harness=$5 rec screen first reset attempts last
-  local source stuck_text
+  local source stuck_text key=''
   rec="$STATE/$id.usage-limit"
 
   screen=$(capture_screen "$backend" "$target") || return 0
@@ -211,7 +217,7 @@ handle_target() {  # <id> <kind> <backend> <target> <harness>
   if [ "$FM_UL_STOPPED" != 1 ]; then
     # Limit screen gone: the endpoint resumed (or the stop was never real).
     [ ! -f "$rec" ] || rm -f "$rec"
-    handle_sleep_resume "$id" "$kind" "$backend" "$target" "$screen"
+    [ "$kind" = primary ] || handle_sleep_resume "$id" "$kind" "$backend" "$target" "$screen"
     return 0
   fi
   rm -f "$STATE/$id.sleep-resume"   # a limit screen stays on the usage-limit path
@@ -255,21 +261,21 @@ handle_target() {  # <id> <kind> <backend> <target> <harness>
     return 0
   fi
   [ "$NOW" -ge $((last + RETRY_SECS)) ] || return 0
-  if [ "$kind" = primary ] && [ "$(fm_backend_composer_state "$backend" "$target" 2>/dev/null)" = pending ]; then
-    return 0   # the captain is typing: wait, and do not spend an attempt
-  fi
+  # Dismiss a menu only when its highlighted option waits; never a credits option.
+  case "$FM_UL_KEY" in Enter|Escape) key=$FM_UL_KEY ;; esac
+  # Main with no menu up: wait, without spending an attempt, until its composer is proven empty.
+  [ "$kind" != primary ] || [ -n "$key" ] || primary_composer_empty || return 0
 
   attempts=$((attempts + 1))
   rec_set "$rec" attempts "$attempts" && rec_set "$rec" last_attempt "$NOW" || return 0
-  # Dismiss a menu only when its highlighted option waits; never a credits option.
-  case "$FM_UL_KEY" in
-    Enter|Escape)
-      if [ "$kind" = primary ]; then
-        primary_send_key "$FM_UL_KEY" || true
-      else
-        FM_HOME="$FM_HOME" "$SEND" "$id" --key "$FM_UL_KEY" >/dev/null 2>&1 || true
-      fi ;;
-  esac
+  if [ -n "$key" ]; then
+    if [ "$kind" = primary ]; then
+      primary_send_key "$key" || true
+      primary_composer_empty || return 0
+    else
+      FM_HOME="$FM_HOME" "$SEND" "$id" --key "$key" >/dev/null 2>&1 || true
+    fi
+  fi
   send_resume "$id" "$kind" "$first" "$attempts" || true
 }
 

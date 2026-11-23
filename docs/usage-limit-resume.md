@@ -24,10 +24,17 @@ This fork detects the stop with plain scripts and resumes each endpoint after th
 Main has no `state/*.meta`, so the sweep above would never see its session.
 `bin/fm-session-start.sh` runs `bin/fm-primary-endpoint.sh record` in the locked start, and that script writes the pane it runs in to `state/.primary-endpoint` (`backend`, `target`, `harness`).
 When no pane is found it removes the record instead of keeping an old one.
+A secondmate home records nothing and removes any old record, so only the main home ever types into main.
 Each tick then sweeps that pane like any other endpoint, with `kind=primary` and the record `state/primary.usage-limit`.
 After the reset it types the resume text straight into the pane through the backend, because `bin/fm-send.sh` needs a task id.
-It waits while the composer holds text, so it never types over the captain, and a skipped tick costs no attempt.
+It types only when the composer reads exactly `empty`; a half-typed or unreadable composer means wait, so it never types over the captain, and a skipped tick costs no attempt.
+After a menu key it checks the composer again before it types.
+Main gets no sleep or network resume; only a usage-limit stop is resumed there.
 The retry limit, the menu rule and the one `usage-limit stuck` line are the same as for any endpoint.
+
+A usage-limit stop ends main's turn through Claude's `StopFailure` event, not `Stop`.
+`.claude/settings.json` registers the same `bin/fm-claude-stop-autoarm.sh` hook on both, so a watcher is still running when main stops this way.
+The watcher runs the tick before any wake can end its cycle, so a watcher that wakes main at once still resumes it first.
 
 ## Sleep and network stops
 

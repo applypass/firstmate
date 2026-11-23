@@ -48,7 +48,7 @@ done
 case "${1:-}" in
   send-keys) printf '%s %s\n' "$win" "$*" >> "$FM_SEND_LOG"; exit 0 ;;
   display-message)
-    for a in "$@"; do case "$a" in *cursor_y*) printf '1\n'; exit 0 ;; esac; done
+    for a in "$@"; do case "$a" in *cursor_y*) cat "$FM_SCREENS/$win.cy" 2>/dev/null || printf '1\n'; exit 0 ;; esac; done
     printf 'fakepane\n'; exit 0 ;;
   capture-pane) cat "$FM_SCREENS/$win" 2>/dev/null; exit 0 ;;
   list-windows) printf 'fm-mate\nfm-work\nfm-main\n'; exit 0 ;;
@@ -396,12 +396,24 @@ test_reset_few_hours_past_is_today() {
 }
 
 # --- primary chat: main's own pane is recorded and resumed (23 Nov) --------------
-PRIMARY_SCREEN=$'earlier output\n5-hour limit reached - resets 3:10am (Asia/Kolkata)'
+BOX_TOP=$'\xe2\x95\xad\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xae'
+BOX_BOTTOM=$'\xe2\x95\xb0\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x95\xaf'
+BAR=$'\xe2\x94\x82'
+LIMIT_LINES=$'earlier output\n5-hour limit reached - resets 3:10am (Asia/Kolkata)'
+# Main's chat: the limit banner above an empty composer, cursor on the prompt row (3).
+PRIMARY_SCREEN="$LIMIT_LINES"$'\n'"$BOX_TOP"$'\n'"$BAR >      $BAR"$'\n'"$BOX_BOTTOM"
+PRIMARY_TYPED="$LIMIT_LINES"$'\n'"$BOX_TOP"$'\n'"$BAR > fix  $BAR"$'\n'"$BOX_BOTTOM"
+
+main_screen() { # <case-dir> <screen>
+  printf '%s\n' "$2" >"$1/screens/fm-main"
+  printf '3\n' >"$1/screens/fm-main.cy"
+}
 
 test_primary_endpoint_record() {
   local dir
   dir=$(setup_case primrec)
-  env -u TMUX_PANE -u HERDR_ENV -u HERDR_PANE_ID -u FM_SUPERVISOR_TARGET PATH="$dir/fakebin:$PATH" \
+  env -u TMUX_PANE -u HERDR_ENV -u HERDR_PANE_ID -u FM_SUPERVISOR_TARGET -u TERM_PROGRAM \
+    -u REX_SESSION -u REX_BLOCK -u FM_SUPERVISOR_BACKEND PATH="$dir/fakebin:$PATH" \
     FM_HOME="$dir/home" "$ROOT/bin/fm-primary-endpoint.sh" record >/dev/null 2>&1
   [ ! -e "$dir/home/state/.primary-endpoint" ] || fail "no pane found: nothing may be recorded"
   env -u HERDR_ENV -u HERDR_PANE_ID -u FM_SUPERVISOR_TARGET PATH="$dir/fakebin:$PATH" TMUX_PANE=sess:fm-main \
@@ -414,7 +426,7 @@ test_primary_endpoint_record() {
 test_primary_stop_recorded_and_resumed() {
   local dir t0 reset out
   dir=$(setup_case primary)
-  printf '%s\n' "$PRIMARY_SCREEN" >"$dir/screens/fm-main"
+  main_screen "$dir" "$PRIMARY_SCREEN"
   env -u HERDR_ENV -u HERDR_PANE_ID -u FM_SUPERVISOR_TARGET PATH="$dir/fakebin:$PATH" TMUX_PANE=sess:fm-main \
     CLAUDECODE=1 FM_HOME="$dir/home" "$ROOT/bin/fm-primary-endpoint.sh" record >/dev/null 2>&1
   t0=$(ist '2026-11-14 02:50')
@@ -438,7 +450,7 @@ test_primary_stop_recorded_and_resumed() {
 test_primary_stuck_surfaces_once() {
   local dir t0 reset out lines n
   dir=$(setup_case primstuck)
-  printf '%s\n' "$PRIMARY_SCREEN" >"$dir/screens/fm-main"
+  main_screen "$dir" "$PRIMARY_SCREEN"
   printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
   t0=$(ist '2026-11-14 02:50')
   reset=$(ist '2026-11-14 03:10')
@@ -456,7 +468,60 @@ test_primary_stuck_surfaces_once() {
   pass "usage-limit: a stuck primary surfaces once after bounded retries"
 }
 
+test_primary_composer_must_be_empty() {
+  local dir t0 reset screen
+  dir=$(setup_case primguard)
+  printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
+  t0=$(ist '2026-11-14 02:50')
+  reset=$(ist '2026-11-14 03:10')
+  # A half-typed composer, then a screen with no provable composer at all.
+  for screen in "$PRIMARY_TYPED" "$LIMIT_LINES"; do
+    main_screen "$dir" "$screen"
+    tick "$dir" "$t0" >/dev/null
+    tick "$dir" $((reset + 120)) >/dev/null
+    tick "$dir" $((reset + 300)) >/dev/null
+    ! grep -q 'fm-main' "$dir/send.log" || fail "typed into a composer not proven empty: $(cat "$dir/send.log")"
+    assert_contains "$(cat "$dir/home/state/primary.usage-limit")" "attempts=0" "a skipped tick spends no attempt"
+  done
+  main_screen "$dir" "$PRIMARY_SCREEN"
+  tick "$dir" $((reset + 420)) >/dev/null
+  grep 'fm-main' "$dir/send.log" | grep -q 'usage limit has reset' \
+    || fail "main got no resume once its composer was empty: $(cat "$dir/send.log")"
+  pass "usage-limit: main is typed into only when its composer is proven empty"
+}
+
+test_primary_gets_no_sleep_resume() {
+  local dir t0 wake
+  dir=$(setup_case primsleep)
+  printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
+  main_screen "$dir" "$WORKING_SCREEN"
+  t0=$(ist '2026-11-14 03:23')
+  tick "$dir" "$t0" >/dev/null
+  wake=$(ist '2026-11-14 08:38')
+  main_screen "$dir" "$CONN_SCREEN"
+  tick "$dir" "$wake" >/dev/null
+  tick "$dir" $((wake + 60)) >/dev/null
+  tick "$dir" $((wake + 300)) >/dev/null
+  [ ! -e "$dir/home/state/primary.sleep-resume" ] || fail "main got a sleep-resume record"
+  ! grep -q 'fm-main' "$dir/send.log" || fail "main got a sleep resume: $(cat "$dir/send.log")"
+  pass "sleep-resume: main's own chat gets no sleep or network resume"
+}
+
+test_secondmate_home_records_no_primary() {
+  local dir
+  dir=$(setup_case primsm)
+  printf 'm9\n' >"$dir/home/.fm-secondmate-home"
+  printf 'backend=tmux\ntarget=sess:old\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
+  env -u HERDR_ENV -u HERDR_PANE_ID -u FM_SUPERVISOR_TARGET PATH="$dir/fakebin:$PATH" TMUX_PANE=sess:fm-main \
+    CLAUDECODE=1 FM_HOME="$dir/home" "$ROOT/bin/fm-primary-endpoint.sh" record >/dev/null 2>&1
+  [ ! -e "$dir/home/state/.primary-endpoint" ] || fail "a secondmate home must record no primary endpoint"
+  pass "usage-limit: a secondmate home records no primary endpoint and drops an old one"
+}
+
 test_reset_few_hours_past_is_today
 test_primary_endpoint_record
 test_primary_stop_recorded_and_resumed
 test_primary_stuck_surfaces_once
+test_primary_composer_must_be_empty
+test_primary_gets_no_sleep_resume
+test_secondmate_home_records_no_primary
