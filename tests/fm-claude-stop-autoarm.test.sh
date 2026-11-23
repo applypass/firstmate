@@ -453,55 +453,40 @@ test_actionable_close_rewakes_with_reason() {
   pass "auto-arm: actionable close translates to exactly one exit-2 rewake with reason"
 }
 
-# A usage-limit turn end fires Claude's StopFailure, not Stop. The tracked
-# StopFailure entry must still arm the watcher so the usage-limit tick runs.
-test_stop_failure_entry_arms_the_watcher() {
-  local dir out status cmd n=0
-  dir=$(make_primary_dir "$TMP_ROOT/stop-failure")
-  : > "$dir/state/task.meta"
-  while IFS= read -r cmd; do
-    [ -n "$cmd" ] || continue
-    n=$((n + 1))
-    write_arm_fixture "$dir" actionable
-    rm -f "$dir/state/arm-ran"
-    out=$(printf '%s\n' '{"session_id":"sess-autoarm","hook_event_name":"StopFailure","error":"rate_limit"}' \
-      | env -u GROK_AGENT -u GROK_HOOK_EVENT FM_HOME="$dir" CLAUDE_PROJECT_DIR="$dir" FM_HOOK_CMD="$cmd" \
-        "$FAKE_CLAUDE" -c 'printf "%s\n" "$$" > "$FM_HOME/state/.lock"; bash -c "$FM_HOOK_CMD"' 2>&1)
-    status=$?
-    expect_code 2 "$status" "a StopFailure turn end must rewake through the arm close"
-    assert_contains "$out" "firstmate watcher wake" "StopFailure rewake carries the wake banner"
-    [ -e "$dir/state/arm-ran" ] || fail "the StopFailure entry never foregrounded the arm"
-  done < <(jq -r '.hooks.StopFailure[]?.hooks[] | select(.asyncRewake == true) | .command' "$ROOT/.claude/settings.json")
-  [ "$n" -ge 1 ] || fail "no asyncRewake StopFailure entry in .claude/settings.json"
-  pass "auto-arm: a StopFailure turn end (usage limit) arms the watcher like Stop"
-}
-
-# Main's own usage-limit stop in an idle fleet (no state/*.meta): the StopFailure
-# entry records the pending primary stop, which is the need that arms a watcher.
-# Any other API error leaves the idle home inert.
-test_stop_failure_usage_limit_arms_idle_fleet() {
+# A usage-limit turn end fires Claude's StopFailure, not Stop, and Claude ignores
+# that hook's exit code. The tracked StopFailure entry records main's usage limit
+# and nothing else: an arm there could consume a worker's signal and lose it in
+# a dropped rewake. Here the arm marks the pending signal seen, as fm-watch.sh
+# does when it consumes one, so any arm leaves a trace.
+test_stop_failure_records_limit_and_leaves_signals() {
   local dir cmd out status payload
-  cmd=$(jq -r '[.hooks.StopFailure[]?.hooks[] | select(.asyncRewake == true) | .command][0] // empty' "$ROOT/.claude/settings.json")
-  [ -n "$cmd" ] || fail "no asyncRewake StopFailure entry in .claude/settings.json"
+  cmd=$(jq -r '[.hooks.StopFailure[]?.hooks[] | .command][0] // empty' "$ROOT/.claude/settings.json")
+  [ -n "$cmd" ] || fail "no StopFailure entry in .claude/settings.json"
   for payload in server_error rate_limit; do
-    dir=$(make_primary_dir "$TMP_ROOT/stop-failure-idle-$payload")
+    dir=$(make_primary_dir "$TMP_ROOT/stop-failure-$payload")
     printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' > "$dir/state/.primary-endpoint"
+    : > "$dir/state/task.meta"
+    printf 'done: PR 105 merged\n' > "$dir/state/task.status"
     write_arm_fixture "$dir" actionable
+    sed -i.bak '2i\
+wc -c < "$FM_HOME/state/task.status" > "$FM_HOME/state/.seen-task"
+' "$dir/bin/fm-watch-arm.sh"
     out=$(printf '{"session_id":"sess-autoarm","hook_event_name":"StopFailure","error":"%s"}\n' "$payload" \
       | env -u GROK_AGENT -u GROK_HOOK_EVENT FM_HOME="$dir" CLAUDE_PROJECT_DIR="$dir" FM_HOOK_CMD="$cmd" \
         "$FAKE_CLAUDE" -c 'printf "%s\n" "$$" > "$FM_HOME/state/.lock"; bash -c "$FM_HOOK_CMD"' 2>&1)
     status=$?
-    if [ "$payload" = server_error ]; then
-      expect_code 0 "$status" "a non-usage-limit StopFailure in an idle fleet stays inert"
-      [ ! -e "$dir/state/primary.usage-limit" ] || fail "a server_error stop recorded a usage limit"
-      [ ! -e "$dir/state/arm-ran" ] || fail "a server_error stop in an idle fleet armed a watcher"
-    else
-      expect_code 2 "$status" "main's usage-limit stop must rewake through the arm close"
+    expect_code 0 "$status" "a $payload StopFailure must exit 0 with nothing to deliver"
+    [ -z "$out" ] || fail "a $payload StopFailure printed output: $out"
+    [ ! -e "$dir/state/arm-ran" ] || fail "a $payload StopFailure armed a watcher"
+    [ ! -e "$dir/state/.seen-task" ] || fail "a $payload StopFailure consumed the pending task signal"
+    [ ! -e "$dir/state/.claude-autoarm-epoch" ] || fail "a $payload StopFailure wrote the autoarm ledger"
+    if [ "$payload" = rate_limit ]; then
       assert_contains "$(cat "$dir/state/primary.usage-limit" 2>/dev/null)" "kind=primary" "pending primary record"
-      [ -e "$dir/state/arm-ran" ] || fail "main's usage-limit stop in an idle fleet armed no watcher: $out"
+    else
+      [ ! -e "$dir/state/primary.usage-limit" ] || fail "a server_error stop recorded a usage limit"
     fi
   done
-  pass "auto-arm: main's usage-limit StopFailure arms a watcher in an idle fleet; other errors do not"
+  pass "auto-arm: a StopFailure records main's usage limit and leaves pending signals unconsumed"
 }
 
 # pi-code (Pi's Claude-hook compatibility extension) delivers a Claude-shaped
@@ -2107,8 +2092,7 @@ test_host_benign_rewake_refusal_opens_no_failure_episode
 test_host_lost_handback_notifies_once_per_episode
 test_host_lost_announced_handback_notifies_once_per_episode
 test_host_crash_is_retried_then_reported
-test_stop_failure_entry_arms_the_watcher
-test_stop_failure_usage_limit_arms_idle_fleet
+test_stop_failure_records_limit_and_leaves_signals
 test_arguments_never_arm
 test_fm_lock_status_still_works_with_shared_lib
 test_stands_down_only_on_pi_code_transcript_path

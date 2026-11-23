@@ -86,6 +86,7 @@ Claude's `.claude/settings.json` Stop `asyncRewake` hook (`bin/fm-claude-stop-au
 Do not run the hook as a manual arm from a tool turn: a short-lived tool process cannot own its park; its header and help own the invocation contract.
 The hook fires on every Stop, and on every StopFailure, which is how Claude ends a turn on an API error such as a usage limit.
 A usage-limit StopFailure in the main home writes the pending `state/primary.usage-limit` record, which counts as supervision need until main resumes ([`usage-limit-resume.md`](usage-limit-resume.md#mains-own-chat)).
+A StopFailure never arms or rewakes, because Claude ignores its exit code; pending signals stay on disk for the next Stop's arm.
 On each Stop, an eligible primary with supervision need admits one home-scoped owner, which foregrounds `bin/fm-watch-arm.sh` inside the hook-owned process tree.
 If a session exits mid-cycle and leaves an orphaned Stop hook, the replacement session's first eligible Stop supersedes its claim, attaches to the running watcher through `bin/fm-watch-arm.sh`, and delivers the cycle's close.
 [`turnend-guard.md`](turnend-guard.md#auto-arm-generation-claim) owns the open-claim definition.

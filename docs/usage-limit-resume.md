@@ -41,7 +41,9 @@ The retry limit, the menu rule and the one `usage-limit stuck` line are the same
 A usage-limit stop ends main's turn through Claude's `StopFailure` event, not `Stop`.
 `.claude/settings.json` registers the same `bin/fm-claude-stop-autoarm.sh` hook on both.
 On a `rate_limit` `StopFailure` in the main home, the hook writes `state/primary.usage-limit` with only `endpoint`, `kind` and `first_seen`.
-`bin/fm-supervision-lib.sh` counts that record as supervision need, so the hook arms a watcher even in an idle fleet with no `state/*.meta`.
+Claude ignores a `StopFailure` hook's exit code, so that run does nothing else: it never arms a watcher or commits a wake, and pending signals stay on disk for the next `Stop`'s arm.
+The watcher already running for the fleet sweeps main's pane.
+`bin/fm-supervision-lib.sh` counts the record as supervision need, so the next `Stop` arms a watcher even in an idle fleet with no `state/*.meta`.
 The tick fills in the rest of the record on its first sweep and removes it once main's banner is gone or no primary pane is recorded, which ends that need.
 The watcher runs the tick before any wake can end its cycle, so a watcher that wakes main at once still resumes it first.
 
