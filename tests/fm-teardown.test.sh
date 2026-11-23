@@ -1578,6 +1578,57 @@ test_scout_nested_clone_returns_with_no_untracked_entries() {
   pass "scout copy with a nested clone and a scratch file returns with no untracked entries"
 }
 
+# Fork-only: the scout cleanup backstop for the framing list (bin/fm-framing.sh gate).
+test_scout_framing_gate_modes() {
+  local case_dir rc mode
+  for mode in warn fail off; do
+    case_dir=$(make_case "scout-framing-$mode")
+    write_meta "$case_dir" no-mistakes scout
+    prepare_scout_teardown "$case_dir"
+    add_treehouse_clean_fd "$case_dir"
+
+    set +e
+    FM_FRAMING_GATE=$mode run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+    rc=$?
+    set -e
+
+    case "$mode" in
+      warn)
+        expect_code 0 "$rc" "scout-framing-warn: teardown should still succeed"
+        assert_grep "WARNING: scout task task-x1 report lacks framing answers" "$case_dir/stderr" "scout-framing-warn: warning missing"
+        ;;
+      fail)
+        expect_code 1 "$rc" "scout-framing-fail: teardown should refuse"
+        assert_grep "REFUSED: scout task task-x1 report lacks framing answers" "$case_dir/stderr" "scout-framing-fail: refusal missing"
+        assert_present "$case_dir/wt" "scout-framing-fail: worktree must stay"
+        ;;
+      off)
+        expect_code 0 "$rc" "scout-framing-off: teardown should succeed"
+        ! grep -q "lacks framing" "$case_dir/stderr" || fail "scout-framing-off: stderr has a framing warning"
+        ;;
+    esac
+  done
+  pass "scout teardown warns, refuses, or skips on missing framing answers by FM_FRAMING_GATE"
+}
+
+test_scout_framing_gate_passes_with_answers() {
+  local case_dir rc
+  case_dir=$(make_case scout-framing-ok)
+  write_meta "$case_dir" no-mistakes scout
+  prepare_scout_teardown "$case_dir"
+  add_treehouse_clean_fd "$case_dir"
+  printf '## Framing\nNot applicable: pure data pull for a count.\n' >> "$case_dir/data/task-x1/report.md"
+
+  set +e
+  FM_FRAMING_GATE=fail run_teardown "$case_dir" > "$case_dir/stdout" 2> "$case_dir/stderr"
+  rc=$?
+  set -e
+
+  expect_code 0 "$rc" "scout-framing-ok: a report with framing answers should pass fail mode"
+  pass "scout teardown passes in fail mode when the report answers the framing list"
+}
+# Fork-only end
+
 test_ship_nested_clone_is_refused_and_bytes_stay() {
   local case_dir wt rc head before after
   case_dir=$(make_case ship-nested-refuse)
@@ -5863,6 +5914,8 @@ test_untracked_only_refusal_diagnostic
 test_tracked_edit_refusal_diagnostic
 test_mixed_refusal_diagnostic
 test_scout_nested_clone_returns_with_no_untracked_entries
+test_scout_framing_gate_modes
+test_scout_framing_gate_passes_with_answers
 test_ship_nested_clone_is_refused_and_bytes_stay
 test_dirty_return_warns_which_slot_was_lost
 test_dirty_return_warns_even_when_a_later_step_refuses
