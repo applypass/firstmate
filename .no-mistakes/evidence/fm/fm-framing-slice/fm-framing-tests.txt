@@ -1,0 +1,20 @@
+ok - fm-framing.sh brief-block: names every label and the absolute check command
+ok - fm-framing.sh check: accepts unknown followed by a next step
+ok - fm-framing.sh check: fails an empty answer
+ok - fm-framing.sh check: fails Not applicable with no real reason
+ok - fm-framing.sh check: fails a table with no complete row
+ok - fm-framing.sh check: fails with no ## Framing section
+ok - fm-framing.sh check: exits 1 and names How often, Metric owner
+ok - fm-framing.sh check: passes a report with all eight labelled answers
+ok - fm-framing.sh check: passes Not applicable with a reason
+ok - fm-framing.sh check: passes a per-item table naming all eight labels
+ok - fm-framing.sh check: reads only the Framing section
+ok - fm-framing.sh gate: off skips
+ok - fm-framing.sh gate: a good report is silent
+ok - fm-framing.sh gate: unknown FM_FRAMING_GATE value exits 2
+ok - fm-framing.sh gate: warn continues, fail refuses
+ok - fm-brief.sh: scout brief carries the framing block
+ok - fm-brief.sh: ship brief with an approved plan gets no framing block
+ok - fm-brief.sh: only the exact plan key for this task suppresses the short form
+ok - fm-brief.sh: ship brief with no approved plan gets the short framing form
+ok - fm-framing.sh: usage errors exit 2

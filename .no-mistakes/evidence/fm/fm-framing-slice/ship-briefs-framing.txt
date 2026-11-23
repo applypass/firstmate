@@ -1,0 +1,23 @@
+decided.md:
+# Decided
+- [plan-fr-ship2] 2026-11-20 approved: onboarding email plan, link in report
+- [plan-fr-ship3] 2026-11-20 pending: awaiting captain review
+- [plan-fr-ship4] 2026-11-20 small: one-line copy fix
+
+=== fr-ship1 brief: Framing section ===
+# Framing
+This task has no approved plan. Before building, answer these from evidence in your first status or plan:
+Five whys, Need, Who and how many, How often, Manual vs automated ROI, Product change, Non-code way, Metric owner.
+If the evidence shows the work is not needed, or a smaller change removes the need, stop and report that.
+
+=== fr-ship2 brief: Framing section ===
+(no # Framing section)
+
+=== fr-ship3 brief: Framing section ===
+# Framing
+This task has no approved plan. Before building, answer these from evidence in your first status or plan:
+Five whys, Need, Who and how many, How often, Manual vs automated ROI, Product change, Non-code way, Metric owner.
+If the evidence shows the work is not needed, or a smaller change removes the need, stop and report that.
+
+=== fr-ship4 brief: Framing section ===
+(no # Framing section)

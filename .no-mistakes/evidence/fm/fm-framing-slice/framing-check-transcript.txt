@@ -1,0 +1,40 @@
+$ bin/fm-framing.sh check 1-no-section.md
+framing check: 1-no-section.md has no ## Framing section
+Add a labelled answer for each (use "unknown - <cheapest way to find out>" if you cannot answer), or write "Not applicable: <reason>" under ## Framing. (bin/fm-framing.sh)
+exit=1
+
+$ bin/fm-framing.sh check 2-list-full.md
+exit=0
+
+$ bin/fm-framing.sh check 3-list-partial.md
+framing check: 3-list-partial.md is missing ## Framing answers: Need, Who and how many, Manual vs automated ROI, Product change, Non-code way, Metric owner
+Add a labelled answer for each (use "unknown - <cheapest way to find out>" if you cannot answer), or write "Not applicable: <reason>" under ## Framing. (bin/fm-framing.sh)
+exit=1
+
+$ bin/fm-framing.sh check 4-table.md
+exit=0
+
+$ bin/fm-framing.sh check 5-table-empty.md
+framing check: 5-table-empty.md has a ## Framing table with no row that fills every cell
+Add a labelled answer for each (use "unknown - <cheapest way to find out>" if you cannot answer), or write "Not applicable: <reason>" under ## Framing. (bin/fm-framing.sh)
+exit=1
+
+$ bin/fm-framing.sh check 6-na.md
+exit=0
+
+$ bin/fm-framing.sh check 7-na-short.md
+framing check: 7-na-short.md is missing ## Framing answers: Five whys, Need, Who and how many, How often, Manual vs automated ROI, Product change, Non-code way, Metric owner
+Add a labelled answer for each (use "unknown - <cheapest way to find out>" if you cannot answer), or write "Not applicable: <reason>" under ## Framing. (bin/fm-framing.sh)
+exit=1
+
+$ bin/fm-framing.sh check 8-answers-outside-section.md
+framing check: 8-answers-outside-section.md is missing ## Framing answers: Five whys, Need, Who and how many, How often, Manual vs automated ROI, Product change, Non-code way, Metric owner
+Add a labelled answer for each (use "unknown - <cheapest way to find out>" if you cannot answer), or write "Not applicable: <reason>" under ## Framing. (bin/fm-framing.sh)
+exit=1
+
+$ bin/fm-framing.sh check (no args)
+fm-framing.sh: check needs <report.md>
+exit=2
+$ bin/fm-framing.sh check /nonexistent/missing.md
+fm-framing.sh: no such report: /nonexistent/missing.md
+exit=2

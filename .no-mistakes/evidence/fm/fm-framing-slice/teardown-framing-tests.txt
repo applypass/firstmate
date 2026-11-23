@@ -1,0 +1,2 @@
+ok - scout teardown warns, refuses, or skips on missing framing answers by FM_FRAMING_GATE
+ok - scout teardown passes in fail mode when the report answers the framing list

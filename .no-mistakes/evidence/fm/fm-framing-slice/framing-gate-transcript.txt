@@ -1,0 +1,41 @@
+$ FM_FRAMING_GATE=<unset> bin/fm-framing.sh gate 3-list-partial.md fr-scout1
+WARNING: scout task fr-scout1 report lacks framing answers (FM_FRAMING_GATE=warn; set fail to refuse).
+framing check: 3-list-partial.md is missing ## Framing answers: Need, Who and how many, Manual vs automated ROI, Product change, Non-code way, Metric owner
+Add a labelled answer for each (use "unknown - <cheapest way to find out>" if you cannot answer), or write "Not applicable: <reason>" under ## Framing. (bin/fm-framing.sh)
+exit=0
+
+$ FM_FRAMING_GATE=<unset> bin/fm-framing.sh gate 2-list-full.md fr-scout1
+exit=0
+
+$ FM_FRAMING_GATE=warn bin/fm-framing.sh gate 3-list-partial.md fr-scout1
+WARNING: scout task fr-scout1 report lacks framing answers (FM_FRAMING_GATE=warn; set fail to refuse).
+framing check: 3-list-partial.md is missing ## Framing answers: Need, Who and how many, Manual vs automated ROI, Product change, Non-code way, Metric owner
+Add a labelled answer for each (use "unknown - <cheapest way to find out>" if you cannot answer), or write "Not applicable: <reason>" under ## Framing. (bin/fm-framing.sh)
+exit=0
+
+$ FM_FRAMING_GATE=warn bin/fm-framing.sh gate 2-list-full.md fr-scout1
+exit=0
+
+$ FM_FRAMING_GATE=fail bin/fm-framing.sh gate 3-list-partial.md fr-scout1
+REFUSED: scout task fr-scout1 report lacks framing answers.
+framing check: 3-list-partial.md is missing ## Framing answers: Need, Who and how many, Manual vs automated ROI, Product change, Non-code way, Metric owner
+Add a labelled answer for each (use "unknown - <cheapest way to find out>" if you cannot answer), or write "Not applicable: <reason>" under ## Framing. (bin/fm-framing.sh)
+exit=1
+
+$ FM_FRAMING_GATE=fail bin/fm-framing.sh gate 2-list-full.md fr-scout1
+exit=0
+
+$ FM_FRAMING_GATE=off bin/fm-framing.sh gate 3-list-partial.md fr-scout1
+exit=0
+
+$ FM_FRAMING_GATE=off bin/fm-framing.sh gate 2-list-full.md fr-scout1
+exit=0
+
+$ FM_FRAMING_GATE=bogus bin/fm-framing.sh gate 3-list-partial.md fr-scout1
+fm-framing.sh: FM_FRAMING_GATE must be warn, fail, or off (got: bogus)
+exit=2
+
+$ FM_FRAMING_GATE=bogus bin/fm-framing.sh gate 2-list-full.md fr-scout1
+fm-framing.sh: FM_FRAMING_GATE must be warn, fail, or off (got: bogus)
+exit=2
+
