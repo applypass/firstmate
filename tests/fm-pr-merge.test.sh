@@ -675,8 +675,26 @@ glab_merge_line() {
   grep -F ' mr merge ' "$1" || true
 }
 
+# Waiver flags need a recorded captain decision (bin/fm-waiver-key-lib.sh). Tests
+# that exercise a waiver rather than the key gate get one seeded and the key
+# added after the URL; FM_TEST_NO_KEY_INJECT=1 leaves the arguments alone.
+seed_waiver_decision() {  # <home> <task-id> [<text>]
+  local home=$1 id=$2 text=${3:-'waive for test - captain: "waive it"'}
+  mkdir -p "$home/data"
+  printf '%s\n' "- [$id-waiver] 2026-11-23 $text (shortcut: sc-1 https://example.invalid/1)" >> "$home/data/decided.md"
+}
+
 run_pr_merge() {
-  local case_dir=$1 rc; shift
+  local case_dir=$1 rc a has_waiver=false; shift
+  if [ "${FM_TEST_NO_KEY_INJECT:-}" != 1 ] && [ "$#" -ge 2 ]; then
+    for a in "$@"; do
+      case "$a" in --allow-red | --allow-missing | --allow-no-pipeline | --waive-proof) has_waiver=true ;; esac
+    done
+    if [ "$has_waiver" = true ]; then
+      seed_waiver_decision "${FM_TEST_HOME:-$case_dir/home}" "$1"
+      set -- "$1" "$2" --decision-key "$1-waiver" "${@:3}"
+    fi
+  fi
   FM_ROOT_OVERRIDE="$ROOT" \
   FM_HOME="${FM_TEST_HOME:-$case_dir/home}" \
   FM_STATE_OVERRIDE="$case_dir/state" \
@@ -4668,6 +4686,66 @@ test_required_producer_identity
 test_app_bound_required_status_context_matches_by_name
 test_required_partial_reads_report_all_failures
 # Fork-only: a merge whose live base is main is refused without --release-main.
+# Every waiver path needs --decision-key naming a decision fm-decide.sh recorded
+# for this task whose text quotes the captain. Each refusal exits 2 before any
+# merge call; a valid key passes the gate and merges.
+test_waivers_need_a_recorded_captain_decision() {
+  local case_dir rc name key url want
+  local head=a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7a7
+  local flags args n=0
+  for name in red missing proof nopipeline; do
+    for key in none unknown unquoted wrongtask good; do
+      n=$((n + 1))
+      url=https://github.com/example/repo/pull/$((700 + n))
+      case "$name" in
+        red)
+          case_dir=$(make_case "waiver-key-$name-$key"); mkdir -p "$case_dir/wt"
+          add_gh_mocks "$case_dir" "$head"; write_github_red_json "$case_dir" "$head" lint
+          flags=(--allow-red lint) ;;
+        missing)
+          case_dir=$(make_case "waiver-key-$name-$key"); mkdir -p "$case_dir/wt"
+          add_gh_mocks "$case_dir" "$head"; write_github_required "$case_dir" ruleset:validate
+          flags=(--allow-missing validate) ;;
+        proof)
+          case_dir=$(make_case "waiver-key-$name-$key"); mkdir -p "$case_dir/wt"
+          set_proof_case "$case_dir" "$ROOT/tests/fixtures/pr-merge-proof-body.md" "$PROOF_HEAD" ci
+          flags=(--waive-proof "$PROOF_411_LINE" reason) ;;
+        nopipeline)
+          case_dir=$(make_gitlab_case "waiver-key-$name-$key" pipeline=null)
+          url=$MR_URL
+          flags=(--allow-no-pipeline) ;;
+      esac
+      seed_waiver_decision "$case_dir/home" task-x1
+      seed_waiver_decision "$case_dir/home" task-x1-bare 'waive with no quote'
+      seed_waiver_decision "$case_dir/home" other-task
+      args=(); want=2
+      case "$key" in
+        unknown) args=(--decision-key task-x1-nothing) ;;
+        unquoted) args=(--decision-key task-x1-bare-waiver) ;;
+        wrongtask) args=(--decision-key other-task-waiver) ;;
+        good) args=(--decision-key task-x1-waiver); want=0 ;;
+      esac
+      set +e
+      FM_TEST_NO_KEY_INJECT=1 run_pr_merge "$case_dir" task-x1 "$url" "${flags[@]}" ${args[@]+"${args[@]}"} \
+        > "$case_dir/stdout" 2> "$case_dir/stderr"
+      rc=$?
+      set -e
+      if [ "$want" = 2 ]; then
+        expect_code 2 "$rc" "waiver-key-$name-$key: a waiver without a valid recorded captain decision must refuse"
+        assert_grep 'decision' "$case_dir/stderr" "waiver-key-$name-$key: the refusal did not name the decision key"
+        assert_grep 'fm-decide.sh record' "$case_dir/stderr" "waiver-key-$name-$key: the refusal did not name the remedy"
+        [ ! -f "$case_dir/gh.log" ] || assert_no_grep 'pr merge' "$case_dir/gh.log" "waiver-key-$name-$key: gh pr merge ran"
+        [ -z "$(glab_merge_line "$case_dir/glab.log" 2>/dev/null)" ] || fail "waiver-key-$name-$key: glab merge ran"
+      else
+        [ "$rc" -ne 2 ] || fail "waiver-key-$name-$key: a valid recorded key must pass the gate: $(cat "$case_dir/stderr")"
+        assert_no_grep "error: --decision-key" "$case_dir/stderr" "waiver-key-$name-$key: the gate refused a valid key: $(cat "$case_dir/stderr")"
+        assert_no_grep "error: decision '" "$case_dir/stderr" "waiver-key-$name-$key: the gate refused a valid key: $(cat "$case_dir/stderr")"
+      fi
+    done
+  done
+  pass "every waiver path refuses without a recorded captain decision key and passes the gate with one"
+}
+
 test_main_base_merge_needs_release_main() {
   local case_dir head=c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1
   case_dir=$(make_case main-guard-refused)
@@ -4947,3 +5025,4 @@ test_allow_red_refused_on_forgejo
 test_allow_missing_refused_on_forgejo
 test_allow_no_pipeline_merges_only_a_null_head_pipeline
 test_allow_no_pipeline_is_attended_only_and_gitlab_only
+test_waivers_need_a_recorded_captain_decision
