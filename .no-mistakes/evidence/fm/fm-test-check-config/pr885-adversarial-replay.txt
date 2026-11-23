@@ -1,0 +1,31 @@
+Target 76655cc9, real bin/fm-pr-merge.sh, gh 'pr view' serving PR 885's real JSON with one mutation each:
+
+### A: 'integration' CANCELLED (unit green, shards green)
+error: refusing to merge https://github.com/applypass/apply_pass_backend/pull/885
+  - state is "MERGED", not open
+  - check 'integration' is not green
+  - the no-mistakes test step was skipped and not every declared CI test check (unit, integration) passed at this head; pass the tests in CI, or waive with: --waive-proof '**Test** - skipped' '<reason>'
+  - mergeable is "UNKNOWN", not MERGEABLE
+error: these checks are not green: integration
+exit=1
+
+### B: 'unit' renamed 'unit-lint', 'integration' renamed 'lint / integration'
+error: refusing to merge https://github.com/applypass/apply_pass_backend/pull/885
+  - state is "MERGED", not open
+  - the no-mistakes test step was skipped and not every declared CI test check (unit, integration) passed at this head; pass the tests in CI, or waive with: --waive-proof '**Test** - skipped' '<reason>'
+  - mergeable is "UNKNOWN", not MERGEABLE
+exit=1
+
+### C: 'integration' check absent (only integration-shard (N/4) green)
+error: refusing to merge https://github.com/applypass/apply_pass_backend/pull/885
+  - state is "MERGED", not open
+  - the no-mistakes test step was skipped and not every declared CI test check (unit, integration) passed at this head; pass the tests in CI, or waive with: --waive-proof '**Test** - skipped' '<reason>'
+  - mergeable is "UNKNOWN", not MERGEABLE
+exit=1
+
+### D: 'unit' renamed 'lint / unit'
+error: refusing to merge https://github.com/applypass/apply_pass_backend/pull/885
+  - state is "MERGED", not open
+  - the no-mistakes test step was skipped and not every declared CI test check (unit, integration) passed at this head; pass the tests in CI, or waive with: --waive-proof '**Test** - skipped' '<reason>'
+  - mergeable is "UNKNOWN", not MERGEABLE
+exit=1

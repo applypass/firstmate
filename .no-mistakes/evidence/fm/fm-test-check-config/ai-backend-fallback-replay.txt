@@ -1,0 +1,18 @@
+Target 76655cc9, real bin/fm-pr-merge.sh on an ai_backend URL (project declared '-'); gh 'pr view' serves PR 885's real JSON (test step skipped):
+
+### E: green 'unit' and 'integration' only - must NOT count for ai_backend
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+dev merge guard: the row for https://github.com/applypass/ai_backend/pull/311 passes
+error: refusing to merge https://github.com/applypass/ai_backend/pull/311
+  - state is "MERGED", not open
+  - the no-mistakes test step was skipped and no test check (a name with "test" or "tests" as a word) passed at this head; pass the tests in CI, or waive with: --waive-proof '**Test** - skipped' '<reason>'
+  - mergeable is "UNKNOWN", not MERGEABLE
+exit=1
+
+### F: plus a green 'Lint & tests' check - old 'test' word rule passes
+WARNING: queued wakes pending - drain them with bin/fm-wake-drain.sh before anything else.
+dev merge guard: the row for https://github.com/applypass/ai_backend/pull/311 passes
+error: refusing to merge https://github.com/applypass/ai_backend/pull/311
+  - state is "MERGED", not open
+  - mergeable is "UNKNOWN", not MERGEABLE
+exit=1

@@ -1,0 +1,32 @@
+### BEFORE (base 7862d5a4): PreToolUse JSON | bin/fm-nm-base-skip-pretool-check.sh --claude
+[apply_pass_backend] no-mistakes axi run --intent "x" --base-branch dev
+  -> DENY (exit 2): [nm-base-skip] This PR targets dev, which merges on green GitHub CI that already runs the tests, so the final no-mistakes run skips the local test step. Re-run the same command with the test step added to --skip (for example '--skip test', or '--skip push,pr,ci,test' when the brief already skips those). Review, document and lint still run.
+[apply_pass_backend] no-mistakes axi run --intent "x" --base-branch dev --skip test
+  -> ALLOW (exit 0)
+[apply_pass_frontend] no-mistakes axi run --intent "x" --base-branch dev --skip push,pr,ci,test
+  -> ALLOW (exit 0)
+[ai_backend] no-mistakes axi run --intent "x" --base-branch dev --skip test
+  -> ALLOW (exit 0)
+[ai_backend] no-mistakes axi run --intent "x" --base-branch dev
+  -> DENY (exit 2): [nm-base-skip] This PR targets dev, which merges on green GitHub CI that already runs the tests, so the final no-mistakes run skips the local test step. Re-run the same command with the test step added to --skip (for example '--skip test', or '--skip push,pr,ci,test' when the brief already skips those). Review, document and lint still run.
+[apply_pass_backend] no-mistakes axi run --intent "x" --base-branch main --skip test
+  -> DENY (exit 2): [nm-base-skip] This PR targets main, so the final no-mistakes run keeps the test step. Re-run the same command without 'test' in --skip.
+[(no origin remote)] no-mistakes axi run --intent "x" --base-branch dev --skip test
+  -> ALLOW (exit 0)
+
+### AFTER (target 76655cc9): PreToolUse JSON | bin/fm-nm-base-skip-pretool-check.sh --claude
+[apply_pass_backend] no-mistakes axi run --intent "x" --base-branch dev
+  -> DENY (exit 2): [nm-base-skip] This PR targets dev, which merges on green GitHub CI that already runs the tests (apply_pass_backend's declared checks: unit, integration), so the final no-mistakes run skips the local test step. Re-run the same command with the test step added to --skip (for example '--skip test', or '--skip push,pr,ci,test' when the brief already skips those). Review, document and lint still run.
+[apply_pass_backend] no-mistakes axi run --intent "x" --base-branch dev --skip test
+  -> ALLOW (exit 0)
+[apply_pass_frontend] no-mistakes axi run --intent "x" --base-branch dev --skip push,pr,ci,test
+  -> ALLOW (exit 0)
+[ai_backend] no-mistakes axi run --intent "x" --base-branch dev --skip test
+  -> DENY (exit 2): [nm-base-skip] This PR targets dev, but ai_backend declares no CI test check in .fork/ci-test-checks, so skipping the local test step would leave the tests unrun. Re-run the same command without 'test' in --skip.
+[ai_backend] no-mistakes axi run --intent "x" --base-branch dev
+  -> ALLOW (exit 0)
+[apply_pass_backend] no-mistakes axi run --intent "x" --base-branch main --skip test
+  -> DENY (exit 2): [nm-base-skip] This PR targets main, so the final no-mistakes run keeps the test step. Re-run the same command without 'test' in --skip.
+[(no origin remote)] no-mistakes axi run --intent "x" --base-branch dev --skip test
+  -> DENY (exit 2): [nm-base-skip] This PR targets dev, but this project declares no CI test check in .fork/ci-test-checks, so skipping the local test step would leave the tests unrun. Re-run the same command without 'test' in --skip.
+

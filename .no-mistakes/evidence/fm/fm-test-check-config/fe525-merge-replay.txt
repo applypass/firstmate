@@ -1,0 +1,15 @@
+### BEFORE (base 7862d5a4): FM_HOME=<lab> bin/fm-pr-merge.sh replay525 https://github.com/applypass/apply_pass_frontend/pull/525
+armed: state/replay525.check.sh
+dev merge guard: the row for https://github.com/applypass/apply_pass_frontend/pull/525 passes
+error: refusing to merge https://github.com/applypass/apply_pass_frontend/pull/525
+  - state is "MERGED", not open
+  - mergeable is "UNKNOWN", not MERGEABLE
+exit=1
+
+### AFTER (target 76655cc9): FM_HOME=<lab> bin/fm-pr-merge.sh replay525 https://github.com/applypass/apply_pass_frontend/pull/525
+armed: state/replay525.check.sh
+dev merge guard: the row for https://github.com/applypass/apply_pass_frontend/pull/525 passes
+error: refusing to merge https://github.com/applypass/apply_pass_frontend/pull/525
+  - state is "MERGED", not open
+  - mergeable is "UNKNOWN", not MERGEABLE
+exit=1

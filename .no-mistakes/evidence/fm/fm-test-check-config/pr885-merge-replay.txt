@@ -1,0 +1,16 @@
+### BEFORE (base 7862d5a4): FM_HOME=<lab> bin/fm-pr-merge.sh replay885 https://github.com/applypass/apply_pass_backend/pull/885
+armed: state/replay885.check.sh
+dev merge guard: the row for https://github.com/applypass/apply_pass_backend/pull/885 passes
+error: refusing to merge https://github.com/applypass/apply_pass_backend/pull/885
+  - state is "MERGED", not open
+  - the no-mistakes test step was skipped and no test check (a name with "test" or "tests" as a word) passed at this head; pass the tests in CI, or waive with: --waive-proof '**Test** - skipped' '<reason>'
+  - mergeable is "UNKNOWN", not MERGEABLE
+exit=1
+
+### AFTER (target 76655cc9): FM_HOME=<lab> bin/fm-pr-merge.sh replay885 https://github.com/applypass/apply_pass_backend/pull/885
+armed: state/replay885.check.sh
+dev merge guard: the row for https://github.com/applypass/apply_pass_backend/pull/885 passes
+error: refusing to merge https://github.com/applypass/apply_pass_backend/pull/885
+  - state is "MERGED", not open
+  - mergeable is "UNKNOWN", not MERGEABLE
+exit=1
