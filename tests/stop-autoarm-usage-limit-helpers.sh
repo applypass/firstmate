@@ -42,10 +42,12 @@ test_stop_failure_resumes_main_and_leaves_signals() {
     : > "$dir/state/task.meta"
     printf 'done: PR 105 merged\n' > "$dir/state/task.status"
     write_arm_fixture "$dir" actionable
+    # shellcheck disable=SC2016 # the inserted line must expand $FM_HOME when the arm script runs
     sed -i.bak '2i\
 wc -c < "$FM_HOME/state/task.status" > "$FM_HOME/state/.seen-task"
 ' "$dir/bin/fm-watch-arm.sh"
     # A notification-started turn hits the limit: no watcher runs to sweep main's pane.
+    # shellcheck disable=SC2016 # $$ and $FM_HOME must expand inside the fake claude shell
     out=$(printf '{"session_id":"sess-autoarm","hook_event_name":"StopFailure","error":"%s"}\n' "$payload" \
       | env -u GROK_AGENT -u GROK_HOOK_EVENT -u TMUX -u HERDR_ENV PATH="$dir/fakebin:$PATH" FM_HOME="$dir" \
         CLAUDE_PROJECT_DIR="$dir" FM_HOOK_CMD="$cmd" FM_SCREENS="$dir/screens" FM_SEND_LOG="$dir/send.log" \
