@@ -5,9 +5,7 @@
 # "asyncRewake": true and an explicit multi-hour timeout. Claude Code fires it
 # in the background on EVERY Stop of a Claude primary session, with no
 # deduplication across firings. It owns routine tokenless watcher continuity
-# for Claude primaries (main home and marked secondmate homes). The same entry
-# is the StopFailure hook, which only records and resumes main's usage limit
-# (below):
+# for Claude primaries (main home and marked secondmate homes):
 #
 #   - Scope: only a genuine primary checkout (plain checkout or validly marked
 #     secondmate home) with AGENTS.md, bin/, and the effective state dir - the
@@ -215,7 +213,7 @@ if ! fm_session_lock_owned_by_self "$STATE"; then
   RECOVER_SESSION_LOCK=1
 fi
 
-# --- StopFailure: record main's usage limit and wait to resume it -------------
+# Fork-only: StopFailure records main's usage limit and waits to resume it; a normal Stop drops it.
 # Claude ignores a StopFailure hook's exit code, so this path never arms or
 # commits a wake: pending signals stay on disk for the next normal Stop's arm.
 # The firing that writes the record then runs bin/fm-usage-limit-tick.sh
@@ -231,6 +229,11 @@ if [ -n "$PAYLOAD" ] && command -v jq >/dev/null 2>&1 \
   fi
   exit 0
 fi
+
+# A normal Stop proves main finished a turn, so a StopFailure record (which proves it could not)
+# is stale: drop it before the need check, so it neither keeps a watcher armed nor lets the tick
+# type a resume into a session that is already working.
+rm -f "$STATE/primary.usage-limit"
 
 # --- AFK: the away daemon owns the watcher and triage; never rewake ----------
 [ -e "$STATE/.afk" ] && exit 0

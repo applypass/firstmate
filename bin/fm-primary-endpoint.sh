@@ -34,5 +34,9 @@ harness=${FM_SUPERVISION_PRIMARY_HARNESS:-}
 if [ -z "$harness" ] && [ -n "${CLAUDECODE:-}${CLAUDE_CODE_ENTRYPOINT:-}" ]; then harness=claude; fi
 
 tmp=$(mktemp "$FILE.XXXXXX") || exit 0
-printf 'backend=%s\ntarget=%s\nharness=%s\n' "$backend" "$target" "$harness" >"$tmp" && mv "$tmp" "$FILE" || rm -f "$tmp"
+if printf 'backend=%s\ntarget=%s\nharness=%s\n' "$backend" "$target" "$harness" >"$tmp"; then
+  mv "$tmp" "$FILE" || rm -f "$tmp"
+else
+  rm -f "$tmp"
+fi
 exit 0

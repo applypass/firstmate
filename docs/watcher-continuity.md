@@ -28,7 +28,7 @@ Codex and Grok keep their own protocols; see [Manual recovery and other harnesse
 | omp | `.omp/extensions/fm-primary-omp-watch.ts` |
 | OpenCode | `.opencode/plugins/fm-primary-watch-arm.js` |
 | Cursor | `.cursor/hooks.json` `stop` hook (`bin/fm-turnend-guard-cursor.sh`) |
-| Claude | `.claude/settings.json` Stop and StopFailure `asyncRewake` hooks (`bin/fm-claude-stop-autoarm.sh`) |
+| Claude | `.claude/settings.json` Stop `asyncRewake` hook (`bin/fm-claude-stop-autoarm.sh`) |
 
 On a non-Pi primary, a home that runs the supervision host also changes what the owner runs; see [Supervision host](#supervision-host).
 
@@ -84,7 +84,8 @@ It re-arms by parking that awaited hook on `bin/fm-watch-arm.sh` and returning a
 
 Claude's `.claude/settings.json` Stop `asyncRewake` hook (`bin/fm-claude-stop-autoarm.sh`) owns routine tokenless re-arm.
 Do not run the hook as a manual arm from a tool turn: a short-lived tool process cannot own its park; its header and help own the invocation contract.
-The hook fires on every Stop, and on every StopFailure, which is how Claude ends a turn on an API error such as a usage limit.
+The hook fires on every Stop.
+Fork-only: it also fires on every StopFailure, which is how Claude ends a turn on an API error such as a usage limit.
 A usage-limit StopFailure in the main home writes the pending `state/primary.usage-limit` record, which counts as supervision need until main resumes ([`usage-limit-resume.md`](usage-limit-resume.md#mains-own-chat)).
 The firing that writes it then waits for the reset and types the resume into main's pane through `bin/fm-usage-limit-tick.sh --wait-primary`, which reads no worker signals.
 A StopFailure never arms or rewakes, because Claude ignores its exit code; pending signals stay on disk for the next Stop's arm.

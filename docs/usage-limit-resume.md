@@ -27,11 +27,14 @@ When no pane is found it removes the record instead of keeping an old one.
 A secondmate home records nothing and removes any old record, so only the main home ever types into main.
 Each tick then sweeps that pane with `kind=primary` and the record `state/primary.usage-limit`.
 Unlike other endpoints, the screen alone never creates that record: only main's own `rate_limit` `StopFailure` hook does (below).
-The screen fills in the reset time and clears the record.
-Main counts as stopped only when a harness limit banner is the last transcript output directly above its composer.
+The screen fills in the reset time.
+Main counts as stopped for the screen only when a harness limit banner is the last transcript output directly above its composer.
 A marker inside a prompt or reply is prose, not a banner: a line that opens with a prompt or reply glyph (`>`, `❯`, `⏺`, `●`) and the indented lines that continue it.
 A menu option, a slash-command hint or a key hint may follow the banner; a later prompt or reply line, or a busy spinner, means main is not stopped.
 So a relayed `usage-limit stuck` line or a reply that mentions a limit is never a stop.
+The hook record already proves the stop, so a screen the banner matcher does not recognize never clears it.
+That screen falls back to the quota or an assumed reset and gets one resume, with no retries and no `usage-limit stuck` line.
+The record clears only when a banner an earlier sweep read is gone from the screen, when a normal `Stop` fires (main finished a turn), or `FM_UL_PRIMARY_MAX_AGE_SECS` (8 hours) after `first_seen`.
 After the reset it types the resume text straight into the pane through the backend, because `bin/fm-send.sh` needs a task id.
 It types only when the composer reads exactly `empty`; a half-typed or unreadable composer means wait, so it never types over the captain, and a skipped tick costs no attempt.
 After a menu key it checks the composer again before it types.
@@ -43,13 +46,14 @@ A usage-limit stop ends main's turn through Claude's `StopFailure` event, not `S
 On a `rate_limit` `StopFailure` in the main home, the hook writes `state/primary.usage-limit` with only `endpoint`, `kind` and `first_seen`.
 Claude ignores a `StopFailure` hook's exit code, so that run never arms a watcher or commits a wake, and pending signals stay on disk for the next `Stop`'s arm.
 Instead the run that wrote the record waits in the background with `bin/fm-usage-limit-tick.sh --wait-primary`.
-That waiter sweeps only main's pane, once every `FM_USAGE_LIMIT_TICK_SECS`, with the same reset parse, grace, empty-composer check and bounded retries as the watcher's tick.
+That waiter sleeps one `FM_USAGE_LIMIT_TICK_SECS` first, because the hook fires before Claude has drawn the banner, then sweeps only main's pane once per tick, with the same reset parse, grace, empty-composer check and bounded retries as the watcher's tick.
 It never reads worker signals or `state/*.meta`, never wakes anyone and prints nothing.
-It exits once the record clears or all attempts are spent, so main resumes even when the limit hit a turn that no watcher outlives.
-Claude ends the waiter with the session or at the hook's 8-hour timeout, so a reset further out than that waits for the watcher.
+It never takes the one `usage-limit stuck` line; a watcher tick prints it, so the line reaches a wake.
+It exits once the record clears or ages out, or all attempts are spent, so main resumes even when the limit hit a turn that no watcher outlives.
+The 8-hour age bound also ends a waiter whose session is gone, and a reset further out than that waits for the watcher.
 A watcher already running for the fleet also sweeps main's pane; the retry spacing and the empty-composer check keep the two from typing twice.
 `bin/fm-supervision-lib.sh` counts the record as supervision need, so the next `Stop` arms a watcher even in an idle fleet with no `state/*.meta`.
-The tick fills in the rest of the record on its first sweep and removes it once main's banner is gone or no primary pane is recorded, which ends that need.
+The tick fills in the rest of the record on its first sweep and removes it on the conditions above or when no primary pane is recorded, which ends that need.
 The watcher runs the tick before any wake can end its cycle, so a watcher that wakes main at once still resumes it first.
 
 ## Sleep and network stops

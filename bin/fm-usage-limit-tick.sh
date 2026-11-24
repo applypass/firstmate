@@ -10,7 +10,7 @@
 #   4. After it, send the dismiss key when a waiting menu is up (never a credits,
 #      extra-usage or upgrade option), then a resume steer through bin/fm-send.sh,
 #      at most FM_UL_MAX_ATTEMPTS times, FM_UL_RETRY_SECS apart.
-#   5. The record clears when the limit screen is gone. An endpoint still stopped
+#   5. The record clears when the limit screen is gone (main's: see Primary chat). An endpoint still stopped
 #      after all attempts prints one `stuck` line (once per incident) with endpoint,
 #      first-seen, reset time and the redacted last screen lines.
 # Sleep/wake (same sweep, bin/fm-sleep-resume-lib.sh): a wall-clock gap above
@@ -23,9 +23,15 @@
 # state/primary.usage-limit (kind=primary) and, after reset, types the resume text straight into
 # it through the backend (never fm-send, which needs a task id). Text is typed only into a composer
 # proven empty, and main gets no sleep/network resume.
-# --wait-primary: main's StopFailure hook runs this after it records main's limit. It sweeps only
-# main's pane, once every FM_USAGE_LIMIT_TICK_SECS, until the record clears or all attempts are
-# spent, and prints nothing. It never reads worker signals or meta files and never wakes anyone.
+# Main's hook record proves the stop, so it clears only when a banner an earlier sweep read is gone
+# from the screen, when a normal Stop clears it, or after FM_UL_PRIMARY_MAX_AGE_SECS (8 hours). A
+# screen the banner matcher does not know falls back to the quota or assumed reset and gets one
+# resume, with no retries and no stuck line.
+# --wait-primary: main's StopFailure hook runs this after it records main's limit. It sleeps one
+# FM_USAGE_LIMIT_TICK_SECS first (Claude has not drawn the banner yet), then sweeps only main's pane
+# once per tick until the record clears or ages out, or all attempts are spent. It prints nothing and
+# leaves the stuck line to a watcher tick. It never reads worker signals or meta files and never
+# wakes anyone.
 # Prints nothing except a stuck line; the watcher turns that into a wake.
 # Nothing is killed, torn down or discarded. Contract: docs/usage-limit-resume.md.
 set -u
@@ -44,6 +50,8 @@ MAX_ATTEMPTS=${FM_UL_MAX_ATTEMPTS:-3}
 RETRY_SECS=${FM_UL_RETRY_SECS:-120}
 GRACE_SECS=${FM_UL_GRACE_SECS:-45}
 ASSUMED_SECS=${FM_UL_ASSUMED_SECS:-900}
+PRIMARY_MAX_AGE_SECS=${FM_UL_PRIMARY_MAX_AGE_SECS:-28800}
+WAITER=0
 SEND=${FM_UL_SEND:-$SCRIPT_DIR/fm-send.sh}
 WAKE_GAP_SECS=${FM_SR_WAKE_GAP_SECS:-180}
 WAKE_WINDOW_SECS=${FM_SR_WAKE_WINDOW_SECS:-600}
@@ -212,6 +220,13 @@ handle_target() {  # <id> <kind> <backend> <target> <harness>
   local source stuck_text key=''
   rec="$STATE/$id.usage-limit"
   [ "$kind" != primary ] || [ -f "$rec" ] || return 0
+  if [ "$kind" = primary ]; then
+    # main's hook record is proof of the stop, so it ends only on evidence: a banner this sweep
+    # read and that later gave way to a reply, a normal Stop (bin/fm-claude-stop-autoarm.sh), or age.
+    first=$(rec_get "$rec" first_seen)
+    case "$first" in ''|*[!0-9]*) first=$NOW ;; esac
+    if [ "$NOW" -ge $((first + PRIMARY_MAX_AGE_SECS)) ]; then rm -f "$rec"; return 0; fi
+  fi
 
   screen=$(capture_screen "$backend" "$target") || return 0
   [ -n "$screen" ] || return 0
@@ -222,10 +237,15 @@ handle_target() {  # <id> <kind> <backend> <target> <harness>
   fi
 
   if [ "$FM_UL_STOPPED" != 1 ]; then
-    # Limit screen gone: the endpoint resumed (or the stop was never real).
-    [ ! -f "$rec" ] || rm -f "$rec"
-    [ "$kind" = primary ] || handle_sleep_resume "$id" "$kind" "$backend" "$target" "$screen"
-    return 0
+    if [ "$kind" != primary ]; then
+      # Limit screen gone: the endpoint resumed (or the stop was never real).
+      [ ! -f "$rec" ] || rm -f "$rec"
+      handle_sleep_resume "$id" "$kind" "$backend" "$target" "$screen"
+      return 0
+    fi
+    # Main: a banner an earlier sweep read is now gone, so main resumed. Otherwise the screen is
+    # one the matcher does not know, and the hook record still stands for the stop.
+    if [ "$(rec_get "$rec" reset_source)" = screen ]; then rm -f "$rec"; return 0; fi
   fi
   rm -f "$STATE/$id.sleep-resume"   # a limit screen stays on the usage-limit path
 
@@ -256,9 +276,13 @@ handle_target() {  # <id> <kind> <backend> <target> <harness>
   fi
 
   [ "$NOW" -ge $((reset + GRACE_SECS)) ] || return 0   # nothing is sent before reset
+  # An unreadable screen gets one resume: no retries and no stuck line on a guess.
+  [ "$FM_UL_STOPPED" = 1 ] || [ "$attempts" -lt 1 ] || return 0
 
   # Still stopped after the last attempt: surface once, never retry again.
   if [ "$attempts" -ge "$MAX_ATTEMPTS" ]; then
+    # The hook's waiter prints nothing, so it leaves the one stuck line to a watcher tick.
+    [ "$WAITER" != 1 ] || return 0
     if [ "$(rec_get "$rec" surfaced)" != 1 ] && [ "$NOW" -ge $((last + RETRY_SECS)) ]; then
       rec_set "$rec" surfaced 1
       stuck_text=$(printf '%s\n' "$screen" | grep -v '^[[:space:]]*$' | tail -n 6 | redact | tr '\n' '|')
@@ -288,11 +312,15 @@ handle_target() {  # <id> <kind> <backend> <target> <harness>
 
 [ -d "$STATE" ] || exit 0
 if [ "${1:-}" = --wait-primary ]; then
+  WAITER=1
   while :; do
+    # Sleep first: the hook runs the moment the stop happens, before Claude has drawn the banner.
+    sleep "${FM_USAGE_LIMIT_TICK_SECS:-60}"
     NOW=${FM_USAGE_LIMIT_NOW:-$(date +%s)}
     handle_primary >/dev/null
-    [ -f "$STATE/primary.usage-limit" ] && [ "$(rec_get "$STATE/primary.usage-limit" surfaced)" != 1 ] || exit 0
-    sleep "${FM_USAGE_LIMIT_TICK_SECS:-60}"
+    [ -f "$STATE/primary.usage-limit" ] || exit 0
+    n=$(rec_get "$STATE/primary.usage-limit" attempts)
+    [ "${n:-0}" -lt "$MAX_ATTEMPTS" ] || exit 0
   done
 fi
 WAKE_EPOCH=''

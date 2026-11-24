@@ -51,13 +51,17 @@ case "${1:-}" in
   display-message)
     for a in "$@"; do case "$a" in *cursor_y*) cat "$FM_SCREENS/$win.cy" 2>/dev/null || printf '1\n'; exit 0 ;; esac; done
     printf 'fakepane\n'; exit 0 ;;
-  capture-pane) cat "$FM_SCREENS/$win" 2>/dev/null; exit 0 ;;
+  capture-pane) printf 'capture\n' >> "${FM_ORDER_LOG:-/dev/null}"; cat "$FM_SCREENS/$win" 2>/dev/null; exit 0 ;;
   list-windows) printf 'fm-mate\nfm-work\nfm-main\n'; exit 0 ;;
 esac
 exit 0
 SH
-  cat >"$fb/sleep" <<'SH'
+  # Hermetic: the real quota-axi must never answer a test's reset lookup.
+printf '#!/usr/bin/env bash\nexit 1\n' >"$fb/quota-axi"
+chmod +x "$fb/quota-axi"
+cat >"$fb/sleep" <<'SH'
 #!/usr/bin/env bash
+printf 'sleep\n' >> "${FM_ORDER_LOG:-/dev/null}"
 exit 0
 SH
   chmod +x "$fb/tmux" "$fb/sleep"
@@ -526,9 +530,9 @@ test_primary_banner_must_be_last_output() {
   t0=$(ist '2026-11-14 02:50')
   reset=$(ist '2026-11-14 03:10')
   box="$BOX_TOP"$'\n'"$BAR >      $BAR"$'\n'"$BOX_BOTTOM"
-  # With main's StopFailure record present: a relayed stuck line, replies that mention or end
-  # on the limit, a captain prompt quoting a banner while main thinks, and a banner left above
-  # a later reply. None is a stop, so each clears the record and types nothing.
+  # With no StopFailure record: a relayed stuck line, replies that mention or end on the limit,
+  # a captain prompt quoting a banner while main thinks, and a banner left above a later reply.
+  # None is a stop, so nothing is recorded and nothing is typed.
   for screen in \
     $'> check on the mate\n\xe2\x8f\xba Relayed: usage-limit stuck: endpoint=m1 5-hour limit reached - resets 3:10am\n  I will retry it after the reset.' \
     $'\xe2\x8f\xba The mate hit the 5-hour limit reached banner earlier; it resets 3:10am.\n  Nothing to do yet.' \
@@ -536,7 +540,6 @@ test_primary_banner_must_be_last_output() {
     $'\xe2\x8f\xba Done. PR 105 now resumes main after\n  the usage limit resets.' \
     $'> relmate shows 5-hour limit reached - resets 3:10am, wait?\n\xe2\x9c\xbb Thinking\xe2\x80\xa6 (esc to interrupt)' \
     "$LIMIT_LINES"$'\n> usage limit has reset - carry on\n\xe2\x8f\xba Picking the task back up.'; do
-    hook_record "$dir" "$t0"
     main_screen "$dir" "$screen"$'\n'"$box"
     tick "$dir" "$t0" >/dev/null
     tick "$dir" $((reset + 120)) >/dev/null
@@ -566,6 +569,126 @@ test_secondmate_home_records_no_primary() {
   pass "usage-limit: a secondmate home records no primary endpoint and drops an old one"
 }
 
+# --- primary chat: the hook record proves the stop (24 Nov review) ----------------
+# Shapes the banner matcher does not recognise. main's StopFailure hook already proved the stop,
+# so an unreadable screen must neither clear the record nor leave main unresumed.
+test_primary_unrecognized_banner_keeps_record() {
+  local dir t0 reset screen n shape box=''
+  box="$BOX_TOP"$'\n'"$BAR >      $BAR"$'\n'"$BOX_BOTTOM"
+  t0=$(ist '2026-11-14 02:50')
+  reset=$((t0 + 900))
+  shape=0
+  for screen in \
+    $'\xe2\x8f\xba Running the retag batch\n  5-hour limit reached - resets 3:10am (Asia/Kolkata)' \
+    $'  \xe2\x8e\xbf  5-hour limit reached - resets 3:10am (Asia/Kolkata)\n     \xe2\x80\xa2 /upgrade to increase your usage limit.' \
+    "$LIMIT_LINES"$'\nUpgrade your plan at claude.ai/settings to keep going.'; do
+    shape=$((shape + 1))
+    dir=$(setup_case "primshape$shape")
+    printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
+    hook_record "$dir" "$t0"
+    main_screen "$dir" "$screen"$'\n'"$box"
+    printf '%s\n' "$(($(printf '%s\n' "$screen" | wc -l) + 1))" >"$dir/screens/fm-main.cy"   # composer row
+    tick "$dir" "$((t0 + 60))" >/dev/null
+    [ -f "$dir/home/state/primary.usage-limit" ] || fail "shape $shape: the first sweep cleared main's record"
+    ! grep -q 'fm-main' "$dir/send.log" || fail "shape $shape: typed before the assumed reset"
+    for n in 1 2 3 4 5; do
+      out=$(tick "$dir" $((reset + 100 + n * 130)))
+      [ -z "$out" ] || fail "shape $shape: an unconfirmed stop must print no stuck line: $out"
+    done
+    [ -f "$dir/home/state/primary.usage-limit" ] || fail "shape $shape: record lost before its age bound"
+    [ "$(grep 'fm-main' "$dir/send.log" | grep -c 'usage limit has reset')" = 1 ] \
+      || fail "shape $shape: an unreadable screen gets exactly one resume: $(cat "$dir/send.log")"
+    tick "$dir" $((t0 + 8 * 3600 + 60)) >/dev/null
+    [ ! -e "$dir/home/state/primary.usage-limit" ] || fail "shape $shape: an unconfirmed record outlived its age bound"
+  done
+  pass "usage-limit: an unrecognised banner shape keeps main's record, resumes once, and ages out"
+}
+
+# A banner a sweep read, then gone from the screen, is positive evidence that main resumed.
+test_primary_confirmed_stop_clears_when_main_resumes() {
+  local dir t0 reset
+  dir=$(setup_case primconfirmed)
+  printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
+  t0=$(ist '2026-11-14 02:50')
+  reset=$(ist '2026-11-14 03:10')
+  hook_record "$dir" "$t0"
+  main_screen "$dir" "$PRIMARY_SCREEN"
+  tick "$dir" "$t0" >/dev/null
+  assert_contains "$(cat "$dir/home/state/primary.usage-limit")" "reset_source=screen" "banner confirmed"
+  main_screen "$dir" "$LIMIT_LINES"$'\n> carry on\n\xe2\x8f\xba Picking the task back up.\n'"$BOX_TOP"$'\n'"$BAR >      $BAR"$'\n'"$BOX_BOTTOM"
+  tick "$dir" $((reset - 600)) >/dev/null
+  [ ! -e "$dir/home/state/primary.usage-limit" ] || fail "a confirmed banner followed by a reply must clear the record"
+  ! grep -q 'fm-main' "$dir/send.log" || fail "typed into main after it resumed: $(cat "$dir/send.log")"
+  pass "usage-limit: a confirmed stop clears once main shows a later reply"
+}
+
+# --wait-primary: the waiter run by main's StopFailure hook.
+wait_primary() { # <case-dir> <now-epoch> [env...]; returns 1 when the waiter never exits
+  local dir=$1 now=$2 pid i
+  shift 2
+  env PATH="$dir/fakebin:$PATH" FM_HOME="$dir/home" FM_ROOT_OVERRIDE="$dir/home" \
+    FM_SCREENS="$dir/screens" FM_SEND_LOG="$dir/send.log" FM_SEND_SETTLE=0 \
+    FM_USAGE_LIMIT_NOW="$now" FM_USAGE_LIMIT_TICK_SECS=0 \
+    ${1+"$@"} "$TICK" --wait-primary >"$dir/wait.out" 2>&1 &
+  pid=$!
+  for i in $(seq 1 100); do
+    kill -0 "$pid" 2>/dev/null || { wait "$pid" 2>/dev/null; return 0; }
+    /bin/sleep 0.1
+  done
+  kill "$pid" 2>/dev/null
+  wait "$pid" 2>/dev/null
+  return 1
+}
+
+# The first sweep waits one tick, so Claude has drawn the banner before the waiter reads it.
+test_wait_primary_sleeps_before_first_sweep() {
+  local dir t0 reset
+  dir=$(setup_case waitorder)
+  printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
+  t0=$(ist '2026-11-14 02:50')
+  reset=$(ist '2026-11-14 03:10')
+  hook_record "$dir" "$t0"
+  main_screen "$dir" "$PRIMARY_SCREEN"
+  : >"$dir/order.log"
+  wait_primary "$dir" $((reset + 120)) FM_ORDER_LOG="$dir/order.log" FM_UL_MAX_ATTEMPTS=1 FM_UL_RETRY_SECS=0 \
+    || fail "the waiter did not exit: $(cat "$dir/wait.out")"
+  [ "$(head -n 1 "$dir/order.log")" = sleep ] \
+    || fail "the waiter swept main's pane before its first sleep: $(tr '\n' ' ' <"$dir/order.log")"
+  grep 'fm-main' "$dir/send.log" | grep -q 'usage limit has reset' \
+    || fail "the waiter never resumed main: $(cat "$dir/send.log")"
+  pass "usage-limit: the waiter sleeps one tick before it first sweeps main"
+}
+
+# The waiter must leave the one stuck line to a watcher tick.
+test_wait_primary_leaves_stuck_line_to_watcher() {
+  local dir t0 reset out
+  dir=$(setup_case waitstuck)
+  printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
+  t0=$(ist '2026-11-14 02:50')
+  reset=$(ist '2026-11-14 03:10')
+  printf 'endpoint=primary\nkind=primary\nfirst_seen=%s\nreset_epoch=%s\nreset_source=screen\nattempts=3\nlast_attempt=%s\nsurfaced=0\n' \
+    "$t0" "$reset" "$((reset + 100))" >"$dir/home/state/primary.usage-limit"
+  main_screen "$dir" "$PRIMARY_SCREEN"
+  wait_primary "$dir" $((reset + 1000)) || fail "the waiter did not exit after the attempts were spent"
+  [ ! -s "$dir/wait.out" ] || fail "the waiter printed output: $(cat "$dir/wait.out")"
+  assert_contains "$(cat "$dir/home/state/primary.usage-limit")" "surfaced=0" "the waiter must not take the stuck line"
+  out=$(tick "$dir" $((reset + 1000)))
+  [ "$(printf '%s\n' "$out" | grep -c 'usage-limit stuck')" = 1 ] || fail "the watcher tick owns the stuck line: $out"
+  pass "usage-limit: the waiter leaves the one stuck line to a watcher tick"
+}
+
+# An orphaned waiter (pane gone, no capture works) ends at the record's age bound.
+test_wait_primary_ends_at_age_bound() {
+  local dir t0
+  dir=$(setup_case waitorphan)
+  printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
+  t0=$(ist '2026-11-14 02:50')
+  hook_record "$dir" "$t0"
+  wait_primary "$dir" $((t0 + 8 * 3600 + 60)) \
+    || fail "an orphaned waiter never exited: $(cat "$dir/wait.out")"
+  pass "usage-limit: the waiter ends once the record is past its age bound"
+}
+
 test_reset_few_hours_past_is_today
 test_primary_endpoint_record
 test_primary_stop_recorded_and_resumed
@@ -574,3 +697,8 @@ test_primary_composer_must_be_empty
 test_primary_gets_no_sleep_resume
 test_primary_banner_must_be_last_output
 test_secondmate_home_records_no_primary
+test_primary_unrecognized_banner_keeps_record
+test_primary_confirmed_stop_clears_when_main_resumes
+test_wait_primary_sleeps_before_first_sweep
+test_wait_primary_leaves_stuck_line_to_watcher
+test_wait_primary_ends_at_age_bound
