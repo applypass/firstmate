@@ -22,7 +22,7 @@
 # state/.primary-endpoint at session start. The same sweep reads that pane, records
 # state/primary.usage-limit (kind=primary) and, after reset, types the resume text straight into
 # it through the backend (never fm-send, which needs a task id). Text is typed only into a composer
-# proven empty, and main gets no sleep/network resume.
+# proven empty on a pane with no busy sign, and main gets no sleep/network resume.
 # Main's hook record proves the stop, so it clears only when a banner an earlier sweep read is gone
 # from the screen, when a normal Stop clears it, or after FM_UL_PRIMARY_MAX_AGE_SECS (8 hours). A
 # screen the banner matcher does not know falls back to the quota or assumed reset and gets one
@@ -39,6 +39,8 @@ set -u
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=bin/fm-backend.sh
 . "$SCRIPT_DIR/fm-backend.sh"
+# shellcheck source=bin/fm-composer-lib.sh
+. "$SCRIPT_DIR/fm-composer-lib.sh"
 # shellcheck source=bin/fm-usage-limit-lib.sh
 . "$SCRIPT_DIR/fm-usage-limit-lib.sh"
 # shellcheck source=bin/fm-sleep-resume-lib.sh
@@ -124,9 +126,10 @@ send_resume() {  # <id> <kind> <first_seen> <attempt> [cause]
 }
 
 # Primary chat sends go straight to main's recorded pane. handle_target types text only while
-# primary_composer_empty holds: any other verdict may be the captain's half-typed line or a busy
-# harness (the bin/fm-supervise-daemon.sh rule).
-PRIMARY_BACKEND='' PRIMARY_TARGET=''
+# primary_ready holds: the composer reads exactly empty (any other verdict may be the captain's
+# half-typed line) and the pane shows no busy sign, because Claude draws an empty composer while it
+# works (the composer and pane_is_busy rules of bin/fm-supervise-daemon.sh).
+PRIMARY_BACKEND='' PRIMARY_TARGET='' PRIMARY_HARNESS=''
 primary_send_text() {  # <text>
   fm_backend_send_text_submit "$PRIMARY_BACKEND" "$PRIMARY_TARGET" "$1" 3 0.4 "${FM_SEND_SETTLE:-1}" >/dev/null 2>&1
 }
@@ -134,8 +137,11 @@ primary_send_key() {  # <key>
   fm_backend_send_key "$PRIMARY_BACKEND" "$PRIMARY_TARGET" "$1" >/dev/null 2>&1
   sleep "${FM_SEND_SETTLE:-1}"
 }
-primary_composer_empty() {
-  [ "$(fm_backend_composer_state "$PRIMARY_BACKEND" "$PRIMARY_TARGET" 2>/dev/null)" = empty ]
+primary_ready() {
+  [ "$(fm_backend_composer_state "$PRIMARY_BACKEND" "$PRIMARY_TARGET" 2>/dev/null)" = empty ] || return 1
+  [ "$(fm_backend_busy_state "$PRIMARY_BACKEND" "$PRIMARY_TARGET" 2>/dev/null)" != busy ] || return 1
+  ! fm_backend_capture "$PRIMARY_BACKEND" "$PRIMARY_TARGET" 40 2>/dev/null | grep -v '^[[:space:]]*$' \
+    | tail -n 12 | fm_busy_lines_match "$PRIMARY_HARNESS"
 }
 
 # A wall-clock gap between ticks is a wake. Records the wake epoch for the sweep window.
@@ -211,8 +217,9 @@ handle_primary() {
   local file="$STATE/.primary-endpoint"
   PRIMARY_BACKEND=$(rec_get "$file" backend)
   PRIMARY_TARGET=$(rec_get "$file" target)
+  PRIMARY_HARNESS=$(rec_get "$file" harness)
   [ -n "$PRIMARY_BACKEND" ] && [ -n "$PRIMARY_TARGET" ] || { rm -f "$STATE/primary.usage-limit"; return 0; }
-  handle_target primary primary "$PRIMARY_BACKEND" "$PRIMARY_TARGET" "$(rec_get "$file" harness)"
+  handle_target primary primary "$PRIMARY_BACKEND" "$PRIMARY_TARGET" "$PRIMARY_HARNESS"
 }
 
 handle_target() {  # <id> <kind> <backend> <target> <harness>
@@ -294,15 +301,15 @@ handle_target() {  # <id> <kind> <backend> <target> <harness>
   [ "$NOW" -ge $((last + RETRY_SECS)) ] || return 0
   # Dismiss a menu only when its highlighted option waits; never a credits option.
   case "$FM_UL_KEY" in Enter|Escape) key=$FM_UL_KEY ;; esac
-  # Main with no menu up: wait, without spending an attempt, until its composer is proven empty.
-  [ "$kind" != primary ] || [ -n "$key" ] || primary_composer_empty || return 0
+  # Main with no menu up: wait, without spending an attempt, until it is proven idle and empty.
+  [ "$kind" != primary ] || [ -n "$key" ] || primary_ready || return 0
 
   attempts=$((attempts + 1))
   rec_set "$rec" attempts "$attempts" && rec_set "$rec" last_attempt "$NOW" || return 0
   if [ -n "$key" ]; then
     if [ "$kind" = primary ]; then
       primary_send_key "$key" || true
-      primary_composer_empty || return 0
+      primary_ready || return 0
     else
       FM_HOME="$FM_HOME" "$SEND" "$id" --key "$key" >/dev/null 2>&1 || true
     fi

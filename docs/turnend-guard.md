@@ -78,7 +78,6 @@ These sources also count toward supervision need:
 - Registered `state/procevent/*.source` records require supervision even though they have no task metadata.
 - Every mode treats `state/x-watch.check.sh` as supervision need, so Relay polling remains guarded without an in-flight task.
 - A custom check registered with `bin/fm-check-register.sh` counts the same way, so an operator's home-level poll keeps running after the last task is torn down.
-- Fork-only: a pending `state/primary.usage-limit` record counts until the usage-limit tick resumes main and removes it, so main's own usage-limit stop stays supervised.
 
 The default cross-harness mode exits silently with no supervision need.
 
@@ -269,7 +268,7 @@ The registrations in detail:
 
 - Claude registers two `Stop` hooks in `.claude/settings.json`, both anchored through `CLAUDE_PROJECT_DIR`: `bin/fm-turnend-guard.sh --claude`, and `bin/fm-claude-stop-autoarm.sh` with `asyncRewake: true` and `timeout: 28800`.
   Fork-only: the same autoarm entry is also the `StopFailure` hook.
-  On a `rate_limit` stop in the main home it writes the pending `state/primary.usage-limit` record, which counts as supervision need until `bin/fm-usage-limit-tick.sh` clears it.
+  On a `rate_limit` stop in the main home it writes the pending `state/primary.usage-limit` record.
   That firing then runs `bin/fm-usage-limit-tick.sh --wait-primary`, which waits for the reset and types the resume into main's pane without reading worker signals.
   On any `StopFailure` it exits 0: Claude ignores that event's exit code, so it never arms a watcher or commits a wake there, and pending signals wait on disk for the next `Stop`.
   In a Claude secondmate home, `bin/fm-spawn.sh` writes a `.fm-busy-stop` pointer and gives the mate no `Stop` busy hook, so `--claude` is the only Stop writer of the parent home's busy record for that generation.

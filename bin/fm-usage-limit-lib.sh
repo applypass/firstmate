@@ -153,7 +153,9 @@ fm_usage_limit_detect() {  # <screen-text> [now]
 # down, or nothing when a prompt or reply line follows that marker. A marker
 # inside a prompt or reply (a line opened by a prompt or reply glyph, and its
 # indented continuation) is prose, never a banner. Only a menu option, a
-# slash-command hint, or a key hint other than a busy spinner may follow it.
+# slash-command hint, a key hint other than a busy spinner, or a local command
+# echo (`> /usage`, `> !ls`) with the indented or `⎿` output under it may follow
+# it: a local command never reaches the model, so it does not prove a resume.
 fm_usage_limit_last_block() {  # <screen>
   printf '%s\n' "$1" | awk '
     { a[NR] = $0 }
@@ -171,8 +173,12 @@ fm_usage_limit_last_block() {  # <screen>
         if (l ~ /out of usage credits|limit reached|hit your( [a-z0-9-]+)? limit|usage limit.*(reset|reached)|limit will reset|stop and wait for limit to reset|wait here, then continue automatically/) mark = i
       }
       if (!mark) exit
+      lcmd = 0
       for (i = mark + 1; i <= end; i++) {
         l = tolower(a[i])
+        if (l ~ /^[[:space:]]*(>|❯)[[:space:]]*(\/[a-z]|!)/) { lcmd = 1; continue }
+        if (lcmd && l ~ /^([[:space:]]|⎿|$)/) continue
+        lcmd = 0
         if (l ~ /^[[:space:]]*$/ || l ~ /^[[:space:]]*(❯|›|>)?[[:space:]]*[0-9]+[.)][[:space:]]/ \
           || l ~ /^[[:space:]]*(⎿[[:space:]]*)?\/[a-z]/ || (l ~ /(enter|esc)[[:space:]]+to/ && l !~ /interrupt/)) continue
         exit

@@ -3631,19 +3631,6 @@ while :; do
     lane_capacity_publish_detached
   fi
 
-  # Fork-only: usage-limit sweep (bin/fm-usage-limit-tick.sh), at most once a minute. It records a
-  # Claude usage-limit stop, resumes the endpoint after the reset, and prints a line only for an
-  # endpoint that stays stopped after the bounded retries. It runs before any wake below can end
-  # the cycle, so a watcher that wakes a rate-limited main at once still resumes it first.
-  if [ "$(age_of "$STATE/.usage-limit-tick")" -ge "${FM_USAGE_LIMIT_TICK_SECS:-60}" ]; then
-    : >"$STATE/.usage-limit-tick" 2>/dev/null || true
-    usage_limit_out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-usage-limit-tick.sh" 2>/dev/null) || usage_limit_out=
-    if [ -n "$usage_limit_out" ]; then
-      wake "check: $usage_limit_out"
-    fi
-  fi
-  # Fork-only end
-
   # Bearings publishes reconcile asks as local one-shot request files and
   # returns before any mate delivery. Supervision owns their later delivery;
   # a skipped or failed request remains durable for another poll.
@@ -3720,6 +3707,18 @@ while :; do
   never_wait_out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-never-wait.sh" sweep 2>/dev/null) || never_wait_out=
   if [ -n "$never_wait_out" ]; then
     wake "check: never-wait $never_wait_out"
+  fi
+  # Fork-only end
+
+  # Fork-only: usage-limit sweep (bin/fm-usage-limit-tick.sh), at most once a minute. It records a
+  # Claude usage-limit stop, resumes the endpoint after the reset, and prints a line only for an
+  # endpoint that stays stopped after the bounded retries.
+  if [ "$(age_of "$STATE/.usage-limit-tick")" -ge "${FM_USAGE_LIMIT_TICK_SECS:-60}" ]; then
+    : >"$STATE/.usage-limit-tick" 2>/dev/null || true
+    usage_limit_out=$(FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-usage-limit-tick.sh" 2>/dev/null) || usage_limit_out=
+    if [ -n "$usage_limit_out" ]; then
+      wake "check: $usage_limit_out"
+    fi
   fi
   # Fork-only end
 

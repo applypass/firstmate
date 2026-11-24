@@ -78,8 +78,6 @@ fm_supervision_status() {
     || [ "$FM_SUP_CHECKS" -gt 0 ]; then
     FM_SUP_NEEDED=true
   fi
-  # Fork-only: main's own usage-limit stop (state/primary.usage-limit) is need until it resumes.
-  [ ! -f "$state/primary.usage-limit" ] || FM_SUP_NEEDED=true
 
   beat="$state/.last-watcher-beat"
   if [ -e "$beat" ]; then

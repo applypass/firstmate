@@ -30,13 +30,14 @@ Unlike other endpoints, the screen alone never creates that record: only main's 
 The screen fills in the reset time.
 Main counts as stopped for the screen only when a harness limit banner is the last transcript output directly above its composer.
 A marker inside a prompt or reply is prose, not a banner: a line that opens with a prompt or reply glyph (`>`, `❯`, `⏺`, `●`) and the indented lines that continue it.
-A menu option, a slash-command hint or a key hint may follow the banner; a later prompt or reply line, or a busy spinner, means main is not stopped.
+A menu option, a slash-command hint or a key hint may follow the banner, and so may a local command the captain ran there (a `/usage` or `!` echo and the `⎿` output under it), because it never reaches the model.
+A later real prompt or reply line, or a busy spinner, means main is not stopped.
 So a relayed `usage-limit stuck` line or a reply that mentions a limit is never a stop.
 The hook record already proves the stop, so a screen the banner matcher does not recognize never clears it.
 That screen falls back to the quota or an assumed reset and gets one resume, with no retries and no `usage-limit stuck` line.
 The record clears only when a banner an earlier sweep read is gone from the screen, when a normal `Stop` fires (main finished a turn), or `FM_UL_PRIMARY_MAX_AGE_SECS` (8 hours) after `first_seen`.
 After the reset it types the resume text straight into the pane through the backend, because `bin/fm-send.sh` needs a task id.
-It types only when the composer reads exactly `empty`; a half-typed or unreadable composer means wait, so it never types over the captain, and a skipped tick costs no attempt.
+It types only when the composer reads exactly `empty` and the pane shows no busy sign (the native busy state or the harness spinner, as `bin/fm-supervise-daemon.sh` checks); a half-typed or unreadable composer or a working main means wait, so it never types over the captain or into a running turn, and a skipped tick costs no attempt.
 After a menu key it checks the composer again before it types.
 Main gets no sleep or network resume; only a usage-limit stop is resumed there.
 The retry limit, the menu rule and the one `usage-limit stuck` line are the same as for any endpoint.
@@ -52,9 +53,7 @@ It never takes the one `usage-limit stuck` line; a watcher tick prints it, so th
 It exits once the record clears or ages out, or all attempts are spent, so main resumes even when the limit hit a turn that no watcher outlives.
 The 8-hour age bound also ends a waiter whose session is gone, and a reset further out than that waits for the watcher.
 A watcher already running for the fleet also sweeps main's pane; the retry spacing and the empty-composer check keep the two from typing twice.
-`bin/fm-supervision-lib.sh` counts the record as supervision need, so the next `Stop` arms a watcher even in an idle fleet with no `state/*.meta`.
-The tick fills in the rest of the record on its first sweep and removes it on the conditions above or when no primary pane is recorded, which ends that need.
-The watcher runs the tick before any wake can end its cycle, so a watcher that wakes main at once still resumes it first.
+The tick fills in the rest of the record on its first sweep and removes it on the conditions above or when no primary pane is recorded.
 
 ## Sleep and network stops
 

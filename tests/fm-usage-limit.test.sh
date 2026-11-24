@@ -622,6 +622,46 @@ test_primary_confirmed_stop_clears_when_main_resumes() {
   pass "usage-limit: a confirmed stop clears once main shows a later reply"
 }
 
+# A local command the captain runs below the banner never reaches the model, so main is still stopped.
+test_primary_local_command_keeps_record() {
+  local dir t0 reset screen box
+  dir=$(setup_case primlocal)
+  printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
+  t0=$(ist '2026-11-14 02:50')
+  reset=$(ist '2026-11-14 03:10')
+  box="$BOX_TOP"$'\n'"$BAR >      $BAR"$'\n'"$BOX_BOTTOM"
+  hook_record "$dir" "$t0"
+  main_screen "$dir" "$PRIMARY_SCREEN"
+  tick "$dir" "$t0" >/dev/null
+  assert_contains "$(cat "$dir/home/state/primary.usage-limit")" "reset_source=screen" "banner confirmed"
+  screen="$LIMIT_LINES"$'\n\n> /usage\n\xe2\x8e\xbf Status dialog dismissed\n> !ls\n  \xe2\x8e\xbf  notes.md'
+  main_screen "$dir" "$screen"$'\n'"$box"
+  printf '%s\n' "$(($(printf '%s\n' "$screen" | wc -l) + 1))" >"$dir/screens/fm-main.cy"
+  tick "$dir" $((t0 + 300)) >/dev/null
+  [ -f "$dir/home/state/primary.usage-limit" ] || fail "a local command below the banner cleared main's record"
+  tick "$dir" $((reset + 120)) >/dev/null
+  grep 'fm-main' "$dir/send.log" | grep -q 'usage limit has reset' \
+    || fail "main got no resume after a local command below its banner: $(cat "$dir/send.log")"
+  pass "usage-limit: a local command below main's banner keeps the record and the resume"
+}
+
+# Claude draws an empty composer while it works, so an empty box alone never licenses typing.
+test_primary_busy_main_gets_no_resume() {
+  local dir t0 screen
+  dir=$(setup_case primbusy)
+  printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
+  t0=$(ist '2026-11-14 02:50')
+  hook_record "$dir" "$t0"
+  screen=$'> continue\n\xc2\xb7 Burrowing\xe2\x80\xa6 (3m 26s \xe2\x86\x93 2.5k tokens)'
+  main_screen "$dir" "$screen"$'\n'"$BOX_TOP"$'\n'"$BAR >      $BAR"$'\n'"$BOX_BOTTOM"
+  tick "$dir" $((t0 + 60)) >/dev/null
+  tick "$dir" $((t0 + 1200)) >/dev/null
+  tick "$dir" $((t0 + 1400)) >/dev/null
+  ! grep -q 'fm-main' "$dir/send.log" || fail "typed a resume into a busy main: $(cat "$dir/send.log")"
+  assert_contains "$(cat "$dir/home/state/primary.usage-limit")" "attempts=0" "a busy tick spends no attempt"
+  pass "usage-limit: main is never typed into while it is busy"
+}
+
 # --wait-primary: the waiter run by main's StopFailure hook.
 wait_primary() { # <case-dir> <now-epoch> [env...]; returns 1 when the waiter never exits
   local dir=$1 now=$2 pid i
@@ -699,6 +739,8 @@ test_primary_banner_must_be_last_output
 test_secondmate_home_records_no_primary
 test_primary_unrecognized_banner_keeps_record
 test_primary_confirmed_stop_clears_when_main_resumes
+test_primary_local_command_keeps_record
+test_primary_busy_main_gets_no_resume
 test_wait_primary_sleeps_before_first_sweep
 test_wait_primary_leaves_stuck_line_to_watcher
 test_wait_primary_ends_at_age_bound

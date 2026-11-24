@@ -218,7 +218,7 @@ fi
 # commits a wake: pending signals stay on disk for the next normal Stop's arm.
 # The firing that writes the record then runs bin/fm-usage-limit-tick.sh
 # --wait-primary, which waits for the reset and types the resume into main's
-# pane even when no watcher runs; bin/fm-supervision-lib.sh counts it as need.
+# pane even when no watcher runs.
 if [ -n "$PAYLOAD" ] && command -v jq >/dev/null 2>&1 \
   && printf '%s' "$PAYLOAD" | jq -e '.hook_event_name == "StopFailure"' >/dev/null 2>&1; then
   if ! fm_root_is_secondmate_home "$FM_ROOT" && [ -f "$STATE/.primary-endpoint" ] \
@@ -231,8 +231,7 @@ if [ -n "$PAYLOAD" ] && command -v jq >/dev/null 2>&1 \
 fi
 
 # A normal Stop proves main finished a turn, so a StopFailure record (which proves it could not)
-# is stale: drop it before the need check, so it neither keeps a watcher armed nor lets the tick
-# type a resume into a session that is already working.
+# is stale: drop it so the tick never types a resume into a session that is already working.
 rm -f "$STATE/primary.usage-limit"
 
 # --- AFK: the away daemon owns the watcher and triage; never rewake ----------
