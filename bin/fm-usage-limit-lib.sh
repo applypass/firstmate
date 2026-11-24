@@ -149,15 +149,15 @@ fm_usage_limit_detect() {  # <screen-text> [now]
 }
 
 # fm_usage_limit_last_block <screen>: print main's closing usage-limit banner,
-# the transcript above the composer prompt from the last harness marker line
-# down, or nothing when a prompt or reply line follows that marker. A marker
-# inside a prompt or reply (a line opened by a prompt or reply glyph, and its
-# indented continuation) is prose, never a banner. Only a menu option, a
-# slash-command hint, a key hint other than a busy spinner, or a local command
-# echo (`> /usage`, `> !ls`) with the indented or `⎿` output under it may follow
-# it: a local command never reaches the model, so it does not prove a resume.
+# the last harness marker line above the composer prompt down to the next
+# prompt, reply or spinner line (at most FM_UL_TAIL_LINES lines), or nothing
+# once main resumed. A marker inside a prompt or reply (a line opened by a
+# prompt or reply glyph, and its indented continuation) is prose, never a
+# banner. Only a real turn proves a resume: a prompt line that is not a local
+# command, then a reply line or a busy spinner. Any other output below the
+# banner, such as a /usage echo or panel, leaves main stopped.
 fm_usage_limit_last_block() {  # <screen>
-  printf '%s\n' "$1" | awk '
+  printf '%s\n' "$1" | awk -v max="$FM_UL_TAIL_LINES" '
     { a[NR] = $0 }
     END {
       end = NR
@@ -173,17 +173,19 @@ fm_usage_limit_last_block() {  # <screen>
         if (l ~ /out of usage credits|limit reached|hit your( [a-z0-9-]+)? limit|usage limit.*(reset|reached)|limit will reset|stop and wait for limit to reset|wait here, then continue automatically/) mark = i
       }
       if (!mark) exit
-      lcmd = 0
+      last = mark
+      cut = 0
+      asked = 0
       for (i = mark + 1; i <= end; i++) {
         l = tolower(a[i])
-        if (l ~ /^[[:space:]]*(>|❯)[[:space:]]*(\/[a-z]|!)/) { lcmd = 1; continue }
-        if (lcmd && l ~ /^([[:space:]]|⎿|$)/) continue
-        lcmd = 0
-        if (l ~ /^[[:space:]]*$/ || l ~ /^[[:space:]]*(❯|›|>)?[[:space:]]*[0-9]+[.)][[:space:]]/ \
-          || l ~ /^[[:space:]]*(⎿[[:space:]]*)?\/[a-z]/ || (l ~ /(enter|esc)[[:space:]]+to/ && l !~ /interrupt/)) continue
-        exit
+        menu = l ~ /^[[:space:]]*(❯|›|>)?[[:space:]]*[0-9]+[.)][[:space:]]/
+        spin = l ~ /esc to interrupt|…[[:space:]]+\([0-9]+[smh]/
+        if (!menu && l ~ "^[[:space:]]*(>|❯)[[:space:]]*[^/![:space:]]") asked = 1
+        else if (asked && (spin || l ~ /^[[:space:]]*(⏺|●)/)) exit
+        if (spin || (!menu && l ~ /^[[:space:]]*(>|❯|⏺|●)/)) cut = 1
+        if (!cut && i - mark < max) last = i
       }
-      for (i = mark; i <= end; i++) print a[i]
+      for (i = mark; i <= last; i++) print a[i]
     }'
 }
 

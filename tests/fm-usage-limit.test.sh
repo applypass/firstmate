@@ -570,38 +570,54 @@ test_secondmate_home_records_no_primary() {
 }
 
 # --- primary chat: the hook record proves the stop (24 Nov review) ----------------
-# Shapes the banner matcher does not recognise. main's StopFailure hook already proved the stop,
+# A shape the banner matcher does not recognise. main's StopFailure hook already proved the stop,
 # so an unreadable screen must neither clear the record nor leave main unresumed.
 test_primary_unrecognized_banner_keeps_record() {
-  local dir t0 reset screen n shape box=''
+  local dir t0 reset screen n box
   box="$BOX_TOP"$'\n'"$BAR >      $BAR"$'\n'"$BOX_BOTTOM"
   t0=$(ist '2026-11-14 02:50')
   reset=$((t0 + 900))
-  shape=0
+  screen=$'\xe2\x8f\xba Running the retag batch\n  5-hour limit reached - resets 3:10am (Asia/Kolkata)'
+  dir=$(setup_case primshape)
+  printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
+  hook_record "$dir" "$t0"
+  main_screen "$dir" "$screen"$'\n'"$box"
+  printf '%s\n' "$(($(printf '%s\n' "$screen" | wc -l) + 1))" >"$dir/screens/fm-main.cy"   # composer row
+  tick "$dir" "$((t0 + 60))" >/dev/null
+  [ -f "$dir/home/state/primary.usage-limit" ] || fail "the first sweep cleared main's record"
+  ! grep -q 'fm-main' "$dir/send.log" || fail "typed before the assumed reset"
+  for n in 1 2 3 4 5; do
+    out=$(tick "$dir" $((reset + 100 + n * 130)))
+    [ -z "$out" ] || fail "an unconfirmed stop must print no stuck line: $out"
+  done
+  [ -f "$dir/home/state/primary.usage-limit" ] || fail "record lost before its age bound"
+  [ "$(grep 'fm-main' "$dir/send.log" | grep -c 'usage limit has reset')" = 1 ] \
+    || fail "an unreadable screen gets exactly one resume: $(cat "$dir/send.log")"
+  tick "$dir" $((t0 + 8 * 3600 + 60)) >/dev/null
+  [ ! -e "$dir/home/state/primary.usage-limit" ] || fail "an unconfirmed record outlived its age bound"
+  pass "usage-limit: an unrecognised banner shape keeps main's record, resumes once, and ages out"
+}
+
+# Output below the banner that is not a new turn (a hint bullet, an upsell line) keeps it a stop.
+test_primary_banner_with_trailing_output_is_a_stop() {
+  local dir t0 reset screen shape=0 box
+  box="$BOX_TOP"$'\n'"$BAR >      $BAR"$'\n'"$BOX_BOTTOM"
+  t0=$(ist '2026-11-14 02:50')
+  reset=$(ist '2026-11-14 03:10')
   for screen in \
-    $'\xe2\x8f\xba Running the retag batch\n  5-hour limit reached - resets 3:10am (Asia/Kolkata)' \
     $'  \xe2\x8e\xbf  5-hour limit reached - resets 3:10am (Asia/Kolkata)\n     \xe2\x80\xa2 /upgrade to increase your usage limit.' \
     "$LIMIT_LINES"$'\nUpgrade your plan at claude.ai/settings to keep going.'; do
     shape=$((shape + 1))
-    dir=$(setup_case "primshape$shape")
+    dir=$(setup_case "primtrail$shape")
     printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
     hook_record "$dir" "$t0"
     main_screen "$dir" "$screen"$'\n'"$box"
-    printf '%s\n' "$(($(printf '%s\n' "$screen" | wc -l) + 1))" >"$dir/screens/fm-main.cy"   # composer row
+    printf '%s\n' "$(($(printf '%s\n' "$screen" | wc -l) + 1))" >"$dir/screens/fm-main.cy"
     tick "$dir" "$((t0 + 60))" >/dev/null
-    [ -f "$dir/home/state/primary.usage-limit" ] || fail "shape $shape: the first sweep cleared main's record"
-    ! grep -q 'fm-main' "$dir/send.log" || fail "shape $shape: typed before the assumed reset"
-    for n in 1 2 3 4 5; do
-      out=$(tick "$dir" $((reset + 100 + n * 130)))
-      [ -z "$out" ] || fail "shape $shape: an unconfirmed stop must print no stuck line: $out"
-    done
-    [ -f "$dir/home/state/primary.usage-limit" ] || fail "shape $shape: record lost before its age bound"
-    [ "$(grep 'fm-main' "$dir/send.log" | grep -c 'usage limit has reset')" = 1 ] \
-      || fail "shape $shape: an unreadable screen gets exactly one resume: $(cat "$dir/send.log")"
-    tick "$dir" $((t0 + 8 * 3600 + 60)) >/dev/null
-    [ ! -e "$dir/home/state/primary.usage-limit" ] || fail "shape $shape: an unconfirmed record outlived its age bound"
+    assert_contains "$(cat "$dir/home/state/primary.usage-limit")" "reset_epoch=$reset" "shape $shape: banner reset read"
+    assert_contains "$(cat "$dir/home/state/primary.usage-limit")" "reset_source=screen" "shape $shape: banner confirmed"
   done
-  pass "usage-limit: an unrecognised banner shape keeps main's record, resumes once, and ages out"
+  pass "usage-limit: output below main's banner that is not a new turn keeps it a stop"
 }
 
 # A banner a sweep read, then gone from the screen, is positive evidence that main resumed.
@@ -639,10 +655,15 @@ test_primary_local_command_keeps_record() {
   printf '%s\n' "$(($(printf '%s\n' "$screen" | wc -l) + 1))" >"$dir/screens/fm-main.cy"
   tick "$dir" $((t0 + 300)) >/dev/null
   [ -f "$dir/home/state/primary.usage-limit" ] || fail "a local command below the banner cleared main's record"
+  screen="$LIMIT_LINES"$'\n\n> /usage\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n  Settings:  Status   Config   Usage\n\n  Current session\n  \xe2\x96\x88\xe2\x96\x88\xe2\x96\x88\xe2\x96\x88 100% used\n  Resets 9pm (UTC)\n\n  Current week (all models)\n  \xe2\x96\x88\xe2\x96\x88 40% used\n  Resets Dec 1, 9pm (UTC)\n\n  Current week (Opus)\n  \xe2\x96\x88 10% used\n  Resets Dec 1, 9pm (UTC)\n\n  Extra usage\n  Not enabled\n\n  Esc to cancel\n! ls\n  \xe2\x8e\xbf  notes.md'
+  main_screen "$dir" "$screen"$'\n'"$box"
+  printf '%s\n' "$(($(printf '%s\n' "$screen" | wc -l) + 1))" >"$dir/screens/fm-main.cy"
+  tick "$dir" $((t0 + 600)) >/dev/null
+  [ -f "$dir/home/state/primary.usage-limit" ] || fail "an open /usage panel below the banner cleared main's record"
   tick "$dir" $((reset + 120)) >/dev/null
   grep 'fm-main' "$dir/send.log" | grep -q 'usage limit has reset' \
     || fail "main got no resume after a local command below its banner: $(cat "$dir/send.log")"
-  pass "usage-limit: a local command below main's banner keeps the record and the resume"
+  pass "usage-limit: local command output below main's banner keeps the record and the resume"
 }
 
 # Claude draws an empty composer while it works, so an empty box alone never licenses typing.
@@ -739,6 +760,7 @@ test_primary_banner_must_be_last_output
 test_secondmate_home_records_no_primary
 test_primary_unrecognized_banner_keeps_record
 test_primary_confirmed_stop_clears_when_main_resumes
+test_primary_banner_with_trailing_output_is_a_stop
 test_primary_local_command_keeps_record
 test_primary_busy_main_gets_no_resume
 test_wait_primary_sleeps_before_first_sweep

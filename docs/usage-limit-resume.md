@@ -30,8 +30,8 @@ Unlike other endpoints, the screen alone never creates that record: only main's 
 The screen fills in the reset time.
 Main counts as stopped for the screen only when a harness limit banner is the last transcript output directly above its composer.
 A marker inside a prompt or reply is prose, not a banner: a line that opens with a prompt or reply glyph (`>`, `❯`, `⏺`, `●`) and the indented lines that continue it.
-A menu option, a slash-command hint or a key hint may follow the banner, and so may a local command the captain ran there (a `/usage` or `!` echo and the `⎿` output under it), because it never reaches the model.
-A later real prompt or reply line, or a busy spinner, means main is not stopped.
+Only a real turn below the banner means main is not stopped: a prompt line that is not a local command (`/usage`, `!ls`), then a reply line or a busy spinner.
+Any other output there, such as a local command's echo or an open `/usage` panel, never reaches the model, so main stays stopped.
 So a relayed `usage-limit stuck` line or a reply that mentions a limit is never a stop.
 The hook record already proves the stop, so a screen the banner matcher does not recognize never clears it.
 That screen falls back to the quota or an assumed reset and gets one resume, with no retries and no `usage-limit stuck` line.
