@@ -749,6 +749,8 @@ if [ "$READ_ONLY" -eq 0 ]; then
   "$SCRIPT_DIR/fm-mate-hooks-install.sh" --main "$FM_HOME" >/dev/null 2>&1 || true
   # Fork-only: meeting-to-ticket PostToolUse hook for the primary home (bin/fm-meeting-ticket-gate.sh); idempotent and untracked.
   "$SCRIPT_DIR/fm-meeting-ticket-gate.sh" install "$FM_HOME" >/dev/null 2>&1 || true
+  # Fork-only: record main's own pane so a usage-limit stop in this chat is resumed (bin/fm-primary-endpoint.sh).
+  "$SCRIPT_DIR/fm-primary-endpoint.sh" record "$FM_HOME" >/dev/null 2>&1 || true
   # A full locked start publishes this home's current structured summary.
   # Publication is side-band and best-effort, so it can never change the
   # session-start result. A context re-emit is not another session start.

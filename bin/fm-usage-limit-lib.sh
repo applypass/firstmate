@@ -85,7 +85,12 @@ fm_usage_limit_parse_reset() {
       else
         d=$(fm_ul_today "$tz" "$now" %Y-%m-%d)
         cand=$(fm_ul_epoch "$tz" "$d" "$hm") || continue
-        [ "$cand" -gt $((now - 60)) ] || cand=$((cand + 86400))
+        # Fork-only: a clock time lands in (now - FM_UL_PAST_SECS, now - FM_UL_PAST_SECS + 24h].
+        if [ "$cand" -le $((now - ${FM_UL_PAST_SECS:-21600})) ]; then
+          cand=$((cand + 86400))
+        elif [ "$cand" -gt $((now - ${FM_UL_PAST_SECS:-21600} + 86400)) ]; then
+          cand=$((cand - 86400))
+        fi
       fi
       [ "$had_nocase" = 1 ] || shopt -u nocasematch
       printf '%s\n' "$cand"
@@ -141,6 +146,48 @@ fm_usage_limit_detect() {  # <screen-text> [now]
   FM_UL_STOPPED=1
   FM_UL_RESET=$(fm_usage_limit_parse_reset "$tail" "$now" 2>/dev/null || true)
   FM_UL_KEY=$(fm_usage_limit_menu_key "$tail")
+}
+
+# fm_usage_limit_last_block <screen>: print main's closing usage-limit banner,
+# the last harness marker line above the composer prompt and the blank, menu,
+# slash-command hint and key hint lines right under it up to the first other
+# line, or nothing once main resumed. A marker inside a prompt or reply (a line
+# opened by a prompt or reply glyph, and its indented continuation) is prose,
+# never a banner. Only a real turn proves a resume: a prompt line that is not a
+# local command, then a reply line or a busy spinner. Any other output below
+# the banner, such as a /usage echo or panel, leaves main stopped and is never
+# printed, so its reset times never stand in for the banner's.
+fm_usage_limit_last_block() {  # <screen>
+  printf '%s\n' "$1" | awk '
+    { a[NR] = $0 }
+    END {
+      end = NR
+      for (i = 1; i < NR; i++)
+        if (a[i] ~ /^[[:space:]]*(╭|─)/ && a[i + 1] ~ /^[[:space:]]*(│[[:space:]]*)?(>|❯)([[:space:]]*$|[[:space:]]+[^0-9[:space:]])/) end = i - 1
+      mark = 0
+      prose = 0
+      for (i = 1; i <= end; i++) {
+        l = tolower(a[i])
+        if (l ~ /^[[:space:]]*(⏺|●|>|❯)/) prose = 1
+        else if (l ~ /^[[:space:]]*⎿/ || l ~ /^[^[:space:]]/) prose = 0
+        if (prose || l ~ /["`]/) continue
+        if (l ~ /out of usage credits|limit reached|hit your( [a-z0-9-]+)? limit|usage limit.*(reset|reached)|limit will reset|stop and wait for limit to reset|wait here, then continue automatically/) mark = i
+      }
+      if (!mark) exit
+      last = mark
+      ext = 1
+      asked = 0
+      for (i = mark + 1; i <= end; i++) {
+        l = tolower(a[i])
+        menu = l ~ /^[[:space:]]*(❯|›|>)?[[:space:]]*[0-9]+[.)][[:space:]]/
+        if (!menu && l ~ "^[[:space:]]*(>|❯)[[:space:]]*[^/![:space:]]") asked = 1
+        else if (asked && l ~ /^[[:space:]]*(⏺|●)|esc to interrupt|…[[:space:]]+\([0-9]+[smh]/) exit
+        if (ext && (l ~ /^[[:space:]]*$/ || menu || l ~ /^[[:space:]]*(⎿[[:space:]]*)?\/[a-z]/ \
+          || (l ~ /(enter|esc)[[:space:]]+to/ && l !~ /interrupt/))) last = i
+        else ext = 0
+      }
+      for (i = mark; i <= last; i++) print a[i]
+    }'
 }
 
 # fm_usage_limit_quota_reset <harness> <now>: print a reset epoch read from

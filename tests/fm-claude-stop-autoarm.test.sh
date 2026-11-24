@@ -453,6 +453,10 @@ test_actionable_close_rewakes_with_reason() {
   pass "auto-arm: actionable close translates to exactly one exit-2 rewake with reason"
 }
 
+# Fork-only: main's StopFailure and Stop usage-limit tests live in a fork-only helper file.
+# shellcheck source=tests/stop-autoarm-usage-limit-helpers.sh
+. "$(dirname "${BASH_SOURCE[0]}")/stop-autoarm-usage-limit-helpers.sh"
+
 # pi-code (Pi's Claude-hook compatibility extension) delivers a Claude-shaped
 # Stop payload but awaits the hook with no asyncRewake support, so the hook
 # must stand down or it wedges Pi's turn for the declared timeout (issue
@@ -2059,3 +2063,6 @@ test_host_crash_is_retried_then_reported
 test_arguments_never_arm
 test_fm_lock_status_still_works_with_shared_lib
 test_stands_down_only_on_pi_code_transcript_path
+# Fork-only: sourced from tests/stop-autoarm-usage-limit-helpers.sh.
+test_stop_failure_resumes_main_and_leaves_signals
+test_normal_stop_clears_main_limit_record

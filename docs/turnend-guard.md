@@ -267,6 +267,10 @@ Each enabled primary harness adapts its own turn-end mechanism to the shared gua
 The registrations in detail:
 
 - Claude registers two `Stop` hooks in `.claude/settings.json`, both anchored through `CLAUDE_PROJECT_DIR`: `bin/fm-turnend-guard.sh --claude`, and `bin/fm-claude-stop-autoarm.sh` with `asyncRewake: true` and `timeout: 28800`.
+  Fork-only: the same autoarm entry is also the `StopFailure` hook.
+  On a `rate_limit` stop in the main home it writes the pending `state/primary.usage-limit` record.
+  That firing then runs `bin/fm-usage-limit-tick.sh --wait-primary`, which waits for the reset and types the resume into main's pane without reading worker signals.
+  On any `StopFailure` it exits 0: Claude ignores that event's exit code, so it never arms a watcher or commits a wake there, and pending signals wait on disk for the next `Stop`.
   In a Claude secondmate home, `bin/fm-spawn.sh` writes a `.fm-busy-stop` pointer and gives the mate no `Stop` busy hook, so `--claude` is the only Stop writer of the parent home's busy record for that generation.
   It records idle when it allows the Stop and busy when its exit 2 blocks it into a continuation, because Claude runs Stop hooks in parallel and that continuation fires no `UserPromptSubmit`.
   A home whose guard predates `.fm-busy-stop` cannot close the turn, so that launch keeps the ordinary `Stop` idle hook instead.

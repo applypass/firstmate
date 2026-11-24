@@ -213,6 +213,27 @@ if ! fm_session_lock_owned_by_self "$STATE"; then
   RECOVER_SESSION_LOCK=1
 fi
 
+# Fork-only: StopFailure records main's usage limit and waits to resume it; a normal Stop drops it.
+# Claude ignores a StopFailure hook's exit code, so this path never arms or
+# commits a wake: pending signals stay on disk for the next normal Stop's arm.
+# The firing that writes the record then runs bin/fm-usage-limit-tick.sh
+# --wait-primary, which waits for the reset and types the resume into main's
+# pane even when no watcher runs.
+if [ -n "$PAYLOAD" ] && command -v jq >/dev/null 2>&1 \
+  && printf '%s' "$PAYLOAD" | jq -e '.hook_event_name == "StopFailure"' >/dev/null 2>&1; then
+  if ! fm_root_is_secondmate_home "$FM_ROOT" && [ -f "$STATE/.primary-endpoint" ] \
+    && [ ! -e "$STATE/primary.usage-limit" ] \
+    && printf '%s' "$PAYLOAD" | jq -e '.error == "rate_limit"' >/dev/null 2>&1; then
+    printf 'endpoint=primary\nkind=primary\nfirst_seen=%s\n' "$(date +%s)" >"$STATE/primary.usage-limit" \
+      && FM_HOME="$FM_HOME" FM_STATE_OVERRIDE="$STATE" "$SCRIPT_DIR/fm-usage-limit-tick.sh" --wait-primary >/dev/null 2>&1
+  fi
+  exit 0
+fi
+
+# A normal Stop proves main finished a turn, so a StopFailure record (which proves it could not)
+# is stale: drop it so the tick never types a resume into a session that is already working.
+rm -f "$STATE/primary.usage-limit"
+
 # --- AFK: the away daemon owns the watcher and triage; never rewake ----------
 [ -e "$STATE/.afk" ] && exit 0
 

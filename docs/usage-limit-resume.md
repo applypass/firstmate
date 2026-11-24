@@ -12,12 +12,48 @@ This fork detects the stop with plain scripts and resumes each endpoint after th
    Later ticks leave `first_seen` alone.
 4. Nothing is sent before `reset_epoch` plus a 45 second grace.
 5. After that the tick sends one resume steer through `bin/fm-send.sh` (a mate steer is fire-and-forget), at most 3 times, 120 seconds apart.
-6. When the limit screen is gone the record clears.
+6. When the limit screen is gone the record clears (main's own chat clears on other evidence; see below).
 7. An endpoint still stopped after the last attempt prints one `usage-limit stuck` line, which the watcher turns into a `check:` wake.
    The line holds the endpoint, first seen, reset time and the last screen lines with secrets redacted.
    `surfaced=1` keeps it to once per incident.
 
 `bin/fm-crew-state.sh` reports an endpoint with a record as `blocked` (source `usage-limit`), never as healthy idle.
+
+## Main's own chat
+
+Main has no `state/*.meta`, so the sweep above would never see its session.
+`bin/fm-session-start.sh` runs `bin/fm-primary-endpoint.sh record` in the locked start, and that script writes the pane it runs in to `state/.primary-endpoint` (`backend`, `target`, `harness`).
+When no pane is found it removes the record instead of keeping an old one.
+A secondmate home records nothing and removes any old record, so only the main home ever types into main.
+Each tick then sweeps that pane with `kind=primary` and the record `state/primary.usage-limit`.
+Unlike other endpoints, the screen alone never creates that record: only main's own `rate_limit` `StopFailure` hook does (below).
+The screen fills in the reset time, read only from the banner and the menu, hint and key lines right under it, never from later output such as an open `/usage` panel.
+Main counts as stopped for the screen only when a harness limit banner is the last limit marker above its composer and no real turn follows it.
+A marker inside a prompt or reply is prose, not a banner: a line that opens with a prompt or reply glyph (`>`, `❯`, `⏺`, `●`) and the indented lines that continue it.
+Only a real turn below the banner means main is not stopped: a prompt line that is not a local command (`/usage`, `!ls`), then a reply line or a busy spinner.
+Any other output there, such as a local command's echo or an open `/usage` panel, never reaches the model, so main stays stopped.
+So a relayed `usage-limit stuck` line or a reply that mentions a limit is never a stop.
+The hook record already proves the stop, so a screen the banner matcher does not recognize never clears it.
+That screen falls back to the quota or an assumed reset and gets one resume, with no retries and no `usage-limit stuck` line.
+The record clears only when a banner an earlier sweep read is gone from the screen, when a normal `Stop` fires (main finished a turn), or `FM_UL_PRIMARY_MAX_AGE_SECS` (8 hours) after `first_seen`.
+After the reset it types the resume text straight into the pane through the backend, because `bin/fm-send.sh` needs a task id.
+It types only when the composer reads exactly `empty` and the pane shows no busy sign (the native busy state or the harness spinner, as `bin/fm-supervise-daemon.sh` checks); a half-typed or unreadable composer or a working main means wait, so it never types over the captain or into a running turn, and a skipped tick costs no attempt.
+After a menu key it checks the composer again before it types.
+Main gets no sleep or network resume; only a usage-limit stop is resumed there.
+The retry limit, the menu rule and the one `usage-limit stuck` line are the same as for any endpoint.
+
+A usage-limit stop ends main's turn through Claude's `StopFailure` event, not `Stop`.
+`.claude/settings.json` registers the same `bin/fm-claude-stop-autoarm.sh` hook on both.
+On a `rate_limit` `StopFailure` in the main home, the hook writes `state/primary.usage-limit` with only `endpoint`, `kind` and `first_seen`.
+Claude ignores a `StopFailure` hook's exit code, so that run never arms a watcher or commits a wake, and pending signals stay on disk for the next `Stop`'s arm.
+Instead the run that wrote the record waits in the background with `bin/fm-usage-limit-tick.sh --wait-primary`.
+That waiter sleeps one `FM_USAGE_LIMIT_TICK_SECS` first, because the hook fires before Claude has drawn the banner, then sweeps only main's pane once per tick, with the same reset parse, grace, empty-composer check and bounded retries as the watcher's tick.
+It never reads worker signals or `state/*.meta`, never wakes anyone and prints nothing.
+It never takes the one `usage-limit stuck` line; a watcher tick prints it, so the line reaches a wake.
+It exits once the record clears or ages out, or all attempts are spent, so main resumes even when the limit hit a turn that no watcher outlives.
+The 8-hour age bound also ends a waiter whose session is gone, and a reset further out than that waits for the watcher.
+A watcher already running for the fleet also sweeps main's pane; the retry spacing and the empty-composer check keep the two from typing twice.
+The tick fills in the rest of the record on its first sweep and removes it on the conditions above or when no primary pane is recorded.
 
 ## Sleep and network stops
 
@@ -44,6 +80,9 @@ Pmset logs are not read; the tick-gap is the wake signal.
 The tick reads the reset from the screen first and honors a timezone shown there, for example `resets 3:10am (Asia/Kolkata)`.
 Without one it asks `quota-axi --json --no-credential-refresh` for the exhausted `five_hour` or `seven_day` window.
 Without that it assumes 15 minutes and re-reads the screen each tick.
+A time with no date, such as `resets 2:30am`, resolves to the one moment within the window from 6 hours past (`FM_UL_PAST_SECS`) to 18 hours ahead.
+So `resets 2:30am` read at 03:10 is today, read at 15:00 is tomorrow, and `resets 11:30pm` read at 00:30 is yesterday.
+A banner read just after the reset therefore resumes at once instead of waiting a day.
 
 ## Menus
 
