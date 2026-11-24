@@ -1,0 +1,40 @@
+05:36:43 rec=[attempts=0 ] waiter=20396 21873 
+05:36:48 rec=[attempts=0 ] waiter=20396 21873 
+05:36:53 rec=[attempts=0 ] waiter=20396 21873 
+05:36:58 rec=[attempts=0 ] waiter=20396 21873 
+05:37:03 rec=[attempts=0 ] waiter=20396 21873 
+05:37:09 rec=[attempts=0 ] waiter=20396 21873 
+05:37:14 rec=[attempts=0 ] waiter=20396 21873 
+05:37:19 rec=[attempts=0 ] waiter=20396 21873 
+05:37:25 rec=[attempts=0 ] waiter=20396 21873 
+05:37:30 rec=[attempts=0 ] waiter=20396 21873 
+05:37:35 rec=[attempts=0 ] waiter=20396 21873 
+05:37:40 rec=[attempts=0 ] waiter=20396 21873 
+05:37:45 rec=[attempts=0 ] waiter=20396 21873 
+05:37:51 rec=[attempts=0 ] waiter=20396 21873 
+05:37:56 rec=[attempts=0 ] waiter=20396 21873 
+05:38:01 rec=[attempts=0 ] waiter=21873 
+05:38:06 rec=[attempts=0 ] waiter=21873 
+05:38:11 rec=[attempts=0 ] waiter=21873 
+05:38:16 rec=[attempts=0 ] waiter=21873 
+05:38:22 rec=[attempts=0 ] waiter=21873 
+05:38:27 rec=[attempts=0 ] waiter=21873 
+05:38:32 rec=[attempts=0 ] waiter=21873 
+05:38:37 rec=[attempts=0 ] waiter=21873 
+05:38:42 rec=[attempts=0 ] waiter=21873 41397 
+05:38:47 rec=[attempts=0 ] waiter=21873 
+cleared composer 05:39:46
+05:39:51 rec=[gone] waiter=
+05:39:56 rec=[gone] waiter=
+05:40:01 rec=[gone] waiter=
+05:40:06 rec=[gone] waiter=
+05:40:12 rec=[gone] waiter=
+05:40:17 rec=[gone] waiter=
+05:40:22 rec=[gone] waiter=
+05:40:27 rec=[gone] waiter=
+05:40:32 rec=[gone] waiter=
+05:40:37 rec=[gone] waiter=
+05:40:42 rec=[gone] waiter=
+05:40:48 rec=[gone] waiter=
+# proxy: 429 at 05:36:30; limit lifted 05:38:01; Claude native auto-continue POSTs 200 at 05:39:04 (draft still in composer).
+# Waiter never typed over the draft (attempts stayed 0). Normal Stop after Claude's own continue cleared the record; waiter exited. One resume total.

@@ -1,0 +1,7 @@
+worker pane %1 screen:
+> run the retag batch
+  ⎿  5-hour limit reached ∙ resets 11:30pm (UTC)
+     /upgrade to increase your usage limit.
+tick --now 2026-11-25 00:30:00 UTC
+base: reset_epoch -> 2026-11-25 23:30:00 UTC; attempts=0; send: 
+new: reset_epoch -> 2026-11-24 23:30:00 UTC; attempts=1; send: fm-send w1 Your Claude usage limit has reset. Continue the work you were doing b

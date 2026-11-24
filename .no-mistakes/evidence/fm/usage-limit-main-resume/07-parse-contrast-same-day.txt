@@ -1,0 +1,5 @@
+banner:   ⎿  You've hit your 5-hour limit · resets 10:39am (Asia/Calcutta)
+  ⚠ Usage limit reached · limit resets 10:39am
+read at: 2026-11-24 05:35:00 UTC
+base (9797228f) reset -> 2026-11-25 05:09:00 UTC (wait 1414 min)
+new (2312ba33) reset -> 2026-11-24 05:09:00 UTC (wait -26 min)

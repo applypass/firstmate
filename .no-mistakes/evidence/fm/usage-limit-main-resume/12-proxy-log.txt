@@ -1,0 +1,23 @@
+05:29:16 GET /v1/models -> 401
+05:29:23 HEAD /api/hello -> 200
+05:29:24 POST /v1/messages?beta=true -> 429
+05:29:51 POST /v1/messages?beta=true -> 200
+05:29:51 POST /v1/messages?beta=true -> 200
+05:30:18 POST /v1/messages?beta=true -> 429 limit
+limit lifted 05:33:00
+05:33:13 POST /v1/messages?beta=true -> 200
+05:33:15 POST /v1/messages?beta=true -> 200
+05:33:17 POST /v1/messages?beta=true -> 200
+05:33:18 POST /v1/messages?beta=true -> 200
+05:34:54 POST /v1/messages?beta=true -> 429 limit
+05:34:54 POST /v1/messages?beta=true -> 429 limit
+limit lifted 05:34:56
+05:35:02 POST /v1/messages?beta=true -> 200
+05:35:04 POST /v1/messages?beta=true -> 200
+05:35:06 POST /v1/messages?beta=true -> 200
+05:35:07 POST /v1/messages?beta=true -> 200
+05:36:30 POST /v1/messages?beta=true -> 429 limit
+05:36:31 POST /v1/messages?beta=true -> 429 limit
+limit lifted 05:38:01
+05:39:04 POST /v1/messages?beta=true -> 200
+05:39:06 POST /v1/messages?beta=true -> 200
