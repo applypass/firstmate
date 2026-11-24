@@ -12,7 +12,7 @@ This fork detects the stop with plain scripts and resumes each endpoint after th
    Later ticks leave `first_seen` alone.
 4. Nothing is sent before `reset_epoch` plus a 45 second grace.
 5. After that the tick sends one resume steer through `bin/fm-send.sh` (a mate steer is fire-and-forget), at most 3 times, 120 seconds apart.
-6. When the limit screen is gone the record clears.
+6. When the limit screen is gone the record clears (main's own chat clears on other evidence; see below).
 7. An endpoint still stopped after the last attempt prints one `usage-limit stuck` line, which the watcher turns into a `check:` wake.
    The line holds the endpoint, first seen, reset time and the last screen lines with secrets redacted.
    `surfaced=1` keeps it to once per incident.
@@ -28,7 +28,7 @@ A secondmate home records nothing and removes any old record, so only the main h
 Each tick then sweeps that pane with `kind=primary` and the record `state/primary.usage-limit`.
 Unlike other endpoints, the screen alone never creates that record: only main's own `rate_limit` `StopFailure` hook does (below).
 The screen fills in the reset time, read only from the banner and the menu, hint and key lines right under it, never from later output such as an open `/usage` panel.
-Main counts as stopped for the screen only when a harness limit banner is the last transcript output directly above its composer.
+Main counts as stopped for the screen only when a harness limit banner is the last limit marker above its composer and no real turn follows it.
 A marker inside a prompt or reply is prose, not a banner: a line that opens with a prompt or reply glyph (`>`, `❯`, `⏺`, `●`) and the indented lines that continue it.
 Only a real turn below the banner means main is not stopped: a prompt line that is not a local command (`/usage`, `!ls`), then a reply line or a busy spinner.
 Any other output there, such as a local command's echo or an open `/usage` panel, never reaches the model, so main stays stopped.
