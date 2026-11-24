@@ -149,15 +149,16 @@ fm_usage_limit_detect() {  # <screen-text> [now]
 }
 
 # fm_usage_limit_last_block <screen>: print main's closing usage-limit banner,
-# the last harness marker line above the composer prompt down to the next
-# prompt, reply or spinner line (at most FM_UL_TAIL_LINES lines), or nothing
-# once main resumed. A marker inside a prompt or reply (a line opened by a
-# prompt or reply glyph, and its indented continuation) is prose, never a
-# banner. Only a real turn proves a resume: a prompt line that is not a local
-# command, then a reply line or a busy spinner. Any other output below the
-# banner, such as a /usage echo or panel, leaves main stopped.
+# the last harness marker line above the composer prompt and the blank, menu,
+# slash-command hint and key hint lines right under it up to the first other
+# line, or nothing once main resumed. A marker inside a prompt or reply (a line
+# opened by a prompt or reply glyph, and its indented continuation) is prose,
+# never a banner. Only a real turn proves a resume: a prompt line that is not a
+# local command, then a reply line or a busy spinner. Any other output below
+# the banner, such as a /usage echo or panel, leaves main stopped and is never
+# printed, so its reset times never stand in for the banner's.
 fm_usage_limit_last_block() {  # <screen>
-  printf '%s\n' "$1" | awk -v max="$FM_UL_TAIL_LINES" '
+  printf '%s\n' "$1" | awk '
     { a[NR] = $0 }
     END {
       end = NR
@@ -174,16 +175,16 @@ fm_usage_limit_last_block() {  # <screen>
       }
       if (!mark) exit
       last = mark
-      cut = 0
+      ext = 1
       asked = 0
       for (i = mark + 1; i <= end; i++) {
         l = tolower(a[i])
         menu = l ~ /^[[:space:]]*(❯|›|>)?[[:space:]]*[0-9]+[.)][[:space:]]/
-        spin = l ~ /esc to interrupt|…[[:space:]]+\([0-9]+[smh]/
         if (!menu && l ~ "^[[:space:]]*(>|❯)[[:space:]]*[^/![:space:]]") asked = 1
-        else if (asked && (spin || l ~ /^[[:space:]]*(⏺|●)/)) exit
-        if (spin || (!menu && l ~ /^[[:space:]]*(>|❯|⏺|●)/)) cut = 1
-        if (!cut && i - mark < max) last = i
+        else if (asked && l ~ /^[[:space:]]*(⏺|●)|esc to interrupt|…[[:space:]]+\([0-9]+[smh]/) exit
+        if (ext && (l ~ /^[[:space:]]*$/ || menu || l ~ /^[[:space:]]*(⎿[[:space:]]*)?\/[a-z]/ \
+          || (l ~ /(enter|esc)[[:space:]]+to/ && l !~ /interrupt/))) last = i
+        else ext = 0
       }
       for (i = mark; i <= last; i++) print a[i]
     }'

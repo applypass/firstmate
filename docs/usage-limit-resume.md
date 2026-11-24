@@ -27,7 +27,7 @@ When no pane is found it removes the record instead of keeping an old one.
 A secondmate home records nothing and removes any old record, so only the main home ever types into main.
 Each tick then sweeps that pane with `kind=primary` and the record `state/primary.usage-limit`.
 Unlike other endpoints, the screen alone never creates that record: only main's own `rate_limit` `StopFailure` hook does (below).
-The screen fills in the reset time.
+The screen fills in the reset time, read only from the banner and the menu, hint and key lines right under it, never from later output such as an open `/usage` panel.
 Main counts as stopped for the screen only when a harness limit banner is the last transcript output directly above its composer.
 A marker inside a prompt or reply is prose, not a banner: a line that opens with a prompt or reply glyph (`>`, `❯`, `⏺`, `●`) and the indented lines that continue it.
 Only a real turn below the banner means main is not stopped: a prompt line that is not a local command (`/usage`, `!ls`), then a reply line or a busy spinner.

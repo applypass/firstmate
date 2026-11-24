@@ -666,6 +666,28 @@ test_primary_local_command_keeps_record() {
   pass "usage-limit: local command output below main's banner keeps the record and the resume"
 }
 
+# An open /usage panel below the banner lists other reset times; only the banner's counts.
+test_primary_reset_read_from_banner_only() {
+  local dir t0 reset screen
+  dir=$(setup_case primpanel)
+  printf 'backend=tmux\ntarget=sess:fm-main\nharness=claude\n' >"$dir/home/state/.primary-endpoint"
+  t0=$(ist '2026-11-14 02:50')
+  reset=$(ist '2026-11-14 03:10')
+  screen="$LIMIT_LINES"$'\n\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\xe2\x94\x80\n  Current session\n  Resets 9pm (UTC)\n\n  Current week (all models)\n  Resets Dec 1, 9pm (UTC)\n\n  Esc to cancel'
+  main_screen "$dir" "$screen"$'\n'"$BOX_TOP"$'\n'"$BAR >      $BAR"$'\n'"$BOX_BOTTOM"
+  printf '%s\n' "$(($(printf '%s\n' "$screen" | wc -l) + 1))" >"$dir/screens/fm-main.cy"
+  hook_record "$dir" "$t0"
+  tick "$dir" $((t0 + 60)) >/dev/null
+  assert_contains "$(cat "$dir/home/state/primary.usage-limit")" "reset_epoch=$reset" "first sweep reads the banner's reset"
+  hook_record "$dir" "$t0"
+  printf 'reset_epoch=%s\nreset_source=assumed\nattempts=0\nlast_attempt=0\nsurfaced=0\n' $((t0 + 18000)) \
+    >>"$dir/home/state/primary.usage-limit"
+  tick "$dir" $((t0 + 120)) >/dev/null
+  assert_contains "$(cat "$dir/home/state/primary.usage-limit")" "reset_epoch=$reset" "a guessed reset is refined from the banner"
+  ! grep -q 'fm-main' "$dir/send.log" || fail "typed into main before its reset: $(cat "$dir/send.log")"
+  pass "usage-limit: main's reset comes from its banner, never from a /usage panel below it"
+}
+
 # Claude draws an empty composer while it works, so an empty box alone never licenses typing.
 test_primary_busy_main_gets_no_resume() {
   local dir t0 screen
@@ -761,6 +783,7 @@ test_secondmate_home_records_no_primary
 test_primary_unrecognized_banner_keeps_record
 test_primary_confirmed_stop_clears_when_main_resumes
 test_primary_banner_with_trailing_output_is_a_stop
+test_primary_reset_read_from_banner_only
 test_primary_local_command_keeps_record
 test_primary_busy_main_gets_no_resume
 test_wait_primary_sleeps_before_first_sweep
