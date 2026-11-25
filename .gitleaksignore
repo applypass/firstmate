@@ -1,0 +1,9 @@
+# Fork-only: gitleaks allowlist. Each line is one finding fingerprint (commit:file:rule:line).
+# All are fake test fixture values, checked by hand on 2026-11-25. Add a line only for a value you have read.
+e349e335ecd5964679a0e7670735dd28ae984d3b:tests/fm-usage-limit.test.sh:generic-api-key:321
+b37d1233d0dfa2da5352afc541234acfbdb4fb52:tests/fm-usage-limit.test.sh:generic-api-key:321
+c35f41e4a7bbd11783815a55541923f9e84c1d12:tests/fm-usage-limit.test.sh:generic-api-key:176
+84ae8a5ad1012a1286598c774542f2b5291b0e9e:tests/fm-usage-limit.test.sh:generic-api-key:176
+9f8482c2d697c92d0473565ba58db60e417d27d8:tests/fm-main-orchestration-guard.test.sh:curl-auth-header:229
+3004ccb107f97fb619e1cafd1ea8591562dc23ef:tests/fm-backend-t3code.test.sh:generic-api-key:1927
+69d660ad6167271daf09e8c5521581c03cb9a4f8:tests/fm-dispatch-resolve.test.sh:generic-api-key:183
